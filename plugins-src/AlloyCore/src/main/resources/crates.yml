@@ -1,0 +1,95 @@
+# BlackForgeMC crates (ids stay iron/gold/netherite/koth/vote; players see Cinder/Molten/Forgeheart/Conqueror/Spark). Edit and restart the survival server to apply.
+# Reward fields: name (shown), item, amount, weight (higher = more common), enchants {id: level},
+#   custom-name, commands (run by console, {player} = winner), give-item (false for command-only), announce (broadcast win)
+
+iron:
+  title: Cinder
+  color: "<#e0895a>"
+  key: TRIPWIRE_HOOK
+  rewards:
+    - {name: "<white>16 Iron Ingots", item: IRON_INGOT, amount: 16, weight: 22}
+    - {name: "<white>32 Cooked Beef", item: COOKED_BEEF, amount: 32, weight: 20}
+    - {name: "<white>64 Torches", item: TORCH, amount: 64, weight: 16}
+    - {name: "<white>8 Gold Ingots", item: GOLD_INGOT, amount: 8, weight: 14}
+    - {name: "<green>$250", item: SUNFLOWER, weight: 14, give-item: false, commands: ["eco give {player} 250"]}
+    - {name: "<aqua>Efficiency III Iron Pickaxe", item: IRON_PICKAXE, weight: 8, enchants: {efficiency: 3, unbreaking: 2}}
+    - {name: "<aqua>3 Diamonds", item: DIAMOND, amount: 3, weight: 5}
+    - {name: "<#ffb52e>Molten Crate Key", item: TRIPWIRE_HOOK, weight: 1, give-item: false, commands: ["alloy crate give {player} gold 1"], announce: true}
+    - {name: "<red>Red Name Tag", item: NAME_TAG, weight: 3, give-item: false, commands: ["alloy tag give {player} red"]}
+    - {name: "<#7ddc4a>Springs I Book", item: ENCHANTED_BOOK, weight: 4, give-item: false, commands: ["alloy ce give {player} springs 1"]}
+    - {name: "<#ff7a1a>Autosmelt Book", item: ENCHANTED_BOOK, weight: 3, give-item: false, commands: ["alloy ce give {player} autosmelt 1"]}
+
+gold:
+  title: Molten
+  color: "<#ffb52e>"
+  key: TRIPWIRE_HOOK
+  rewards:
+    - {name: "<white>8 Diamonds", item: DIAMOND, amount: 8, weight: 18}
+    - {name: "<white>16 Golden Carrots", item: GOLDEN_CARROT, amount: 16, weight: 16}
+    - {name: "<green>$1,000", item: SUNFLOWER, weight: 16, give-item: false, commands: ["eco give {player} 1000"]}
+    - {name: "<white>4 Golden Apples", item: GOLDEN_APPLE, amount: 4, weight: 14}
+    - {name: "<aqua>Sharpness IV Diamond Sword", item: DIAMOND_SWORD, weight: 10, enchants: {sharpness: 4, unbreaking: 3, looting: 2}}
+    - {name: "<aqua>Protection IV Diamond Chestplate", item: DIAMOND_CHESTPLATE, weight: 8, enchants: {protection: 4, unbreaking: 3}}
+    - {name: "<light_purple>Mending Book", item: ENCHANTED_BOOK, weight: 6, enchants: {mending: 1}}
+    - {name: "<light_purple>Elytra", item: ELYTRA, weight: 1, announce: true}
+    - {name: "<#ff4422>Forgeheart Crate Key", item: TRIPWIRE_HOOK, weight: 2, give-item: false, commands: ["alloy crate give {player} netherite 1"], announce: true}
+    - {name: "<gradient:#ffd27a:#ff4d00>Molten Name Tag", item: NAME_TAG, weight: 3, give-item: false, commands: ["alloy tag give {player} molten"], announce: true}
+    - {name: "<gradient:#7ff0c8:#2a8f6b>Oxidized Name Tag", item: NAME_TAG, weight: 3, give-item: false, commands: ["alloy tag give {player} oxidized"], announce: true}
+    - {name: "<#ff5f7a>Lifesteal I Book", item: ENCHANTED_BOOK, weight: 5, give-item: false, commands: ["alloy ce give {player} lifesteal 1"]}
+    - {name: "<#c0392b>Bleed I Book", item: ENCHANTED_BOOK, weight: 5, give-item: false, commands: ["alloy ce give {player} bleed 1"]}
+    - {name: "<#ff9f43>Overload I Book", item: ENCHANTED_BOOK, weight: 5, give-item: false, commands: ["alloy ce give {player} overload 1"]}
+    - {name: "<#c6a15b>Excavator Book", item: ENCHANTED_BOOK, weight: 3, give-item: false, commands: ["alloy ce give {player} excavator 1"], announce: true}
+
+netherite:
+  title: Forgeheart
+  color: "<#ff4422>"
+  key: TRIPWIRE_HOOK
+  rewards:
+    - {name: "<white>2 Netherite Ingots", item: NETHERITE_INGOT, amount: 2, weight: 18}
+    - {name: "<green>$5,000", item: SUNFLOWER, weight: 18, give-item: false, commands: ["eco give {player} 5000"]}
+    - {name: "<white>Enchanted Golden Apple", item: ENCHANTED_GOLDEN_APPLE, weight: 14}
+    - {name: "<light_purple>Elytra", item: ELYTRA, weight: 10, announce: true}
+    - {name: "<light_purple>Totem of Undying", item: TOTEM_OF_UNDYING, weight: 12}
+    - {name: "<gold>God Pickaxe", item: NETHERITE_PICKAXE, weight: 6, enchants: {efficiency: 5, unbreaking: 3, fortune: 3, mending: 1}, custom-name: "<gold><bold>Alloy Breaker", announce: true}
+    - {name: "<gold>God Sword", item: NETHERITE_SWORD, weight: 6, enchants: {sharpness: 5, unbreaking: 3, looting: 3, mending: 1, fire_aspect: 2}, custom-name: "<gold><bold>Forgeblade", announce: true}
+    - {name: "<gold>Beacon", item: BEACON, weight: 4, announce: true}
+    - {name: "<gradient:#b9a7ff:#4a4043>Netherite Name Tag", item: NAME_TAG, weight: 6, give-item: false, commands: ["alloy tag give {player} netherite"], announce: true}
+    - {name: "<rainbow>Rainbow Name Tag", item: NAME_TAG, weight: 2, give-item: false, commands: ["alloy tag give {player} rainbow"], announce: true}
+    - {name: "<#ffe066>Thunderstrike II Book", item: ENCHANTED_BOOK, weight: 8, give-item: false, commands: ["alloy ce give {player} thunderstrike 2"], announce: true}
+    - {name: "<#ff5f7a>Lifesteal II Book", item: ENCHANTED_BOOK, weight: 8, give-item: false, commands: ["alloy ce give {player} lifesteal 2"], announce: true}
+    - {name: "<#ff9f43>Overload II Book", item: ENCHANTED_BOOK, weight: 8, give-item: false, commands: ["alloy ce give {player} overload 2"]}
+
+koth:
+  title: Conqueror
+  color: "<#c084fc>"
+  key: TRIPWIRE_HOOK
+  rewards:
+    - {name: "<green>$7,500", item: SUNFLOWER, weight: 20, give-item: false, commands: ["eco give {player} 7500"]}
+    - {name: "<white>4 Netherite Ingots", item: NETHERITE_INGOT, amount: 4, weight: 16}
+    - {name: "<gold>King's Crown", item: GOLDEN_HELMET, weight: 10, enchants: {protection: 5, unbreaking: 5, mending: 1}, custom-name: "<gold><bold>King's Crown", announce: true}
+    - {name: "<gold>Kingslayer", item: NETHERITE_SWORD, weight: 8, enchants: {sharpness: 6, unbreaking: 4, looting: 3, mending: 1}, custom-name: "<#e5484d><bold>Kingslayer", announce: true}
+    - {name: "<light_purple>3 Enchanted Golden Apples", item: ENCHANTED_GOLDEN_APPLE, amount: 3, weight: 14}
+    - {name: "<#ff4422>2 Forgeheart Crate Keys", item: TRIPWIRE_HOOK, weight: 14, give-item: false, commands: ["alloy crate give {player} netherite 2"]}
+    - {name: "<light_purple>Shulker Box", item: SHULKER_BOX, weight: 12}
+    - {name: "<gold>Dragon Head", item: DRAGON_HEAD, weight: 6, announce: true}
+    - {name: "<gradient:#ff5f5f:#7a0000>Kingslayer Name Tag", item: NAME_TAG, weight: 8, give-item: false, commands: ["alloy tag give {player} kingslayer"], announce: true}
+    - {name: "<#ff5f7a>Lifesteal III Book", item: ENCHANTED_BOOK, weight: 6, give-item: false, commands: ["alloy ce give {player} lifesteal 3"], announce: true}
+    - {name: "<#ffe066>Thunderstrike III Book", item: ENCHANTED_BOOK, weight: 6, give-item: false, commands: ["alloy ce give {player} thunderstrike 3"], announce: true}
+    - {name: "<#7ddc4a>Springs II Book", item: ENCHANTED_BOOK, weight: 6, give-item: false, commands: ["alloy ce give {player} springs 2"]}
+    - {name: "<#e07a45><bold>Copper Rank Voucher", item: PAPER, weight: 1.2727, give-item: false, commands: ["alloy voucher give {player} copper"], announce: true}
+
+vote:
+  title: Spark
+  color: "<#ffe45c>"
+  key: TRIPWIRE_HOOK
+  rewards:
+    - {name: "<green>$500", item: SUNFLOWER, weight: 20, give-item: false, commands: ["eco give {player} 500"]}
+    - {name: "<white>12 Iron Ingots", item: IRON_INGOT, amount: 12, weight: 18}
+    - {name: "<white>6 Gold Ingots", item: GOLD_INGOT, amount: 6, weight: 14}
+    - {name: "<white>3 Golden Apples", item: GOLDEN_APPLE, amount: 3, weight: 12}
+    - {name: "<white>16 Bottles o' Enchanting", item: EXPERIENCE_BOTTLE, amount: 16, weight: 12}
+    - {name: "<aqua>2 Diamonds", item: DIAMOND, amount: 2, weight: 9}
+    - {name: "<#e0895a>Cinder Key", item: TRIPWIRE_HOOK, weight: 6, give-item: false, commands: ["alloy crate give {player} iron 1"]}
+    - {name: "<#7ddc4a>Springs I Book", item: ENCHANTED_BOOK, weight: 4, give-item: false, commands: ["alloy ce give {player} springs 1"]}
+    - {name: "<green>Lime Name Tag", item: NAME_TAG, weight: 3, give-item: false, commands: ["alloy tag give {player} lime"]}
+    - {name: "<#ffb52e>Molten Key", item: TRIPWIRE_HOOK, weight: 2, give-item: false, commands: ["alloy crate give {player} gold 1"], announce: true}

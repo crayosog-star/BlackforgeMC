@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BlackForgeMC</title>
+  <meta name="description" content="BlackForgeMC is a Minecraft Java network with Skyblock, OneBlock, Survival, Factions and Arcade. Join at blackforgemc.com.">
+  <meta name="theme-color" content="#0b0b0e">
+  <meta property="og:title" content="BlackForgeMC — Minecraft Network">
+  <meta property="og:description" content="Skyblock, OneBlock, Survival, Factions and Arcade. One economy, one rank, five worlds. Join at blackforgemc.com.">
+  <meta property="og:image" content="https://blackforgemc.com/assets/img/og-card.png">
+  <meta property="og:url" content="https://blackforgemc.com/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://blackforgemc.com/">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="assets/img/logo.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/img/logo-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/img/logo-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="BlackForgeMC home">
+      <img class="brand-mark" src="assets/img/logo.svg" alt="">
+      <span class="brand-name">BLACK<span>FORGE</span></span>
+    </a>
+    <button class="nav-toggle" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="#modes">Game Modes</a>
+      <a href="#features">Features</a>
+      <a href="#ranks">Ranks</a>
+      <a href="#vote">Vote</a>
+      <a href="store.html">Store</a>
+      <a href="rules.html">Rules</a>
+      <a class="btn btn-primary" href="#join">Play Now</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg"><img src="assets/img/hero-hub.png" alt="The BlackForge hub: a floating forge island with portals to every game mode"></div>
+    <canvas id="embers" aria-hidden="true"></canvas>
+    <div class="wrap">
+      <div class="hero-inner">
+        <svg class="hero-mark" viewBox="0 0 128 128" role="img" aria-label="BlackForge logo: a hammer striking an anvil">
+  <defs>
+    <linearGradient id="hm-ember" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffd27a"/>
+      <stop offset=".5" stop-color="#ff8a2a"/>
+      <stop offset="1" stop-color="#ff4d00"/>
+    </linearGradient>
+    <linearGradient id="hm-badge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22222b"/>
+      <stop offset="1" stop-color="#0b0b0f"/>
+    </linearGradient>
+    <linearGradient id="hm-steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8a8a98"/>
+      <stop offset=".35" stop-color="#4a4a56"/>
+      <stop offset="1" stop-color="#1e1e26"/>
+    </linearGradient>
+    <linearGradient id="hm-head" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6b6b78"/>
+      <stop offset="1" stop-color="#26262e"/>
+    </linearGradient>
+    <radialGradient id="hm-glow" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#fff1c2" stop-opacity=".95"/>
+      <stop offset=".25" stop-color="#ffb347" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#ff4d00" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- forged hexagon badge -->
+  <path d="M64 5 L116 34.5 V93.5 L64 123 L12 93.5 V34.5 Z" fill="url(#hm-badge)" stroke="url(#hm-ember)" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M64 15 L107 39.5 V88.5 L64 113 L21 88.5 V39.5 Z" fill="none" stroke="#ffffff" stroke-opacity=".07" stroke-width="1.5" stroke-linejoin="round"/>
+
+  <!-- strike glow -->
+  <circle class="hm-glow" cx="84" cy="58" r="24" fill="url(#hm-glow)"/>
+
+  <!-- anvil -->
+  <path d="M24 63 Q32 58.5 44 58.5 H95 L97.5 66.5 L87 70.5 Q77 72.5 75 77 V82.5 L83 86 L85 95 H43 L45 86 L53 82.5 V77 Q51 72.5 43 70.5 Q31 69 24 63 Z" fill="url(#hm-steel)"/>
+  <path d="M30 61.5 Q36 59 44 58.5 H95" fill="none" stroke="url(#hm-ember)" stroke-width="2.6" stroke-linecap="round"/>
+  <rect x="40" y="95" width="48" height="5" rx="2" fill="#2a2a33"/>
+
+  <!-- hammer, mid-strike -->
+  <g class="hm-hammer"><g transform="rotate(32 72 47)">
+    <rect x="69.5" y="9" width="5.5" height="35" rx="2.75" fill="#2c2c35" stroke="#0b0b0f" stroke-width="1"/>
+    <rect x="70.6" y="11" width="1.6" height="30" rx=".8" fill="#ffffff" opacity=".12"/>
+    <rect x="55" y="39" width="35" height="15" rx="3" fill="url(#hm-head)" stroke="#0b0b0f" stroke-width="1"/>
+    <rect x="85" y="39" width="5" height="15" rx="2" fill="url(#hm-ember)"/>
+  </g>
+
+  </g>
+  <!-- sparks fly off the strike -->
+  <g class="hm-sparks" fill="#ffd27a">
+    <path class="hm-spark" d="M102 38 l1.8 3.8 3.8 1.8 -3.8 1.8 -1.8 3.8 -1.8 -3.8 -3.8 -1.8 3.8 -1.8 z"/>
+    <path class="hm-spark" d="M92 28 l1.1 2.3 2.3 1.1 -2.3 1.1 -1.1 2.3 -1.1 -2.3 -2.3 -1.1 2.3 -1.1 z"/>
+    <path class="hm-spark" d="M104 22 l1.2 2.5 2.5 1.2 -2.5 1.2 -1.2 2.5 -1.2 -2.5 -2.5 -1.2 2.5 -1.2 z"/>
+  </g>
+  <circle class="hm-spark" cx="106" cy="52" r="1.5" fill="#ff8a2a"/>
+  <circle class="hm-spark" cx="98" cy="47" r="1.2" fill="#ffd27a"/>
+  <circle class="hm-spark" cx="110" cy="40" r="1.2" fill="#ff8a2a"/>
+</svg>
+        <span class="eyebrow">Minecraft Java Network</span>
+        <h1>Forged for <span class="grad-text">players</span>.</h1>
+        <p class="hero-lead">Skyblock, OneBlock, Survival, Factions and Arcade on one network, with one economy and one rank that follow you everywhere.</p>
+
+        <div class="ip-card">
+          <div class="ip-main">
+            <span class="ip-label">Server address</span>
+            <span class="ip-value" data-ip>blackforgemc.com</span>
+          </div>
+          <button class="ip-copy" data-copy-ip aria-label="Copy server address">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            <span>Copy IP</span>
+          </button>
+        </div>
+        <div class="status" data-status>
+          <i class="status-dot"></i>
+          <span data-status-text>Checking server status…</span>
+        </div>
+
+        <div class="hero-actions">
+          <a class="btn btn-discord" data-link="discord" href="#">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.4 18.4 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.4C.6 9 0 13.5.3 18a19.9 19.9 0 0 0 6 3l1.3-2a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12 0l.5.4-2 1 1.3 2a19.8 19.8 0 0 0 6-3c.4-5.2-.7-9.7-3.6-13.6ZM8.5 15.3c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm7 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg>
+            <span data-label>Join the Discord</span>
+          </a>
+          <a class="btn btn-ghost" href="#modes">Explore game modes</a>
+        </div>
+      </div>
+    </div>
+    <div class="scroll-hint" aria-hidden="true">Scroll<i></i></div>
+  </section>
+
+  <!-- ANIMATED BANNER -->
+  <div class="ticker" aria-label="Game modes and features">
+    <div class="ticker-track"><span>Skyblock</span><i aria-hidden="true">✦</i><span>OneBlock</span><i aria-hidden="true">✦</i><span>Survival</span><i aria-hidden="true">✦</i><span>Factions</span><i aria-hidden="true">✦</i><span>Arcade</span><i aria-hidden="true">✦</i><span>King of the Hill</span><i aria-hidden="true">✦</i><span>The Scrapyard</span><i aria-hidden="true">✦</i><span>Custom Enchants</span><i aria-hidden="true">✦</i><span>Robots</span><i aria-hidden="true">✦</i><span>Crates</span><i aria-hidden="true">✦</i><span>Auction House</span><i aria-hidden="true">✦</i><span>Vote Parties</span><i aria-hidden="true">✦</i></div>
+    <div class="ticker-track" aria-hidden="true"><span>Skyblock</span><i aria-hidden="true">✦</i><span>OneBlock</span><i aria-hidden="true">✦</i><span>Survival</span><i aria-hidden="true">✦</i><span>Factions</span><i aria-hidden="true">✦</i><span>Arcade</span><i aria-hidden="true">✦</i><span>King of the Hill</span><i aria-hidden="true">✦</i><span>The Scrapyard</span><i aria-hidden="true">✦</i><span>Custom Enchants</span><i aria-hidden="true">✦</i><span>Robots</span><i aria-hidden="true">✦</i><span>Crates</span><i aria-hidden="true">✦</i><span>Auction House</span><i aria-hidden="true">✦</i><span>Vote Parties</span><i aria-hidden="true">✦</i></div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="wrap">
+      <div class="stat"><b class="grad-text">5</b><span>Game modes, one network</span></div>
+      <div class="stat"><b class="grad-text">7</b><span>Custom enchantments</span></div>
+      <div class="stat"><b class="grad-text">1.13+</b><span>Join from 1.13 up to 26.3</span></div>
+      <div class="stat"><b class="grad-text">24/7</b><span>Anti-cheat on every server</span></div>
+    </div>
+  </div>
+
+  <!-- GAME MODES -->
+  <section class="section" id="modes">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="eyebrow">Game modes</span>
+        <h2>Five worlds. <span class="grad-text">One forge.</span></h2>
+        <p>Every mode starts at the hub, a floating forge island with walk-in portals to each world. Pick one with the compass or just walk through a gate.</p>
+      </div>
+
+      <div class="modes">
+        <article class="mode wide reveal">
+          <div class="mode-img"><span class="mode-tag">/server skyblock</span><img src="assets/img/skyblock.png" alt="Sky Harbor, the Skyblock spawn island" loading="lazy"></div>
+          <div class="mode-body">
+            <h3>Skyblock</h3>
+            <p>Start with a scrap of land in the void and build it into an empire. Climb island levels, finish challenges and fight for a spot in the Hall of Fame.</p>
+            <ul class="ticks">
+              <li>Island levels, challenges and player warps</li>
+              <li>Upgradable spawners paid in Mob Essence</li>
+              <li>Copper-golem robots that farm, mine and grind for you</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="mode wide reveal">
+          <div class="mode-img"><span class="mode-tag new">NEW</span><img src="assets/img/skyblock-spawn.png" alt="The OneBlock Gate at Sky Harbor" loading="lazy"></div>
+          <div class="mode-body">
+            <h3>OneBlock</h3>
+            <p>One block under your feet. Break it and it comes back as something new. Work through the phases from grass to the End and grow a whole island from it.</p>
+            <ul class="ticks">
+              <li>Phase-based progression with rare drops</li>
+              <li>Miner robots keep breaking your block for you</li>
+              <li>Top OneBlock leaderboard with <code>/istop</code></li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="mode reveal">
+          <div class="mode-img"><span class="mode-tag">/server survival</span><img src="assets/img/survival.png" alt="The floating Survival spawn town" loading="lazy"></div>
+          <div class="mode-body">
+            <h3>Survival</h3>
+            <p>Classic survival with a twist: a floating spawn town, chunk claims, an auction house and a 10,000-block world to explore.</p>
+            <ul class="ticks">
+              <li>KOTH every two hours</li>
+              <li>The Scrapyard PvP zone with supply drops</li>
+              <li>Crates, vouchers and custom enchants</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="mode reveal">
+          <div class="mode-img"><span class="mode-tag">/server factions</span><img src="assets/img/scrapyard-ground.png" alt="A battle-scarred PvP landscape" loading="lazy"></div>
+          <div class="mode-body">
+            <h3>Factions</h3>
+            <p>Build a faction, claim land and raid your rivals. PvP is always on, so pick your allies carefully and don't let anyone near your base.</p>
+            <ul class="ticks">
+              <li>Faction claims, power and alliances</li>
+              <li>Always-on PvP</li>
+              <li>Network-wide money and ranks</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="mode reveal">
+          <div class="mode-img"><span class="mode-tag">/server arcade</span><img src="assets/img/arcade.png" alt="The Arcade lobby with three game gates" loading="lazy"></div>
+          <div class="mode-body">
+            <h3>Arcade</h3>
+            <p>Quick rounds when you just want to play. Jump into a queue and you're in a match in seconds.</p>
+            <ul class="ticks">
+              <li>Spleef, TNT Run and Infected</li>
+              <li>2–16 players with automatic queues</li>
+              <li>Instant restarts, no waiting around</li>
+            </ul>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- SPOTLIGHT -->
+  <section class="section spotlight">
+    <div class="wrap">
+      <div class="spot reveal">
+        <div class="spot-media"><img src="assets/img/scrapyard.png" alt="The Scrapyard, a 200 by 200 walled PvP wasteland" loading="lazy"></div>
+        <div class="spot-copy">
+          <span class="eyebrow">Survival PvP</span>
+          <h3>Welcome to <span class="grad-text">the Scrapyard</span></h3>
+          <p>A 200×200 walled wasteland where anything goes. Every five hours around fifteen supply crates crash into the arena, loaded with upgraded gear, golden apples, potions and the occasional rare key. Getting in is easy: jump down a Drop Zone shaft. Getting out alive with the loot is the hard part.</p>
+          <div class="chips">
+            <span class="chip"><b>~15</b> supply crates per drop</span>
+            <span class="chip"><b>5h</b> drop cycle</span>
+            <span class="chip"><b>10s</b> escape warm-up</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="spot flip reveal">
+        <div class="spot-media"><img src="assets/img/koth.png" alt="The King of the Hill arena" loading="lazy"></div>
+        <div class="spot-copy">
+          <span class="eyebrow">Events</span>
+          <h3>King of <span class="grad-text">the Hill</span></h3>
+          <p>Every two hours the KOTH arena opens. Hold the hill, outlast everyone else and claim the KOTH crate, which has a small chance of dropping a rank voucher.</p>
+          <div class="chips">
+            <span class="chip"><b>Every 2h</b> on Survival</span>
+            <span class="chip"><b>+200</b> Scrap for the winner</span>
+            <span class="chip"><b>KOTH</b> crate key</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="section" id="features">
+    <div class="wrap">
+      <div class="section-head center reveal">
+        <span class="eyebrow">Built in-house</span>
+        <h2>More than <span class="grad-text">plugins</span></h2>
+        <p>Most of BlackForge runs on our own custom plugin, so the systems are made for this network and work together.</p>
+      </div>
+      <div class="features">
+        <div class="feature reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg></div>
+          <h4>Custom enchants</h4>
+          <p>Lifesteal, Thunderstrike, Bleed, Overload, Springs, Autosmelt and Excavator. Drag a book onto your gear to apply it.</p>
+        </div>
+        <div class="feature reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="7" width="14" height="12" rx="2"/><path d="M12 3v4M9 12h.01M15 12h.01M9 16h6"/></svg></div>
+          <h4>Robots</h4>
+          <p>Copper-golem workers that farm, mine, grind and fish while fuelled. Upgrade them from tier I to V.</p>
+        </div>
+        <div class="feature reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div>
+          <h4>Spawner upgrades</h4>
+          <p>Upgrade spawn speed, mob count, range and Essence yield, or change the mob type. Upgrades stay on the spawner when you Silk Touch it.</p>
+        </div>
+        <div class="feature reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg></div>
+          <h4>Crates & keys</h4>
+          <p>Iron, Gold, Netherite, KOTH and Vote crates. Win keys from events, voting, supply drops and play time.</p>
+        </div>
+        <div class="feature reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V10l7-6 7 6v11"/><path d="M9 21v-6h6v6"/></svg></div>
+          <h4>Auction house</h4>
+          <p>List anything with <code>/ah</code> and trade with the whole server. Your money is the same on every mode.</p>
+        </div>
+        <div class="feature reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2M12 16v2"/></svg></div>
+          <h4>Shared economy</h4>
+          <p>Money and Scrap travel with you across every server. Spend Scrap in the Scrap Shop on spawners, tags and more.</p>
+        </div>
+        <div class="feature reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <h4>Fair play</h4>
+          <p>GrimAC plus our own Guardian system catches fly, reach, x-ray and auto-clickers, and the chat filter stops slurs and spam.</p>
+        </div>
+        <div class="feature reveal">
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg></div>
+          <h4>Leaderboards</h4>
+          <p>Richest players, top islands and top OneBlocks, shown on live boards in the Hall of Fame.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RANKS -->
+  <section class="section spotlight" id="ranks">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="eyebrow">Ranks</span>
+        <h2>Earn your <span class="grad-text">metal</span></h2>
+        <p>Five ranks, shared across the whole network. Each one adds to the perks of the rank below it, and every one of them is earned in game.</p>
+      </div>
+      <div class="ranks">
+        <div class="rank copper reveal">
+          <div>
+            <div class="rank-name">Copper</div>
+            <div class="rank-prefix"><b>COPPER</b> Steve</div>
+          </div>
+          <ul class="ticks">
+            <li>Copper kit: Prot IV armour + tools every 10 days</li>
+            <li><code>/hat</code> and <code>/craft</code></li>
+            <li>4 homes, +10 claim chunks</li>
+            <li>+10% Scrap, 2 Iron Keys monthly</li>
+          </ul>
+        </div>
+        <div class="rank iron reveal">
+          <div>
+            <div class="rank-name">Iron</div>
+            <div class="rank-prefix"><b>IRON</b> Steve</div>
+          </div>
+          <ul class="ticks">
+            <li>Everything in Copper</li>
+            <li>Iron kit every 10 days</li>
+            <li><code>/ec</code> and <code>/feed</code></li>
+            <li>6 homes, +20% Scrap, 1 Gold Key monthly</li>
+          </ul>
+        </div>
+        <div class="rank gold featured reveal">
+          <div>
+            <div class="rank-name">Gold</div>
+            <div class="rank-prefix"><b>GOLD</b> Steve</div>
+          </div>
+          <ul class="ticks">
+            <li>Everything in Iron</li>
+            <li>Gold kit every 10 days</li>
+            <li><code>/fly</code> in your claims or on your island</li>
+            <li><code>/anvil</code>, 9 homes, +30% Scrap</li>
+          </ul>
+        </div>
+        <div class="rank diamond reveal">
+          <div>
+            <div class="rank-name">Diamond</div>
+            <div class="rank-prefix"><b>DIAMOND</b> Steve</div>
+          </div>
+          <ul class="ticks">
+            <li>Everything in Gold</li>
+            <li>Diamond kit every 10 days</li>
+            <li><code>/repair</code></li>
+            <li>13 homes, +40% Scrap, 1 Netherite Key monthly</li>
+          </ul>
+        </div>
+        <div class="rank netherite reveal">
+          <div>
+            <div class="rank-name">Netherite</div>
+            <div class="rank-prefix"><b>NETHERITE</b> Steve</div>
+          </div>
+          <ul class="ticks">
+            <li>Everything in Diamond</li>
+            <li>Netherite kit every 10 days</li>
+            <li><code>/repair all</code></li>
+            <li>18 homes, +50% Scrap, 2 Netherite Keys monthly</li>
+          </ul>
+        </div>
+      </div>
+      <div class="note reveal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg>
+        <span>Metal ranks are earned by playing, never sold: win Rank Vouchers from KOTH crates and events. Want to support the server? <a class="grad-text" href="store.html">Supporter ranks</a> in the store are cosmetic only.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- VOTE + JOIN -->
+  <section class="section" id="vote">
+    <div class="wrap split">
+      <div class="panel reveal">
+        <span class="eyebrow">Support the server</span>
+        <h3>Vote daily</h3>
+        <p>Voting helps new players find BlackForge, and you get rewarded every time. If you vote while offline, the rewards wait for you until you log in. Every 50 votes starts a vote party for the whole server.</p>
+        <div class="rewards">
+          <div class="reward"><b class="grad-text">Key</b><span>Vote crate</span></div>
+          <div class="reward"><b class="grad-text">$250</b><span>Money</span></div>
+          <div class="reward"><b class="grad-text">20</b><span>Scrap</span></div>
+        </div>
+        <div class="vote-sites" data-vote-sites>
+          <div class="vote-site">Minecraft-MP <em>At launch</em></div>
+          <div class="vote-site">Minecraft Server List <em>At launch</em></div>
+          <div class="vote-site">MinecraftServers.org <em>At launch</em></div>
+          <div class="vote-site">Planet Minecraft <em>At launch</em></div>
+          <div class="vote-site">TopG <em>At launch</em></div>
+        </div>
+      </div>
+
+      <div class="panel reveal" id="join">
+        <span class="eyebrow">How to join</span>
+        <h3>Play in a minute</h3>
+        <p>BlackForge is a Java Edition server. Any version from 1.13 up to the latest release works.</p>
+        <ol class="steps">
+          <li><b>Open Minecraft</b><span>Launch Minecraft: Java Edition and click <em>Multiplayer</em>.</span></li>
+          <li><b>Add the server</b><span>Click <em>Add Server</em> and enter <code data-ip>blackforgemc.com</code></span></li>
+          <li><b>Pick your world</b><span>Join, then walk through a portal at the hub or use the compass.</span></li>
+        </ol>
+        <div class="hero-actions">
+          <button class="btn btn-primary" data-copy-ip>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            <span>Copy server IP</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section spotlight" id="faq">
+    <div class="wrap">
+      <div class="section-head center reveal">
+        <span class="eyebrow">FAQ</span>
+        <h2>Good <span class="grad-text">questions</span></h2>
+      </div>
+      <div class="faq reveal">
+        <details>
+          <summary>Which Minecraft versions can join?</summary>
+          <p>Java Edition 1.13 up to 26.3. The latest version is recommended so you see every block and feature as intended.</p>
+        </details>
+        <details>
+          <summary>Can I play on Bedrock (console, mobile, Windows 10/11)?</summary>
+          <p>Not yet. BlackForge is Java Edition only for now. Bedrock support may come later; watch the Discord for news.</p>
+        </details>
+        <details>
+          <summary>Is my progress shared between game modes?</summary>
+          <p>Your money, Scrap and rank are shared across every server. Items, islands and claims stay in the mode where you earned them.</p>
+        </details>
+        <details>
+          <summary>Is the server free to play?</summary>
+          <p>Yes. Everything that affects gameplay is earned by playing. The <a class="grad-text" href="store.html">store</a> only sells cosmetics, like supporter badges, particle trails and name colours.</p>
+        </details>
+        <details>
+          <summary>I got muted or banned. What now?</summary>
+          <p>Read the <a class="grad-text" href="rules.html">server rules</a> to see what happened. If you think it was a mistake, open a ticket in our Discord and a staff member will review it.</p>
+        </details>
+        <details>
+          <summary>How do I report a hacker or rule-breaker?</summary>
+          <p>Our anti-cheat catches most cheats automatically. For anything else, take a screenshot or clip and report it in the Discord.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="section cta">
+    <div class="wrap">
+      <div class="cta-box reveal">
+        <h2>The forge is <span class="grad-text">lit</span>.</h2>
+        <p>Grab the IP, bring your friends and pick your world.</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary" data-copy-ip>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            <span>Copy blackforgemc.com</span>
+          </button>
+          <a class="btn btn-discord" data-link="discord" href="#"><span data-label>Join the Discord</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <a class="foot-logo" href="#top"><img src="assets/img/logo-full.png" alt="BlackForge Minecraft Network" width="330" height="69" loading="lazy"></a>
+        <p>A Minecraft Java network with Skyblock, OneBlock, Survival, Factions and Arcade.</p>
+      </div>
+      <div>
+        <h5>Play</h5>
+        <ul>
+          <li><a href="#modes">Game modes</a></li>
+          <li><a href="#join">How to join</a></li>
+          <li><a href="#vote">Vote</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Server</h5>
+        <ul>
+          <li><a href="#ranks">Ranks</a></li>
+          <li><a href="rules.html">Rules</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Community</h5>
+        <ul>
+          <li><a data-link="discord" href="#"><span data-label>Discord</span></a></li>
+          <li><a href="store.html">Store</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">
+      <span>© <span data-year>2026</span> BlackForgeMC. All rights reserved.</span>
+      <span>Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/js/main.js"></script>
+</body>
+</html>

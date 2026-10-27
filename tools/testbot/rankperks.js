@@ -1,0 +1,26 @@
+const mineflayer = require('mineflayer');
+const { execSync } = require('child_process');
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const once = (b, e) => new Promise(r => b.once(e, r));
+const rcon = c => { try { return execSync(`python ../netctl.py cmd survival "${c}"`).toString().replace(/§./g, '').trim(); } catch (e) { return 'ERR'; } };
+const A = mineflayer.createBot({ host: '127.0.0.1', port: 25577, username: 'AlloyTesterA', version: '1.20.4', auth: 'offline' });
+A.on('message', m => { const t = m.toString(); if (/kit|Kit|Key|tag|Tag|Repair|repair|fly|Flight|Diamond|claim/i.test(t) && !/Welcome|joined/.test(t)) console.log('A>', t.slice(0, 150)); });
+(async () => {
+  await once(A, 'spawn'); await sleep(4000);
+  rcon('lp user AlloyTesterA permission set grim.exempt true');
+  A.setQuickBarSlot(4); await sleep(300); const w = once(A, 'windowOpen'); A.activateItem(); await w; await sleep(300); await A.clickWindow(12, 0, 0); await sleep(8000);
+  rcon('minecraft:clear AlloyTesterA'); rcon('alloy voucher give AlloyTesterA diamond'); await sleep(800);
+  const v = A.inventory.items().find(i => i.name === 'paper'); await A.equip(v, 'hand'); A.activateItem(); await sleep(3000);
+  rcon('minecraft:clear AlloyTesterA');
+  let win = once(A, 'windowOpen'); A.chat('/kit'); await win; await sleep(500);
+  await A.clickWindow(14, 0, 0); await sleep(1500); if (A.currentWindow) A.closeWindow(A.currentWindow);
+  console.log('after /kit:', A.inventory.items().map(i => i.name + 'x' + i.count).join(', '));
+  win = once(A, 'windowOpen'); A.chat('/kit'); await win; await sleep(500); await A.clickWindow(14, 0, 0); await sleep(1000); if (A.currentWindow) A.closeWindow(A.currentWindow);
+  rcon('minecraft:give AlloyTesterA minecraft:diamond_pickaxe[minecraft:damage=900]'); await sleep(800);
+  const pk = A.inventory.items().find(i => i.name === 'diamond_pickaxe'); await A.equip(pk, 'hand');
+  A.chat('/repairhand'); await sleep(1000);
+  console.log('pickaxe damage now:', rcon('data get entity AlloyTesterA SelectedItem.components'));
+  A.chat('/repairhand'); await sleep(1000);
+  A.chat('/rtp'); await sleep(9000); A.chat('/claim'); await sleep(1500); A.chat('/fly'); await sleep(1000);
+  process.exit(0);
+})().catch(e => { console.error(e); process.exit(1); });

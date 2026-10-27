@@ -1,0 +1,30 @@
+# Whitelist: only source, tools, docs and branding go in the repo.
+/*
+!/.gitignore
+!/README.txt
+!/STORE_SETUP.md
+!/VOTE_SETUP.md
+!/WEBSITE_SETUP.md
+!/start-alloymc.bat
+!/stop-alloymc.bat
+!/plugins-src/
+!/tools/
+!/datapacks/
+!/branding/
+!/website/
+!/docs/
+
+# build output and caches
+plugins-src/**/build/
+plugins-src/**/.gradle/
+plugins-src/**/out/
+
+# tools: bundled JDK/Gradle, secrets, logs, node deps
+tools/jdk-*/
+tools/gradle-*/
+tools/rcon.secret
+tools/*.log
+tools/**/node_modules/
+tools/**/*.log
+tools/__pycache__/
+*.secret

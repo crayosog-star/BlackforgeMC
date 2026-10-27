@@ -1,0 +1,14 @@
+const mineflayer = require('mineflayer'); const { execSync } = require('child_process');
+const sleep = ms => new Promise(r => setTimeout(r, ms)); const once = (b, e) => new Promise(r => b.once(e, r));
+const ob = c => { try { return execSync(`python ../netctl.py cmd skyblock "execute in minecraft:oneblock_world run ${c}"`).toString().replace(/§./g, '').trim(); } catch (e) { return 'ERR'; } };
+const A = mineflayer.createBot({ host: '127.0.0.1', port: 25577, username: 'AlloyTesterA', version: '1.20.4', auth: 'offline' });
+(async () => { await once(A, 'spawn'); await sleep(4000);
+  A.setQuickBarSlot(4); await sleep(300); let w = once(A, 'windowOpen'); A.activateItem(); await w; await sleep(300); await A.clickWindow(10, 0, 0); await sleep(8000);
+  A.chat('/ob'); await sleep(8000);
+  ob('fill 798 80 796 806 80 804 minecraft:grass_block replace minecraft:stone');
+  await sleep(30000); console.log('pigs', ob('execute if entity @e[type=pig,x=802,y=81,z=800,distance=..10]'));
+  console.log('pig tags', ob('data get entity @e[type=pig,x=802,y=81,z=800,distance=..10,limit=1,sort=nearest] BukkitValues'));
+  console.log('kill', ob('kill @e[type=pig,x=802,y=81,z=800,distance=..10]')); await sleep(1500);
+  console.log('spawner', ob('data get block 802 81 800 PublicBukkitValues')); console.log('Delay later', ob('data get block 802 81 800 Delay'));
+  console.log('light', ob('execute if block 802 82 800 minecraft:air'));
+  process.exit(0); })();

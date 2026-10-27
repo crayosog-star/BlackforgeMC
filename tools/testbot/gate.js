@@ -1,0 +1,23 @@
+const mineflayer = require('mineflayer');
+const { execSync } = require('child_process');
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const once = (b, e) => new Promise(r => b.once(e, r));
+const rcon = c => { try { return execSync(`python ../netctl.py cmd skyblock "${c}"`).toString().replace(/§./g, '').trim(); } catch (e) { return 'ERR'; } };
+const A = mineflayer.createBot({ host: '127.0.0.1', port: 25577, username: 'AlloyTesterA', version: '1.20.4', auth: 'offline' });
+const title = w => JSON.stringify(w.title).match(/"value":"([^"]{3,})"/g)?.map(s => s.slice(9, -1)).join(' ') || '?';
+(async () => {
+  await once(A, 'spawn'); await sleep(4000);
+  A.setQuickBarSlot(4); await sleep(400); let w = once(A, 'windowOpen'); A.activateItem(); await w; await sleep(300); await A.clickWindow(10, 0, 0); await sleep(8000);
+  console.log('returning player arrives at:', A.entity.position.toString(), '(spawn is 0.5,151,24.5)');
+  rcon('minecraft:tp AlloyTesterA 0.5 151 -28.0 180 0'); await sleep(2000);
+  const g0 = once(A, 'windowOpen'); rcon('minecraft:tp AlloyTesterA 0.5 153.5 -29.5 180 0');
+  const w0 = await Promise.race([g0, sleep(4000).then(() => null)]);
+  console.log('dropped into the gate:', w0 ? 'window "' + title(w0) + '"' : 'no window', '/ pos', A.entity.position.toString());
+  process.exit(0);
+  console.log('in front of gate:', A.entity.position.toString(), '| block at gate:', rcon('execute if block 0 151 -30 minecraft:nether_portal'));
+  const g = once(A, 'windowOpen');
+  A.setControlState('forward', true); await sleep(1200); A.setControlState('forward', false);
+  const gw = await Promise.race([g, sleep(4000).then(() => null)]);
+  console.log('after walking into the gate:', gw ? 'window "' + title(gw) + '"' : 'no window', '| pos', A.entity.position.toString());
+  process.exit(0);
+})();
