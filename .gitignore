@@ -29,3 +29,4 @@ tools/**/node_modules/
 tools/**/*.log
 tools/__pycache__/
 *.secret
+tools/autoupdate.lock
