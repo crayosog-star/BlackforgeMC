@@ -30,6 +30,13 @@ public final class PreviewMain {
         pov(hub, new File(out, "hub_castle_aerial.png"), 0.5, 240, 300.5, 180, 32, 1600, 900);
         dragons(hub, out);
         night = false;
+        Canvas ta = net.alloymc.core.hub.TestArenaBuilder.build();
+        System.out.println("arena blocks: " + ta.size());
+        render(ta, new File(out, "arena_southeast.png"), 0, 9);
+        topDown(ta, new File(out, "arena_top.png"), 8);
+        pov(ta, new File(out, "arena_spawn_view.png"), 0.5, 102.62, 13.5, 180, -4, 1280, 720);
+        pov(ta, new File(out, "arena_showcase_view.png"), -4.5, 102.62, 0.5, 90, -8, 1280, 720);
+        pov(ta, new File(out, "arena_aerial.png"), 0.5, 140, 50.5, 180, 32, 1600, 900);
         Canvas sv = net.alloymc.core.survival.SpawnBuilder.spawn();
         System.out.println("survival spawn blocks: " + sv.size());
         render(sv, new File(out, "survival_spawn.png"), 0, 9);

@@ -29,6 +29,7 @@ import java.util.*;
 public final class HubModule implements Listener {
     private final AlloyCore plugin;
     private final World world;
+    private final TestArena arena;
     private final Map<UUID, Long> portalCooldown = new HashMap<>();
     private final Set<UUID> hidingPlayers = new HashSet<>();
     private final List<TextDisplay> holograms = new ArrayList<>();
@@ -51,7 +52,8 @@ public final class HubModule implements Listener {
         this.world = Bukkit.getWorlds().getFirst();
         LobbyRules.setupWorld(plugin, world, 18000);   // midnight under the Inferno biome's red sky
         world.setSpawnLocation(spawn());
-        Bukkit.getPluginManager().registerEvents(new LobbyRules(p -> false), plugin);
+        // the Arena (item testing ground) is free to shuffle, drop and pick up items; everything else stays locked
+        Bukkit.getPluginManager().registerEvents(new LobbyRules(p -> false).allowItems(p -> p.getWorld().getName().equals(TestArena.WORLD)), plugin);
         new net.alloymc.core.SpawnSafety(plugin, l -> l.getWorld() == world, p -> spawn()).withStuckCommand();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         registerJoinCommand();   // the clickable links in the first-join guide run /alloyjoin
@@ -67,12 +69,28 @@ public final class HubModule implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, this::refresh, 60L, 40L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::ambient, 20L, 10L);
         dragons = new DragonAnimator(plugin, world);
+        arena = new TestArena(plugin);
     }
+
+    public TestArena arena() { return arena; }
 
     private void registerJoinCommand() {
         Bukkit.getCommandMap().register("alloy", new org.bukkit.command.Command("alloyjoin", "Join a game mode", "/alloyjoin <server>", List.of()) {
             @Override public boolean execute(org.bukkit.command.CommandSender s, String label, String[] a) {
-                if (s instanceof Player p && a.length == 1 && List.of("skyblock", "survival", "factions", "arcade").contains(a[0])) connect(p, a[0]);
+                if (s instanceof Player p && a.length == 1 && a[0].equals("arena")) arena.enter(p);
+                else if (s instanceof Player p && a.length == 1 && List.of("skyblock", "survival", "factions", "arcade").contains(a[0])) connect(p, a[0]);
+                return true;
+            }
+        });
+        // /arena: go to the Arena; /arena kit: refill the test kit while in it
+        Bukkit.getCommandMap().register("alloy", new org.bukkit.command.Command("arena", "Go to the Arena (item testing ground)", "/arena [kit]", List.of()) {
+            @Override public boolean execute(org.bukkit.command.CommandSender s, String label, String[] a) {
+                if (!(s instanceof Player p)) return true;
+                if (a.length > 0 && a[0].equalsIgnoreCase("kit")) {
+                    if (arena.inArena(p)) { arena.kit(p); p.sendActionBar(Ui.mm("<green>Kit refilled.")); }
+                    else p.sendMessage(Ui.mm("<gray>Go to the Arena first: <white>/arena"));
+                } else if (arena.inArena(p)) p.sendMessage(Ui.mm("<gray>You're already in the Arena. <white>/hub <gray>to leave."));
+                else arena.enter(p);
                 return true;
             }
         });
@@ -80,7 +98,7 @@ public final class HubModule implements Listener {
 
     private DragonAnimator dragons;
 
-    public void shutdown() { holograms.forEach(TextDisplay::remove); if (dragons != null) dragons.remove(); }
+    public void shutdown() { holograms.forEach(TextDisplay::remove); if (dragons != null) dragons.remove(); arena.shutdown(); }
 
     public Location spawn() {
         return new Location(world, HubLayout.SPAWN_X, HubLayout.SPAWN_Y, HubLayout.SPAWN_Z, HubLayout.SPAWN_YAW, HubLayout.SPAWN_PITCH);
@@ -206,6 +224,17 @@ public final class HubModule implements Listener {
         }, 60L);
     }
 
+    /** Back from the Arena: the hub kit and double jump again. */
+    @EventHandler
+    public void onWorldChange(PlayerChangedWorldEvent e) {
+        Player p = e.getPlayer();
+        if (p.getWorld() != world) return;
+        if (!p.hasPermission("alloy.admin") || p.getGameMode() != GameMode.CREATIVE) p.setGameMode(GameMode.ADVENTURE);
+        p.setAllowFlight(true);
+        p.setFireTicks(0);
+        kit(p);
+    }
+
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
         e.quitMessage(null);
@@ -237,6 +266,8 @@ public final class HubModule implements Listener {
         public Inventory getInventory() { return inv; }
     }
 
+    private static final int ARENA_SLOT = 22;
+
     private void openMenu(Player p) {
         MenuHolder h = new MenuHolder();
         Inventory inv = Bukkit.createInventory(h, 27, Ui.mm("<dark_gray>Select a Server"));
@@ -252,6 +283,8 @@ public final class HubModule implements Listener {
             lore.add("<yellow>» Click to join");
             inv.setItem(Integer.parseInt(m[1]), Ui.item(Material.valueOf(m[2]), m[3], lore.toArray(String[]::new)));
         }
+        inv.setItem(ARENA_SLOT, Ui.item(Material.TARGET, "<#7bd88f><bold>Arena", "<gray>Testing ground: try every item", "<gray>on the dummy, grab the newest ones", "<gray>from the showcase wall.", "",
+                "<gray>In the Arena: <white>" + arena.world().getPlayers().size(), "<yellow>» Click to enter"));
         p.openInventory(inv);
         p.playSound(p.getLocation(), Sound.BLOCK_CHEST_OPEN, 0.5f, 1.3f);
     }
@@ -261,6 +294,7 @@ public final class HubModule implements Listener {
         if (!(e.getInventory().getHolder() instanceof MenuHolder)) return;
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p)) return;
+        if (e.getRawSlot() == ARENA_SLOT) { p.closeInventory(); arena.enter(p); return; }
         for (String[] m : MENU)
             if (e.getRawSlot() == Integer.parseInt(m[1])) {
                 p.closeInventory();
@@ -280,6 +314,7 @@ public final class HubModule implements Listener {
     public void onMove(PlayerMoveEvent e) {
         Player p = e.getPlayer();
         Location to = e.getTo();
+        if (to.getWorld() != world) return;   // the Arena handles its own world
         if (to.getY() < HubLayout.VOID_Y) { toSpawn(p); p.playSound(p.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1f); return; }
         if (p.getGameMode() == GameMode.ADVENTURE && !p.getAllowFlight() && p.isOnGround()) p.setAllowFlight(true);
         if (!e.hasChangedBlock()) return;
@@ -299,6 +334,7 @@ public final class HubModule implements Listener {
     @EventHandler
     public void onDoubleJump(PlayerToggleFlightEvent e) {
         Player p = e.getPlayer();
+        if (p.getWorld() != world) return;
         if (p.getGameMode() != GameMode.ADVENTURE && p.getGameMode() != GameMode.SURVIVAL) return;
         e.setCancelled(true);
         p.setAllowFlight(false);
