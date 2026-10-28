@@ -34,7 +34,8 @@ import java.util.concurrent.ThreadLocalRandom;
  * </ol>
  * Everything is sent only to the joining player (particle receivers, per-player hidden fireworks, player-only
  * sounds), so a wave of new players never floods the hub for everyone else.
- * The show is staged in front of where the player is facing; at hub spawn that's toward the BLACKFORGE sign.
+ * The show surrounds the player: rockets launch from a ring around them and burst on every side, while the
+ * fireball, sigil (a flat halo) and finale centre straight overhead and the finale fireworks circle them.
  */
 public final class WelcomeShow {
 
@@ -73,22 +74,25 @@ public final class WelcomeShow {
         double yaw = Math.toRadians(l.getYaw());
         this.fwd = new Vector(-Math.sin(yaw), 0, Math.cos(yaw));
         this.right = fwd.clone().crossProduct(up);
-        // centre of the show: 24 blocks ahead, 13 up - inside entity tracking range so the real fireworks show
-        this.sky = rel(origin, 0, 13, 24);
+        // centre of the show: straight above the player, well inside entity tracking range for the real fireworks
+        this.sky = rel(origin, 0, 14, 0);
 
-        // ember volleys: launch tick, sideways offset, distance ahead, extra burst height
-        volley(86, -11, 20, 2, Kind.RING);
-        volley(94, 10, 22, 4, Kind.STARBURST);
-        volley(104, 0, 26, 6, Kind.SOUL);
-        volley(112, -6, 24, 0, Kind.WILLOW);
-        volley(120, 12, 20, 1, Kind.RING);
-        volley(128, -12, 22, 5, Kind.CRACKLE);
-        volley(136, 5, 24, 3, Kind.STARBURST);
-        volley(140, -4, 22, 7, Kind.SOUL);
+        // ember volleys from a ring around the player: launch tick, angle (0 = where they face, 90 = their right),
+        // extra burst height. Front and back alternate with the sides so the show goes all the way round.
+        volley(86, 0, 2, Kind.RING);
+        volley(94, 180, 4, Kind.STARBURST);
+        volley(104, 90, 6, Kind.SOUL);
+        volley(112, 270, 0, Kind.WILLOW);
+        volley(120, 45, 1, Kind.RING);
+        volley(128, 225, 5, Kind.CRACKLE);
+        volley(136, 135, 3, Kind.STARBURST);
+        volley(140, 315, 7, Kind.SOUL);
     }
 
-    private void volley(int launch, double side, double ahead, double height, Kind kind) {
-        rockets.add(new Rocket(launch, rel(origin, side, 0, ahead), rel(origin, side * 0.7, 13 + height, 24 + (ahead - 22) * 0.5), 14, kind));
+    /** A rocket launched 10 blocks out at {@code deg} around the player, bursting 7 blocks out and 11+ up. */
+    private void volley(int launch, double deg, double height, Kind kind) {
+        double a = Math.toRadians(deg), side = Math.sin(a), ahead = Math.cos(a);
+        rockets.add(new Rocket(launch, rel(origin, side * 10, 0, ahead * 10), rel(origin, side * 7, 11 + height, ahead * 7), 14, kind));
     }
 
     private void tick(BukkitTask task) {
@@ -155,7 +159,7 @@ public final class WelcomeShow {
     // ------------------------------------------------------------------ 2. fireball
 
     private void fireball(int k) {
-        Vector start = origin.clone().add(new Vector(0, 2.2, 0)), ctrl = rel(origin, 0, 16, 8);
+        Vector start = origin.clone().add(new Vector(0, 2.2, 0)), ctrl = rel(origin, 0, 10, 5);
         Particle.DustOptions core = new Particle.DustOptions(EMBER, 2.5f);
         for (int sub = 0; sub < 2; sub++) {   // two sub-steps per tick keep the trail continuous
             Vector pos = bezier(start, ctrl, sky, (k + 0.5 * (sub + 1)) / 18.0);
@@ -195,8 +199,8 @@ public final class WelcomeShow {
                 }
                 double r = 9 * easeOut(Math.min(1, (k + 1) / 10.0));
                 Particle.DustTransition outer = new Particle.DustTransition(WHITE_HOT, EMBER, 2f), inner = new Particle.DustTransition(SOUL, GOLD, 1.4f);
-                for (int i = 0; i < 56; i++) fx(Particle.DUST_COLOR_TRANSITION, facing(c, r, Math.PI * 2 * i / 56), 1, 0, 0, 0, 0, outer);
-                for (int i = 0; i < 32; i++) fx(Particle.DUST_COLOR_TRANSITION, facing(c, r * 0.6, Math.PI * 2 * i / 32 - k * 0.1), 1, 0, 0, 0, 0, inner);
+                for (int i = 0; i < 56; i++) fx(Particle.DUST_COLOR_TRANSITION, flat(c, r, Math.PI * 2 * i / 56), 1, 0, 0, 0, 0, outer);
+                for (int i = 0; i < 32; i++) fx(Particle.DUST_COLOR_TRANSITION, flat(c, r * 0.6, Math.PI * 2 * i / 32 - k * 0.1), 1, 0, 0, 0, 0, inner);
                 return k < 12;
             }
             case RING -> {
@@ -281,15 +285,15 @@ public final class WelcomeShow {
             Particle.DustOptions gold = new Particle.DustOptions(GOLD, 1.6f), crimson = new Particle.DustOptions(CRIMSON, 1.4f),
                     ember = new Particle.DustOptions(EMBER, 1.2f);
             Particle.DustTransition star = new Particle.DustTransition(GOLD, BLOOD, 1.3f);
-            for (int i = 0; i < 56; i++) fx(Particle.DUST, facing(sky, 8.5 * s, Math.PI * 2 * i / 56), 1, 0, 0, 0, 0, gold);
-            for (int i = 0; i < 40; i++) fx(Particle.DUST, facing(sky, 6 * s, Math.PI * 2 * i / 40), 1, 0, 0, 0, 0, crimson);
+            for (int i = 0; i < 56; i++) fx(Particle.DUST, flat(sky, 8.5 * s, Math.PI * 2 * i / 56), 1, 0, 0, 0, 0, gold);
+            for (int i = 0; i < 40; i++) fx(Particle.DUST, flat(sky, 6 * s, Math.PI * 2 * i / 40), 1, 0, 0, 0, 0, crimson);
             for (int i = 0; i < 16; i++) {   // rotating notches between the two circles
                 double a = Math.PI * 2 * i / 16 + spin;
-                line(facing(sky, 6.3 * s, a), facing(sky, 8.2 * s, a), 3, Particle.DUST, ember);
+                line(flat(sky, 6.3 * s, a), flat(sky, 8.2 * s, a), 3, Particle.DUST, ember);
             }
             for (int j = 0; j < 8; j++) {    // counter-rotating eight-point star (two squares)
                 double a0 = -spin * 1.5 + Math.PI / 4 * j, a1 = a0 + Math.PI / 2;
-                line(facing(sky, 6 * s, a0), facing(sky, 6 * s, a1), 7, Particle.DUST_COLOR_TRANSITION, star);
+                line(flat(sky, 6 * s, a0), flat(sky, 6 * s, a1), 7, Particle.DUST_COLOR_TRANSITION, star);
             }
             fx(Particle.FLAME, sky, 4, 0.3, 0.3, 0.3, 0.01);
         }
@@ -314,15 +318,15 @@ public final class WelcomeShow {
                 firework(sky, effect(FireworkEffect.Type.BALL_LARGE, GOLD, EMBER, CRIMSON));
             }
             case 5 -> {
-                firework(rel(sky, -8, 3, 2), effect(FireworkEffect.Type.STAR, WHITE_HOT, GOLD, EMBER));
-                firework(rel(sky, 8, 3, 2), effect(FireworkEffect.Type.STAR, WHITE_HOT, GOLD, EMBER));
+                firework(rel(sky, -8, -2, 0), effect(FireworkEffect.Type.STAR, WHITE_HOT, GOLD, EMBER));
+                firework(rel(sky, 8, -2, 0), effect(FireworkEffect.Type.STAR, WHITE_HOT, GOLD, EMBER));
             }
             case 11 -> {
-                firework(rel(sky, -4, 7, 4), effect(FireworkEffect.Type.BURST, CRIMSON, EMBER, BLOOD));
-                firework(rel(sky, 4, 7, 4), effect(FireworkEffect.Type.BURST, SOUL, EMBER, GOLD));
+                firework(rel(sky, 0, -1, 8), effect(FireworkEffect.Type.BURST, CRIMSON, EMBER, BLOOD));
+                firework(rel(sky, 0, -1, -8), effect(FireworkEffect.Type.BURST, SOUL, EMBER, GOLD));
             }
             case 17 -> {
-                firework(rel(sky, 0, 9, 6), effect(FireworkEffect.Type.BALL_LARGE, EMBER, GOLD, WHITE_HOT, CRIMSON));
+                firework(rel(sky, 0, 4, 0), effect(FireworkEffect.Type.BALL_LARGE, EMBER, GOLD, WHITE_HOT, CRIMSON));
                 sound(origin, Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 0.8f);
                 p.sendActionBar(Ui.mm("<gradient:#ffd27a:#ff5a1a>✦ The forge burns for you, " + p.getName() + " ✦</gradient>"));
             }
@@ -399,9 +403,11 @@ public final class WelcomeShow {
         return c.clone().add(new Vector(Math.cos(a) * r, 0, Math.sin(a) * r));
     }
 
-    /** point on a circle standing upright, facing the player */
+    /** point on a circle standing upright and turned to face the player, wherever around them it is */
     private Vector facing(Vector c, double r, double a) {
-        return c.clone().add(right.clone().multiply(Math.cos(a) * r)).add(up.clone().multiply(Math.sin(a) * r));
+        Vector toward = c.clone().subtract(origin).setY(0);
+        Vector side = toward.lengthSquared() < 1 ? right : toward.normalize().crossProduct(up);
+        return c.clone().add(side.clone().multiply(Math.cos(a) * r)).add(up.clone().multiply(Math.sin(a) * r));
     }
 
     private static Vector lerp(Vector a, Vector b, double s) {
