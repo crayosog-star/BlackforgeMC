@@ -132,6 +132,9 @@ public final class TestArena implements Listener {
         this.world = w;
         LobbyRules.setupWorld(plugin, world, 1000);                     // a bright, still morning
         world.setDifficulty(Difficulty.NORMAL);                         // the dummy is a husk: peaceful would delete it
+        // the hub server runs pvp=false, and vanilla then blocks player-on-player damage before any plugin sees it
+        // (swords, Gale Bellows, everything); the Arena's own rules decide who can hit whom, so PvP is on for this world
+        world.setPVP(true);
         world.setSpawnFlags(false, false);
         world.setSpawnLocation(spawn());
         for (int cx = -3; cx <= 2; cx++) for (int cz = -3; cz <= 2; cz++) world.addPluginChunkTicket(cx, cz, plugin);

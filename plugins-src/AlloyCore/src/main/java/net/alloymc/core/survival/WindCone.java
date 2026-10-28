@@ -7,10 +7,16 @@ package net.alloymc.core.survival;
 public final class WindCone {
     private WindCone() {}
 
-    /** How far the burst reaches, measured from the caster's eyes (about 2 blocks in front of the body). */
-    public static final double RANGE = 2.6;
+    /** How far the burst reaches: 3 blocks from the caster's eyes to the nearest edge of the target's hitbox. */
+    public static final double RANGE = 3.0;
     /** Half the cone's width: 35 degrees either side of where you look, so a 70 degree cone. */
     public static final double HALF_ANGLE_DEG = 35.0;
+    /** Point-blank: within this distance of your eyes the cone opens to 80 degrees either side, so huggers can't dodge it. */
+    public static final double CLOSE = 1.2;
+    public static final double CLOSE_HALF_ANGLE_DEG = 80.0;
+    /** The slash is a wave: it starts this far from your eyes and rolls out to {@link #RANGE} over {@link #WAVE_TICKS} ticks. */
+    public static final double WAVE_START = 0.6;
+    public static final int WAVE_TICKS = 4;
     /** Horizontal push speed before any reductions. */
     public static final double PUSH = 1.4;
     /** Upward lift for targets standing on the ground. */
@@ -25,6 +31,18 @@ public final class WindCone {
     public static final double MIN_SCALE = 0.45;
 
     private static final double COS_HALF = Math.cos(Math.toRadians(HALF_ANGLE_DEG));
+    private static final double COS_CLOSE = Math.cos(Math.toRadians(CLOSE_HALF_ANGLE_DEG));
+
+    /** Radius of the wave's front on tick {@code tick} (0-based): 1.2, 1.8, 2.4, 3.0 blocks. */
+    public static double waveRadius(int tick) {
+        return WAVE_START + (RANGE - WAVE_START) * (tick + 1) / WAVE_TICKS;
+    }
+
+    /** The tick on which the wave's front reaches something {@code dist} blocks from your eyes (0 = right away). */
+    public static int waveTick(double dist) {
+        int k = (int) Math.ceil((dist - WAVE_START) / (RANGE - WAVE_START) * WAVE_TICKS) - 1;
+        return Math.max(0, Math.min(WAVE_TICKS - 1, k));
+    }
 
     /**
      * True if the point (dx, dy, dz), given relative to the caster's eyes, is in range and inside the cone
@@ -37,7 +55,7 @@ public final class WindCone {
         double look = Math.sqrt(lx * lx + ly * ly + lz * lz);
         if (look < 1e-9) return false;
         double cos = (lx * dx + ly * dy + lz * dz) / (look * dist);
-        return cos >= COS_HALF;
+        return cos >= (dist <= CLOSE ? COS_CLOSE : COS_HALF);
     }
 
     /**
@@ -46,10 +64,21 @@ public final class WindCone {
      * (dx, dz): horizontal offset of the target from the eyes; minDy/maxDy: their feet and head height relative to the eyes.
      */
     public static boolean hits(double lx, double ly, double lz, double dx, double dz, double minDy, double maxDy) {
+        return hits(lx, ly, lz, dx, dz, minDy, maxDy, 0);
+    }
+
+    /**
+     * As above, measured to the near side of a hitbox {@code halfWidth} wide either side of (dx, dz), so a player whose
+     * hitbox edge is 3 blocks away counts as 3 blocks away (like a sword's reach), not 3.3.
+     */
+    public static boolean hits(double lx, double ly, double lz, double dx, double dz, double minDy, double maxDy, double halfWidth) {
+        double h = Math.sqrt(dx * dx + dz * dz);
+        double s = h > 1e-9 ? Math.max(0, h - halfWidth) / h : 0;
+        double ex = dx * s, ez = dz * s;
         int samples = 5;
         for (int i = 0; i < samples; i++) {
             double dy = minDy + (maxDy - minDy) * i / (samples - 1);
-            if (inCone(lx, ly, lz, dx, dy, dz)) return true;
+            if (inCone(lx, ly, lz, ex, dy, ez)) return true;
         }
         return false;
     }

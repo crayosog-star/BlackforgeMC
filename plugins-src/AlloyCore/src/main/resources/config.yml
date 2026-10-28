@@ -8,7 +8,7 @@ mode: backend
 gale-bellows:
   enabled: true
   custom-model: false
-  cooldown-seconds: 0   # seconds between blasts; 0 = no cooldown (was 10)
+  cooldown-seconds: 7   # seconds between blasts (and Gale jumps), Arena included; 0 = no cooldown
 
 # Potion of Gaia (survival only): a pink splash potion that grows a mist, blooms, and rises as an 8-block
 # platform. No resource pack needed. Staff: /gaia. Crates: alloy gaia give {player}. Set false to stop it.

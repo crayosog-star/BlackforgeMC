@@ -25,8 +25,30 @@ class WindConeTest {
         assertTrue(WindCone.hits(LX, LY, LZ, 1.0, 0, FEET, HEAD));
     }
 
-    @Test void missesPlayerThreeBlocksAhead() {
-        assertFalse(WindCone.hits(LX, LY, LZ, 3.0, 0, FEET, HEAD));
+    @Test void reachesThreeBlocksToTheHitbox() {
+        // centre 3.2 away, hitbox edge 2.9: in reach, like a sword
+        assertTrue(WindCone.hits(LX, LY, LZ, 3.2, 0, FEET, HEAD, 0.3));
+    }
+
+    @Test void missesPlayerBeyondThreeBlocks() {
+        assertFalse(WindCone.hits(LX, LY, LZ, 3.5, 0, FEET, HEAD, 0.3));   // edge 3.2
+    }
+
+    @Test void pointBlankConeIsWide() {
+        double[] hug = at(0.8, 60), far = at(2.0, 60);
+        assertTrue(WindCone.hits(LX, LY, LZ, hug[0], hug[1], FEET, HEAD));    // right up against you, well off-centre
+        assertFalse(WindCone.hits(LX, LY, LZ, far[0], far[1], FEET, HEAD));   // the same angle further out is a miss
+    }
+
+    @Test void waveStartsCloseAndReachesThreeBlocks() {
+        assertEquals(1.2, WindCone.waveRadius(0), 1e-9);
+        assertEquals(WindCone.RANGE, WindCone.waveRadius(WindCone.WAVE_TICKS - 1), 1e-9);
+        assertEquals(0, WindCone.waveTick(0.3));
+        assertEquals(0, WindCone.waveTick(1.0));
+        assertEquals(2, WindCone.waveTick(2.0));
+        assertEquals(WindCone.WAVE_TICKS - 1, WindCone.waveTick(3.0));
+        for (double d = 0; d <= WindCone.RANGE; d += 0.05)   // the front has always reached you by your tick
+            assertTrue(WindCone.waveRadius(WindCone.waveTick(d)) >= d - 1e-9, "dist " + d);
     }
 
     @Test void coneEdgeIsThirtyFiveDegrees() {
@@ -36,8 +58,8 @@ class WindConeTest {
     }
 
     @Test void rangeEdge() {
-        assertTrue(WindCone.inCone(LX, LY, LZ, 2.5, 0, 0));
-        assertFalse(WindCone.inCone(LX, LY, LZ, 2.7, 0, 0));
+        assertTrue(WindCone.inCone(LX, LY, LZ, 2.9, 0, 0));
+        assertFalse(WindCone.inCone(LX, LY, LZ, 3.1, 0, 0));
     }
 
     @Test void missesPlayerFortyFiveDegreesToTheSide() {
