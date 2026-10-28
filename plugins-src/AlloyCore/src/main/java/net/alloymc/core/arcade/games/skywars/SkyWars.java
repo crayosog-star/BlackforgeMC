@@ -55,8 +55,8 @@ public final class SkyWars extends ArcadeGame {
 
     @Override public List<BuiltMap> builtInMaps() {
         return List.of(
-            SkyWarsMaps.build("skyreach_ruins", "Skyreach Ruins", "Eight crumbling stone islands around an old temple.", 8, 36, SkyWarsMaps.RUINS),
-            SkyWarsMaps.build("gilded_atoll", "Gilded Atoll", "Twelve lush islands circling a golden shrine.", 12, 46, SkyWarsMaps.GILDED),
-            SkyWarsMaps.build("cinderfall", "Cinderfall", "Eight scorched islands over a burning sky.", 8, 34, SkyWarsMaps.CINDER));
+            SkyWarsMaps.build("skyreach_ruins", "Skyreach Ruins", "Eight crumbling stone islands around an old temple.", 8, 56, SkyWarsMaps.RUINS),
+            SkyWarsMaps.build("gilded_atoll", "Gilded Atoll", "Twelve lush islands circling a golden shrine.", 12, 80, SkyWarsMaps.GILDED),
+            SkyWarsMaps.build("cinderfall", "Cinderfall", "Eight scorched islands over a burning sky.", 8, 54, SkyWarsMaps.CINDER));
     }
 }

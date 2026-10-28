@@ -231,7 +231,7 @@ public abstract class Match {
             }
             case IN_PROGRESS -> {
                 elapsed++;
-                for (Player p : everyone()) if (!isAlive(p) && p.getGameMode() == GameMode.SPECTATOR && !inBounds(p.getLocation())) p.teleport(at(map.spectator));
+                for (Player p : everyone()) if (!isAlive(p) && p.getGameMode() == GameMode.SPECTATOR && (!inBounds(p.getLocation()) || belowVoid(p.getLocation()))) p.teleport(at(map.spectator));
                 for (Player p : online(spectators)) if (!inBounds(p.getLocation())) p.teleport(at(map.spectator));
                 secondTick();
                 if (state.is(MatchState.IN_PROGRESS) && timeLimit() > 0 && elapsed >= timeLimit()) onTimeUp();
@@ -252,7 +252,12 @@ public abstract class Match {
 
     void tickFast() {
         if (!state.get().live()) return;
-        for (Player p : living()) if (belowVoid(p.getLocation())) onVoid(p);
+        for (Player p : living()) if (belowVoid(p.getLocation())) {
+            // a player waiting to respawn is a spectator: flying under the void must not "kill" them again
+            // (that restarted their respawn timer forever), just bring them back up
+            if (p.getGameMode() == GameMode.SPECTATOR) { if (map.spectator != null) p.teleport(at(map.spectator)); }
+            else onVoid(p);
+        }
         if (state.is(MatchState.IN_PROGRESS)) fastTick();
     }
 
@@ -307,8 +312,10 @@ public abstract class Match {
         p.setFallDistance(0);
         p.setExp(0);
         p.setLevel(0);
-        p.setAllowFlight(false);
-        p.setFlying(false);
+        // spectators must keep flight: without it they fall straight through the map forever
+        boolean spec = mode == GameMode.SPECTATOR;
+        p.setAllowFlight(spec);
+        p.setFlying(spec);
         p.setGlowing(false);
         p.setInvisible(false);
         p.setWalkSpeed(0.2f);
@@ -379,7 +386,7 @@ public abstract class Match {
     protected void makeSpectator(Player p) {
         resetPlayer(p, GameMode.SPECTATOR);
         if (map.spectator != null) p.teleport(at(map.spectator));
-        p.sendMessage(Ui.mm("<gray>You're spectating. <white>/arcade leave <gray>to go back to the lobby."));
+        p.sendMessage(Ui.mm("<gray>You're spectating: fly anywhere in the arena, <white>left-click a player<gray> to watch through their eyes (sneak to stop), or press <white>1<gray> to jump to a player. <white>/arcade leave <gray>to go back to the lobby."));
     }
 
     void addSpectator(Player p) {

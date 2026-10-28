@@ -50,8 +50,9 @@ public final class BedWars extends ArcadeGame {
 
     @Override public List<BuiltMap> builtInMaps() {
         return List.of(
-            BedWarsMaps.build("forgeworks", "Forgeworks", "Copper foundries floating over the void.", 4, 34, BedWarsMaps.FORGE),
-            BedWarsMaps.build("verdant_isles", "Verdant Isles", "Eight overgrown islands around an emerald shrine.", 8, 46, BedWarsMaps.VERDANT),
-            BedWarsMaps.build("frostspire", "Frostspire", "Icy outposts around a frozen spire.", 4, 38, BedWarsMaps.FROST));
+            BedWarsMaps.build("forgeworks", "Forgeworks", "Copper foundries floating over the void.", 4, 64, BedWarsMaps.FORGE),
+            BedWarsMaps.build("verdant_isles", "Verdant Isles", "Eight overgrown islands around an emerald shrine.", 8, 88, BedWarsMaps.VERDANT),
+            BedWarsMaps.build("frostspire", "Frostspire", "Icy outposts around a frozen spire.", 4, 68, BedWarsMaps.FROST),
+            BedWarsMaps.build("ashen_crown", "Ashen Crown", "Eight crimson strongholds around a crying-obsidian crown.", 8, 84, BedWarsMaps.ASHEN));
     }
 }

@@ -129,10 +129,21 @@ public final class CustomEnchants implements Listener {
         int cur = level(target, ce.id());
         int next = cur == lvl ? lvl + 1 : Math.max(cur, lvl);
         if (cur >= ce.max() || next > ce.max() || next <= cur) { p.sendMessage(Ui.mm("<red>That item already has " + ce.name() + " " + ROMAN[cur] + ".")); return; }
-        target.editMeta(m -> m.getPersistentDataContainer().set(keys.get(ce.id()), PersistentDataType.INTEGER, next));
-        relore(target);
-        cursor.setAmount(cursor.getAmount() - 1);
-        e.getView().setCursor(cursor.getAmount() > 0 ? cursor : null);
+        // Work on copies and write both slots back explicitly: the client already predicted a swap (book in the slot,
+        // tool on the cursor), so the cursor and slot must be re-sent or the tool shows twice and can be duplicated.
+        ItemStack done = target.clone();
+        done.editMeta(m -> m.getPersistentDataContainer().set(keys.get(ce.id()), PersistentDataType.INTEGER, next));
+        relore(done);
+        ItemStack left = cursor.clone();
+        left.setAmount(cursor.getAmount() - 1);
+        ItemStack newCursor = left.getAmount() > 0 ? left : null;
+        e.setCurrentItem(done);
+        e.getView().setCursor(newCursor);
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!p.isOnline()) return;
+            p.setItemOnCursor(newCursor);
+            p.updateInventory();
+        });
         p.playSound(p.getLocation(), Sound.BLOCK_ENCHANTMENT_TABLE_USE, 1f, 1.2f);
         p.playSound(p.getLocation(), Sound.BLOCK_ANVIL_USE, 0.5f, 1.6f);
         p.sendMessage(Ui.mm("<green>✔ Applied " + ce.color() + ce.name() + " " + ROMAN[next] + "<green>!"));

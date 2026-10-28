@@ -29,7 +29,7 @@ final class SkyWarsMaps {
         MapDef d = new MapDef("skywars", id);
         d.display = name; d.description = desc;
         d.minPlayers = 2; d.maxPlayers = islands;
-        d.builderVersion = 2;
+        d.builderVersion = 3;
         int ext = ringR + 16;
         d.bounds = Box.of(-ext, -40, -ext, ext, 50, ext);
         d.voidY = -25;
@@ -70,7 +70,7 @@ final class SkyWarsMaps {
         for (int i = 0; i < islands; i++) {
             double a = Math.PI * 2 * i / islands;
             int sx = (int) Math.round(Math.cos(a) * ringR), sz = (int) Math.round(Math.sin(a) * ringR);
-            land(k, t, sx, 0, sz, 6, false);
+            land(k, t, sx, 0, sz, 7, false);
             int ox = (int) Math.round(Math.cos(a) * 3), oz = (int) Math.round(Math.sin(a) * 3);
             int px = -(int) Math.round(Math.sin(a) * 2), pz = (int) Math.round(Math.cos(a) * 2);
             k.set(sx + ox + px, 1, sz + oz + pz, "chest");

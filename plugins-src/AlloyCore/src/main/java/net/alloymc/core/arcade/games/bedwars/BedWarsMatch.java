@@ -266,9 +266,11 @@ final class BedWarsMatch extends Match {
     }
 
     @Override protected boolean allowPlace(Player p, Block b) {
-        // keep generator pads and villagers clear
+        // keep generator pads and villagers clear (only the generator spot itself and the block above it: a wider
+        // ring used to block the space right behind the bed's pillow, so beds couldn't be fully covered)
         for (Team t : teams) {
-            if (teamPoint(t, "generator").getBlock().getLocation().distanceSquared(b.getLocation()) < 2) return false;
+            Block g = teamPoint(t, "generator").getBlock();
+            if (b.getX() == g.getX() && b.getZ() == g.getZ() && (b.getY() == g.getY() || b.getY() == g.getY() + 1)) return false;
             if (teamPoint(t, "shop").getBlock().getLocation().distanceSquared(b.getLocation()) < 2 || teamPoint(t, "upgrades").getBlock().getLocation().distanceSquared(b.getLocation()) < 2) return false;
         }
         return true;
@@ -290,6 +292,11 @@ final class BedWarsMatch extends Match {
 
     @Override protected void onInteract(Player p, PlayerInteractEvent e) {
         ItemStack it = e.getItem();
+        // right-clicking a bed with a block places the block (no "you can only sleep at night"), no sneaking needed
+        if (e.getAction() == Action.RIGHT_CLICK_BLOCK && e.getClickedBlock() != null && e.getClickedBlock().getBlockData() instanceof Bed) {
+            e.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY);
+            if (it == null || !it.getType().isBlock()) e.setCancelled(true);
+        }
         if (it != null && it.getType() == Material.FIRE_CHARGE && (e.getAction() == Action.RIGHT_CLICK_AIR || e.getAction() == Action.RIGHT_CLICK_BLOCK)) {
             e.setCancelled(true);
             it.setAmount(it.getAmount() - 1);
