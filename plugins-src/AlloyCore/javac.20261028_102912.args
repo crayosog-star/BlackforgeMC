@@ -1,0 +1,11 @@
+-d
+/tmp/claude-0/-home-claude/d0a34879-edf4-53cc-8229-7fdebedb8dc1/scratchpad/jc
+-proc:none
+-Xmaxerrs
+3000
+-sourcepath
+src/main/java
+src/main/java/net/alloymc/core/survival/BloomCurve.java
+src/main/java/net/alloymc/core/survival/GaiaPlatform.java
+src/main/java/net/alloymc/core/hub/TestArena.java
+src/test/java/net/alloymc/core/survival/BloomCurveTest.java

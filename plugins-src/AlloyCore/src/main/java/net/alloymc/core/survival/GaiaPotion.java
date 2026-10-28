@@ -44,13 +44,21 @@ public final class GaiaPotion implements Listener {
     private final boolean enabled;
     private final NamespacedKey tagKey, cooldownGroup;
     private final BiPredicate<Player, Location> mayUse;   // spawn + claims rules, supplied by the server module
+    private final java.util.function.Predicate<Location> testArea;   // the hub Arena: refilled potions, new cloud replaces your old one
     private final List<GaiaPlatform> active = new ArrayList<>();
     private final Map<UUID, Long> readyAt = new HashMap<>();
     private final File barrierLog;
 
-    public GaiaPotion(AlloyCore plugin, BiPredicate<Player, Location> mayUse) {
+    public GaiaPotion(AlloyCore plugin, BiPredicate<Player, Location> mayUse) { this(plugin, mayUse, l -> false); }
+
+    /**
+     * {@code testArea}: where potions are refilled for free (the hub Arena). There a failed throw isn't refunded (the
+     * refill already replaced it, so a refund would duplicate it) and a new throw replaces your old cloud.
+     */
+    public GaiaPotion(AlloyCore plugin, BiPredicate<Player, Location> mayUse, java.util.function.Predicate<Location> testArea) {
         this.plugin = plugin;
         this.mayUse = mayUse;
+        this.testArea = testArea;
         this.enabled = plugin.getConfig().getBoolean("gaia-potion.enabled", true);
         this.tagKey = new NamespacedKey(plugin, "gaia_potion");
         this.cooldownGroup = new NamespacedKey("blackforge", "gaia_potion");
@@ -133,8 +141,13 @@ public final class GaiaPotion implements Listener {
     private void start(Player p, Location at) {
         World w = at.getWorld();
         if (active.size() >= MAX_ACTIVE) { fizzle(p, at, "Too many clouds are up right now - try again in a moment."); return; }
-        for (GaiaPlatform g : active) {
-            if (g.owner.equals(p.getUniqueId())) { fizzle(p, at, "Your last cloud is still up."); return; }
+        for (Iterator<GaiaPlatform> it = active.iterator(); it.hasNext(); ) {
+            GaiaPlatform g = it.next();
+            if (g.fading()) continue;   // shattering: already on its way out
+            if (g.owner.equals(p.getUniqueId())) {
+                if (testArea.test(at)) { g.remove(); it.remove(); saveLog(); continue; }   // Arena: the new cloud replaces your old one
+                fizzle(p, at, "Your last cloud is still up."); return;
+            }
             double dx = g.cx + 0.5 - at.getX(), dz = g.cz + 0.5 - at.getZ();
             if (g.world == w && dx * dx + dz * dz < MIN_SPACING * MIN_SPACING) {
                 fizzle(p, at, "Too close to another cloud."); return;
@@ -182,15 +195,19 @@ public final class GaiaPotion implements Listener {
         return null;
     }
 
-    /** It didn't take: pink smoke, a hiss, and the potion comes back (and the cooldown is cleared). */
+    /**
+     * It didn't take: pink smoke, a hiss, and the cooldown is cleared. The potion comes back only if the throw really
+     * used it up: not in creative (throwing doesn't use it) and not in the Arena (refilled already) - either would dupe it.
+     */
     private void fizzle(Player p, Location at, String why) {
         at.getWorld().spawnParticle(Particle.DUST, at.clone().add(0, 0.3, 0), 20, 0.4, 0.3, 0.4, 0, new Particle.DustOptions(GaiaPlatform.LAVENDER, 1.2f));
         at.getWorld().spawnParticle(Particle.SMOKE, at.clone().add(0, 0.3, 0), 10, 0.3, 0.2, 0.3, 0.01);
         at.getWorld().playSound(at, Sound.BLOCK_FIRE_EXTINGUISH, SoundCategory.PLAYERS, 0.7f, 1.6f);
-        p.sendMessage(Ui.mm("<#FFB3DE>✿ <gray>" + why + " <dark_gray>(potion returned)"));
+        boolean refund = p.getGameMode() != GameMode.CREATIVE && !testArea.test(p.getLocation());
+        p.sendMessage(Ui.mm("<#FFB3DE>✿ <gray>" + why + (refund ? " <dark_gray>(potion returned)" : "")));
         readyAt.remove(p.getUniqueId());
         p.setCooldown(item(), 0);
-        p.getInventory().addItem(item()).values().forEach(left -> p.getWorld().dropItemNaturally(p.getLocation(), left));
+        if (refund) p.getInventory().addItem(item()).values().forEach(left -> p.getWorld().dropItemNaturally(p.getLocation(), left));
     }
 
     // ------------------------------------------------------------------ running clouds

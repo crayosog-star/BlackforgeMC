@@ -4,18 +4,21 @@ package net.alloymc.core.survival;
  * Timing for the Potion of Gaia: how big the mist is, how solid the platform is, and how high it is at each moment.
  * Pure maths (no Bukkit), so it can be unit tested. Time is in seconds after the splash.
  *
- *   mist    0.0 - 2.5   particles only; radius 0.5 -> 3.5, cubic ease-in: barely moves at first, then faster and faster
- *   bloom   2.5 - 3.0   the fog flares out to 4.6, then snaps back to 3.5
- *   harden  3.0 - 4.5   blocks fade in from the centre outward, thin and dim at first, thickening as the mist thins
- *   rise    4.5 - 7.0   the solid platform climbs 8 blocks, easing in and out
- *   hold    7.0 - 13.0  stays at the top (riders slowly heal)
- *   fade   13.0 - 14.5  shatters and drifts down
+ *   mist    0.0 - 1.7   particles only; radius 0.5 -> 3.5, cubic ease-in: barely moves at first, then faster and faster
+ *   bloom   1.7 - 2.0   the fog flares out to 4.6, then snaps back to 3.5
+ *   harden  2.0 - 3.0   blocks fade in from the centre outward, thin and dim at first, thickening as the mist thins
+ *   rise    3.0 - 5.5   the solid platform climbs 8 blocks, easing in and out
+ *   hold    5.5 - 11.5  stays at the top (riders slowly heal)
+ *   fade   11.5 - 13.0  shatters and drifts down
+ *
+ * (Leaves the ground 1.5 s sooner than v2, which rose at 4.5 s: mist, bloom and harden are each about a third
+ * shorter; rise, hold and fade keep their lengths.)
  */
 public final class BloomCurve {
     private BloomCurve() {}
 
-    public static final double GROW_END = 2.5, BLOOM_PEAK = 2.75, BLOOM_END = 3.0, HARDEN_END = 4.5,
-            RISE_END = 7.0, HOLD_END = 13.0, FADE_END = 14.5;
+    public static final double GROW_END = 1.7, BLOOM_PEAK = 1.85, BLOOM_END = 2.0, HARDEN_END = 3.0,
+            RISE_END = 5.5, HOLD_END = 11.5, FADE_END = 13.0;
     public static final double START_RADIUS = 0.5, RADIUS = 3.5, BLOOM_RADIUS = 4.6;
     public static final double MAX_RISE = 8.0;
 

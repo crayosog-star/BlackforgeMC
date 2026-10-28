@@ -75,7 +75,8 @@ public final class HubModule implements Listener {
         dragons = new DragonAnimator(plugin, world);
         Bukkit.getScheduler().runTaskTimer(plugin, this::leaderboards, 60L, 1200L);
         arena = new TestArena(plugin);
-        gaia = new net.alloymc.core.survival.GaiaPotion(plugin, (pl, l) -> l.getWorld() == arena.world());   // never on the hub itself
+        gaia = new net.alloymc.core.survival.GaiaPotion(plugin, (pl, l) -> l.getWorld() == arena.world(),   // never on the hub itself
+                l -> l.getWorld() == arena.world());   // Arena: no refund (refill covers it), new cloud replaces your old one
         darkness = new net.alloymc.core.survival.DarknessPotion(plugin, l -> l.getWorld() == arena.world());
         surge = new net.alloymc.core.survival.Surge(plugin, l -> l.getWorld() == arena.world(), true);   // staff: no cooldown in the Arena
         bellows = new net.alloymc.core.survival.GaleBellows(plugin, l -> l.getWorld() == arena.world());   // Arena: no cooldown, never breaks
