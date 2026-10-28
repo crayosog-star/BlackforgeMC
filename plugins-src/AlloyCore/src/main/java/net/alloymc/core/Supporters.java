@@ -90,7 +90,7 @@ public final class Supporters implements Listener {
     /** Badge to put before a player's name ("" for non-supporters). */
     public static String badge(Player p) {
         Tier t = tierOf(p);
-        return t == null ? "" : t.badge();
+        return (Media.has(p) ? Media.BADGE : "") + (t == null ? "" : t.badge());
     }
 
     public static Tier byId(String id) { return TIERS.stream().filter(t -> t.id().equalsIgnoreCase(id)).findFirst().orElse(null); }
