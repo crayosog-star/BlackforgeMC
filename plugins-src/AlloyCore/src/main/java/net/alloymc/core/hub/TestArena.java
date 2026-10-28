@@ -95,6 +95,8 @@ public final class TestArena implements Listener {
 
     /** Give every Arena kit a Potion of Gaia (its splash and platform are handled by {@code g}). */
     public void setGaia(net.alloymc.core.survival.GaiaPotion g) { this.gaia = g; }
+    private net.alloymc.core.survival.DarknessPotion darkness;     // a Potion of Darkness in every kit, if set
+    public void setDarkness(net.alloymc.core.survival.DarknessPotion d) { this.darkness = d; }
     // the current combo on the dummy: hits within 4 s of each other
     private final Deque<double[]> hits = new ArrayDeque<>();   // {time ms, damage}
     private double lastHit, comboTotal;
@@ -315,7 +317,8 @@ public final class TestArena implements Listener {
         ItemStack bow = new ItemStack(Material.BOW);
         bow.addEnchantment(Enchantment.INFINITY, 1);
         inv.setItem(3, bow);
-        inv.setItem(4, new ItemStack(Material.CROSSBOW));
+        inv.setItem(13, new ItemStack(Material.CROSSBOW));   // hotbar slot 5 holds the Potion of Darkness
+        if (darkness != null) inv.setItem(4, darkness.item());
         ItemStack trident = new ItemStack(Material.TRIDENT);
         trident.addEnchantment(Enchantment.LOYALTY, 3);
         inv.setItem(5, trident);

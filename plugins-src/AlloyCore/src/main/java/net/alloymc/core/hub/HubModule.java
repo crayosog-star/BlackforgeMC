@@ -31,6 +31,7 @@ public final class HubModule implements Listener {
     private final World world;
     private final TestArena arena;
     private final net.alloymc.core.survival.GaiaPotion gaia;   // Potion of Gaia, usable in the Arena only
+    private final net.alloymc.core.survival.DarknessPotion darkness;   // Potion of Darkness, darkens players in the Arena only
     private final Map<UUID, Long> portalCooldown = new HashMap<>();
     private final Set<UUID> hidingPlayers = new HashSet<>();
     private final List<TextDisplay> holograms = new ArrayList<>();
@@ -73,6 +74,8 @@ public final class HubModule implements Listener {
         arena = new TestArena(plugin);
         gaia = new net.alloymc.core.survival.GaiaPotion(plugin, (pl, l) -> l.getWorld() == arena.world());   // never on the hub itself
         arena.setGaia(gaia);
+        darkness = new net.alloymc.core.survival.DarknessPotion(plugin, l -> l.getWorld() == arena.world());
+        arena.setDarkness(darkness);
     }
 
     public TestArena arena() { return arena; }
