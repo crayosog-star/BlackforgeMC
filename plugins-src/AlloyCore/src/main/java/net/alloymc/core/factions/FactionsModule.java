@@ -28,7 +28,7 @@ import java.time.*;
 import java.util.*;
 
 /**
- * Factions server: the floating Elden Ring style arena spawn (protected, unclaimable), gates that drop you into a
+ * Factions server: the floating war-citadel spawn at night (protected, unclaimable), gates that drop you into a
  * random spot in the wild, /spawn and /rtp, and the 3-month season clock. When a season ends the top
  * factions are recorded, everyone is sent to the hub, and tools/factions_reset.py archives the old world
  * and factions data, starts a fresh map and the next season.
@@ -78,7 +78,7 @@ public final class FactionsModule implements Listener {
     public Location spawn() { double[] s = FactionsBuilder.spawn(); return new Location(world, s[0], s[1], s[2], 180, 0); }
 
     /** Bump to rebuild the spawn on existing worlds after a design change. */
-    private static final String SPAWN_MARKER = "blackforge-spawn-v3", OLD_MARKER = "blackforge-spawn-v2", BIOME_MARKER = "blackforge-biome-erdtree";
+    private static final String SPAWN_MARKER = "blackforge-spawn-v3", OLD_MARKER = "blackforge-spawn-v2", BIOME_MARKER = "blackforge-biome-ember";
 
     public void build(CommandSender who) {
         who.sendMessage(Component.text("Building the Factions spawn..."));
@@ -114,39 +114,39 @@ public final class FactionsModule implements Listener {
     }
 
     /**
-     * Paints the spawn with the blackforge:erdtree biome (datapack in world/datapacks/blackforge): a golden sky
-     * and haze, drifting ash and golden sparks, golden grass. Skipped with a warning if the datapack isn't loaded.
+     * Paints the spawn with the blackforge:ember_night biome (datapack in world/datapacks/blackforge): a near-black
+     * sky, red-orange haze, drifting ash and embers. Skipped with a warning if the datapack isn't loaded.
      */
     private void applyBiome() {
-        org.bukkit.block.Biome erdtree = io.papermc.paper.registry.RegistryAccess.registryAccess()
-                .getRegistry(io.papermc.paper.registry.RegistryKey.BIOME).get(NamespacedKey.fromString("blackforge:erdtree"));
-        if (erdtree == null) { plugin.getLogger().warning("blackforge:erdtree biome missing - is the blackforge datapack in the factions world/datapacks?"); return; }
+        org.bukkit.block.Biome ember = io.papermc.paper.registry.RegistryAccess.registryAccess()
+                .getRegistry(io.papermc.paper.registry.RegistryKey.BIOME).get(NamespacedKey.fromString("blackforge:ember_night"));
+        if (ember == null) { plugin.getLogger().warning("blackforge:ember_night biome missing - is the blackforge datapack in the factions world/datapacks?"); return; }
         int r = FactionsBuilder.EXTENT + 8, y0 = FactionsBuilder.Y - 64, y1 = FactionsBuilder.Y + 100;
         for (int x = -r; x <= r; x += 4)
             for (int z = -r; z <= r; z += 4) {
                 if (Math.hypot(x, z) > r + 4) continue;
-                for (int y = y0; y <= y1; y += 4) world.setBiome(x, y, z, erdtree);
+                for (int y = y0; y <= y1; y += 4) world.setBiome(x, y, z, ember);
             }
         for (int cx = (-r >> 4) - 1; cx <= (r >> 4) + 1; cx++) for (int cz = (-r >> 4) - 1; cz <= (r >> 4) + 1; cz++) world.refreshChunk(cx, cz);
         try { new File(world.getWorldFolder(), BIOME_MARKER).createNewFile(); } catch (Exception ignored) { }
-        plugin.getLogger().info("Factions spawn painted with the blackforge:erdtree biome");
+        plugin.getLogger().info("Factions spawn painted with the blackforge:ember_night biome");
     }
 
     // ------------------------------------------------------------------ atmosphere
 
-    private final Set<UUID> goldenHour = new HashSet<>();
+    private final Set<UUID> nightSky = new HashSet<>();
     private double graceSpin;
 
-    /** Every 5 ticks: golden-hour sky for players at spawn, the Site of Grace glow and the fog over the gates. */
+    /** Every 5 ticks: a frozen midnight for players at spawn, the Site of Grace glow and the fog over the gates. */
     private void ambient() {
         List<Player> players = world.getPlayers();
-        goldenHour.removeIf(id -> Bukkit.getPlayer(id) == null);
+        nightSky.removeIf(id -> Bukkit.getPlayer(id) == null);
         for (Player p : players) {
             boolean in = inSpawn(p.getLocation());
-            if (in && goldenHour.add(p.getUniqueId())) p.setPlayerTime(12300, false);   // sunset, frozen
-            else if (!in && goldenHour.remove(p.getUniqueId())) p.resetPlayerTime();
+            if (in && nightSky.add(p.getUniqueId())) p.setPlayerTime(18000, false);   // midnight, frozen
+            else if (!in && nightSky.remove(p.getUniqueId())) p.resetPlayerTime();
         }
-        if (goldenHour.isEmpty()) return;
+        if (nightSky.isEmpty()) return;
         // Site of Grace: golden motes spiralling up from the shrine
         double[] g = FactionsBuilder.grace();
         graceSpin += 0.45;

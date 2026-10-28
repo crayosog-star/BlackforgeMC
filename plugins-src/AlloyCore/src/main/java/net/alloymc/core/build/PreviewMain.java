@@ -49,6 +49,7 @@ public final class PreviewMain {
         pov(sk, new File(out, "skyblock_aerial.png"), 0.5, 200, 75.5, 180, 30, 1600, 900);
         pov(sk, new File(out, "skyblock_spawn_view.png"), 0.5, 152.62, 24.5, 180, -4, 1280, 720);
         pov(sk, new File(out, "skyblock_market_view.png"), -14.5, 152.62, 20.5, 0, 6, 1280, 720);
+        night = true;      // the factions spawn sits under a frozen midnight
         Canvas fa = net.alloymc.core.factions.FactionsBuilder.build();
         System.out.println("factions spawn blocks: " + fa.size());
         double[] fs = net.alloymc.core.factions.FactionsBuilder.spawn();
@@ -58,6 +59,7 @@ public final class PreviewMain {
         pov(fa, new File(out, "factions_duel.png"), -26.5, fy + 16, 26.5, 225, -22, 1280, 900);
         pov(fa, new File(out, "factions_side.png"), 95.5, fy + 25, 60.5, 122, 8, 1600, 900);
         topDown(fa, new File(out, "factions_top.png"), 4);
+        night = false;
         Canvas pv = net.alloymc.core.survival.PvpBuilder.build();
         System.out.println("scrapyard blocks: " + pv.size());
         topDown(pv, new File(out, "pvp_top.png"), 4);

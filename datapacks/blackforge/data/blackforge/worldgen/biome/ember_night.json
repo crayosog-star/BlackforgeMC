@@ -1,0 +1,38 @@
+{
+  "attributes": {
+    "minecraft:visual/ambient_particles": {
+      "argument": [
+        {
+          "particle": {
+            "type": "minecraft:ash"
+          },
+          "probability": 0.014
+        },
+        {
+          "particle": {
+            "type": "minecraft:crimson_spore"
+          },
+          "probability": 0.005
+        },
+        {
+          "particle": {
+            "type": "minecraft:white_ash"
+          },
+          "probability": 0.003
+        }
+      ],
+      "modifier": "append"
+    },
+    "minecraft:visual/sky_color": "#0a0506",
+    "minecraft:visual/fog_color": "#2e0e07",
+    "minecraft:visual/water_fog_color": "#2e0e07"
+  },
+  "carvers": [],
+  "downfall": 0.0,
+  "effects": {
+    "water_color": "#3f76e4"
+  },
+  "features": [],
+  "has_precipitation": false,
+  "temperature": 2.0
+}

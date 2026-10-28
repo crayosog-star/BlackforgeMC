@@ -7,42 +7,36 @@ import net.alloymc.core.build.Canvas;
 import java.util.Random;
 
 /**
- * Factions spawn - "the Colosseum of Fallen Kings", an Elden Ring style boss arena in the sky:
+ * Factions spawn: a floating war citadel at night (blackstone, deepslate and gold, battlements, four gate
+ * towers whose fog curtains drop you into the wild, corner watchtowers) with an Elden Ring boss-arena mood:
  * <ul>
- *   <li>an irregular, jagged floating island with rolling golden grass and rocky terraces, cliffs and stalactites
- *       underneath, gate promontories at N/E/S/W and a long northern outcrop</li>
- *   <li>a worn sandstone colosseum floor (the arena) inlaid with a gold rune sigil, ringed by broken columns,
- *       fallen drums and ruined arches hung with lanterns</li>
- *   <li>the two colossal duelling warriors at the centre - a crowned knight with a longsword (crimson cloak) and a
- *       horned knight with a great axe and kite shield (azure cloak) - their weapons clashing high above the arena,
- *       sculpted with layered pauldrons, tassets, lamed breastplates, gauntlets and streaming cloaks</li>
- *   <li>a giant glowing golden Erdtree on the northern outcrop, its roots spilling over the cliffs</li>
- *   <li>colossal swords impaled in the ground, floating rock fragments with ruins and minor golden trees</li>
- *   <li>a Site of Grace in front of spawn, candles, lanterns and hidden light blocks for warm lighting</li>
+ *   <li>the two colossal duelling warriors at the centre - a crowned knight with a longsword (crimson cloak)
+ *       against a horned knight with a great axe and kite shield (azure cloak), weapons clashing high above
+ *       the plaza - sculpted with layered pauldrons, lamed breastplates, tassets, gauntlets and streaming cloaks</li>
+ *   <li>a jagged, broken island: rock spurs and crags beyond the walls, magma-veined cliffs, stalactites and
+ *       hanging chains beneath</li>
+ *   <li>two colossal black swords impaled in the plaza, a Site of Grace before spawn, candles everywhere,
+ *       dim hidden light so the fire and gold carry the scene</li>
  * </ul>
- * The four gates (walk-through portal curtains that drop you into the wild) keep their positions.
  * Absolute coordinates, centred on (0, Y, 0). Everything lies within {@link #EXTENT} blocks of (0, 0).
  */
 public final class FactionsBuilder {
     public static final int Y = 190, R = 44;
-    public static final int GATE = R - 2;   // gate arches at (0,-GATE) (GATE,0) (0,GATE) (-GATE,0)
-    /** Horizontal radius that contains the whole build (outcrop, Erdtree canopy, floating isles). */
-    public static final int EXTENT = 100;
-    static final int ARENA = 25;             // radius of the flat colosseum floor
-    static final int TREE_Z = -68;           // Erdtree trunk on the northern outcrop
+    public static final int GATE = R - 2;   // gate towers at (0,-GATE) (GATE,0) (0,GATE) (-GATE,0)
+    /** Horizontal radius that contains the whole build (rock spurs included). */
+    public static final int EXTENT = R + 14;
 
     private final Canvas c = new Canvas();
     private final Random rnd = new Random(1312);
-    private final int[][] height = new int[2 * EXTENT + 1][2 * EXTENT + 1];   // surface height per column (Integer.MIN_VALUE = no island)
 
     public static double[] spawn() { return new double[]{0.5, Y + 1, 30.5}; }
     public static double[] rules() { return new double[]{-9.5, Y + 3.6, 27.5}; }
     public static double[] season() { return new double[]{10.5, Y + 3.6, 27.5}; }
-    /** Site of Grace, between spawn and the arena. */
-    public static double[] grace() { return new double[]{0.5, Y + 1, 22.5}; }
-    /** Name-plate positions on the spawn side of the two duelling statues: crimson (west), azure (east). */
+    /** Site of Grace, a few steps in front of spawn. */
+    public static double[] grace() { return new double[]{0.5, Y + 1, 23.5}; }
+    /** Name plates on the spawn side of the two duelling statues: crimson (west), azure (east). */
     public static double[][] statueLabels() {
-        return new double[][]{{-9.5, Y + 5.2, 10.0}, {11.5, Y + 5.2, 10.0}};
+        return new double[][]{{-9.5, Y + 5.2, 10.5}, {11.5, Y + 5.2, 10.5}};
     }
 
     private void set(int x, int y, int z, String b) { c.set(x, Y + y, z, "minecraft:" + b); }
@@ -53,16 +47,15 @@ public final class FactionsBuilder {
     public static Canvas build() {
         FactionsBuilder b = new FactionsBuilder();
         b.island();
-        b.arena();
-        b.graceShrine();
-        b.ruins();
+        b.plaza();
+        b.walls();
         for (int[] g : new int[][]{{0, -GATE, 0}, {GATE, 0, 1}, {0, GATE, 2}, {-GATE, 0, 3}}) b.gate(g[0], g[1], g[2]);
         b.warriors();
-        b.erdtree();
+        b.braziers();
         b.swords();
-        b.isles();
+        b.graceShrine();
         b.sign();
-        b.lights();
+        b.candlesAndLight();
         return b.c;
     }
 
@@ -91,251 +84,137 @@ public final class FactionsBuilder {
         return (String) weighted[weighted.length - 2];
     }
 
-    private int surf(int x, int z) {
-        if (Math.abs(x) > EXTENT || Math.abs(z) > EXTENT) return Integer.MIN_VALUE;
-        return height[x + EXTENT][z + EXTENT];
-    }
+    // ------------------------------------------------------------------ ground
 
-    // ------------------------------------------------------------------ island
-
-    /** Radius of the island's edge in direction a (radians, atan2(z, x)). */
+    /** Radius of the island edge in direction a: jagged, with rock spurs, never cutting into the walls or gates. */
     static double outline(double a) {
-        double r = 43 + 7 * Math.sin(2 * a + 0.6) + 5 * Math.sin(3 * a + 1.9) + 3 * Math.sin(5 * a + 0.3) + 2 * Math.sin(7 * a + 2.2);
-        for (double g : new double[]{-Math.PI / 2, 0, Math.PI / 2, Math.PI}) r = Math.max(r, 49 - 34 * angDist(a, g));   // gate promontories
-        double n = angDist(a, -Math.PI / 2);
-        r += 38 * Math.exp(-(n / 0.36) * (n / 0.36));                                                                   // northern outcrop
-        return Math.max(r, ARENA + 9);
+        double r = R + 3 + 2.5 * Math.sin(3 * a + 0.7) + 1.8 * Math.sin(5 * a + 2.1) + 1.2 * Math.sin(9 * a + 0.4);
+        for (int k = 0; k < 9; k++) {   // spurs of rock jutting out
+            double s = k * 0.7 + 0.35 + (k % 2) * 0.15;
+            double d = angDist(a, s);
+            r += (7 + (k % 3) * 3.5) * Math.exp(-(d / 0.085) * (d / 0.085));
+        }
+        return Math.max(r, R + 2);
     }
 
     private void island() {
-        for (int[] row : height) java.util.Arrays.fill(row, Integer.MIN_VALUE);
         for (int x = -EXTENT; x <= EXTENT; x++) for (int z = -EXTENT; z <= EXTENT; z++) {
             double d = Math.hypot(x, z), a = Math.atan2(z, x);
-            double edge = outline(a) + (MapKit.noise(x / 8.0, z / 8.0, 5) - 0.5) * 7;
+            double edge = outline(a) + (MapKit.noise(x / 4.0, z / 4.0, 9) - 0.5) * 3;
             if (d > edge) continue;
-            // surface: flat arena and gate roads, rolling rocky terraces elsewhere, a mound under the Erdtree
-            int hgt = 0;
-            if (d > ARENA + 1) {
-                double t = Math.min(1, (d - ARENA - 1) / 8);
-                double n = MapKit.noise(x / 11.0, z / 11.0, 77) * 0.7 + MapKit.noise(x / 4.0, z / 4.0, 78) * 0.3;
-                double hh = t * (0.5 + n * 9);
-                double crag = MapKit.noise(x / 6.0, z / 6.0, 79);
-                if (crag > 0.68 && d > ARENA + 8) hh += (crag - 0.68) * 45;           // rocky crags
-                double road = Math.min(Math.abs(x), Math.abs(z));
-                if (road < 7) hh *= Math.max(0, (road - 3.5) / 3.5);   // gate roads stay flat
-                double plaza = Math.hypot(x, z - 29);
-                if (plaza < 16) hh *= Math.max(0, (plaza - 12) / 4);    // flat spawn plaza
-                double tm = Math.hypot(x, z - TREE_Z);
-                hh += 8 * Math.exp(-(tm / 11) * (tm / 11));               // Erdtree mound
-                hh = Math.min(hh, Math.max(0, (edge - d) * 1.4));        // soften right at the cliff edge
-                hgt = (int) Math.round(hh);
+            int depth = (int) ((edge - d) * 0.8) + 3 + rnd.nextInt(3) + (int) (MapKit.noise(x / 3.0, z / 3.0, 14) * 8);
+            if (h(x, 0, z, 1) < 0.05) depth += 6 + (int) (h(x, 1, z, 2) * 10);   // stalactites
+            // beyond the walls the ground breaks up into crags of black rock
+            int top = 0;
+            if (d > R + 0.5) {
+                double crag = MapKit.noise(x / 3.5, z / 3.5, 15);
+                top = crag > 0.5 ? (int) ((crag - 0.5) * 22) : 0;
+                if (d > outline(a) - 4) top += (int) (h(x, 0, z, 6) * 3);   // ragged lip
+                if (Math.min(Math.abs(x), Math.abs(z)) <= 5) top = 0;   // keep the ground in front of the gates level
             }
-            // sunken ledges where the cliff breaks away
-            double ledge = MapKit.noise(a * 7, 3.3, 81);   // whole radial strips, so every ledge opens onto the void
-            if (d > edge - 9 && ledge > 0.64 && Math.min(Math.abs(x), Math.abs(z)) > 8 && Math.hypot(x, z - TREE_Z) > 30) hgt = -6 - (int) ((ledge - 0.64) * 20);
-            height[x + EXTENT][z + EXTENT] = hgt;
-            int depth = (int) (3 + (edge - d) * 0.85 + MapKit.noise(x / 5.0, z / 5.0, 13) * 9 + (h(x, 0, z, 1) < 0.06 ? 6 : 0));
-            depth = Math.max(depth, 3 - hgt);
-            for (int y = -depth; y <= hgt; y++) {
+            for (int y = -depth; y <= top; y++) {
                 String b;
-                if (y == hgt) b = d <= ARENA + 1 ? "smooth_sandstone" : Math.hypot(x, z - 29) < 11.5 && hgt == 0
-                        ? (MapKit.noise(x / 2.5, z / 2.5, 24) > 0.72 ? "grass_block" : ((x >> 1) + (z >> 1) & 1) == 0 ? "cut_sandstone" : "smooth_sandstone") : hgt >= 7 || hgt >= 4 && MapKit.noise(x / 5.0, z / 5.0, 41) > 0.55
-                        ? pick(h(x, y, z, 2), "tuff", 3, "stone", 2, "andesite", 2, "mossy_cobblestone", 1)
-                        : pick(MapKit.noise(x / 6.0, z / 6.0, 31), "grass_block", 7, "coarse_dirt", 1.2, "rooted_dirt", 0.8, "moss_block", 1);
-                else if (y >= hgt - 2) b = "dirt";
-                else if (y > -depth + 2 || y > -6) b = pick(h(x, y, z, 3), "stone", 4, "tuff", 3, "andesite", 2, "deepslate", 1, "calcite", 0.4, "raw_gold_block", 0.08);
-                else b = pick(h(x, y, z, 4), "tuff", 2, "deepslate", 2, "cobbled_deepslate", 1);
+                if (y > 0) b = pick(h(x, y, z, 3), "blackstone", 4, "basalt", 3, "polished_basalt", 1, "gilded_blackstone", 0.25);
+                else if (y == 0) b = d > R + 0.5 ? pick(h(x, y, z, 4), "blackstone", 4, "cobbled_deepslate", 2, "magma_block", 0.4) : "polished_deepslate";
+                else if (y == -1) b = "deepslate_bricks";
+                else b = pick(h(x, y, z, 5), "blackstone", 8, "basalt", 3, "deepslate", 3, "magma_block", 0.7, "gilded_blackstone", 0.15);
                 set(x, y, z, b);
             }
-            // grass tufts
-            if (d > ARENA + 2 && "minecraft:grass_block".equals(get(x, hgt, z))) {
-                double g = h(x, 1, z, 5);
-                if (g < 0.22) late(x, hgt + 1, z, "short_grass");
-                else if (g < 0.25) late(x, hgt + 1, z, "fern");
-            }
         }
-        // golden roots dangling beneath the island
-        for (int i = 0; i < 26; i++) {
-            double a = rnd.nextDouble() * Math.PI * 2, rr = outline(a) * (0.55 + rnd.nextDouble() * 0.35);
-            int x = (int) (Math.cos(a) * rr), z = (int) (Math.sin(a) * rr);
-            int bottom = -1;
-            while (bottom > -70 && !empty(x, bottom, z)) bottom--;
-            double[] top = {x, bottom + 3, z};
-            double[] tip = {x + rnd.nextGaussian() * 3, bottom - 8 - rnd.nextInt(14), z + rnd.nextGaussian() * 3};
-            cone(top, tip, 1.3, 0.35, (px, py, pz) -> rootMat(px, py, pz));
+        // chains hanging from the underside, some with a lantern at the end
+        for (int i = 0; i < 22; i++) {
+            double a = rnd.nextDouble() * 2 * Math.PI, rr = R * (0.4 + rnd.nextDouble() * 0.5);
+            int x = (int) Math.round(Math.cos(a) * rr), z = (int) Math.round(Math.sin(a) * rr);
+            int y = -1;
+            while (y > -60 && !empty(x, y, z)) y--;
+            int len = 4 + rnd.nextInt(10);
+            for (int j = 0; j < len; j++) late(x, y - j, z, "iron_chain[axis=y]");
+            if (rnd.nextBoolean()) late(x, y - len, z, "lantern[hanging=true]");
         }
     }
 
-    /** Highest solid block in a column at or below maxY (relative), or MIN_VALUE if none. */
-    private int top(int x, int z, int maxY) {
-        for (int y = maxY; y >= -60; y--) if (!empty(x, y, z)) return y;
-        return Integer.MIN_VALUE;
-    }
-
-    private static String rootMat(int x, int y, int z) {
-        return pick(h(x, y, z, 9), "stripped_oak_wood", 5, "stripped_birch_wood", 2, "gold_block", 1, "ochre_froglight", 1);
-    }
-
-    // ------------------------------------------------------------------ the colosseum floor
-
-    private void arena() {
-        for (int x = -ARENA - 1; x <= ARENA + 1; x++) for (int z = -ARENA - 1; z <= ARENA + 1; z++) {
+    /** War-plaza floor: dark tiles, a gold compass rose, red-lit cracks running to the gates. */
+    private void plaza() {
+        for (int x = -R; x <= R; x++) for (int z = -R; z <= R; z++) {
+            if (get(x, 0, z) == null) continue;
             double d = Math.hypot(x, z), a = Math.atan2(z, x);
-            if (d > ARENA + 0.5) continue;
-            if (d > ARENA - 2 && MapKit.noise(x / 2.5, z / 2.5, 23) > 0.7) continue;   // crumbling edge, grass creeping in
-            // big worn flagstones in rings
-            int ring = (int) (d / 3.2), seg = (int) ((a + Math.PI) / (2 * Math.PI) * (12 + ring * 6));
-            String b = ((ring + seg) & 1) == 0 ? "smooth_sandstone" : "cut_sandstone";
-            double wear = MapKit.noise(x / 3.5, z / 3.5, 21);
-            if (wear > 0.74) b = "sandstone";
-            if (wear < 0.06) b = "stone_bricks";
-            if (MapKit.noise(x / 5.0, z / 5.0, 22) > 0.86) b = "mossy_stone_bricks";
-            if (h(x, 0, z, 6) < 0.025) b = "cracked_stone_bricks";
-            if (d > ARENA - 1.2) b = "chiseled_sandstone";                         // border band
-            if (sigil(x + 0.5, z + 0.5)) b = h(x, 0, z, 7) < 0.15 ? "raw_gold_block" : "gold_block";
+            String b = (((x >> 1) + (z >> 1)) & 1) == 0 ? "deepslate_tiles" : "polished_blackstone_bricks";
+            if (MapKit.noise(x / 4.0, z / 4.0, 21) > 0.78) b = "cracked_deepslate_tiles";
+            if (d > 15.5 && d <= 16.5 || d > 30.5 && d <= 31.5) b = "gold_block";
+            if (d <= 15.5 && Math.abs(Math.sin(4 * a)) < 0.08 && d > 2) b = "gold_block";                // compass rays
+            if (Math.abs(x) <= 1 && d > 16.5 || Math.abs(z) <= 1 && d > 16.5) b = Math.abs(x) + Math.abs(z) <= 1 || (x == 0 || z == 0) ? "red_nether_bricks" : "nether_bricks";   // roads to the gates
+            if ((x == 0 || z == 0) && d > 16.5 && ((int) d) % 4 == 0) b = "shroomlight";
             set(x, 0, z, b);
         }
-        // low curb around the arena, broken where the roads leave
-        for (int x = -ARENA - 2; x <= ARENA + 2; x++) for (int z = -ARENA - 2; z <= ARENA + 2; z++) {
+    }
+
+    private void walls() {
+        for (int x = -R - 1; x <= R + 1; x++) for (int z = -R - 1; z <= R + 1; z++) {
             double d = Math.hypot(x, z);
-            if (d <= ARENA + 0.5 || d > ARENA + 1.5 || Math.min(Math.abs(x), Math.abs(z)) <= 4) continue;
-            if (h(x, 1, z, 8) < 0.12) continue;   // crumbled
-            set(x, 1, z, h(x, 1, z, 9) < 0.5 ? "cut_sandstone" : "smooth_sandstone");
-            if (h(x, 2, z, 10) < 0.05) late(x, 2, z, "candle[candles=" + (1 + (int) (h(x, 3, z, 11) * 4)) + ",lit=true]");
+            if (d <= R - 1.5 || d > R - 0.5 || get(x, 0, z) == null) continue;
+            boolean gateGap = Math.abs(x) <= 4 || Math.abs(z) <= 4;
+            if (gateGap) continue;
+            for (int y = 1; y <= 5; y++) set(x, y, z, y == 3 && ((x + z) & 7) == 0 ? "chiseled_polished_blackstone" : "polished_blackstone_bricks");
+            set(x, 6, z, ((int) (Math.atan2(z, x) * 40) & 1) == 0 ? "polished_blackstone_brick_wall" : "air");
+            if (((int) (Math.atan2(z, x) * 20) % 5) == 0) late(x, 6, z, "lantern");
         }
-    }
-
-    /** The gold rune sigil inlaid in the arena floor (inspired by the Elden Ring's interlocking arcs). */
-    private static boolean sigil(double x, double z) {
-        double w = 0.55;
-        if (Math.abs(Math.hypot(x, z) - 13) < w) return true;                                   // outer ring
-        if (Math.abs(Math.hypot(x, z + 4.5) - 8.5) < w) return true;                            // upper ring
-        if (Math.abs(Math.hypot(x, z - 4.5) - 8.5) < w) return true;                            // lower ring
-        if (Math.abs(Math.hypot(x, z) - 3.2) < w) return true;                                  // core
-        if (Math.abs(x) < 0.6 && Math.abs(z) < 21) return true;                                 // the spine
-        double big = Math.hypot(x, z - 10);
-        if (Math.abs(big - 20) < w && z < -2 && Math.abs(x) < 17) return true;                 // great arc
-        double small = Math.hypot(x, z + 13);
-        return Math.abs(small - 6) < w && z > -13;                                               // crown arc
-    }
-
-    private void graceShrine() {
-        double[] g = grace();
-        int gx = (int) Math.floor(g[0]), gz = (int) Math.floor(g[2]);
-        for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
-            double d = Math.hypot(x, z);
-            if (d > 2.3) continue;
-            set(gx + x, 0, gz + z, d < 0.5 ? "gold_block" : d < 1.5 ? "chiseled_sandstone" : "polished_tuff");
-        }
-        late(gx, 1, gz, "light[level=15]");
-    }
-
-    // ------------------------------------------------------------------ ruins ring
-
-    private void ruins() {
-        int n = 26;
-        boolean[] tall = new boolean[n];
-        int[] tops = new int[n];
-        for (int i = 0; i < n; i++) {
-            double a = i * 2 * Math.PI / n + 0.05;
-            boolean onRoad = false;
-            for (double g : new double[]{-Math.PI / 2, 0, Math.PI / 2, Math.PI}) if (angDist(a, g) < 0.17) onRoad = true;
-            if (onRoad) continue;
-            int cx = (int) Math.round(Math.cos(a) * (ARENA + 5)), cz = (int) Math.round(Math.sin(a) * (ARENA + 5));
-            int base = surf(cx, cz);
-            if (base == Integer.MIN_VALUE) continue;
-            double roll = rnd.nextDouble();
-            int hgt = roll < 0.25 ? 2 + rnd.nextInt(2) : roll < 0.55 ? 6 + rnd.nextInt(5) : 13 + rnd.nextInt(4);
-            column(cx, base, cz, hgt);
-            tall[i] = hgt >= 13;
-            tops[i] = base + hgt;
-            if (roll < 0.25) fallenDrum(cx, cz, a);
-            if (hgt < 13 && rnd.nextDouble() < 0.6) late(cx, base + hgt + 1, cz, "candle[candles=" + (2 + rnd.nextInt(3)) + ",lit=true]");
-        }
-        // arches between neighbouring tall columns, each with a hanging lantern
-        for (int i = 0; i < n; i++) {
-            int j = (i + 1) % n;
-            if (!tall[i] || !tall[j]) continue;
-            double a1 = i * 2 * Math.PI / n + 0.05, a2 = j * 2 * Math.PI / n + 0.05;
-            double[] p1 = {Math.cos(a1) * (ARENA + 5), 0, Math.sin(a1) * (ARENA + 5)}, p2 = {Math.cos(a2) * (ARENA + 5), 0, Math.sin(a2) * (ARENA + 5)};
-            int top = Math.min(tops[i], tops[j]);
-            double span = Math.hypot(p2[0] - p1[0], p2[2] - p1[2]);
-            for (double s = 0; s <= 1; s += 0.5 / span) {
-                double x = p1[0] + (p2[0] - p1[0]) * s, z = p1[2] + (p2[2] - p1[2]) * s;
-                double sag = Math.sqrt(Math.max(0, 0.25 - (s - 0.5) * (s - 0.5))) * 2;   // 0..1 semicircle
-                int under = (int) Math.round(top - 3 + sag * 2.5);
-                for (int y = under; y <= top + 1; y++) set((int) Math.floor(x), y, (int) Math.floor(z), y == top + 1 ? "smooth_sandstone_slab[type=bottom]" : "cut_sandstone");
+        // corner watchtowers
+        for (int i = 0; i < 4; i++) {
+            double a = Math.PI / 4 + i * Math.PI / 2;
+            int tx = (int) Math.round(Math.cos(a) * (R - 1)), tz = (int) Math.round(Math.sin(a) * (R - 1));
+            for (int x = -3; x <= 3; x++) for (int z = -3; z <= 3; z++) for (int y = 1; y <= 12; y++) {
+                boolean edge = Math.abs(x) == 3 || Math.abs(z) == 3;
+                if (!edge && y < 12) { set(tx + x, y, tz + z, "air"); continue; }
+                set(tx + x, y, tz + z, y == 12 ? "gold_block" : y % 4 == 0 ? "gilded_blackstone" : "deepslate_bricks");
             }
-            int mx = (int) Math.floor((p1[0] + p2[0]) / 2), mz = (int) Math.floor((p1[2] + p2[2]) / 2);
-            int y = top - 1;
-            while (y > top - 4 && !empty(mx, y, mz)) y--;
-            late(mx, y, mz, "iron_chain[axis=y]");
-            late(mx, y - 1, mz, "lantern[hanging=true]");
+            for (int x = -3; x <= 3; x++) for (int z = -3; z <= 3; z++) if ((Math.abs(x) == 3 || Math.abs(z) == 3) && ((x + z) & 1) == 0) set(tx + x, 13, tz + z, "deepslate_brick_wall");
+            late(tx, 13, tz, "campfire[lit=true]");
         }
     }
 
-    private void column(int cx, int base, int cz, int hgt) {
-        for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
-            double d = Math.hypot(x, z);
-            if (d > 2.3) continue;
-            set(cx + x, base + 1, cz + z, "chiseled_tuff");   // plinth
-            if (d > 1.6) continue;
-            for (int y = base + 2; y <= base + hgt; y++) {
-                boolean topLayer = y == base + hgt;
-                if (topLayer && hgt < 13 && h(cx + x, y, cz + z, 12) < 0.45) continue;   // broken, jagged top
-                String b = topLayer && hgt >= 13 ? "chiseled_sandstone" : (y - base) % 4 == 0 ? "smooth_sandstone" : "cut_sandstone";
-                if (h(cx + x, y, cz + z, 13) < 0.12) b = "sandstone";
-                if (y < base + 4 && h(cx + x, y, cz + z, 14) < 0.25) b = "mossy_stone_bricks";
-                set(cx + x, y, cz + z, b);
-            }
-        }
-    }
-
-    /** A toppled column drum lying on the grass. */
-    private void fallenDrum(int cx, int cz, double a) {
-        double dir = a + Math.PI / 2 + (rnd.nextDouble() - 0.5);
-        double len = 4 + rnd.nextInt(4);
-        double sx = cx + Math.cos(a) * 3, sz = cz + Math.sin(a) * 3;
-        int base = surf((int) sx, (int) sz);
-        if (base == Integer.MIN_VALUE) return;
-        double[] p = {sx, Y + base + 2.0, sz}, q = {sx + Math.cos(dir) * len, Y + base + 2.0, sz + Math.sin(dir) * len};
-        cone(p, q, 1.35, 1.35, (x, y, z) -> h(x, y, z, 15) < 0.2 ? "mossy_stone_bricks" : "cut_sandstone");
-    }
-
-    // ------------------------------------------------------------------ gates
-
-    /** A pointed stone archway whose portal curtain is the way out to the wild. dir: 0=N 1=E 2=S 3=W. */
+    /** A gate tower whose portal curtain is the way out to the wild. dir: 0=N 1=E 2=S 3=W. */
     private void gate(int gx, int gz, int dir) {
-        boolean alongX = dir == 0 || dir == 2;
-        for (int u = -7; u <= 7; u++) for (int y = 1; y <= 17; y++) for (int w = -2; w <= 2; w++) {
+        boolean alongX = dir == 0 || dir == 2;   // the opening spans x for N/S gates
+        for (int u = -6; u <= 6; u++) for (int y = 1; y <= 13; y++) for (int w = -2; w <= 2; w++) {
             int x = gx + (alongX ? u : w), z = gz + (alongX ? w : u);
             int au = Math.abs(u);
             boolean open = au <= 3 && y <= 8 || au <= 2 && y == 9;
+            // walk-through curtain (portal blocks; AlloyCore cancels the vanilla portal and drops you in the wild)
             if (open) { if (w == 0) late(x, y, z, "nether_portal[axis=" + (alongX ? "x" : "z") + "]"); else set(x, y, z, "air"); continue; }
-            // pointed (gothic) arch: two arcs meeting at the apex
-            double arcIn = Math.hypot(au + 3.5, y - 8.5), arcOut = Math.hypot(au + 3.5, y - 7.5);
-            boolean pier = au >= 4 && au <= 6 && y <= 11;
-            boolean arch = y > 8 && arcIn >= 7.0 && arcOut <= 11.0 && au <= 6;
-            if (!pier && !arch) continue;
-            if (Math.abs(w) == 2 && !(pier && y <= 2)) continue;   // slimmer arch, wide footing
-            String b = h(x, y, z, 16) < 0.15 ? "cracked_stone_bricks" : h(x, y, z, 17) < 0.25 ? "mossy_stone_bricks" : "stone_bricks";
-            if (pier && (y == 1 || y == 11)) b = "chiseled_stone_bricks";
-            if (arch && au <= 1 && y >= 15) b = "gold_block";   // keystone
-            if (pier && au == 4 && y >= 3 && y <= 9 && w == 0) b = "gold_block";   // gilded jamb
+            if (au >= 6 && y > 11) continue;
+            String b = au == 6 || y == 13 ? "deepslate_bricks" : (au == 4 && y <= 9 || y == 10 && au <= 3) ? "gold_block" : "polished_blackstone_bricks";
+            if (y == 12 && w == 0 && au <= 5) b = "chiseled_polished_blackstone";
             set(x, y, z, b);
         }
-        for (int s : new int[]{-5, 5}) {
-            int x = gx + (alongX ? s : 0), z = gz + (alongX ? 0 : s);
-            late(x, 12, z, "candle[candles=4,lit=true]");
-        }
-        // flat road under the arch
-        for (int u = -4; u <= 4; u++) for (int w = -3; w <= 3; w++) {
-            int x = gx + (alongX ? u : w), z = gz + (alongX ? w : u);
-            set(x, 0, z, Math.abs(u) <= 1 ? "cut_sandstone" : "smooth_sandstone");
+        for (int u = -6; u <= 6; u += 2) { int x = gx + (alongX ? u : -2), z = gz + (alongX ? -2 : u); set(x, 14, z, "deepslate_brick_wall"); }
+        for (int s : new int[]{-5, 5}) { int x = gx + (alongX ? s : 0), z = gz + (alongX ? 0 : s); late(x, 14, z, "lantern"); }
+    }
+
+    private void braziers() {
+        for (int i = 0; i < 8; i++) {
+            double a = i * Math.PI / 4 + Math.PI / 8;
+            int x = (int) Math.round(Math.cos(a) * 24), z = (int) Math.round(Math.sin(a) * 24);
+            set(x, 1, z, "gold_block"); set(x, 2, z, "polished_blackstone_wall");
+            late(x, 3, z, "campfire[lit=true]");
         }
     }
 
-    // ------------------------------------------------------------------ the statues
+    /** "FACTIONS" in red-gold letters above the north gate. */
+    private void sign() {
+        String text = "FACTIONS";
+        int scale = 2, spacing = 1, width = BlockFont.width(text, spacing) * scale, x0 = -width / 2, y0 = 22, z = -R - 4;
+        BlockFont.draw(text, spacing, (col, row, glyphRow) -> {
+            String b = glyphRow <= 1 ? "shroomlight" : glyphRow <= 4 ? "red_nether_bricks" : "nether_bricks";
+            for (int sx = 0; sx < scale; sx++) for (int sy = 0; sy < scale; sy++) {
+                int x = x0 + col * scale + sx, y = y0 + row * scale + sy;
+                set(x, y, z, b); set(x, y, z + 1, b);
+                for (int ox = -1; ox <= 1; ox++) for (int oy = -1; oy <= 1; oy++) if (get(x + ox, y + oy, z - 1) == null) set(x + ox, y + oy, z - 1, "gold_block");
+            }
+        });
+        for (int s : new int[]{-1, 1}) for (int y = 14; y < 22; y++) set(s * (width / 2 - 4), y, z - 1, "iron_chain[axis=y]");
+    }
+
+    // ------------------------------------------------------------------ the warriors
 
     private interface Sdf { double d(double x, double y, double z); }
     private interface Mat { String at(int x, int y, int z); }
@@ -436,8 +315,8 @@ public final class FactionsBuilder {
                 double d = Math.hypot(x, z);
                 if (d > rr) continue;
                 boolean rim = d > rr - 1;
-                String b = tier == 2 && rim ? "gold_block" : rim ? "chiseled_tuff" : "tuff_bricks";
-                if (rim && tier != 2 && h(px + x, tier, pz + z, 18) < 0.12) b = "mossy_stone_bricks";
+                String b = tier == 2 && rim ? "gold_block" : rim ? "chiseled_polished_blackstone" : "polished_blackstone_bricks";
+                if (rim && tier != 2 && h(px + x, tier, pz + z, 18) < 0.12) b = "cracked_polished_blackstone_bricks";
                 set(px + x, tier, pz + z, b);
             }
         }
@@ -602,232 +481,74 @@ public final class FactionsBuilder {
             if (y < 5.0 && h((int) Math.floor(x * 3), 0, (int) Math.floor(z * 3), 25) < 0.4) return 1;   // tattered hem
             return Math.abs(z - back) <= 0.7 ? -1 : 1;
         }, cape);
-        // moss creeping onto the plinth
-        for (int i = 0; i < 16; i++) {
-            int x = px + rnd.nextInt(17) - 8, z = pz + rnd.nextInt(17) - 8;
-            for (int y = 3; y >= 1; y--) if (!empty(x, y, z)) { if (empty(x, y + 1, z) && Math.hypot(x - px, z - pz) > 6.5) late(x, y + 1, z, "moss_carpet"); break; }
+        // candles burning around the plinth
+        for (int i = 0; i < 10; i++) {
+            double a = i * 2 * Math.PI / 10 + 0.3;
+            int x = px + (int) Math.round(Math.cos(a) * 8.6), z = pz + (int) Math.round(Math.sin(a) * 8.6);
+            if (empty(x, 2, z) && !empty(x, 1, z)) late(x, 2, z, "candle[candles=" + (2 + i % 3) + ",lit=true]");
         }
     }
 
-    // ------------------------------------------------------------------ the Erdtree
-
-    private void erdtree() {
-        int base = Math.max(0, surf(0, TREE_Z));
-        double tx = 0.5, ty = Y + base, tz = TREE_Z + 0.5;
-        Mat bark = (x, y, z) -> pick(h(x, y, z, 30), "stripped_oak_wood", 50, "stripped_birch_wood", 18, "honeycomb_block", 10, "gold_block", 10, "ochre_froglight", 12);
-        // a trunk of six twisting strands, flaring at the roots
-        int strands = 7;
-        for (int k = 0; k < strands; k++) {
-            double[] prev = null;
-            for (double ly = -2; ly <= 60; ly += 3) {
-                double phi = k * 2 * Math.PI / strands + ly * 0.05;
-                double rr = 4.6 * (1 - ly / 85) + 1.2 + (ly < 8 ? (8 - ly) * 0.9 : 0);
-                double[] p = {tx + Math.cos(phi) * rr, ty + ly, tz + Math.sin(phi) * rr};
-                double rad = 2.9 - ly / 60 * 1.4;
-                if (prev != null) cone(prev, p, rad + 0.1, rad, bark);
-                prev = p;
-            }
-        }
-        // solid heartwood so there are no pockets between the strands
-        cone(new double[]{tx, ty - 3, tz}, new double[]{tx, ty + 40, tz}, 5.6, 3.6, bark);
-        // branches spreading into the canopy
-        double[] crown = {tx, ty + 66, tz};
-        for (int k = 0; k < 9; k++) {
-            double a = k * 2 * Math.PI / 9 + 0.3, from = 36 + (k % 3) * 7;
-            double[] p = {tx + Math.cos(a) * 2, ty + from, tz + Math.sin(a) * 2};
-            double[] q = {tx + Math.cos(a) * (18 + k % 4 * 3), ty + 58 + (k % 3) * 4, tz + Math.sin(a) * (18 + k % 4 * 3)};
-            cone(p, q, 1.9, 0.8, bark);
-        }
-        // canopy: a cloud of golden, glowing foliage
-        Mat leaf = (x, y, z) -> {   // colours in clusters, not per-block speckle
-            double n = MapKit.noise((x + y * 0.7) / 3.5, (z - y * 0.5) / 3.5, 31);
-            if (h(x, y, z, 32) < 0.06) return "ochre_froglight";
-            return n < 0.3 ? "yellow_terracotta" : n < 0.5 ? "honeycomb_block" : n < 0.68 ? "gold_block" : n < 0.82 ? "yellow_concrete" : "ochre_froglight";
-        };
-        Random r = new Random(77);
-        for (int i = 0; i < 90; i++) {
-            double a = r.nextDouble() * 2 * Math.PI, d = Math.sqrt(r.nextDouble()) * 29;
-            double cx = crown[0] + Math.cos(a) * d, cz = crown[2] + Math.sin(a) * d;
-            double cy = crown[1] - 2 + r.nextDouble() * 9 * (1 - d / 34) - (d > 20 ? (d - 20) * 0.5 : 0);
-            double rad = 4 + r.nextDouble() * 4;
-            solid(cx - rad, cy - rad, cz - rad, cx + rad, cy + rad, cz + rad, (x, y, z) -> {
-                double dd = Math.sqrt(sq(x + 0.5 - cx) + sq((y + 0.5 - cy) * 1.3) + sq(z + 0.5 - cz)) - rad;
-                return dd <= 0 && dd > -3.2 ? -1 : 1;   // hollow shell keeps the block count sane
-            }, leaf);
-            // glowing drips hanging from the underside
-            if (r.nextDouble() < 0.55) {
-                int x = (int) Math.floor(cx + r.nextGaussian() * rad * 0.4), z = (int) Math.floor(cz + r.nextGaussian() * rad * 0.4);
-                int y = (int) Math.floor(cy - rad / 1.3);
-                while (y < cy && c.get(x, y, z) == null) y++;
-                int len = 3 + r.nextInt(7);
-                for (int j = 1; j <= len; j++)
-                    if (c.get(x, y - j, z) == null) c.setLate(x, y - j, z, "minecraft:" + (j == len ? "cave_vines[berries=true]" : "cave_vines_plant[berries=" + (r.nextBoolean() ? "true" : "false") + "]"));
-            }
-        }
-        // great roots crawling across the outcrop and spilling over the cliffs
-        for (int k = 0; k < 11; k++) {
-            double a = k * 2 * Math.PI / 11 + 0.2;
-            double[] p = {tx + Math.cos(a) * 3, ty + 1, tz + Math.sin(a) * 3};
-            double reach = 14 + (k % 4) * 5;
-            double[] q = {tx + Math.cos(a) * reach, ty - 1, tz + Math.sin(a) * reach};
-            double[] e = {tx + Math.cos(a) * (reach + 7), ty - 14 - k % 3 * 5, tz + Math.sin(a) * (reach + 7)};
-            cone(p, q, 2.0, 1.2, bark);
-            cone(q, e, 1.2, 0.4, bark);
-        }
-        // fill the gaps under and between the roots so nobody gets wedged in them
-        for (int x = -20; x <= 20; x++) for (int z = TREE_Z - 20; z <= TREE_Z + 20; z++) {
-            int g = surf(x, z);
-            if (g == Integer.MIN_VALUE) continue;
-            int top = -1;
-            for (int y = base + 12; y > g; y--) if (!empty(x, y, z)) { top = y; break; }
-            for (int y = g + 1; y < top; y++) if (empty(x, y, z)) set(x, y, z, rootMat(x, Y + y, z));
-        }
-        // raise any hollow among the roots that is walled in on all four sides until it can be climbed out of
-        for (int pass = 0; pass < 16; pass++) {
-            boolean changed = false;
-            for (int x = -20; x <= 20; x++) for (int z = TREE_Z - 20; z <= TREE_Z + 20; z++) {
-                int t = top(x, z, base + 14);
-                if (t == Integer.MIN_VALUE) continue;
-                // a narrow crevasse: both neighbours on one axis tower over it
-                int ex = Math.min(top(x + 1, z, base + 14), top(x - 1, z, base + 14)), ez = Math.min(top(x, z + 1, base + 14), top(x, z - 1, base + 14));
-                if (ex != Integer.MIN_VALUE && ex >= t + 2 || ez != Integer.MIN_VALUE && ez >= t + 2) { set(x, t + 1, z, rootMat(x, Y + t + 1, z)); changed = true; }
-            }
-            if (!changed) break;
-        }
-    }
-
-    // ------------------------------------------------------------------ colossal swords
+    // ------------------------------------------------------------------ colossal black swords
 
     private void swords() {
-        double[][] at = {{0.78, 40}, {2.33, 38}, {-2.45, 41}, {-0.72, 40}};
-        for (double[] s : at) {
+        for (double[] s : new double[][]{{-2.36, 27}, {-0.78, 27}}) {
             double a = s[0], rr = s[1];
             int gx = (int) Math.round(Math.cos(a) * rr), gz = (int) Math.round(Math.sin(a) * rr);
-            int g = surf(gx, gz);
-            if (g == Integer.MIN_VALUE) continue;
-            double tilt = 0.32;
+            double tilt = 0.3;
             double[] dir = {Math.cos(a) * Math.sin(tilt), Math.cos(tilt), Math.sin(a) * Math.sin(tilt)};   // leaning outward
             double[] side = {-Math.sin(a), 0, Math.cos(a)};
-            double[] tip = {gx + 0.5 - dir[0] * 4, Y + g - 4, gz + 0.5 - dir[2] * 4};
-            double len = 24;
+            double[] tip = {gx + 0.5 - dir[0] * 4, Y - 4, gz + 0.5 - dir[2] * 4};
+            double len = 22;
             double[] guardAt = {tip[0] + dir[0] * len, tip[1] + dir[1] * len, tip[2] + dir[2] * len};
-            // blade: flat, tapering to the point, darker fuller down the middle
             solid(Math.min(tip[0], guardAt[0]) - 4, tip[1] - 1, Math.min(tip[2], guardAt[2]) - 4,
                     Math.max(tip[0], guardAt[0]) + 4, guardAt[1] + 1, Math.max(tip[2], guardAt[2]) + 4, (x, y, z) -> {
-                        double px = x + 0.5 - tip[0], py = y + 0.5 - tip[1], pz = z + 0.5 - tip[2];
+                        double px = x - tip[0], py = y - tip[1], pz = z - tip[2];
                         double along = px * dir[0] + py * dir[1] + pz * dir[2];
                         if (along < 0 || along > len) return 1;
                         double across = px * side[0] + pz * side[2];
                         double nx = px - dir[0] * along - side[0] * across, ny = py - dir[1] * along, nz = pz - dir[2] * along - side[2] * across;
-                        double thick = Math.sqrt(nx * nx + ny * ny + nz * nz);
-                        double w = 2.0 * Math.min(1, along / 6);
-                        return Math.abs(across) <= w && thick <= 0.6 ? -1 : 1;
+                        double w = 1.9 * Math.min(1, along / 6);
+                        return Math.abs(across) <= w && Math.sqrt(nx * nx + ny * ny + nz * nz) <= 0.6 ? -1 : 1;
                     }, (x, y, z) -> {
-                        double px = x + 0.5 - tip[0], pz = z + 0.5 - tip[2];
-                        double across = px * side[0] + pz * side[2];
-                        return Math.abs(across) < 0.55 ? "polished_deepslate" : pick(h(x, y, z, 40), "iron_block", 55, "polished_andesite", 30, "smooth_stone", 15);
+                        double across = (x + 0.5 - tip[0]) * side[0] + (z + 0.5 - tip[2]) * side[2];
+                        if (Math.abs(across) < 0.55) return h(x, y, z, 40) < 0.25 ? "magma_block" : "crying_obsidian";   // a smouldering fuller
+                        return pick(h(x, y, z, 41), "netherite_block", 45, "polished_blackstone", 35, "blackstone", 20);
                     });
-            // crossguard, grip and pommel
-            double[] gl = {guardAt[0] - side[0] * 4.5, guardAt[1], guardAt[2] - side[2] * 4.5}, gr = {guardAt[0] + side[0] * 4.5, guardAt[1], guardAt[2] + side[2] * 4.5};
-            cone(gl, gr, 0.75, 0.75, (x, y, z) -> h(x, y, z, 41) < 0.2 ? "raw_gold_block" : "gold_block");
-            double[] gripEnd = {guardAt[0] + dir[0] * 6, guardAt[1] + dir[1] * 6, guardAt[2] + dir[2] * 6};
-            cone(guardAt, gripEnd, 0.7, 0.7, (x, y, z) -> "dark_oak_wood");
-            double[] pom = {gripEnd[0] + dir[0], gripEnd[1] + dir[1], gripEnd[2] + dir[2]};
-            cone(pom, pom, 1.3, 1.3, (x, y, z) -> "gold_block");
-            // cracked earth around the impact
-            for (int x = -4; x <= 4; x++) for (int z = -4; z <= 4; z++) {
-                int sy = surf(gx + x, gz + z);
-                if (sy == Integer.MIN_VALUE || Math.hypot(x, z) > 4.2 || h(gx + x, 0, gz + z, 42) < 0.4) continue;
-                String cur = get(gx + x, sy, gz + z);
-                if (cur != null && cur.contains("grass")) set(gx + x, sy, gz + z, h(gx + x, 1, gz + z, 43) < 0.5 ? "coarse_dirt" : "tuff");
-            }
+            double[] gl = {guardAt[0] - side[0] * 4.2, guardAt[1], guardAt[2] - side[2] * 4.2}, gr = {guardAt[0] + side[0] * 4.2, guardAt[1], guardAt[2] + side[2] * 4.2};
+            cone(gl, gr, 0.7, 0.7, (x, y, z) -> h(x, y, z, 42) < 0.2 ? "raw_gold_block" : "gold_block");
+            double[] gripEnd = {guardAt[0] + dir[0] * 5.5, guardAt[1] + dir[1] * 5.5, guardAt[2] + dir[2] * 5.5};
+            cone(guardAt, gripEnd, 0.65, 0.65, (x, y, z) -> "dark_oak_wood");
+            cone(gripEnd, gripEnd, 1.25, 1.25, (x, y, z) -> "gold_block");
+            // the floor cracked open around the blade, glowing
+            for (int x = -3; x <= 3; x++) for (int z = -3; z <= 3; z++)
+                if (Math.hypot(x, z) <= 3.2 && h(gx + x, 0, gz + z, 43) < 0.45) set(gx + x, 0, gz + z, h(gx + x, 1, gz + z, 44) < 0.4 ? "magma_block" : "cracked_deepslate_tiles");
         }
     }
 
-    // ------------------------------------------------------------------ floating isles
+    /** Site of Grace: a small gold-inlaid circle before spawn (the glow itself is particles, see FactionsModule). */
+    private void graceShrine() {
+        double[] g = grace();
+        int gx = (int) Math.floor(g[0]), gz = (int) Math.floor(g[2]);
+        for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
+            double d = Math.hypot(x, z);
+            if (d > 2.3) continue;
+            set(gx + x, 0, gz + z, d < 0.5 ? "gold_block" : d < 1.5 ? "chiseled_polished_blackstone" : "gilded_blackstone");
+        }
+        late(gx, 1, gz, "light[level=13]");
+    }
 
-    private void isles() {
-        Random r = new Random(4040);
-        int placed = 0;
-        for (int tries = 0; tries < 200 && placed < 11; tries++) {
-            double a = r.nextDouble() * 2 * Math.PI, d = 58 + r.nextDouble() * 34;
-            if (d < outline(a) + 12) continue;   // keep a gap from the main island's edge
-            int cx = (int) (Math.cos(a) * d), cz = (int) (Math.sin(a) * d);
-            if (Math.hypot(cx, cz) > EXTENT - 10) continue;
-            int cy = -18 + r.nextInt(46);
-            int rad = 4 + r.nextInt(6);
-            isle(cx, cy, cz, rad, placed % 5, r);
-            placed++;
+    /** Candles on the battlements and around the braziers; dim hidden light so the fire and gold carry the scene. */
+    private void candlesAndLight() {
+        for (int x = -R - 1; x <= R + 1; x++) for (int z = -R - 1; z <= R + 1; z++) {
+            double d = Math.hypot(x, z);
+            if (d <= R - 1.5 || d > R - 0.5) continue;
+            if (empty(x, 6, z) && !empty(x, 5, z) && h(x, 6, z, 60) < 0.12) late(x, 6, z, "candle[candles=" + (1 + (int) (h(x, 7, z, 61) * 4)) + ",lit=true]");
+        }
+        for (int x = -R; x <= R; x += 6) for (int z = -R; z <= R; z += 6) {
+            if (Math.hypot(x, z) > R - 3 || !empty(x, 3, z) || !empty(x, 2, z) || empty(x, 0, z)) continue;
+            late(x, 3, z, "light[level=6]");
         }
     }
 
-    private void isle(int cx, int cy, int cz, int rad, int kind, Random r) {
-        for (int x = -rad - 2; x <= rad + 2; x++) for (int z = -rad - 2; z <= rad + 2; z++) {
-            double d = Math.hypot(x, z), edge = rad + (MapKit.noise((cx + x) / 3.0, (cz + z) / 3.0, 50) - 0.5) * 3;
-            if (d > edge) continue;
-            int depth = (int) (2 + (edge - d) * 1.6 + h(cx + x, 0, cz + z, 51) * 3);
-            for (int y = -depth; y <= 0; y++)
-                set(cx + x, cy + y, cz + z, y == 0 ? (h(cx + x, 0, cz + z, 52) < 0.75 ? "grass_block" : "moss_block") : y > -3 ? "dirt" : pick(h(cx + x, y, cz + z, 53), "stone", 3, "tuff", 2, "andesite", 1));
-            if (h(cx + x, 1, cz + z, 54) < 0.2) late(cx + x, cy + 1, cz + z, "short_grass");
-        }
-        switch (kind) {
-            case 0 -> column(cx, cy, cz, 5 + r.nextInt(8));
-            case 1 -> {   // minor golden tree
-                double[] base = {cx + 0.5, Y + cy + 1, cz + 0.5}, top = {cx + 0.5, Y + cy + 8, cz + 0.5};
-                cone(base, top, 1.1, 0.6, (x, y, z) -> pick(h(x, y, z, 55), "stripped_oak_wood", 3, "stripped_birch_wood", 1));
-                solid(cx - 5, Y + cy + 6, cz - 5, cx + 6, Y + cy + 14, cz + 6, (x, y, z) -> Math.sqrt(sq(x + 0.5 - top[0]) + sq((y + 0.5 - top[1] - 1.5) * 1.4) + sq(z + 0.5 - top[2])) - 4.2,
-                        (x, y, z) -> pick(h(x, y, z, 56), "honeycomb_block", 3, "gold_block", 2, "ochre_froglight", 2, "yellow_terracotta", 2));
-            }
-            case 2 -> {   // a lone ruined arch
-                for (int y = 1; y <= 9; y++) for (int s : new int[]{-3, 3}) set(cx + s, cy + y, cz, y % 3 == 0 ? "smooth_sandstone" : "cut_sandstone");
-                for (int x = -3; x <= 3; x++) if (h(cx + x, 10, cz, 57) < 0.8) set(cx + x, cy + 10, cz, "cut_sandstone");
-                late(cx, cy + 9, cz, "lantern[hanging=true]");
-            }
-            case 3 -> {   // a candle shrine
-                for (int x = -1; x <= 1; x++) for (int z = -1; z <= 1; z++) set(cx + x, cy + 1, cz + z, "chiseled_tuff");
-                for (int x = -1; x <= 1; x++) for (int z = -1; z <= 1; z++) late(cx + x, cy + 2, cz + z, "candle[candles=" + (1 + (int) (h(cx + x, 0, cz + z, 58) * 4)) + ",lit=true]");
-            }
-            default -> {  // a broken greatsword, buried at an angle
-                double[] p = {cx + 0.5, Y + cy - 2, cz + 0.5}, q = {cx + 3.5, Y + cy + 9, cz + 1.5};
-                cone(p, q, 0.9, 0.9, (x, y, z) -> pick(h(x, y, z, 59), "iron_block", 2, "polished_andesite", 1));
-            }
-        }
-    }
-
-    // ------------------------------------------------------------------ the sign
-
-    /** "FACTIONS" in gold letters above the north gate, hung on chains. */
-    private void sign() {
-        String text = "FACTIONS";
-        int scale = 2, spacing = 1, width = BlockFont.width(text, spacing) * scale, x0 = -width / 2, y0 = 47, z = -R - 6;
-        BlockFont.draw(text, spacing, (col, row, glyphRow) -> {
-            String b = glyphRow <= 1 ? "gold_block" : glyphRow <= 4 ? "raw_gold_block" : "gilded_blackstone";
-            for (int sx = 0; sx < scale; sx++) for (int sy = 0; sy < scale; sy++) {
-                int x = x0 + col * scale + sx, y = y0 + row * scale + sy;
-                set(x, y, z, b); set(x, y, z + 1, b);
-                for (int ox = -1; ox <= 1; ox++) for (int oy = -1; oy <= 1; oy++) if (get(x + ox, y + oy, z - 1) == null) set(x + ox, y + oy, z - 1, "polished_blackstone");
-            }
-        });
-        for (int s : new int[]{-1, 1}) for (int y = 62; y < 76; y++) if (get(s * (width / 2 - 4), y, z - 1) == null) set(s * (width / 2 - 4), y, z - 1, "iron_chain[axis=y]");   // hung from the canopy
-    }
-
-    // ------------------------------------------------------------------ lighting
-
-    /** Hidden light blocks for a warm glow everywhere (invisible, no collision), plus lanterns on posts along the roads. */
-    private void lights() {
-        for (int x = -EXTENT; x <= EXTENT; x += 5) for (int z = -EXTENT; z <= EXTENT; z += 5) {
-            int s = surf(x, z);
-            if (s == Integer.MIN_VALUE) continue;
-            int y = s + 3;
-            if (empty(x, y, z) && empty(x, y - 1, z)) late(x, y, z, "light[level=" + (Math.hypot(x, z) <= ARENA ? 12 : 9) + "]");
-        }
-        for (int g = 0; g < 4; g++) for (int d = ARENA + 4; d <= GATE - 6; d += 5) for (int side : new int[]{-4, 4}) {
-            int x = g == 0 || g == 2 ? side : (g == 1 ? d : -d), z = g == 0 ? -d : g == 2 ? d : side;
-            int s = surf(x, z);
-            if (s == Integer.MIN_VALUE || !empty(x, s + 1, z)) continue;
-            set(x, s + 1, z, "polished_tuff_wall");
-            set(x, s + 2, z, "polished_tuff_wall");
-            late(x, s + 3, z, "lantern");
-        }
-    }
 }
