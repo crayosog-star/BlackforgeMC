@@ -31,7 +31,7 @@ final class GaiaPlatform {
             LILAC = Color.fromRGB(0xE2C6FF), LAVENDER = Color.fromRGB(0xB48CFF);
 
     private static final float SLAB_THICKNESS = 0.4f;
-    private static final int HARDEN_TICKS = 20;          // each cell thickens over 1 s once it starts to harden
+    private static final int HARDEN_TICKS = 14;          // each cell thickens over 0.7 s once it starts to harden
     private static final int HEAL_EVERY = 40;            // riders heal half a heart every 2 s
     private static final double HEAL_AMOUNT = 1.0;
     private static final int SHARDS = 6;

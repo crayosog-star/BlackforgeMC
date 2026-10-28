@@ -216,6 +216,7 @@ public final class TestArena implements Listener {
             mark(h);
             if (h instanceof Ageable a) a.setAdult();
             h.setAI(false);
+            h.setSilent(true);                                          // no groans or hurt noises
             h.setRemoveWhenFarAway(false);
             h.setCanPickupItems(false);
             h.customName(Ui.mm("<gold><bold>Test Dummy"));
