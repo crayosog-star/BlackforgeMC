@@ -89,7 +89,6 @@ public final class Community implements Listener {
         tips.add("Your Ingots and Scrap travel with you to every game mode.");
         switch (mode) {
             case "arcade" -> {
-                tips.add("New: <gold>Forge Tycoon</gold> - buy the forge districts and bankrupt your friends. Find it in the Casual games!");
                 tips.add("Every Arcade win pays Ingots and Scrap.");
             }
             case "hub" -> tips.add("Watch the sky - the forge dragons never land.");
