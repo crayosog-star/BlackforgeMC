@@ -224,7 +224,9 @@ public final class Surge implements Listener {
                 p.spawnParticle(Particle.DUST_COLOR_TRANSITION, pt, 1, 0, 0, 0, 0, new Particle.DustTransition(CRIMSON, MAGENTA, 1.2f));
             }
             if (n % 3 == 0) p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, SoundCategory.PLAYERS, 0.6f, (float) (0.8 + progress));
-            if (n >= CHANNEL_TICKS) {   // burst
+            if (n >= CHANNEL_TICKS) {   // burst: the bolt comes down on the rose, right in front of you
+                p.getWorld().strikeLightningEffect(at);
+                p.playSound(p.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, SoundCategory.PLAYERS, 0.8f, 1.2f);
                 p.getWorld().spawnParticle(Particle.DUST, at, 30, 0.3, 0.3, 0.3, 0, new Particle.DustOptions(MAGENTA, 1.6f));
                 p.getWorld().spawnParticle(Particle.DUST, at, 20, 0.3, 0.3, 0.3, 0, new Particle.DustOptions(WITHER_BLACK, 1.4f));
                 rose.remove();

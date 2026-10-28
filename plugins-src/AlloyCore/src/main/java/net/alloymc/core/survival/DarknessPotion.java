@@ -26,14 +26,14 @@ import java.util.function.Predicate;
 
 /**
  * Potion of Darkness: a goth splash potion. Players it hits (where PvP is on) get a black flash, then the Warden's
- * Darkness for 2.5 s, plus an audio glitch: phantom footsteps and swings played on the WRONG side (the nearest
+ * total darkness for 5.5 s (Blindness + Darkness), plus an audio glitch: phantom footsteps and swings played on the WRONG side (the nearest
  * enemy's position mirrored left/right) and a heartbeat. Mobs it hits anywhere are confused for 2.5 s: they lose
  * their target, can't pick a new one, and stagger around. Does no damage.
  */
 public final class DarknessPotion implements Listener {
     public static final String NAME = "<gradient:#6E2C83:#8C1C2E><bold>Potion of Darkness</bold></gradient>";
-    public static final int DARK_TICKS = 50;          // 2.5 s
-    public static final int FLASH_TICKS = 10;         // 0.5 s of Blindness so the hit lands instantly
+    public static final int DARK_TICKS = 110;         // 5.5 s of solid dark for players
+    public static final int MOB_CONFUSE_TICKS = 50;   // 2.5 s of confusion for mobs
     public static final int COOLDOWN_SECONDS = 15;
     private static final long IMMUNE_MS = 4000;       // after the dark lifts: no chain-blinding
 
@@ -66,7 +66,7 @@ public final class DarknessPotion implements Listener {
             m.displayName(Ui.mm(NAME));
             m.lore(List.of(
                     Ui.mm("<gray>Throw it to steal their sight"),
-                    Ui.mm("<gray>Darkness for <white>2.5s <gray>to everyone it hits"),
+                    Ui.mm("<gray>Total darkness for <white>5.5s <gray>to everyone it hits"),
                     Ui.mm("<gray>Mobs lose their target and stagger"),
                     Ui.mm("<gray>Only darkens players where PvP is on"),
                     Ui.mm(""),
@@ -145,7 +145,8 @@ public final class DarknessPotion implements Listener {
             return;
         }
         // reset, never extend: two potions are not 5 s of blindness
-        p.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, FLASH_TICKS, 0, false, false, false));
+        // Blindness for the whole time keeps it fully dark (Darkness alone pulses); Darkness on top adds the pulsing edges
+        p.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, DARK_TICKS, 0, false, false, false));
         p.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, DARK_TICKS, 0, false, false, true));
         darkUntil.put(p.getUniqueId(), now + DARK_TICKS * 50L);
         immuneUntil.put(p.getUniqueId(), now + DARK_TICKS * 50L + IMMUNE_MS);
@@ -216,8 +217,8 @@ public final class DarknessPotion implements Listener {
     private void confuse(Mob m, long now) {
         if (immuneMob(m)) return;
         m.setTarget(null);
-        confusedUntil.put(m.getUniqueId(), now + DARK_TICKS * 50L);
-        m.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, DARK_TICKS, 1, false, false, false));
+        confusedUntil.put(m.getUniqueId(), now + MOB_CONFUSE_TICKS * 50L);
+        m.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, MOB_CONFUSE_TICKS, 1, false, false, false));
         UUID id = m.getUniqueId();
         int[] t = {0};
         Bukkit.getScheduler().runTaskTimer(plugin, task -> {
@@ -259,7 +260,7 @@ public final class DarknessPotion implements Listener {
         int[] t = {0};
         Bukkit.getScheduler().runTaskTimer(plugin, task -> {
             int n = t[0]++;
-            if (n >= DARK_TICKS / 5) { task.cancel(); return; }
+            if (n >= MOB_CONFUSE_TICKS / 5) { task.cancel(); return; }
             int count = Math.max(1, 12 - n);
             w.spawnParticle(Particle.DUST, c, count, 1.3, 0.4, 1.3, 0, new Particle.DustOptions(VOID_BLACK, 1.8f));
             w.spawnParticle(Particle.SMOKE, c, count / 2 + 1, 1.2, 0.3, 1.2, 0.005);
