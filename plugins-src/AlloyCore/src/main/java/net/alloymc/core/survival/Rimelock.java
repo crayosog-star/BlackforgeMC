@@ -27,44 +27,70 @@ import org.joml.Vector3f;
 
 import java.time.Duration;
 import java.util.*;
+import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 
 /**
- * Rimelock: a BlackForgeMC ability item. Right-click to leap up and slam down; a round cage of light-blue glass
- * ({@link CageShape#RADIUS} blocks across the middle) bursts up around where you land and holds for 7 seconds.
+ * Rimelock: a BlackForgeMC ability item. Right-click to leap up and slam down; a tall round cage of shimmering glass
+ * ({@link CageShape#RADIUS} blocks across the middle, {@link CageShape#WALL_HEIGHT} high) bursts up around where you
+ * land and holds for 10 seconds.
  *
  * <ul>
- *   <li>Anyone inside can't walk, get knocked, pearl or chorus out. That includes the caster.</li>
- *   <li>Mobs too: one that's in (or wanders in) is held at the glass until the cage drops.</li>
+ *   <li>Anyone inside can't walk, get knocked, pearl or chorus out. Mobs inside are held at the glass too.</li>
  *   <li>Anyone outside can see in and can walk in, but once they're in they're stuck too.</li>
- *   <li>No damage crosses the wall either way: hits are cancelled and projectiles bounce off the glass.</li>
+ *   <li>The caster (and their team, once teams exist - see {@code allies}) walks in and out freely.</li>
+ *   <li>No damage crosses the wall either way, for anyone: hits are cancelled and projectiles bounce off the glass.</li>
  * </ul>
  *
- * Only where {@code allowedAt} says (the hub Arena for now). The item isn't used up; you can't drop a second cage
- * while your first is still standing. The geometry lives in {@link CageShape}.
+ * Two colours: the caster and their team see the cage in ice blue, everyone else sees it in red. Each cage is built
+ * twice (one set of displays per colour, each shown only to its side) and every particle is sent per viewer in that
+ * viewer's colours.
+ *
+ * The look: panes that shoot up past full height and settle, a neon frame and floor ring, spinning crystals on the
+ * posts, white glints with light streaks sweeping round the wall, a brightness ripple, an aurora over the rim, snow
+ * inside, and a burst of shards when it breaks. Only where {@code allowedAt} says (the hub Arena for now). Never used
+ * up; one cage per caster at a time. The geometry lives in {@link CageShape}.
  */
 public final class Rimelock implements Listener {
     public static final String NAME = "<gradient:#BFF4FF:#3FA9FF><bold>Rimelock</bold></gradient>";
-    public static final int DURATION_TICKS = 7 * 20;
+    public static final int DURATION_TICKS = 10 * 20;
 
-    // palette: ice, sky, azure and a near-white for the bright edges
-    static final Color ICE = Color.fromRGB(0xBFF4FF), SKY = Color.fromRGB(0x7FD8FF), AZURE = Color.fromRGB(0x3FA9FF), FROST = Color.fromRGB(0xF2FDFF);
-    private static final int RISE_TICKS = 8, FALL_TICKS = 6;
+    private static final int RISE_TICKS = 8, SETTLE_TICKS = 6, BREAK_TICKS = 10;
+    private static final float OVERSHOOT = 1.1f;
+    private static final double GLINT_SPEED = 0.11;   // radians per tick: each glint laps the wall in ~3 s
+    private static final double VIEW = 96;            // particles go to players this close to the cage
+
+    /** One side's colours: the caster's team sees BLUE, everyone else RED. */
+    private record Palette(Color frost, Color ice, Color sky, Color azure, Color deep, BlockData glass, BlockData glint,
+                           BlockData frame, Material gem, String gradient, String hex) {
+        String title() { return "<gradient:" + gradient + "><bold>RIMELOCKED</bold></gradient>"; }
+    }
+
+    private final Palette blue = new Palette(Color.fromRGB(0xF2FDFF), Color.fromRGB(0xBFF4FF), Color.fromRGB(0x7FD8FF), Color.fromRGB(0x3FA9FF),
+            Color.fromRGB(0x1E6FD9), Material.LIGHT_BLUE_STAINED_GLASS.createBlockData(), Material.WHITE_STAINED_GLASS.createBlockData(),
+            Material.LIGHT_BLUE_CONCRETE.createBlockData(), Material.LIGHT_BLUE_STAINED_GLASS, "#F2FDFF:#7FD8FF:#3FA9FF", "#7FD8FF");
+    private final Palette red = new Palette(Color.fromRGB(0xFFEDEA), Color.fromRGB(0xFFB0A8), Color.fromRGB(0xFF6B5E), Color.fromRGB(0xE5312B),
+            Color.fromRGB(0x8E0F12), Material.RED_STAINED_GLASS.createBlockData(), Material.PINK_STAINED_GLASS.createBlockData(),
+            Material.RED_CONCRETE.createBlockData(), Material.RED_STAINED_GLASS, "#FFEDEA:#FF6B5E:#E5312B", "#FF6B5E");
 
     private final AlloyCore plugin;
     private final boolean enabled;
     private final Predicate<Location> allowedAt;
+    private final BiPredicate<UUID, Player> allies;   // (caster, player): player is on the caster's team
     private final NamespacedKey tagKey;
     private final List<Cage> cages = new ArrayList<>();
     private final Set<UUID> leaping = new HashSet<>();
     private final Map<UUID, Long> fxReadyAt = new HashMap<>();     // per player: bounce / blocked-hit effects at most every 200 ms
     private final Random rnd = new Random();
-    private final BlockData glass = Material.LIGHT_BLUE_STAINED_GLASS.createBlockData();
-    private final BlockData frame = Material.LIGHT_BLUE_CONCRETE.createBlockData();
 
-    public Rimelock(AlloyCore plugin, Predicate<Location> allowedAt) {
+    public Rimelock(AlloyCore plugin, Predicate<Location> allowedAt) { this(plugin, allowedAt, (caster, p) -> false); }
+
+    /** {@code allies}: true when {@code p} is on the caster's team (no teams yet, so the hub passes "nobody"). */
+    public Rimelock(AlloyCore plugin, Predicate<Location> allowedAt, BiPredicate<UUID, Player> allies) {
         this.plugin = plugin;
         this.allowedAt = allowedAt;
+        this.allies = allies;
         this.enabled = plugin.getConfig().getBoolean("rimelock.enabled", true);
         this.tagKey = new NamespacedKey(plugin, "rimelock");
         Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -77,11 +103,13 @@ public final class Rimelock implements Listener {
         it.editMeta(m -> {
             m.displayName(Ui.mm(NAME));
             m.lore(List.of(
-                    Ui.mm("<gray>Right-click to leap and slam down a cage"),
-                    Ui.mm("<gray>of light around you for <white>7s"),
+                    Ui.mm("<gray>Right-click to leap and slam down a tower"),
+                    Ui.mm("<gray>of shimmering ice for <white>10s"),
                     Ui.mm("<gray>Nobody inside can leave, mobs included."),
                     Ui.mm("<gray>Anyone can walk in, but then they're stuck too"),
+                    Ui.mm("<gray>You and your team come and go as you like"),
                     Ui.mm("<gray>No hits get through the wall, either way"),
+                    Ui.mm("<gray>Your side sees it <#7FD8FF>blue<gray>, enemies see <#FF6B5E>red"),
                     Ui.mm(""),
                     Ui.mm("<dark_gray>BlackForgeMC ability")));
             m.setMaxStackSize(1);
@@ -94,6 +122,17 @@ public final class Rimelock implements Listener {
     public boolean isCage(ItemStack it) {
         return it != null && it.getType() == Material.HEART_OF_THE_SEA && it.hasItemMeta()
                 && it.getItemMeta().getPersistentDataContainer().has(tagKey, PersistentDataType.BYTE);
+    }
+
+    /** The caster and their team: not held by the cage, and they see it blue. */
+    private boolean friendly(UUID caster, Player p) { return caster.equals(p.getUniqueId()) || allies.test(caster, p); }
+
+    private Palette paletteFor(UUID caster, Player p) { return friendly(caster, p) ? blue : red; }
+
+    /** Run a per-viewer effect for every player near {@code at}, with the colours that player sees. */
+    private void fx(UUID caster, Location at, BiConsumer<Player, Palette> f) {
+        for (Player p : at.getWorld().getPlayers())
+            if (p.getLocation().distanceSquared(at) < VIEW * VIEW) f.accept(p, paletteFor(caster, p));
     }
 
     // ------------------------------------------------------------------ casting
@@ -127,15 +166,25 @@ public final class Rimelock implements Listener {
         Location feet = p.getLocation();
         w.playSound(feet, Sound.ENTITY_RAVAGER_ROAR, SoundCategory.PLAYERS, 0.6f, 1.4f);
         w.playSound(feet, Sound.ENTITY_IRON_GOLEM_ATTACK, SoundCategory.PLAYERS, 1f, 0.7f);
-        w.spawnParticle(Particle.CLOUD, feet, 14, 0.4, 0.05, 0.4, 0.06);
-        ring(w, feet.getX(), feet.getY() + 0.1, feet.getZ(), 1.2, 20, new Particle.DustOptions(SKY, 1.4f));
+        w.playSound(feet, Sound.BLOCK_AMETHYST_BLOCK_RESONATE, SoundCategory.PLAYERS, 1f, 1.6f);
+        fx(id, feet, (v, pal) -> {
+            v.spawnParticle(Particle.CLOUD, feet, 14, 0.4, 0.05, 0.4, 0.06);
+            ring(v, feet.getX(), feet.getY() + 0.1, feet.getZ(), 1.2, 24, new Particle.DustOptions(pal.sky(), 1.4f));
+        });
         int[] n = {0};
         plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
             int k = n[0]++;
             if (!p.isOnline() || p.isDead()) { leaping.remove(id); task.cancel(); return; }
             Location at = p.getLocation().add(0, 0.9, 0);
-            w.spawnParticle(Particle.DUST_COLOR_TRANSITION, at, 4, 0.25, 0.4, 0.25, 0, new Particle.DustTransition(FROST, AZURE, 1.5f));
-            if (k % 2 == 0) w.spawnParticle(Particle.END_ROD, at, 1, 0.2, 0.3, 0.2, 0.01);
+            fx(id, at, (v, pal) -> {   // a spiral of frost round the caster on the way up
+                for (int s = 0; s < 2; s++) {
+                    double a = k * 0.9 + s * Math.PI;
+                    v.spawnParticle(Particle.DUST_COLOR_TRANSITION, at.getX() + Math.cos(a) * 0.6, at.getY() - 0.4, at.getZ() + Math.sin(a) * 0.6, 1, 0, 0, 0, 0,
+                            new Particle.DustTransition(pal.frost(), pal.azure(), 1.4f));
+                }
+                v.spawnParticle(Particle.DUST_COLOR_TRANSITION, at, 3, 0.2, 0.4, 0.2, 0, new Particle.DustTransition(pal.frost(), pal.sky(), 1.2f));
+                if (k % 2 == 0) v.spawnParticle(Particle.END_ROD, at, 1, 0.2, 0.3, 0.2, 0.01);
+            });
             if ((k >= 4 && p.isOnGround()) || k >= 30 || !allowedAt.test(p.getLocation())) {
                 task.cancel();
                 if (allowedAt.test(p.getLocation())) slam(p);
@@ -154,52 +203,65 @@ public final class Rimelock implements Listener {
     private void slam(Player p) {
         Location c = p.getLocation();
         World w = c.getWorld();
-        Cage cage = new Cage(p.getUniqueId(), p.getName(), w, c.getX(), c.getY(), c.getZ());
+        UUID id = p.getUniqueId();
+        Cage cage = new Cage(id, p.getName(), w, c.getX(), c.getY(), c.getZ());
         cages.add(cage);
         w.playSound(c, Sound.ITEM_MACE_SMASH_GROUND_HEAVY, SoundCategory.PLAYERS, 1.2f, 0.8f);
         w.playSound(c, Sound.BLOCK_ANVIL_LAND, SoundCategory.PLAYERS, 0.5f, 0.6f);
         w.playSound(c, Sound.BLOCK_BEACON_ACTIVATE, SoundCategory.PLAYERS, 1.4f, 1.5f);
         w.playSound(c, Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, SoundCategory.PLAYERS, 1f, 0.8f);
+        w.playSound(c, Sound.BLOCK_AMETHYST_BLOCK_RESONATE, SoundCategory.PLAYERS, 1.4f, 0.8f);
         w.playSound(c, Sound.ENTITY_LIGHTNING_BOLT_THUNDER, SoundCategory.PLAYERS, 0.35f, 2f);
-        w.spawnParticle(Particle.EXPLOSION, c, 1);
         BlockData under = c.clone().add(0, -0.5, 0).getBlock().getBlockData();
-        if (!under.getMaterial().isAir()) w.spawnParticle(Particle.BLOCK, c, 70, 1.2, 0.1, 1.2, 0.2, under);
-        // the shockwave: a bright ring that races out to the wall in 6 ticks, shedding frost
+        fx(id, c, (v, pal) -> {
+            v.spawnParticle(Particle.EXPLOSION, c, 1);
+            v.spawnParticle(Particle.END_ROD, c.clone().add(0, 0.3, 0), 40, 0.2, 0.1, 0.2, 0.35);
+            if (!under.getMaterial().isAir()) v.spawnParticle(Particle.BLOCK, c, 70, 1.2, 0.1, 1.2, 0.2, under);
+        });
+        // the shockwave: a double ring that races out to the wall in 6 ticks, shedding frost
         int[] n = {0};
         plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
             int k = n[0]++;
             double r = CageShape.RADIUS * (k + 1) / 6.0;
-            ring(w, cage.cx, cage.y + 0.15, cage.cz, r, (int) (12 + r * 8), new Particle.DustOptions(k % 2 == 0 ? FROST : SKY, 1.8f));
-            for (int i = 0; i < 10; i++) {
-                double a = rnd.nextDouble() * Math.PI * 2;
-                w.spawnParticle(Particle.SNOWFLAKE, cage.cx + Math.cos(a) * r, cage.y + 0.3, cage.cz + Math.sin(a) * r, 0, Math.cos(a), 0.4, Math.sin(a), 0.15);
-            }
-            if (k >= 5) {
-                task.cancel();
-                for (int i = 0; i < CageShape.SEGMENTS; i++) {
+            double[] flakes = new double[12];
+            for (int i = 0; i < flakes.length; i++) flakes[i] = rnd.nextDouble() * Math.PI * 2;
+            fx(id, c, (v, pal) -> {
+                ring(v, cage.cx, cage.y + 0.15, cage.cz, r, (int) (14 + r * 9), new Particle.DustOptions(pal.frost(), 2.0f));
+                if (r > 0.6) ring(v, cage.cx, cage.y + 0.1, cage.cz, r - 0.5, (int) (10 + r * 7), new Particle.DustOptions(pal.azure(), 1.5f));
+                for (double a : flakes)
+                    v.spawnParticle(Particle.SNOWFLAKE, cage.cx + Math.cos(a) * r, cage.y + 0.3, cage.cz + Math.sin(a) * r, 0, Math.cos(a), 0.5, Math.sin(a), 0.15);
+                if (k >= 5) for (int i = 0; i < CageShape.SEGMENTS; i++) {
                     double a = CageShape.edgeAngle(i);
-                    w.spawnParticle(Particle.ELECTRIC_SPARK, cage.cx + Math.cos(a) * CageShape.RADIUS, cage.y + 0.4, cage.cz + Math.sin(a) * CageShape.RADIUS, 3, 0.1, 0.3, 0.1, 0.2);
+                    v.spawnParticle(Particle.ELECTRIC_SPARK, cage.cx + Math.cos(a) * CageShape.RADIUS, cage.y + 0.4, cage.cz + Math.sin(a) * CageShape.RADIUS, 3, 0.1, 0.3, 0.1, 0.2);
                 }
-            }
+            });
+            if (k >= 5) task.cancel();
         }, 0L, 1L);
         cage.build();
         // who got caught
         for (Player q : w.getPlayers()) {
-            if (cage.inside(q.getLocation())) {
-                cage.trapped.add(q.getUniqueId());
-                boolean caster = q.equals(p);
-                q.showTitle(Title.title(Ui.mm("<gradient:#F2FDFF:#7FD8FF:#3FA9FF><bold>CAGED</bold></gradient>"),
-                        Ui.mm(caster ? "<gray>You and everyone in here. <white>7s<gray>. Fight." : "<gray>by <white>" + p.getName() + " <dark_gray>· <gray>no way out for <white>7s"),
-                        Title.Times.times(Duration.ofMillis(120), Duration.ofMillis(1300), Duration.ofMillis(400))));
-            } else if (q.getLocation().distanceSquared(c) < 22 * 22) {
-                q.sendActionBar(Ui.mm("<#7FD8FF>⛓ <white>" + p.getName() + " <gray>dropped a cage. Walk in if you dare."));
+            Palette pal = paletteFor(id, q);
+            if (!cage.inside(q.getLocation())) {
+                if (q.getLocation().distanceSquared(c) < 24 * 24)
+                    q.sendActionBar(Ui.mm("<" + pal.hex() + ">⛓ <white>" + p.getName() + " <gray>locked a cage down. "
+                            + (friendly(id, q) ? "You can come and go." : "Walk in if you dare.")));
+                continue;
             }
+            if (friendly(id, q)) {
+                q.showTitle(Title.title(Ui.mm(pal.title()),
+                        Ui.mm(q.equals(p) ? "<gray>Your cage. You come and go - they don't. <white>10s" : "<white>" + p.getName() + "<gray>'s cage. You can come and go."),
+                        Title.Times.times(Duration.ofMillis(120), Duration.ofMillis(1300), Duration.ofMillis(400))));
+                continue;
+            }
+            cage.trapped.add(q.getUniqueId());
+            q.showTitle(Title.title(Ui.mm(pal.title()), Ui.mm("<gray>by <white>" + p.getName() + " <dark_gray>· <gray>no way out for <white>10s"),
+                    Title.Times.times(Duration.ofMillis(120), Duration.ofMillis(1300), Duration.ofMillis(400))));
         }
     }
 
     // ------------------------------------------------------------------ the barrier
 
-    /** Walking (or being knocked) out of a cage you're in: you stop at the glass and get nudged back in. */
+    /** Walking (or being knocked) out of a cage you're held by: you stop at the glass and get nudged back in. */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onMove(PlayerMoveEvent e) {
         if (cages.isEmpty()) return;
@@ -208,7 +270,8 @@ public final class Rimelock implements Listener {
         Player p = e.getPlayer();
         if (p.getGameMode() == GameMode.SPECTATOR) return;
         for (Cage c : cages) {
-            if (c.world != from.getWorld() || !c.inside(from) || CageShape.insideXZ(c.cx, c.cz, to.getX(), to.getZ(), CageShape.RADIUS - CageShape.BODY)) continue;
+            if (c.world != from.getWorld() || friendly(c.owner, p) || !c.inside(from)
+                    || CageShape.insideXZ(c.cx, c.cz, to.getX(), to.getZ(), CageShape.RADIUS - CageShape.BODY)) continue;
             Location back = from.clone();
             back.setYaw(to.getYaw());
             back.setPitch(to.getPitch());
@@ -218,7 +281,7 @@ public final class Rimelock implements Listener {
             if (fxReady(p)) {
                 wallHit(c, from, 1.0);
                 p.playSound(p.getLocation(), Sound.ITEM_SHIELD_BLOCK, SoundCategory.PLAYERS, 0.5f, 1.6f);
-                p.sendActionBar(Ui.mm("<#7FD8FF>⛓ <gray>The cage holds. <white>" + secs(c.left()) + "s <gray>left"));
+                p.sendActionBar(Ui.mm("<#FF6B5E>⛓ <gray>The ice holds. <white>" + secs(c.left()) + "s <gray>left"));
             }
             return;
         }
@@ -231,17 +294,17 @@ public final class Rimelock implements Listener {
         String cause = e.getCause().name();
         if (!cause.equals("ENDER_PEARL") && !cause.equals("CHORUS_FRUIT") && !cause.equals("CONSUMABLE_EFFECT")) return;
         for (Cage c : cages) {
-            if (c.world != e.getFrom().getWorld() || !c.inside(e.getFrom()) || c.inside(e.getTo())) continue;
+            if (c.world != e.getFrom().getWorld() || friendly(c.owner, e.getPlayer()) || !c.inside(e.getFrom()) || c.inside(e.getTo())) continue;
             e.setCancelled(true);
             wallHit(c, e.getFrom(), 1.4);
-            e.getPlayer().sendActionBar(Ui.mm("<#7FD8FF>⛓ <gray>Nice try. The cage holds."));
+            e.getPlayer().sendActionBar(Ui.mm("<#FF6B5E>⛓ <gray>Nice try. The ice holds."));
             return;
         }
     }
 
     /**
-     * No damage across the wall, either way. Runs last so it also wins over the Arena's "PvP is on here" rule, and the
-     * Gale Bellows' own probe sees the cancel and skips anyone on the other side.
+     * No damage across the wall, either way, for everyone (the caster too). Runs last so it also wins over the Arena's
+     * "PvP is on here" rule, and the Gale Bellows' own probe sees the cancel and skips anyone on the other side.
      */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onHit(EntityDamageByEntityEvent e) {
@@ -255,7 +318,7 @@ public final class Rimelock implements Listener {
                 Location mid = by.getLocation().add(victim.getLocation()).multiply(0.5);
                 wallHit(c, mid, 1.2);
                 p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_HIT, SoundCategory.PLAYERS, 1f, 1.3f);
-                p.sendActionBar(Ui.mm("<#7FD8FF>⛓ <gray>The cage soaks up the hit"));
+                p.sendActionBar(Ui.mm("<" + paletteFor(c.owner, p).hex() + ">⛓ <gray>The ice soaks up the hit"));
             }
             return;
         }
@@ -268,16 +331,20 @@ public final class Rimelock implements Listener {
         return true;
     }
 
-    /** A crackle of light where something met the glass: sparks, a flash of frost, a glassy ping. */
+    /** A crackle of light where something met the glass: sparks, a star of frost, a glassy ping, and that pane flares. */
     private void wallHit(Cage c, Location near, double size) {
         Vector out = new Vector(near.getX() - c.cx, 0, near.getZ() - c.cz);
         if (out.lengthSquared() < 1e-6) out = new Vector(1, 0, 0);
         out.normalize();
         Location at = new Location(c.world, c.cx + out.getX() * CageShape.RADIUS, Math.max(c.y + 0.3, near.getY() + 1.0), c.cz + out.getZ() * CageShape.RADIUS);
-        c.world.spawnParticle(Particle.ELECTRIC_SPARK, at, (int) (8 * size), 0.15, 0.35, 0.15, 0.15);
-        c.world.spawnParticle(Particle.DUST, at, (int) (10 * size), 0.1, 0.45, 0.1, 0, new Particle.DustOptions(FROST, 1.4f));
-        c.world.spawnParticle(Particle.END_ROD, at, 2, 0.1, 0.2, 0.1, 0.04);
+        fx(c.owner, at, (v, pal) -> {
+            v.spawnParticle(Particle.ELECTRIC_SPARK, at, (int) (10 * size), 0.15, 0.35, 0.15, 0.18);
+            v.spawnParticle(Particle.DUST_COLOR_TRANSITION, at, (int) (12 * size), 0.1, 0.5, 0.1, 0, new Particle.DustTransition(pal.frost(), pal.azure(), 1.5f));
+            v.spawnParticle(Particle.END_ROD, at, 3, 0.1, 0.2, 0.1, 0.05);
+            v.spawnParticle(Particle.SNOWFLAKE, at, (int) (4 * size), 0.1, 0.3, 0.1, 0.04);
+        });
         c.world.playSound(at, Sound.BLOCK_AMETHYST_BLOCK_HIT, SoundCategory.PLAYERS, 0.9f, 1.5f);
+        c.flash(out);
     }
 
     // ------------------------------------------------------------------ housekeeping
@@ -297,11 +364,46 @@ public final class Rimelock implements Listener {
 
     private static String secs(int ticks) { return String.format(Locale.ROOT, "%.1f", Math.max(0, ticks) / 20.0); }
 
-    private static void ring(World w, double x, double y, double z, double r, int pts, Particle.DustOptions dust) {
+    private static void ring(Player v, double x, double y, double z, double r, int pts, Particle.DustOptions dust) {
         for (int i = 0; i < pts; i++) {
             double a = i * 2 * Math.PI / pts;
-            w.spawnParticle(Particle.DUST, x + Math.cos(a) * r, y, z + Math.sin(a) * r, 1, 0.02, 0.02, 0.02, 0, dust);
+            v.spawnParticle(Particle.DUST, x + Math.cos(a) * r, y, z + Math.sin(a) * r, 1, 0.02, 0.02, 0.02, 0, dust);
         }
+    }
+
+    /** Smallest angle between two directions, 0..pi. */
+    private static double angleGap(double a, double b) {
+        double d = Math.abs((a - b) % (2 * Math.PI));
+        return d > Math.PI ? 2 * Math.PI - d : d;
+    }
+
+    // ------------------------------------------------------------------ geometry of the pieces (shared by both colours)
+
+    /** A slab of w (along the wall) x h x th (across it), centred on the wall line at {@code angle}/{@code radius}. */
+    private static Transformation slab(double angle, double radius, float w, float h, float th, float lift) {
+        Quaternionf q = new Quaternionf().rotateY((float) CageShape.panelYaw(angle));
+        Vector3f mid = new Vector3f((float) (Math.cos(angle) * radius), lift, (float) (Math.sin(angle) * radius));
+        Vector3f corner = q.transform(new Vector3f(-w / 2, 0, -th / 2)).add(mid);
+        return new Transformation(corner, q, new Vector3f(w, h, th), new Quaternionf());
+    }
+
+    private static Transformation post(double angle, float h) {
+        float s = 0.2f;
+        Vector3f at = new Vector3f((float) (Math.cos(angle) * CageShape.RADIUS) - s / 2, 0, (float) (Math.sin(angle) * CageShape.RADIUS) - s / 2);
+        return new Transformation(at, new Quaternionf(), new Vector3f(s, h, s), new Quaternionf());
+    }
+
+    /** A glass cube stood on its corner like a gem, floating over a post. */
+    private static Transformation crystal(double angle, float scale, float spin, float bob) {
+        Vector3f at = new Vector3f((float) (Math.cos(angle) * CageShape.RADIUS), (float) CageShape.WALL_HEIGHT + 1.0f + bob, (float) (Math.sin(angle) * CageShape.RADIUS));
+        return new Transformation(at, new Quaternionf().rotateY(spin).rotateX(0.7854f).rotateZ(0.6155f), new Vector3f(scale), new Quaternionf());
+    }
+
+    private static void move(Display d, Transformation tf, int ticks) {
+        if (d == null || !d.isValid()) return;
+        d.setInterpolationDelay(0);
+        d.setInterpolationDuration(ticks);
+        d.setTransformation(tf);
     }
 
     // ------------------------------------------------------------------ one cage
@@ -311,86 +413,222 @@ public final class Rimelock implements Listener {
         final String ownerName;
         final World world;
         final double cx, y, cz;
-        final List<BlockDisplay> panels = new ArrayList<>(), rims = new ArrayList<>(), posts = new ArrayList<>();
+        final Side friends, foes;                            // the blue set and the red set of displays
+        final long[] flashUntil = new long[CageShape.SEGMENTS];   // per pane: flaring after a hit (tick)
+        final Map<UUID, Boolean> viewers = new HashMap<>();  // who has been shown which set (true = blue)
         final Set<UUID> trapped = new HashSet<>();
         final Map<UUID, Location> shots = new HashMap<>();   // projectiles near the wall: where they were last tick
         final Map<UUID, Location> mobsIn = new HashMap<>();  // mobs in the cage: their last spot inside
-        TextDisplay timer;
+        boolean standing;                                    // panes have finished rising: the shimmer may take over
         BukkitTask task;
         int t;
 
         Cage(UUID owner, String ownerName, World world, double cx, double y, double cz) {
             this.owner = owner; this.ownerName = ownerName; this.world = world; this.cx = cx; this.y = y; this.cz = cz;
+            this.friends = new Side(blue);
+            this.foes = new Side(red);
         }
 
         int left() { return DURATION_TICKS - t; }
         boolean inside(Location l) { return l.getWorld() == world && CageShape.inside(cx, y, cz, l.getX(), l.getY(), l.getZ()); }
         Location center() { return new Location(world, cx, y, cz); }
+        private void later(int ticks, Runnable r) { plugin.getServer().getScheduler().runTaskLater(plugin, r, Math.max(1, ticks)); }
 
-        // --- the build: every piece starts flat on the ground and rises, panel by panel round the circle
+        /** One colour's full set of displays, visible only to the players on that side. */
+        final class Side {
+            final Palette pal;
+            final BlockDisplay[] panes = new BlockDisplay[CageShape.SEGMENTS], tops = new BlockDisplay[CageShape.SEGMENTS],
+                    floors = new BlockDisplay[CageShape.SEGMENTS];
+            final boolean[] lit = new boolean[CageShape.SEGMENTS];   // which panes currently show the glint block
+            final int[] bright = new int[CageShape.SEGMENTS];
+            final List<BlockDisplay> posts = new ArrayList<>(), streaks = new ArrayList<>();
+            final List<ItemDisplay> crystals = new ArrayList<>();
+            final List<Entity> all = new ArrayList<>();
+            TextDisplay timer;
 
-        void build() {
-            float w = (float) CageShape.panelWidth(), th = 0.05f, h = (float) CageShape.WALL_HEIGHT;
-            for (int i = 0; i < CageShape.SEGMENTS; i++) {
-                double phi = CageShape.panelAngle(i);
-                Quaternionf q = new Quaternionf().rotateY((float) CageShape.panelYaw(phi));
-                Vector3f mid = new Vector3f((float) (Math.cos(phi) * CageShape.RADIUS), 0, (float) (Math.sin(phi) * CageShape.RADIUS));
-                BlockDisplay pane = display(glass, panelTf(mid, q, w, 0.01f, th, 0), false);
-                BlockDisplay rim = display(frame, panelTf(mid, q, w, 0.1f, 0.1f, 0), true);
-                panels.add(pane);
-                rims.add(rim);
-                int delay = 2 + i / 4;   // a wave that runs round the circle in ~8 ticks
-                plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                    move(pane, panelTf(mid, q, w, h, th, 0), RISE_TICKS);
-                    move(rim, panelTf(mid, q, w, 0.1f, 0.1f, h), RISE_TICKS);
-                }, delay);
-                if (i % 4 == 0) {   // a glowing post every 4 panels
-                    double a = CageShape.edgeAngle(i);
-                    Vector3f at = new Vector3f((float) (Math.cos(a) * CageShape.RADIUS), 0, (float) (Math.sin(a) * CageShape.RADIUS));
-                    BlockDisplay post = display(frame, postTf(at, 0.01f), true);
-                    posts.add(post);
-                    plugin.getServer().getScheduler().runTaskLater(plugin, () -> move(post, postTf(at, h + 0.25f), RISE_TICKS), delay);
+            Side(Palette pal) { this.pal = pal; }
+
+            BlockDisplay block(BlockData data, Transformation tf, Color glow, int light) {
+                BlockDisplay b = world.spawn(center(), BlockDisplay.class, d -> {
+                    d.setPersistent(false);
+                    d.setVisibleByDefault(false);
+                    d.setBlock(data);
+                    d.setBrightness(new Display.Brightness(light, 15));
+                    d.setViewRange(4f);
+                    d.setShadowRadius(0);
+                    d.setTransformation(tf);
+                    if (glow != null) { d.setGlowing(true); d.setGlowColorOverride(glow); }
+                });
+                all.add(b);
+                return b;
+            }
+
+            // the build: panes shoot up white past full height, settle and cool to colour, in a wave round the circle
+            void build() {
+                int n = CageShape.SEGMENTS;
+                float w = (float) CageShape.panelWidth(), h = (float) CageShape.WALL_HEIGHT;
+                for (int i = 0; i < n; i++) {
+                    double a = CageShape.panelAngle(i);
+                    int at = 2 + i / 4;   // the wave runs round the circle in ~8 ticks
+                    BlockDisplay pane = block(pal.glint(), slab(a, CageShape.RADIUS, w, 0.01f, 0.05f, 0), null, 15);
+                    BlockDisplay top = block(pal.frame(), slab(a, CageShape.RADIUS, w, 0.12f, 0.14f, 0), pal.sky(), 15);
+                    BlockDisplay floor = block(pal.glass(), slab(a, CageShape.RADIUS - 0.05, 0.01f, 0.03f, 0.8f, 0.01f), pal.sky(), 15);
+                    panes[i] = pane; tops[i] = top; floors[i] = floor; lit[i] = true; bright[i] = 15;
+                    later(5, () -> move(floor, slab(a, CageShape.RADIUS - 0.05, w, 0.03f, 0.8f, 0.01f), 4));   // unrolls as the shockwave arrives
+                    later(at, () -> {
+                        move(pane, slab(a, CageShape.RADIUS, w, h * OVERSHOOT, 0.05f, 0), RISE_TICKS);
+                        move(top, slab(a, CageShape.RADIUS, w, 0.12f, 0.14f, h * OVERSHOOT), RISE_TICKS);
+                    });
+                    int idx = i;
+                    later(at + RISE_TICKS, () -> {
+                        move(pane, slab(a, CageShape.RADIUS, w, h, 0.05f, 0), SETTLE_TICKS);
+                        move(top, slab(a, CageShape.RADIUS, w, 0.12f, 0.14f, h), SETTLE_TICKS);
+                        if (pane.isValid()) pane.setBlock(pal.glass());
+                        lit[idx] = false;
+                    });
+                    if (i % 4 == 0) {   // a glowing post every 4 panes, a spinning crystal over it
+                        double e = CageShape.edgeAngle(i);
+                        BlockDisplay post = block(pal.frame(), post(e, 0.01f), pal.sky(), 15);
+                        posts.add(post);
+                        later(at, () -> move(post, post(e, (h + 0.4f) * OVERSHOOT), RISE_TICKS));
+                        later(at + RISE_TICKS, () -> move(post, post(e, h + 0.4f), SETTLE_TICKS));
+                        ItemDisplay gem = world.spawn(center(), ItemDisplay.class, d -> {
+                            d.setPersistent(false);
+                            d.setVisibleByDefault(false);
+                            d.setItemStack(new ItemStack(pal.gem()));
+                            d.setBrightness(new Display.Brightness(15, 15));
+                            d.setViewRange(4f);
+                            d.setShadowRadius(0);
+                            d.setGlowing(true);
+                            d.setGlowColorOverride(pal.ice());
+                            d.setTransformation(crystal(e, 0.01f, 0, 0));
+                        });
+                        crystals.add(gem);
+                        all.add(gem);
+                        later(at + RISE_TICKS + 2, () -> {
+                            move(gem, crystal(e, 1.3f, (float) Math.PI, 0.15f), 5);                          // pops in big...
+                            later(5, () -> move(gem, crystal(e, 0.9f, (float) Math.PI * 1.5f, 0), 4));      // ...and settles
+                        });
+                    }
+                }
+                // two light streaks that ride the glints round the wall (just inside the glass)
+                for (int k = 0; k < 2; k++) streaks.add(block(pal.glint(), slab(k * Math.PI, CageShape.RADIUS - 0.09, 0.22f, 0.01f, 0.05f, 0), pal.frost(), 15));
+                timer = world.spawn(center().add(0, 6.5, 0), TextDisplay.class, d -> {
+                    d.setPersistent(false);
+                    d.setVisibleByDefault(false);
+                    d.setBillboard(Display.Billboard.CENTER);
+                    d.setShadowed(true);
+                    d.setBackgroundColor(Color.fromARGB(0, 0, 0, 0));
+                    d.setBrightness(new Display.Brightness(15, 15));
+                    d.setTransformation(new Transformation(new Vector3f(), new Quaternionf(), new Vector3f(2.4f), new Quaternionf()));
+                });
+                all.add(timer);
+            }
+
+            void show(Player p, boolean on) {
+                for (Entity e : all) if (e.isValid()) { if (on) p.showEntity(plugin, e); else p.hideEntity(plugin, e); }
+            }
+
+            /**
+             * The shimmer: two white glints sweep round the wall with a light streak riding each, and a brightness
+             * ripple rolls round the glass. Panes that were hit flare. In the last 2 s the whole wall strobes. Only
+             * changed values are sent.
+             */
+            void shimmer(double glintAt, boolean strobe) {
+                for (int i = 0; i < CageShape.SEGMENTS; i++) {
+                    BlockDisplay pane = panes[i];
+                    if (pane == null || !pane.isValid()) continue;
+                    double a = CageShape.panelAngle(i);
+                    boolean w = strobe || flashUntil[i] > t || angleGap(a, glintAt) < 0.23 || angleGap(a, glintAt + Math.PI) < 0.23;
+                    if (w != lit[i]) { pane.setBlock(w ? pal.glint() : pal.glass()); lit[i] = w; }
+                    int b = w ? 15 : (int) Math.round(9 + 6 * (0.5 + 0.5 * Math.sin(t * 0.3 - a * 4)));
+                    if (b != bright[i]) { pane.setBrightness(new Display.Brightness(b, 15)); bright[i] = b; }
+                }
+                float h = (float) CageShape.WALL_HEIGHT;
+                for (int k = 0; k < streaks.size(); k++)
+                    move(streaks.get(k), slab(glintAt + k * Math.PI + 0.12, CageShape.RADIUS - 0.09, 0.22f, h, 0.05f, 0), 2);
+            }
+
+            /** Each crystal turns a quarter and bobs, a beat behind its neighbour. */
+            void spinCrystals() {
+                for (int k = 0; k < crystals.size(); k++) {
+                    double e = CageShape.edgeAngle(k * 4);
+                    float spin = (float) ((t / 10 + k) % 4 * Math.PI / 2 + Math.PI / 2);
+                    float bob = (float) (Math.sin((t / 10.0 + k) * 1.2) * 0.18);
+                    move(crystals.get(k), crystal(e, 0.9f, spin, bob), 10);
                 }
             }
-            timer = world.spawn(center().add(0, CageShape.WALL_HEIGHT + 1.0, 0), TextDisplay.class, d -> {
-                d.setPersistent(false);
-                d.setBillboard(Display.Billboard.CENTER);
-                d.setShadowed(true);
-                d.setBackgroundColor(Color.fromARGB(0, 0, 0, 0));
-                d.setBrightness(new Display.Brightness(15, 15));
-                d.setTransformation(new Transformation(new Vector3f(), new Quaternionf(), new Vector3f(2.2f), new Quaternionf()));
-            });
+
+            void frameGlow(boolean on) {
+                for (BlockDisplay d : tops) if (d != null && d.isValid()) d.setGlowing(on);
+                for (BlockDisplay d : posts) if (d.isValid()) d.setGlowing(on);
+            }
+
+            void timerText(int left, boolean ending) {
+                if (timer == null || !timer.isValid()) return;
+                String phase = String.format(Locale.ROOT, "%.2f", Math.sin(t / 6.0));
+                String[] stops = pal.gradient().split(":");
+                String num = ending
+                        ? "<" + (t % 8 < 4 ? stops[0] : stops[2]) + "><bold>⛓ " + secs(left) + "</bold>"
+                        : "<gradient:" + pal.gradient() + ":" + stops[1] + ":" + phase + "><bold>⛓ " + secs(left) + "</bold></gradient>";
+                timer.text(Ui.mm(num + "<newline><gray><font:uniform>" + ownerName + "'s rimelock</font>"));
+            }
+
+            /** Everything flares, then bursts outward into shrinking shards. */
+            void shatter() {
+                float w = (float) CageShape.panelWidth(), h = (float) CageShape.WALL_HEIGHT;
+                for (BlockDisplay d : panes) if (d != null && d.isValid()) { d.setBlock(pal.glint()); d.setBrightness(new Display.Brightness(15, 15)); }
+                long seed = rnd.nextLong();
+                later(2, () -> {
+                    Random r = new Random(seed);   // both colours break the same way
+                    for (int i = 0; i < CageShape.SEGMENTS; i++) {
+                        double a = CageShape.panelAngle(i);
+                        float out = 1.5f + r.nextFloat() * 2f, up = r.nextFloat() * 4f;
+                        move(panes[i], slab(a, CageShape.RADIUS + out, w * 0.15f, h * 0.12f, 0.05f, up + h * 0.3f), BREAK_TICKS);
+                        move(tops[i], slab(a, CageShape.RADIUS + out * 0.8, w * 0.2f, 0.05f, 0.05f, h + up), BREAK_TICKS);
+                        move(floors[i], slab(a, CageShape.RADIUS - 0.05, 0.01f, 0.03f, 0.8f, 0.01f), BREAK_TICKS);
+                    }
+                    for (int k = 0; k < posts.size(); k++) move(posts.get(k), post(CageShape.edgeAngle(k * 4), 0.01f), BREAK_TICKS);
+                    for (BlockDisplay s : streaks) s.remove();
+                    for (int k = 0; k < crystals.size(); k++) move(crystals.get(k), crystal(CageShape.edgeAngle(k * 4), 0.01f, (float) Math.PI * 3, 1.5f), BREAK_TICKS);
+                });
+                if (timer != null) timer.remove();
+            }
+
+            void remove() { for (Entity e : all) e.remove(); }
+        }
+
+        // --- life cycle
+
+        void build() {
+            friends.build();
+            foes.build();
+            syncViewers();
+            later(2 + CageShape.SEGMENTS / 4 + RISE_TICKS + SETTLE_TICKS, () -> standing = true);
             task = plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
         }
 
-        private BlockDisplay display(BlockData block, Transformation tf, boolean glow) {
-            return world.spawn(center(), BlockDisplay.class, d -> {
-                d.setPersistent(false);
-                d.setBlock(block);
-                d.setBrightness(new Display.Brightness(15, 15));
-                d.setViewRange(3f);
-                d.setShadowRadius(0);
-                d.setTransformation(tf);
-                if (glow) { d.setGlowing(true); d.setGlowColorOverride(SKY); }
-            });
+        /** Each player sees exactly one colour: blue for the caster's side, red for everyone else. Newcomers too. */
+        void syncViewers() {
+            Set<UUID> here = new HashSet<>();
+            for (Player p : world.getPlayers()) {
+                here.add(p.getUniqueId());
+                boolean f = friendly(owner, p);
+                Boolean was = viewers.get(p.getUniqueId());
+                if (was != null && was == f) continue;
+                if (was != null) (was ? friends : foes).show(p, false);
+                (f ? friends : foes).show(p, true);
+                viewers.put(p.getUniqueId(), f);
+            }
+            viewers.keySet().retainAll(here);
         }
 
-        private static void move(BlockDisplay d, Transformation tf, int ticks) {
-            if (!d.isValid()) return;
-            d.setInterpolationDelay(0);
-            d.setInterpolationDuration(ticks);
-            d.setTransformation(tf);
-        }
-
-        /** A w x h x th slab centred on {@code mid}, turned by {@code q}, its bottom at {@code lift} above the ground. */
-        private static Transformation panelTf(Vector3f mid, Quaternionf q, float w, float h, float th, float lift) {
-            Vector3f corner = q.transform(new Vector3f(-w / 2, 0, -th / 2)).add(mid).add(0, lift, 0);
-            return new Transformation(corner, new Quaternionf(q), new Vector3f(w, h, th), new Quaternionf());
-        }
-
-        private static Transformation postTf(Vector3f at, float h) {
-            float s = 0.16f;
-            return new Transformation(new Vector3f(at).add(-s / 2, 0, -s / 2), new Quaternionf(), new Vector3f(s, h, s), new Quaternionf());
+        /** The pane facing {@code out} flares for half a second (blocked hits, bounces, shots). */
+        void flash(Vector out) {
+            double a = Math.atan2(out.getZ(), out.getX());
+            if (a < 0) a += 2 * Math.PI;
+            int i = (int) (a / (2 * Math.PI) * CageShape.SEGMENTS) % CageShape.SEGMENTS;
+            flashUntil[i] = t + 10;
         }
 
         // --- every tick while it stands
@@ -399,89 +637,103 @@ public final class Rimelock implements Listener {
             t++;
             int left = left();
             if (left <= 0) { shatter(); return; }
-            Particle.DustOptions ice = new Particle.DustOptions(ICE, 1.6f), azure = new Particle.DustOptions(AZURE, 1.3f);
             double R = CageShape.RADIUS, H = CageShape.WALL_HEIGHT;
+            double glintAt = (t * GLINT_SPEED) % (2 * Math.PI);
+            boolean ending = left <= 40;
 
-            if (t % 2 == 0) {
-                // two comets chase each other round the top rim; one sweeps the floor the other way
-                for (int k = 0; k < 2; k++) {
-                    double a = t * 0.16 + k * Math.PI;
-                    world.spawnParticle(Particle.DUST, cx + Math.cos(a) * R, y + H + 0.05, cz + Math.sin(a) * R, 3, 0.05, 0.05, 0.05, 0, ice);
-                    world.spawnParticle(Particle.END_ROD, cx + Math.cos(a) * R, y + H + 0.05, cz + Math.sin(a) * R, 1, 0, 0, 0, 0.01);
-                }
-                double b = -t * 0.12;
-                world.spawnParticle(Particle.DUST, cx + Math.cos(b) * R, y + 0.15, cz + Math.sin(b) * R, 2, 0.05, 0.02, 0.05, 0, azure);
-                // motes of light drifting up the glass (count 0: the offset is the direction)
-                for (int i = 0; i < 4; i++) {
-                    double a = rnd.nextDouble() * Math.PI * 2, hy = rnd.nextDouble() * H;
-                    world.spawnParticle(Particle.DUST_COLOR_TRANSITION, cx + Math.cos(a) * R, y + hy, cz + Math.sin(a) * R, 1, 0.03, 0.1, 0.03, 0,
-                            new Particle.DustTransition(SKY, FROST, 1.1f));
-                    if (i == 0) world.spawnParticle(Particle.END_ROD, cx + Math.cos(a) * (R - 0.1), y + hy, cz + Math.sin(a) * (R - 0.1), 0, 0, 1, 0, 0.04);
-                }
+            if (t % 10 == 0) syncViewers();
+            if (standing && t % 2 == 0) {
+                boolean strobe = ending && (left / 4) % 2 == 0;
+                friends.shimmer(glintAt, strobe);
+                foes.shimmer(glintAt, strobe);
             }
-            if (t % 10 == 0) ring(world, cx, y + 0.1, cz, R - 0.05, 64, azure);   // a soft pulse round the base
+            if (t % 10 == 0) { friends.spinCrystals(); foes.spinCrystals(); }
+            if (t % 2 == 0) { friends.timerText(left, ending); foes.timerText(left, ending); }
+            if (left <= 30 && left % 3 == 0) { boolean on = (left / 3) % 2 == 0; friends.frameGlow(on); foes.frameGlow(on); }
 
-            // the clock: big number over the cage, ticking chimes that climb as time runs out
-            if (timer != null && timer.isValid() && t % 2 == 0) {
-                boolean late = left <= 40;
-                String col = late ? (t % 8 < 4 ? "<#F2FDFF>" : "<#3FA9FF>") : "<gradient:#F2FDFF:#7FD8FF>";
-                timer.text(Ui.mm(col + "<bold>⛓ " + secs(left) + "</bold>" + (late ? "" : "</gradient>") + "<newline><gray><font:uniform>" + ownerName + "'s cage</font>"));
-            }
+            particles(R, H, glintAt);
+
+            // sound: chimes that climb as time runs out, a hum, and the glass singing now and then
             if (left % 20 == 0) {
-                float pitch = 0.7f + (DURATION_TICKS - left) / 20f * 0.15f;
+                float pitch = 0.6f + (DURATION_TICKS - left) / 20f * 0.11f;
                 world.playSound(center(), Sound.BLOCK_NOTE_BLOCK_CHIME, SoundCategory.PLAYERS, 0.8f, pitch);
-            } else if (left <= 40 && left % 5 == 0) world.playSound(center(), Sound.BLOCK_NOTE_BLOCK_HAT, SoundCategory.PLAYERS, 0.6f, 1.6f);
+            } else if (ending && left % 5 == 0) world.playSound(center(), Sound.BLOCK_NOTE_BLOCK_HAT, SoundCategory.PLAYERS, 0.6f, 1.6f);
             if (t % 40 == 1) world.playSound(center(), Sound.BLOCK_BEACON_AMBIENT, SoundCategory.PLAYERS, 1f, 1.4f);
-
-            // last 1.5 s: the frame flickers - it's about to go
-            if (left <= 30 && left % 3 == 0) {
-                boolean on = (left / 3) % 2 == 0;
-                for (BlockDisplay d : rims) if (d.isValid()) d.setGlowing(on);
-                for (BlockDisplay d : posts) if (d.isValid()) d.setGlowing(on);
+            if (t % 7 == 0 && rnd.nextInt(3) == 0) {
+                double a = rnd.nextDouble() * Math.PI * 2;
+                world.playSound(new Location(world, cx + Math.cos(a) * R, y + 1.5, cz + Math.sin(a) * R), Sound.BLOCK_AMETHYST_BLOCK_CHIME, SoundCategory.PLAYERS, 0.5f, 1.2f + rnd.nextFloat() * 0.6f);
             }
 
-            // anyone who walked in since: they're stuck now too
+            // anyone who walked in since: they're stuck now too (unless they're on the caster's side)
             if (t % 2 == 0) for (Player q : world.getPlayers()) {
                 if (!inside(q.getLocation())) continue;
+                if (friendly(owner, q)) {
+                    if (t % 4 == 0) q.sendActionBar(Ui.mm("<#7FD8FF>⛓ <gray>" + (q.getUniqueId().equals(owner) ? "Your" : ownerName + "'s")
+                            + " rimelock <dark_gray>· <white>" + secs(left) + "s <dark_gray>· <gray>you can come and go"));
+                    continue;
+                }
                 if (trapped.add(q.getUniqueId())) {
-                    q.showTitle(Title.title(Ui.mm("<gradient:#F2FDFF:#3FA9FF><bold>CAGED</bold></gradient>"), Ui.mm("<gray>You walked in. Now you can't leave."),
+                    q.showTitle(Title.title(Ui.mm(red.title()), Ui.mm("<gray>You walked in. Now you can't leave."),
                             Title.Times.times(Duration.ofMillis(100), Duration.ofMillis(900), Duration.ofMillis(300))));
                     q.playSound(q.getLocation(), Sound.BLOCK_IRON_TRAPDOOR_CLOSE, SoundCategory.PLAYERS, 1f, 0.6f);
-                    world.spawnParticle(Particle.ELECTRIC_SPARK, q.getLocation().add(0, 1, 0), 12, 0.3, 0.5, 0.3, 0.1);
+                    q.playSound(q.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_RESONATE, SoundCategory.PLAYERS, 1f, 1.4f);
+                    Location l = q.getLocation().add(0, 1, 0);
+                    fx(owner, l, (v, pal) -> {
+                        v.spawnParticle(Particle.ELECTRIC_SPARK, l, 14, 0.3, 0.5, 0.3, 0.1);
+                        v.spawnParticle(Particle.DUST_COLOR_TRANSITION, l, 12, 0.3, 0.5, 0.3, 0, new Particle.DustTransition(pal.frost(), pal.azure(), 1.3f));
+                    });
                 } else if (t % 4 == 0 && fxReadyAt.getOrDefault(q.getUniqueId(), 0L) < System.currentTimeMillis() - 600) {
-                    q.sendActionBar(Ui.mm("<#7FD8FF>⛓ <bold>CAGED</bold> <dark_gray>· <white>" + secs(left) + "s"));
+                    q.sendActionBar(Ui.mm("<#FF6B5E>⛓ <bold>RIMELOCKED</bold> <dark_gray>· <white>" + secs(left) + "s"));
                 }
             }
             bounceShots();
             holdMobs();
         }
 
-        /**
-         * Mobs don't fire move events, so each tick: any mob that was inside and has crossed the wall goes back to its
-         * last spot inside and gets nudged towards the middle. A mob that walks in is held from then on. Dropping out
-         * of the bottom (a hole, the void) lets it go, same as for players. Mounts drop their riders first, so a
-         * player on a horse is held by the player rule instead.
-         */
-        private void holdMobs() {
-            Set<UUID> seen = new HashSet<>();
-            boolean fx = t % 4 == 0;
-            for (Entity en : world.getNearbyEntities(center(), CageShape.RADIUS + 3, CageShape.ABOVE, CageShape.RADIUS + 3)) {
-                if (!(en instanceof LivingEntity m) || en instanceof Player || m.isDead() || m.isInsideVehicle()) continue;
-                Location at = m.getLocation();
-                if (inside(at)) { mobsIn.put(m.getUniqueId(), at.clone()); seen.add(m.getUniqueId()); continue; }
-                Location last = mobsIn.get(m.getUniqueId());
-                if (last == null || at.getY() < y - CageShape.BELOW || at.getY() > y + CageShape.ABOVE) continue;   // never in, or fell out
-                seen.add(m.getUniqueId());
-                if (!m.getPassengers().isEmpty()) m.eject();
-                Location back = last.clone();
-                back.setYaw(at.getYaw());
-                back.setPitch(at.getPitch());
-                m.teleport(back);
-                Vector in = new Vector(cx - back.getX(), 0, cz - back.getZ());
-                if (in.lengthSquared() > 1e-6) m.setVelocity(in.normalize().multiply(0.25).setY(Math.min(0, m.getVelocity().getY())));
-                if (fx) { wallHit(this, back, 0.7); fx = false; }
-            }
-            mobsIn.keySet().retainAll(seen);
+        /** Comets on the rim, motes up the glass, an aurora over the top, glint sparkles, snow inside, the floor pulse. */
+        private void particles(double R, double H, double glintAt) {
+            boolean even = t % 2 == 0, third = t % 3 == 0, sixth = t % 6 == 0, tenth = t % 10 == 0;
+            if (!even && !third) return;
+            // roll the random spots once so both colours show the same pattern
+            double[] motes = new double[8], aurora = new double[6], sparks = new double[2];
+            for (int i = 0; i < motes.length; i++) motes[i] = rnd.nextDouble() * (i % 2 == 0 ? Math.PI * 2 : H);
+            for (int i = 0; i < aurora.length; i++) aurora[i] = rnd.nextDouble() * (i % 2 == 0 ? Math.PI * 2 : 2.0);
+            for (int i = 0; i < sparks.length; i++) sparks[i] = rnd.nextDouble() * H;
+            boolean[] flip = {rnd.nextBoolean(), rnd.nextBoolean(), rnd.nextBoolean()};
+            fx(owner, center(), (v, pal) -> {
+                Particle.DustOptions ice = new Particle.DustOptions(pal.ice(), 1.8f), az = new Particle.DustOptions(pal.azure(), 1.4f);
+                if (even) {
+                    for (int k = 0; k < 3; k++) {   // three comets chase round the top rim
+                        double a = t * 0.16 + k * Math.PI * 2 / 3;
+                        double x = cx + Math.cos(a) * R, z = cz + Math.sin(a) * R;
+                        v.spawnParticle(Particle.DUST, x, y + H + 0.1, z, 3, 0.05, 0.05, 0.05, 0, ice);
+                        v.spawnParticle(Particle.END_ROD, x, y + H + 0.1, z, 1, 0, 0, 0, 0.01);
+                    }
+                    double b = -t * 0.12;   // one sweeps the floor the other way
+                    v.spawnParticle(Particle.DUST, cx + Math.cos(b) * R, y + 0.15, cz + Math.sin(b) * R, 2, 0.05, 0.02, 0.05, 0, az);
+                    for (int i = 0; i < motes.length; i += 2) {   // motes of light drifting up the glass
+                        double a = motes[i], hy = motes[i + 1];
+                        v.spawnParticle(Particle.DUST_COLOR_TRANSITION, cx + Math.cos(a) * R, y + hy, cz + Math.sin(a) * R, 1, 0.03, 0.15, 0.03, 0,
+                                new Particle.DustTransition(pal.sky(), pal.frost(), 1.2f));
+                        if (i == 0) v.spawnParticle(Particle.END_ROD, cx + Math.cos(a) * (R - 0.1), y + hy, cz + Math.sin(a) * (R - 0.1), 0, 0, 1, 0, 0.05);
+                    }
+                    for (int i = 0; i < aurora.length; i += 2) {   // the aurora: curtains of colour lifting off the rim
+                        double a = aurora[i], up = 0.2 + aurora[i + 1];
+                        v.spawnParticle(Particle.DUST_COLOR_TRANSITION, cx + Math.cos(a) * R, y + H + up, cz + Math.sin(a) * R, 1, 0.05, 0.2, 0.05, 0,
+                                new Particle.DustTransition(flip[i / 2] ? pal.ice() : pal.sky(), flip[i / 2] ? pal.azure() : pal.deep(), 2.0f));
+                    }
+                }
+                if (third) for (int k = 0; k < 2; k++) {   // the glints throw sparkles off the glass where they pass
+                    double a = glintAt + k * Math.PI;
+                    v.spawnParticle(Particle.END_ROD, cx + Math.cos(a) * (R + 0.15), y + sparks[k], cz + Math.sin(a) * (R + 0.15), 0, Math.cos(a), 0.2, Math.sin(a), 0.05);
+                    v.spawnParticle(Particle.WAX_OFF, cx + Math.cos(a) * R, y + sparks[1 - k], cz + Math.sin(a) * R, 1, 0.05, 0.5, 0.05, 0);
+                }
+                if (sixth) {   // snow drifting down inside, glow motes hanging in the air
+                    v.spawnParticle(Particle.SNOWFLAKE, cx, y + 6, cz, 4, R * 0.55, 1.5, R * 0.55, 0.005);
+                    v.spawnParticle(Particle.GLOW, cx, y + 2, cz, 1, R * 0.5, 1.2, R * 0.5, 0);
+                }
+                if (tenth) ring(v, cx, y + 0.1, cz, R - 0.05, 64, az);   // a soft pulse round the base
+            });
         }
 
         /** Arrows, tridents, snowballs, pearls and potions bounce off the glass instead of crossing it. */
@@ -506,50 +758,71 @@ public final class Rimelock implements Listener {
             shots.keySet().retainAll(seen);
         }
 
-        // --- the end: the glass sinks, the frame drops and it all shatters into light
+        /**
+         * Mobs don't fire move events, so each tick: any mob that was inside and has crossed the wall goes back to its
+         * last spot inside and gets nudged towards the middle. A mob that walks in is held from then on. Dropping out
+         * of the bottom (a hole, the void) lets it go, same as for players. Mounts drop their riders first, so a
+         * player on a horse is held by the player rule instead.
+         */
+        private void holdMobs() {
+            Set<UUID> seen = new HashSet<>();
+            boolean fxOn = t % 4 == 0;
+            for (Entity en : world.getNearbyEntities(center(), CageShape.RADIUS + 3, CageShape.ABOVE, CageShape.RADIUS + 3)) {
+                if (!(en instanceof LivingEntity m) || en instanceof Player || m.isDead() || m.isInsideVehicle()) continue;
+                Location at = m.getLocation();
+                if (inside(at)) { mobsIn.put(m.getUniqueId(), at.clone()); seen.add(m.getUniqueId()); continue; }
+                Location last = mobsIn.get(m.getUniqueId());
+                if (last == null || at.getY() < y - CageShape.BELOW || at.getY() > y + CageShape.ABOVE) continue;   // never in, or fell out
+                seen.add(m.getUniqueId());
+                if (!m.getPassengers().isEmpty()) m.eject();
+                Location back = last.clone();
+                back.setYaw(at.getYaw());
+                back.setPitch(at.getPitch());
+                m.teleport(back);
+                Vector in = new Vector(cx - back.getX(), 0, cz - back.getZ());
+                if (in.lengthSquared() > 1e-6) m.setVelocity(in.normalize().multiply(0.25).setY(Math.min(0, m.getVelocity().getY())));
+                if (fxOn) { wallHit(this, back, 0.7); fxOn = false; }
+            }
+            mobsIn.keySet().retainAll(seen);
+        }
+
+        // --- the end
 
         void shatter() {
             if (task != null) task.cancel();
-            float w = (float) CageShape.panelWidth(), h = (float) CageShape.WALL_HEIGHT;
-            for (int i = 0; i < panels.size(); i++) {
-                double phi = CageShape.panelAngle(i);
-                Quaternionf q = new Quaternionf().rotateY((float) CageShape.panelYaw(phi));
-                Vector3f mid = new Vector3f((float) (Math.cos(phi) * CageShape.RADIUS), 0, (float) (Math.sin(phi) * CageShape.RADIUS));
-                move(panels.get(i), panelTf(mid, q, w, 0.01f, 0.05f, 0), FALL_TICKS);
-                move(rims.get(i), panelTf(mid, q, w, 0.1f, 0.1f, 0), FALL_TICKS);
-            }
-            for (BlockDisplay d : posts) {
-                Transformation tf = d.getTransformation();
-                move(d, new Transformation(tf.getTranslation(), tf.getLeftRotation(), new Vector3f(tf.getScale().x(), 0.01f, tf.getScale().z()), tf.getRightRotation()), FALL_TICKS);
-            }
-            BlockData shard = glass;
-            for (int i = 0; i < 48; i++) {
-                double a = rnd.nextDouble() * Math.PI * 2, hy = rnd.nextDouble() * h;
-                double x = cx + Math.cos(a) * CageShape.RADIUS, z = cz + Math.sin(a) * CageShape.RADIUS;
-                world.spawnParticle(Particle.BLOCK, x, y + hy, z, 4, 0.2, 0.2, 0.2, 0.1, shard);
-                world.spawnParticle(Particle.DUST_COLOR_TRANSITION, x, y + hy, z, 1, 0.1, 0.1, 0.1, 0, new Particle.DustTransition(FROST, AZURE, 1.6f));
-                if (i % 6 == 0) world.spawnParticle(Particle.END_ROD, x, y + hy, z, 0, Math.cos(a), 0.3, Math.sin(a), 0.12);
-            }
-            world.spawnParticle(Particle.FIREWORK, cx, y + h, cz, 30, 1.5, 0.3, 1.5, 0.08);
-            world.playSound(center(), Sound.BLOCK_GLASS_BREAK, SoundCategory.PLAYERS, 1.4f, 0.8f);
-            world.playSound(center(), Sound.BLOCK_GLASS_BREAK, SoundCategory.PLAYERS, 1.0f, 1.3f);
-            world.playSound(center(), Sound.BLOCK_BEACON_DEACTIVATE, SoundCategory.PLAYERS, 1.2f, 1.4f);
-            for (Player q : world.getPlayers()) if (inside(q.getLocation())) q.sendActionBar(Ui.mm("<#BFF4FF>⛓ <gray>The cage shatters. You're free."));
-            if (timer != null) timer.remove();
             cages.remove(this);
-            plugin.getServer().getScheduler().runTaskLater(plugin, this::removeDisplays, FALL_TICKS + 1L);
+            friends.shatter();
+            foes.shatter();
+            world.playSound(center(), Sound.BLOCK_AMETHYST_BLOCK_RESONATE, SoundCategory.PLAYERS, 1.4f, 2f);
+            double h = CageShape.WALL_HEIGHT;
+            later(2, () -> {
+                double[] spots = new double[160];
+                for (int i = 0; i < spots.length; i++) spots[i] = rnd.nextDouble() * (i % 2 == 0 ? Math.PI * 2 : h);
+                fx(owner, center(), (v, pal) -> {
+                    for (int i = 0; i < spots.length; i += 2) {
+                        double a = spots[i], hy = spots[i + 1];
+                        double x = cx + Math.cos(a) * CageShape.RADIUS, z = cz + Math.sin(a) * CageShape.RADIUS;
+                        v.spawnParticle(Particle.BLOCK, x, y + hy, z, 3, 0.2, 0.2, 0.2, 0.1, pal.glass());
+                        v.spawnParticle(Particle.DUST_COLOR_TRANSITION, x, y + hy, z, 1, 0.1, 0.1, 0.1, 0, new Particle.DustTransition(pal.frost(), pal.azure(), 1.8f));
+                        if (i % 8 == 0) v.spawnParticle(Particle.END_ROD, x, y + hy, z, 0, Math.cos(a), 0.3, Math.sin(a), 0.18);
+                        if (i % 6 == 0) v.spawnParticle(Particle.SNOWFLAKE, x, y + hy, z, 0, Math.cos(a), 0.2, Math.sin(a), 0.12);
+                    }
+                    v.spawnParticle(Particle.FIREWORK, cx, y + h, cz, 50, 2.0, 0.5, 2.0, 0.12);
+                });
+                world.playSound(center(), Sound.BLOCK_GLASS_BREAK, SoundCategory.PLAYERS, 1.4f, 0.8f);
+                world.playSound(center(), Sound.BLOCK_GLASS_BREAK, SoundCategory.PLAYERS, 1.0f, 1.3f);
+                world.playSound(center(), Sound.BLOCK_AMETHYST_CLUSTER_BREAK, SoundCategory.PLAYERS, 1.2f, 1.0f);
+                world.playSound(center(), Sound.BLOCK_BEACON_DEACTIVATE, SoundCategory.PLAYERS, 1.2f, 1.4f);
+                for (Player q : world.getPlayers()) if (inside(q.getLocation()))
+                    q.sendActionBar(Ui.mm("<" + paletteFor(owner, q).hex() + ">⛓ <gray>The ice shatters. " + (friendly(owner, q) ? "Nice work." : "You're free.")));
+            });
+            later(2 + BREAK_TICKS + 1, () -> { friends.remove(); foes.remove(); });
         }
 
         void remove() {
             if (task != null) task.cancel();
-            if (timer != null) timer.remove();
-            removeDisplays();
-        }
-
-        private void removeDisplays() {
-            panels.forEach(Entity::remove);
-            rims.forEach(Entity::remove);
-            posts.forEach(Entity::remove);
+            friends.remove();
+            foes.remove();
         }
     }
 }

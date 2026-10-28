@@ -29,8 +29,9 @@ surge:
   custom-model: false
   screen-darkness: true
 
-# Rimelock (hub Arena only for now): leap, slam, and a 6-block-radius cage holds for 7 s. Nobody inside can leave,
-# mobs included; anyone can walk in; no hits cross the wall either way. Staff: /rimelock (/cage). Set false to stop it.
+# Rimelock (hub Arena only for now): leap, slam, and a 16-block-tall, 6-block-radius cage holds for 10 s. Nobody
+# inside can leave, mobs included, except the caster (and their team, once teams exist); anyone can walk in; no hits
+# cross the wall either way. The caster's side sees it blue, everyone else red. Staff: /rimelock (/cage).
 rimelock:
   enabled: true
 
