@@ -35,6 +35,11 @@ surge:
 rimelock:
   enabled: true
 
+# Gods-eye (hub Arena only for now): marks the closest player for 10 s - halo, beam into the sky, banner with their
+# face and name; the caster gets distance + direction. Staff: /godseye (/eye). Set false to stop it.
+gods-eye:
+  enabled: true
+
 # Last Rite (Survival, Factions, hub Arena): a wave pulls the first enemy it touches into a 1v1 chamber.
 # timeout: both-die | both-weakened (leave empty for the server's default: Survival weakened, Factions/Arena die)
 last-rite:
