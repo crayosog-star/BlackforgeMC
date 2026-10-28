@@ -50,11 +50,6 @@ public final class Scrap implements Listener {
         for (int t = 1; t <= 3; t++) { int tt = t; offers.add(new Offer("Supplies", Robots.fuelCell(t, 1), cost[t - 1], p -> give(p, Robots.fuelCell(tt, 1)))); }
     }
 
-    /** Gale Bellows PvP item (only added when gale-bellows.enabled is on). */
-    void addBellowsOffer(GaleBellows gb) {
-        offers.add(new Offer("Supplies", gb.icon(), GaleBellows.SHOP_PRICE, gb::give));
-    }
-
     record Offer(String category, ItemStack icon, int cost, Consumer<Player> give) {}
 
     public static final int PER_KILL = 25, PER_MOB = 1, PER_PLAYTIME = 10, PLAYTIME_MINUTES = 10;

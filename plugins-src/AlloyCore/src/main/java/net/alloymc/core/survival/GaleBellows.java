@@ -16,6 +16,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
@@ -36,7 +37,6 @@ import java.util.*;
 public final class GaleBellows implements Listener {
     public static final int COOLDOWN_TICKS = 200;          // 10 s
     public static final double DAMAGE = 2.0;                // 1 heart
-    public static final int SHOP_PRICE = 2000;              // Scrap
 
     // palette (see the plan's visual guide)
     private static final Color GALE_WHITE = Color.fromRGB(0xEAF6FF), GUST_CYAN = Color.fromRGB(0x9EE6FF), DRAFT_TEAL = Color.fromRGB(0x4FC3D9);
@@ -44,7 +44,7 @@ public final class GaleBellows implements Listener {
 
     private final AlloyCore plugin;
     private final boolean enabled;
-    private final NamespacedKey tagKey, uidKey, modelKey;
+    private final NamespacedKey tagKey, uidKey, modelKey, starterKey;
     private final Map<UUID, Long> readyAt = new HashMap<>();       // caster -> when the bellows can fire again
     private final Map<UUID, Long> lastPushed = new HashMap<>();    // target -> when they were last pushed (juggle rule)
     private final Random rnd = new Random();
@@ -55,8 +55,11 @@ public final class GaleBellows implements Listener {
         this.tagKey = new NamespacedKey(plugin, "gale_bellows");
         this.uidKey = new NamespacedKey(plugin, "gb_uid");
         this.modelKey = new NamespacedKey("blackforge", "gale_bellows");   // the resource pack's item model
+        this.starterKey = new NamespacedKey(plugin, "gb_starter");         // on the player: already got their free one
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::dupeScan, 600L, 600L);
+        // players already online when the plugin (re)loads get theirs too
+        Bukkit.getScheduler().runTask(plugin, () -> Bukkit.getOnlinePlayers().forEach(this::giveStarter));
     }
 
     public boolean enabled() { return enabled; }
@@ -87,11 +90,6 @@ public final class GaleBellows implements Listener {
         return it;
     }
 
-    /** The Scrap shop icon (no id - the real item is minted on purchase). */
-    public ItemStack icon() {
-        return Ui.item(Material.BREEZE_ROD, NAME, "<gray>Right-click to blast a gust of wind", "<gray>that hits and pushes enemies 2 blocks", "<gray>in front of you. 10s cooldown.");
-    }
-
     public boolean isBellows(ItemStack it) {
         return it != null && it.getType() == Material.BREEZE_ROD && it.hasItemMeta()
                 && it.getItemMeta().getPersistentDataContainer().has(tagKey, PersistentDataType.BYTE);
@@ -104,6 +102,33 @@ public final class GaleBellows implements Listener {
     public void give(Player p) {
         p.getInventory().addItem(item()).values().forEach(left -> p.getWorld().dropItemNaturally(p.getLocation(), left));
         p.sendMessage(Ui.mm("<#9EE6FF>✦ <gray>You received a " + NAME + "<gray>! Right-click to blast the wind."));
+    }
+
+    /** True if the player already carries a bellows anywhere in their inventory (hotbar, offhand, armour slots). */
+    public boolean hasOne(Player p) {
+        for (ItemStack it : p.getInventory().getContents()) if (isBellows(it)) return true;
+        return isBellows(p.getItemOnCursor());
+    }
+
+    /** /jbello: one into your inventory. Only if you don't already carry one, so the command can't flood the ground with copies. */
+    public void claim(Player p) {
+        if (hasOne(p)) { p.sendMessage(Ui.mm("<#9EE6FF>🌬 <gray>You already have a " + NAME + "<gray> in your inventory.")); return; }
+        if (p.getInventory().firstEmpty() < 0) { p.sendMessage(Ui.mm("<red>Your inventory is full - make a free slot, then /jbello again.")); return; }
+        give(p);
+    }
+
+    /** Everyone gets one free bellows, once (tracked on the player so it isn't re-given every join). */
+    private void giveStarter(Player p) {
+        var pdc = p.getPersistentDataContainer();
+        if (pdc.has(starterKey, PersistentDataType.BYTE)) return;
+        pdc.set(starterKey, PersistentDataType.BYTE, (byte) 1);
+        if (!hasOne(p)) give(p);
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent e) {
+        Player p = e.getPlayer();
+        Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) giveStarter(p); }, 20L);   // after other join handlers move/fill them
     }
 
     // ------------------------------------------------------------------ casting

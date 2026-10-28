@@ -1,7 +1,8 @@
 # hub | arcade | backend
 mode: backend
 
-# Gale Bellows PvP item (survival only). On by default; set false to stop it firing and remove it from the
-# Scrap shop. Its custom texture needs the resource pack; without it the item looks like a named breeze rod.
+# Gale Bellows PvP item (survival only). Every player gets one on first join; /jbello gives another if they
+# don't carry one. Set false to stop it firing. Its custom texture needs the resource pack; without it the
+# item looks like a named breeze rod.
 gale-bellows:
   enabled: true

@@ -72,8 +72,7 @@ public final class SurvivalModule implements Listener {
         pvp.setEnchants(enchants);
         votes = new Votes(plugin, crates);
         scrap = new Scrap(plugin, crates, tags, enchants);
-        bellows = new GaleBellows(plugin);   // always loaded so crate rewards can hand it out; gale-bellows.enabled (default true) gates firing and the shop
-        if (bellows.enabled()) scrap.addBellowsOffer(bellows);
+        bellows = new GaleBellows(plugin);   // every player gets one on join and can get another with /jbello
         new SilkSpawners(plugin);
         votes.setScrap(scrap);
         ranks = new Ranks(plugin, crates);
@@ -224,6 +223,7 @@ public final class SurvivalModule implements Listener {
         reg("repairhand", List.of("rh", "fixhand"), (p, a) -> ranks.repairHand(p));
         reg("fly", List.of(), (p, a) -> ranks.fly(p));
         reg("scrap", List.of("scrapshop", "shards"), (p, a) -> scrap.command(p, a));
+        reg("jbello", List.of("bellows", "galebellows"), (p, a) -> bellows.claim(p));
         reg("koth", List.of(), (p, a) -> {
             if (a.length > 0 && p.hasPermission("alloy.admin")) {
                 if (a[0].equalsIgnoreCase("start")) koth.start();
