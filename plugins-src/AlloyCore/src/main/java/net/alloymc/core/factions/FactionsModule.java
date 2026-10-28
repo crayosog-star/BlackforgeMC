@@ -28,7 +28,7 @@ import java.time.*;
 import java.util.*;
 
 /**
- * Factions server: the floating war-citadel spawn (protected, unclaimable), gates that drop you into a
+ * Factions server: the floating war-citadel spawn at night (protected, unclaimable), gates that drop you into a
  * random spot in the wild, /spawn and /rtp, and the 3-month season clock. When a season ends the top
  * factions are recorded, everyone is sent to the hub, and tools/factions_reset.py archives the old world
  * and factions data, starts a fresh map and the next season.
@@ -61,9 +61,14 @@ public final class FactionsModule implements Listener {
         new net.alloymc.core.survival.SilkSpawners(plugin);
         hookClaims();
         registerCommands();
-        // a new season means a new world: the citadel is rebuilt the first time the world is used
-        if (!new File(world.getWorldFolder(), "blackforge-spawn-v2").exists()) build(Bukkit.getConsoleSender());
-        else Bukkit.getScheduler().runTaskLater(plugin, this::spawnHolograms, 40L);
+        // a new season means a new world: the spawn is rebuilt the first time the world is used,
+        // and an existing world still on an older design gets the new one
+        if (!new File(world.getWorldFolder(), SPAWN_MARKER).exists()) build(Bukkit.getConsoleSender());
+        else {
+            Bukkit.getScheduler().runTaskLater(plugin, this::spawnHolograms, 40L);
+            if (!new File(world.getWorldFolder(), BIOME_MARKER).exists()) Bukkit.getScheduler().runTaskLater(plugin, this::applyBiome, 60L);
+        }
+        Bukkit.getScheduler().runTaskTimer(plugin, this::ambient, 40L, 5L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::everyMinute, 200L, 1200L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::refreshBoard, 100L, 200L);
     }
@@ -72,20 +77,96 @@ public final class FactionsModule implements Listener {
 
     public Location spawn() { double[] s = FactionsBuilder.spawn(); return new Location(world, s[0], s[1], s[2], 180, 0); }
 
+    /** Bump to rebuild the spawn on existing worlds after a design change. */
+    private static final String SPAWN_MARKER = "blackforge-spawn-v3", OLD_MARKER = "blackforge-spawn-v2", BIOME_MARKER = "blackforge-biome-ember";
+
     public void build(CommandSender who) {
-        who.sendMessage(Component.text("Building the Factions citadel..."));
-        Paster.paste(plugin, world, FactionsBuilder.build(), 6000, () -> {
-            try { new File(world.getWorldFolder(), "blackforge-spawn-v2").createNewFile(); } catch (Exception ignored) { }
-            who.sendMessage(Component.text("Factions citadel built."));
+        who.sendMessage(Component.text("Building the Factions spawn..."));
+        var canvas = FactionsBuilder.build();
+        // only clear when replacing the old citadel - a fresh season world keeps its natural terrain
+        boolean replacing = new File(world.getWorldFolder(), OLD_MARKER).exists() || new File(world.getWorldFolder(), SPAWN_MARKER).exists();
+        if (!replacing) { paste(who, canvas); return; }
+        int r = FactionsBuilder.R + 8, lo = FactionsBuilder.Y - 46, hi = FactionsBuilder.Y + 62;
+        int[] x = {-r};
+        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+            for (int n = 0; n < 2 && x[0] <= r; n++, x[0]++)
+                for (int z = -r; z <= r; z++) {
+                    if (Math.hypot(x[0], z) > r) continue;
+                    for (int y = lo; y <= hi; y++) {
+                        Block b = world.getBlockAt(x[0], y, z);
+                        if (!b.getType().isAir()) b.setType(Material.AIR, false);
+                    }
+                }
+            if (x[0] <= r) return;
+            task.cancel();
+            paste(who, canvas);
+        }, 1L, 1L);
+    }
+
+    private void paste(CommandSender who, net.alloymc.core.build.Canvas canvas) {
+        Paster.paste(plugin, world, canvas, 6000, () -> {
+            try { new File(world.getWorldFolder(), SPAWN_MARKER).createNewFile(); } catch (Exception ignored) { }
+            who.sendMessage(Component.text("Factions spawn built: " + canvas.size() + " blocks."));
+            applyBiome();
             spawnHolograms();
+            for (Player p : world.getPlayers()) if (inSpawn(p.getLocation())) p.teleport(spawn());
         });
+    }
+
+    /**
+     * Paints the spawn with the blackforge:ember_night biome (datapack in world/datapacks/blackforge): a near-black
+     * sky, red-orange haze, drifting ash and embers. Skipped with a warning if the datapack isn't loaded.
+     */
+    private void applyBiome() {
+        org.bukkit.block.Biome ember = io.papermc.paper.registry.RegistryAccess.registryAccess()
+                .getRegistry(io.papermc.paper.registry.RegistryKey.BIOME).get(NamespacedKey.fromString("blackforge:ember_night"));
+        if (ember == null) { plugin.getLogger().warning("blackforge:ember_night biome missing - is the blackforge datapack in the factions world/datapacks?"); return; }
+        int r = FactionsBuilder.EXTENT + 8, y0 = FactionsBuilder.Y - 64, y1 = FactionsBuilder.Y + 100;
+        for (int x = -r; x <= r; x += 4)
+            for (int z = -r; z <= r; z += 4) {
+                if (Math.hypot(x, z) > r + 4) continue;
+                for (int y = y0; y <= y1; y += 4) world.setBiome(x, y, z, ember);
+            }
+        for (int cx = (-r >> 4) - 1; cx <= (r >> 4) + 1; cx++) for (int cz = (-r >> 4) - 1; cz <= (r >> 4) + 1; cz++) world.refreshChunk(cx, cz);
+        try { new File(world.getWorldFolder(), BIOME_MARKER).createNewFile(); } catch (Exception ignored) { }
+        plugin.getLogger().info("Factions spawn painted with the blackforge:ember_night biome");
+    }
+
+    // ------------------------------------------------------------------ atmosphere
+
+    private final Set<UUID> nightSky = new HashSet<>();
+    private double graceSpin;
+
+    /** Every 5 ticks: a frozen midnight for players at spawn, the Site of Grace glow and the fog over the gates. */
+    private void ambient() {
+        List<Player> players = world.getPlayers();
+        nightSky.removeIf(id -> Bukkit.getPlayer(id) == null);
+        for (Player p : players) {
+            boolean in = inSpawn(p.getLocation());
+            if (in && nightSky.add(p.getUniqueId())) p.setPlayerTime(18000, false);   // midnight, frozen
+            else if (!in && nightSky.remove(p.getUniqueId())) p.resetPlayerTime();
+        }
+        if (nightSky.isEmpty()) return;
+        // Site of Grace: golden motes spiralling up from the shrine
+        double[] g = FactionsBuilder.grace();
+        graceSpin += 0.45;
+        Particle.DustOptions gold = new Particle.DustOptions(Color.fromRGB(255, 214, 110), 0.9f);
+        for (int i = 0; i < 3; i++) {
+            double a = graceSpin + i * 2 * Math.PI / 3, up = (graceSpin * 0.35 + i * 0.55) % 1.8;
+            world.spawnParticle(Particle.DUST, g[0] + Math.cos(a) * 0.55, g[1] + 0.2 + up, g[2] + Math.sin(a) * 0.55, 1, 0, 0, 0, 0, gold);
+        }
+        world.spawnParticle(Particle.WAX_ON, g[0], g[1] + 0.8, g[2], 1, 0.3, 0.5, 0.3, 0);
+        // fog walls drifting over the four gate curtains
+        int gt = FactionsBuilder.GATE;
+        for (int[] q : new int[][]{{0, -gt, 1}, {gt, 0, 0}, {0, gt, 1}, {-gt, 0, 0}})
+            world.spawnParticle(Particle.CLOUD, q[0] + 0.5, FactionsBuilder.Y + 4.5, q[1] + 0.5, 2, q[2] == 1 ? 2.2 : 0.25, 2.2, q[2] == 1 ? 0.25 : 2.2, 0.004);
     }
 
     // ------------------------------------------------------------------ spawn area
 
-    /** Inside the citadel (its column of sky, so nothing can be built over or under it either). */
+    /** Inside the spawn island and its floating isles (their column of sky, so nothing can be built over or under it either). */
     public boolean inSpawn(Location l) {
-        return l.getWorld() == world && Math.hypot(l.getX(), l.getZ()) <= FactionsBuilder.R + 6 && l.getY() > FactionsBuilder.Y - 40;
+        return l.getWorld() == world && Math.hypot(l.getX(), l.getZ()) <= FactionsBuilder.EXTENT + 4 && l.getY() > FactionsBuilder.Y - 40;
     }
 
     private boolean staff(Player p) { return p.hasPermission("alloy.admin") && p.getGameMode() == GameMode.CREATIVE; }
@@ -130,7 +211,7 @@ public final class FactionsModule implements Listener {
         try {
             Class<? extends Event> cls = (Class<? extends Event>) Class.forName("com.pvpindex.factions.event.FactionChunkClaimEvent");
             var getX = cls.getMethod("getChunkX"); var getZ = cls.getMethod("getChunkZ"); var getW = cls.getMethod("getWorldName"); var getP = cls.getMethod("getPlayerUUID");
-            int safe = (FactionsBuilder.R + 32) / 16 + 1;
+            int safe = (FactionsBuilder.EXTENT + 16) / 16 + 1;
             Bukkit.getPluginManager().registerEvent(cls, this, EventPriority.HIGH, (l, ev) -> {
                 try {
                     if (!cls.isInstance(ev) || !world.getName().equals(getW.invoke(ev))) return;
@@ -257,16 +338,17 @@ public final class FactionsModule implements Listener {
         seasonBoard = Ui.hologram(new Location(world, s[0], s[1], s[2]), seasonText(), 1.0f);
         holos.add(seasonBoard);
         int g = FactionsBuilder.GATE;
-        for (int[] p : new int[][]{{0, -g}, {g, 0}, {0, g}, {-g, 0}})
-            holos.add(Ui.hologram(new Location(world, p[0] + 0.5, FactionsBuilder.Y + 11.5, p[1] + 0.5), "<red><bold>TO THE WILD</bold><newline><gray>Walk through the gate", 1.2f));
-        holos.add(Ui.hologram(new Location(world, -10.5, FactionsBuilder.Y + 4.5, 8.5), "<#ff5f5f><bold>THE CRIMSON WARLORD", 1.2f));
-        holos.add(Ui.hologram(new Location(world, 11.5, FactionsBuilder.Y + 4.5, 8.5), "<#5f9dff><bold>THE AZURE VANGUARD", 1.2f));
+        for (int[] p : new int[][]{{0, -g}, {g, 0}, {0, g}, {-g, 0}})   // just inside each arch, below the stonework
+            holos.add(Ui.hologram(new Location(world, p[0] + 0.5 - Integer.signum(p[0]) * 3, FactionsBuilder.Y + 10.2, p[1] + 0.5 - Integer.signum(p[1]) * 3), "<gold><bold>TO THE WILD</bold><newline><gray>Walk through the fog gate", 1.2f));
+        double[][] lab = FactionsBuilder.statueLabels();
+        holos.add(Ui.hologram(new Location(world, lab[0][0], lab[0][1], lab[0][2]), "<#ff5f5f><bold>THE CRIMSON WARLORD", 1.2f));
+        holos.add(Ui.hologram(new Location(world, lab[1][0], lab[1][1], lab[1][2]), "<#5f9dff><bold>THE AZURE VANGUARD", 1.2f));
         double[] sp = FactionsBuilder.spawn();
         holos.add(Ui.hologram(new Location(world, sp[0], sp[1] + 3.2, sp[2] - 3), Ui.TITLE + " <white><bold>FACTIONS</bold><newline><gray>Season <white>" + season.getInt("number") + " <dark_gray>• <white>/f create <gray>to start a faction", 1.3f));
     }
 
     private void refreshBoard() {
-        if (seasonBoard == null || !seasonBoard.isValid()) { if (new File(world.getWorldFolder(), "blackforge-spawn-v2").exists()) spawnHolograms(); return; }
+        if (seasonBoard == null || !seasonBoard.isValid()) { if (new File(world.getWorldFolder(), SPAWN_MARKER).exists()) spawnHolograms(); return; }
         seasonBoard.text(Ui.mm(seasonText()));
     }
 

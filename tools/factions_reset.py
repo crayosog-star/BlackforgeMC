@@ -60,6 +60,10 @@ def main():
     if homes.exists():
         shutil.move(str(homes), str(archive / "essentials-userdata"))
     print(f"archived season {n} to {archive}", flush=True)
+    # the fresh world needs the blackforge datapack for the spawn's Ember Night biome
+    pack = ROOT / "datapacks" / "blackforge"
+    if pack.exists():
+        shutil.copytree(pack, FAC / "world" / "datapacks" / "blackforge", dirs_exist_ok=True)
 
     props = FAC / "server.properties"
     text = props.read_text(encoding="utf-8")

@@ -74,7 +74,7 @@ for name, s in SERVERS.items():
     if not any(o["uuid"] == OWNER["uuid"] for o in cur):
         cur.append(OWNER)
     ops.write_text(json.dumps(cur, indent=2))
-    if s["mode"] == "hub":   # the blackforge:inferno biome (dark red sky, ash, embers) the hub is painted with
+    if s["mode"] in ("hub", "factions"):   # blackforge:inferno (hub) and blackforge:ember_night (factions spawn) biomes
         dp = d / "world" / "datapacks" / "blackforge"
         if dp.exists():
             shutil.rmtree(dp)

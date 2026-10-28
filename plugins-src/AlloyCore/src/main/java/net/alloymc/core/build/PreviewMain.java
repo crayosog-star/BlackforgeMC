@@ -49,6 +49,17 @@ public final class PreviewMain {
         pov(sk, new File(out, "skyblock_aerial.png"), 0.5, 200, 75.5, 180, 30, 1600, 900);
         pov(sk, new File(out, "skyblock_spawn_view.png"), 0.5, 152.62, 24.5, 180, -4, 1280, 720);
         pov(sk, new File(out, "skyblock_market_view.png"), -14.5, 152.62, 20.5, 0, 6, 1280, 720);
+        night = true;      // the factions spawn sits under a frozen midnight
+        Canvas fa = net.alloymc.core.factions.FactionsBuilder.build();
+        System.out.println("factions spawn blocks: " + fa.size());
+        double[] fs = net.alloymc.core.factions.FactionsBuilder.spawn();
+        int fy = net.alloymc.core.factions.FactionsBuilder.Y;
+        pov(fa, new File(out, "factions_aerial.png"), 0.5, fy + 70, 120.5, 180, 28, 1600, 900);
+        pov(fa, new File(out, "factions_spawn_view.png"), fs[0], fs[1] + 1.62, fs[2], 180, -8, 1280, 720);
+        pov(fa, new File(out, "factions_duel.png"), -26.5, fy + 16, 26.5, 225, -22, 1280, 900);
+        pov(fa, new File(out, "factions_side.png"), 95.5, fy + 25, 60.5, 122, 8, 1600, 900);
+        topDown(fa, new File(out, "factions_top.png"), 4);
+        night = false;
         Canvas pv = net.alloymc.core.survival.PvpBuilder.build();
         System.out.println("scrapyard blocks: " + pv.size());
         topDown(pv, new File(out, "pvp_top.png"), 4);
@@ -72,6 +83,7 @@ public final class PreviewMain {
         List<B> list = new ArrayList<>();
         Map<Long, String> all = new HashMap<>(c.blocks());
         all.putAll(c.lateBlocks());
+        all.values().removeIf(v -> v.startsWith("minecraft:light"));   // invisible light blocks
         for (var e : all.entrySet()) {
             if (e.getValue().equals("minecraft:air") || e.getValue().equals("minecraft:barrier")) continue;
             long k = e.getKey();
@@ -118,6 +130,7 @@ public final class PreviewMain {
     static void pov(Canvas c, File file, double ex, double ey, double ez, float yaw, float pitch, int w, int h) throws Exception {
         Map<Long, String> all = new HashMap<>(c.blocks());
         all.putAll(c.lateBlocks());
+        all.values().removeIf(v -> v.startsWith("minecraft:light"));   // invisible light blocks
         all.values().removeIf(v -> v.equals("minecraft:air") || v.equals("minecraft:barrier"));
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         double yr = Math.toRadians(yaw), pr = Math.toRadians(pitch);
@@ -200,6 +213,7 @@ public final class PreviewMain {
         Map<Long, Integer> topY = new HashMap<>();
         Map<Long, String> all = new HashMap<>(c.blocks());
         all.putAll(c.lateBlocks());
+        all.values().removeIf(v -> v.startsWith("minecraft:light"));   // invisible light blocks
         int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
         for (var e : all.entrySet()) {
             if (e.getValue().equals("minecraft:air")) continue;
@@ -234,6 +248,12 @@ public final class PreviewMain {
 
     static final LinkedHashMap<String, Integer> COLORS = new LinkedHashMap<>();
     static {
+        for (String[] e : new String[][]{{"candle", "FFE0A0!"}, {"cave_vines", "F0A040!"}, {"honeycomb", "E8A02C"}, {"yellow_terracotta", "B98530"},
+                {"orange_terracotta", "A0532A"}, {"red_terracotta", "8F3D2E"}, {"light_blue_terracotta", "716C89"}, {"red_wool", "A02722"},
+                {"blue_wool", "35399D"}, {"stripped_oak", "C29D62"}, {"stripped_birch", "C4B07C"}, {"dark_oak_wood", "3D2A17"},
+                {"chiseled_tuff", "6A6B63"}, {"polished_tuff", "626359"}, {"tuff_bricks", "666760"}, {"cut_sandstone", "D8CB95"},
+                {"smooth_sandstone", "E0D4A2"}, {"chiseled_sandstone", "CDBE86"}, {"sandstone", "D5C892"}, {"cracked_stone", "6E6E6E"}})
+            COLORS.put(e[0], (int) Long.parseLong(e[1].replace("!", ""), 16) | (e[1].endsWith("!") ? 0xFE000000 : 0xFF000000));
         COLORS.put("red_nether", 0xFF6B1F23);
         COLORS.put("nether_bricks", 0xFF2C1418);
         COLORS.put("warped_wart", 0xFF167E86);
