@@ -4,6 +4,7 @@ import java.io.File;
 
 import net.alloymc.core.arcade.ArcadeModule;
 import net.alloymc.core.hub.HubModule;
+import net.alloymc.core.hub.WelcomeShow;
 import net.alloymc.core.moderation.AutoMod;
 import net.alloymc.core.moderation.Guardian;
 import net.alloymc.core.survival.SkyblockModule;
@@ -109,7 +110,7 @@ public final class AlloyCore extends JavaPlugin implements Listener {
                         Player target = args.length > 1 ? Bukkit.getPlayerExact(args[1]) : sender instanceof Player p ? p : null;
                         if (hub == null) sender.sendMessage(Component.text("Not a hub server."));
                         else if (target == null) sender.sendMessage(Component.text("Player not found."));
-                        else if (!net.alloymc.core.hub.WelcomeShow.play(this, target)) sender.sendMessage(Component.text("A show is already playing for " + target.getName() + "."));
+                        else if (!WelcomeShow.play(this, target)) sender.sendMessage(Component.text("A show is already playing for " + target.getName() + "."));
                     }
                     default -> sender.sendMessage(Component.text("/alloy buildhub | buildarcade | spawn | welcomeshow [player]"));
                 }
