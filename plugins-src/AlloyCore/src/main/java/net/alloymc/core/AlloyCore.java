@@ -45,6 +45,7 @@ public final class AlloyCore extends JavaPlugin implements Listener {
         catch (java.io.IOException e) { shared = new File(getServer().getWorldContainer().getAbsoluteFile().getParentFile(), "shared"); }
         Bukkit.getPluginManager().registerEvents(new TestGuard(shared), this);
         // network-wide stats and cosmetics listen to the kill/arcade hooks, so they exist before the game modes
+        Nicks.init(this, shared);
         sharedStats = new SharedStats(shared);
         cosmetics = new Cosmetics(this, shared);
         // moderation and cheat checks run on every server

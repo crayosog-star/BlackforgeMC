@@ -24,7 +24,7 @@ public final class SharedStats {
     public synchronized void add(Player p, String key, long n) {
         File f = new File(dir, p.getUniqueId() + ".yml");
         YamlConfiguration y = YamlConfiguration.loadConfiguration(f);
-        y.set("name", p.getName());
+        y.set("name", Nicks.of(p));
         y.set(key, y.getLong(key) + n);
         try { y.save(f); } catch (Exception ignored) { }
     }

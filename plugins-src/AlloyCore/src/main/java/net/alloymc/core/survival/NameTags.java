@@ -161,7 +161,7 @@ public final class NameTags implements Listener {
         Tag t = tag(equipped.getOrDefault(p.getUniqueId(), ""));
         Ranks.Rank r = ranks == null ? null : ranks.of(p);
         if (t != null && !has(p, t)) t = null;   // e.g. a supporter colour after a refund
-        Component name = Ui.mm(net.alloymc.core.Supporters.badge(p) + (r == null ? "" : r.prefix()) + (t == null ? "<white>" : t.mm()) + p.getName());
+        Component name = Ui.mm(net.alloymc.core.Supporters.badge(p) + (r == null ? "" : r.prefix()) + (t == null ? "<white>" : t.mm()) + net.alloymc.core.Nicks.of(p));
         p.displayName(name);
         p.playerListName(name);
     }

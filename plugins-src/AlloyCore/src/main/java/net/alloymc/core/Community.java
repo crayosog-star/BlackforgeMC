@@ -156,7 +156,7 @@ public final class Community implements Listener {
         if (chatHook.isBlank()) return;
         Player p = e.getPlayer();
         String msg = PLAIN.serialize(e.message());
-        post(chatHook, p.getName() + " · " + label, p.getUniqueId(), escape(msg));
+        post(chatHook, Nicks.of(p) + " · " + label, p.getUniqueId(), escape(msg));
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

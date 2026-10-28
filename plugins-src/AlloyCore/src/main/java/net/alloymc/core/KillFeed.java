@@ -36,9 +36,9 @@ public final class KillFeed implements Listener {
     /** "☠ Victim was slain by Killer using [Item]" - the item shows its custom name and can be hovered. */
     public static Component message(Player victim, Player killer, ItemStack weapon) {
         Component msg = SKULL
-                .append(Component.text(victim.getName(), NamedTextColor.WHITE))
+                .append(Component.text(Nicks.of(victim), NamedTextColor.WHITE))
                 .append(Component.text(" was slain by ", NamedTextColor.GRAY))
-                .append(Component.text(killer.getName(), NamedTextColor.RED));
+                .append(Component.text(Nicks.of(killer), NamedTextColor.RED));
         return msg.append(weapon(weapon));
     }
 

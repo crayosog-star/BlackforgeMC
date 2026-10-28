@@ -142,7 +142,7 @@ public final class Supporters implements Listener {
         if (!mode.equals("survival") && !mode.equals("skyblock"))
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (!p.isOnline()) return;
-                Component name = Ui.mm(badge(p) + "<white>" + p.getName());
+                Component name = Ui.mm(badge(p) + "<white>" + Nicks.of(p));
                 p.displayName(name);
                 p.playerListName(name);
             }, 10L);

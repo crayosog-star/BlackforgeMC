@@ -375,7 +375,7 @@ public abstract class Match {
         return v + " <gray>" + (how.equals("void") ? "fell into the void" : "died");
     }
 
-    protected String nameOf(Player p) { Team t = team(p); return (variant.isTeams() && t != null ? t.color.mm : "<white>") + p.getName(); }
+    protected String nameOf(Player p) { Team t = team(p); return (variant.isTeams() && t != null ? t.color.mm : "<white>") + net.alloymc.core.Nicks.of(p); }
 
     /** Out of the game: becomes a spectator inside this map only. */
     protected void eliminate(Player p, String message) {
