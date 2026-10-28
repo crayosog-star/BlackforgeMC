@@ -18,6 +18,10 @@ public final class TestArenaBuilder {
     public static final int VOID_Y = Y - 40;
     /** Showcase wall: frames hang on the wall's east face at x = WALL_X, in front of it at x = WALL_X + 1. */
     public static final int WALL_X = -13, GRID = 5, GRID_Y0 = Y + 2, GRID_Z0 = -2;
+    /** The lever that switches the dummy's armour sits on a stone post here (lever at LEVER_Y). */
+    public static final int LEVER_X = 2, LEVER_Y = Y + 2, LEVER_Z = 3;
+    /** The archery targets are at z = TARGET_Z, on hay bales. */
+    public static final int TARGET_Z = -20;
 
     private static final long SEED = 7719;
     private static final int CLEARING = 15;
@@ -157,13 +161,15 @@ public final class TestArenaBuilder {
             c.set(q[0], Y + 2, q[1], "minecraft:spruce_fence");
             c.setLate(q[0], Y + 3, q[1], "minecraft:lantern");
         }
+        c.set(LEVER_X, Y + 1, LEVER_Z, "minecraft:chiseled_stone_bricks");
+        c.setLate(LEVER_X, LEVER_Y, LEVER_Z, "minecraft:lever[face=floor,facing=north,powered=false]");
     }
 
     /** Three targets on hay bales up the north lane, 20 blocks from the dummy. */
     private void archery() {
         for (int x : new int[]{-4, 0, 4}) {
-            c.set(x, Y + 1, -20, "minecraft:hay_block");
-            c.set(x, Y + 2, -20, "minecraft:target");
+            c.set(x, Y + 1, TARGET_Z, "minecraft:hay_block");
+            c.set(x, Y + 2, TARGET_Z, "minecraft:target");
         }
         for (int x = -6; x <= 6; x++) c.set(x, Y, -18, rnd.nextInt(3) == 0 ? "minecraft:coarse_dirt" : "minecraft:dirt_path");   // shooting line
     }

@@ -10,7 +10,9 @@ import net.kyori.adventure.title.Title;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.type.Switch;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.enchantments.Enchantment;
@@ -27,6 +29,10 @@ import org.bukkit.event.player.*;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.util.RayTraceResult;
+import org.bukkit.util.Transformation;
+import org.joml.AxisAngle4f;
+import org.joml.Vector3f;
 
 import java.io.File;
 import java.time.Duration;
@@ -42,7 +48,7 @@ import java.util.*;
  */
 public final class TestArena implements Listener {
     public static final String WORLD = "arena";
-    private static final String MARKER = "arena-built-v1";
+    private static final String MARKER = "arena-built-v2";   // v2: armour lever post
     private static final int SLOTS = TestArenaBuilder.GRID * TestArenaBuilder.GRID;
     private static final double DUMMY_HEALTH = 1000;
 
@@ -61,6 +67,23 @@ public final class TestArena implements Listener {
     private final ItemFrame[] frames = new ItemFrame[SLOTS];
     private final Random rnd = new Random();
     private final Map<UUID, Long> grabCooldown = new HashMap<>();
+    private final long[] showcaseTime = new long[SLOTS];                     // when each slot was filled (for the NEW badge)
+    private final Map<UUID, TextDisplay> cards = new HashMap<>();             // the item card each player sees, only to them
+    private final Map<UUID, Integer> cardSlot = new HashMap<>();
+
+    // dummy armour, switched by the lever: none, leather, iron, diamond, netherite
+    private static final String[] ARMOR_NAMES = {"None", "Leather", "Iron", "Diamond", "Netherite"};
+    private static final String[] ARMOR_COLORS = {"<gray>", "<#c08a5b>", "<#d9dde3>", "<#4fe3e0>", "<#7d6e72>"};
+    private int armorTier;
+    private TextDisplay armorHolo, archeryHolo;
+
+    // the dummy's wobble after a hit
+    private double wobbleAmp;
+    private int wobbleT;
+
+    // archery: longest bullseye this session
+    private double bestShot;
+    private String bestShooter;
 
     private LivingEntity dummy;
     private TextDisplay dummyHolo, wallHolo, spawnHolo;
@@ -142,7 +165,8 @@ public final class TestArena implements Listener {
 
     private void removeEntities() {
         for (Entity e : world.getEntities()) if (ours(e)) e.remove();
-        dummy = null; dummyHolo = wallHolo = spawnHolo = null;
+        dummy = null; dummyHolo = wallHolo = spawnHolo = armorHolo = archeryHolo = null;
+        cards.clear(); cardSlot.clear();
         Arrays.fill(frames, null);
     }
 
@@ -154,8 +178,12 @@ public final class TestArena implements Listener {
         wallHolo = Ui.hologram(new Location(world, TestArenaBuilder.WALL_X + 1.6, TestArenaBuilder.Y + 10.2, 0.5), "", 1.4f);
         spawnHolo = Ui.hologram(new Location(world, TestArenaBuilder.SPAWN_X, TestArenaBuilder.Y + 3.4, TestArenaBuilder.SPAWN_Z - 3),
                 "<gradient:#7bd88f:#2e9e5b><bold>THE ARENA</bold></gradient><newline><gray>Test your gear on the <white>dummy"
-                        + "<newline><gray>Grab new items from the <light_purple>showcase wall <gray>(west)<newline><gray>/arena kit <dark_gray>· <gray>/hub to leave", 1.1f);
-        for (TextDisplay td : List.of(dummyHolo, wallHolo, spawnHolo)) mark(td);
+                        + "<newline><gray>Grab new items from the <light_purple>showcase wall <gray>(west)<newline><gray>Flip the <white>lever <gray>to armour the dummy<newline><gray>/arena kit <dark_gray>· <gray>/hub to leave", 1.1f);
+        armorHolo = Ui.hologram(new Location(world, TestArenaBuilder.LEVER_X + 0.5, TestArenaBuilder.LEVER_Y + 0.9, TestArenaBuilder.LEVER_Z + 0.5), "", 0.8f);
+        archeryHolo = Ui.hologram(new Location(world, 0.5, TestArenaBuilder.Y + 4.4, TestArenaBuilder.TARGET_Z + 0.5), "", 1.1f);
+        for (TextDisplay td : List.of(dummyHolo, wallHolo, spawnHolo, armorHolo, archeryHolo)) mark(td);
+        updateArmorText();
+        updateArcheryText();
         ready = true;
     }
 
@@ -173,11 +201,35 @@ public final class TestArena implements Listener {
             setBase(h, Attribute.ARMOR, 0);                             // raw damage: no natural armour
             setBase(h, Attribute.KNOCKBACK_RESISTANCE, 1);
             h.setHealth(DUMMY_HEALTH);
-            var eq = h.getEquipment();
-            eq.clear();
-            eq.setHelmet(new ItemStack(Material.CARVED_PUMPKIN));
-            eq.setHelmetDropChance(0f);
         });
+        applyArmor();
+    }
+
+    private void applyArmor() {
+        if (dummy == null) return;
+        var eq = dummy.getEquipment();
+        if (eq == null) return;
+        eq.clear();
+        String m = switch (armorTier) { case 1 -> "LEATHER"; case 2 -> "IRON"; case 3 -> "DIAMOND"; case 4 -> "NETHERITE"; default -> null; };
+        if (m == null) eq.setHelmet(new ItemStack(Material.CARVED_PUMPKIN));
+        else {
+            eq.setHelmet(new ItemStack(Material.valueOf(m + "_HELMET")));
+            eq.setChestplate(new ItemStack(Material.valueOf(m + "_CHESTPLATE")));
+            eq.setLeggings(new ItemStack(Material.valueOf(m + "_LEGGINGS")));
+            eq.setBoots(new ItemStack(Material.valueOf(m + "_BOOTS")));
+        }
+        eq.setHelmetDropChance(0f); eq.setChestplateDropChance(0f); eq.setLeggingsDropChance(0f); eq.setBootsDropChance(0f);
+    }
+
+    private void updateArmorText() {
+        if (armorHolo != null && armorHolo.isValid())
+            armorHolo.text(Ui.mm("<gray>Dummy armour: " + ARMOR_COLORS[armorTier] + "<bold>" + ARMOR_NAMES[armorTier] + "</bold><newline><dark_gray>right-click the lever"));
+    }
+
+    private void updateArcheryText() {
+        if (archeryHolo != null && archeryHolo.isValid())
+            archeryHolo.text(Ui.mm("<gold><bold>◎ ARCHERY ◎</bold><newline><gray>Longest bullseye: "
+                    + (bestShooter == null ? "<dark_gray>nobody yet" : "<white>" + bestShooter + " <yellow>" + fmt(bestShot) + "m")));
     }
 
     private static void setBase(LivingEntity e, Attribute a, double v) {
@@ -215,12 +267,12 @@ public final class TestArena implements Listener {
 
     private void loadShowcase() {
         YamlConfiguration y = YamlConfiguration.loadConfiguration(showcaseFile);
-        for (int i = 0; i < SLOTS; i++) showcase[i] = y.getItemStack("slot." + i);
+        for (int i = 0; i < SLOTS; i++) { showcase[i] = y.getItemStack("slot." + i); showcaseTime[i] = y.getLong("time." + i, 0L); }
     }
 
     private void saveShowcase() {
         YamlConfiguration y = new YamlConfiguration();
-        for (int i = 0; i < SLOTS; i++) if (showcase[i] != null) y.set("slot." + i, showcase[i]);
+        for (int i = 0; i < SLOTS; i++) if (showcase[i] != null) { y.set("slot." + i, showcase[i]); y.set("time." + i, showcaseTime[i]); }
         try { y.save(showcaseFile); } catch (Exception ex) { plugin.getLogger().warning("Could not save arena-showcase.yml: " + ex.getMessage()); }
     }
 
@@ -238,7 +290,7 @@ public final class TestArena implements Listener {
     @EventHandler
     public void onWorldChange(PlayerChangedWorldEvent e) {
         Player p = e.getPlayer();
-        if (p.getWorld() != world) return;
+        if (p.getWorld() != world) { removeCard(p); return; }
         if (!p.hasPermission("alloy.admin") || p.getGameMode() != GameMode.CREATIVE) p.setGameMode(GameMode.ADVENTURE);
         p.setFlying(false);
         p.setAllowFlight(p.getGameMode() == GameMode.CREATIVE);
@@ -289,7 +341,7 @@ public final class TestArena implements Listener {
     }
 
     @EventHandler
-    public void onQuit(PlayerQuitEvent e) { grabCooldown.remove(e.getPlayer().getUniqueId()); }
+    public void onQuit(PlayerQuitEvent e) { grabCooldown.remove(e.getPlayer().getUniqueId()); removeCard(e.getPlayer()); }
 
     // ------------------------------------------------------------------ showcase wall
 
@@ -305,8 +357,11 @@ public final class TestArena implements Listener {
         if (p.isSneaking() && p.hasPermission("alloy.admin")) {        // staff: put the held item on show, or clear the frame
             boolean clear = hand.getType().isAir();
             showcase[slot] = clear ? null : hand.asOne();
+            showcaseTime[slot] = clear ? 0 : System.currentTimeMillis();
             frames[slot].setItem(clear ? null : showcase[slot].clone(), false);
             saveShowcase();
+            cardSlot.clear();   // cards re-read the slot
+            if (!clear) newArrival(slot);
             p.sendActionBar(Ui.mm(clear ? "<gray>Showcase slot " + (slot + 1) + " cleared." : "<green>Showcase slot " + (slot + 1) + " set."));
             p.playSound(p.getLocation(), clear ? Sound.ENTITY_ITEM_FRAME_REMOVE_ITEM : Sound.ENTITY_ITEM_FRAME_ADD_ITEM, 1f, 1f);
             return;
@@ -357,9 +412,27 @@ public final class TestArena implements Listener {
             if (ee.getDamager() instanceof Player p) by = p;
             else if (ee.getDamager() instanceof Projectile pr && pr.getShooter() instanceof Player p) by = p;
         }
-        if (by != null) by.sendActionBar(Ui.mm("<gold>" + fmt(dmg) + " damage <gray>(" + fmt(dmg / 2) + "❤)  <dark_gray>|  <yellow>DPS " + fmt(dps(now))));
+        // what kind of hit was it?
+        String hitTag = null;
+        if (e.getCause() == EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK) hitTag = "<aqua>SWEEP";
+        else if (e instanceof EntityDamageByEntityEvent ee) {
+            if (ee.getDamager() instanceof Player p && p.getInventory().getItemInMainHand().getType() == Material.MACE && p.getFallDistance() > 1.5f) hitTag = "<light_purple>SMASH!";
+            else if (ee.getDamager() instanceof Projectile pr && pr.getLocation().getY() >= dummy.getLocation().getY() + 1.45) hitTag = "<red>HEADSHOT";
+            else if (ee.isCritical()) hitTag = "<gold>CRIT";
+        }
+        if (by != null) by.sendActionBar(Ui.mm("<gold>" + fmt(dmg) + " damage <gray>(" + fmt(dmg / 2) + "❤)  <dark_gray>|  <yellow>DPS " + fmt(dps(now))
+                + (armorTier > 0 ? "  <dark_gray>|  " + ARMOR_COLORS[armorTier] + ARMOR_NAMES[armorTier] + " armour" : "")));
         Location head = dummy.getLocation().add(0, 2.1, 0);
         world.spawnParticle(Particle.DAMAGE_INDICATOR, head, (int) Math.min(12, 1 + dmg / 3), 0.25, 0.2, 0.25, 0.05);
+        // floating number, colour by size; a tag under it for crits, sweeps, smashes and headshots
+        String col = dmg >= 20 ? "<red><bold>" : hitTag != null && hitTag.contains("CRIT") ? "<gold>" : "<white>";
+        float size = (float) Math.min(2.2, 0.9 + dmg / 25);
+        Location pop = dummy.getLocation().add((rnd.nextDouble() - 0.5) * 1.1, 1.3 + rnd.nextDouble() * 0.5, (rnd.nextDouble() - 0.5) * 1.1);
+        popup(pop, col + fmt(dmg) + (hitTag != null ? "<newline><reset><bold>" + hitTag : ""), size, 22);
+        // the dummy rocks on its post and sheds some straw
+        wobbleAmp = Math.min(38, Math.max(wobbleAmp, 7 + dmg * 1.3));
+        wobbleT = 0;
+        world.spawnParticle(Particle.BLOCK, dummy.getLocation().add(0, 1.1, 0), (int) Math.min(30, 4 + dmg), 0.25, 0.4, 0.25, 0.1, Material.HAY_BLOCK.createBlockData());
         // full health again next tick, so it never dies (unless something does over 1000 in one go - see onDummyDeath)
         Bukkit.getScheduler().runTask(plugin, () -> { if (dummy != null && dummy.isValid()) dummy.setHealth(DUMMY_HEALTH); });
         updateDummyText();
@@ -398,6 +471,152 @@ public final class TestArena implements Listener {
         dummyHolo.text(Ui.mm("<italic><gray>\"" + quip + "\"</italic><newline>" + stats));
     }
 
+    // ------------------------------------------------------------------ armour lever + archery
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onLever(PlayerInteractEvent e) {
+        if (e.getAction() != Action.RIGHT_CLICK_BLOCK || e.getHand() != EquipmentSlot.HAND) return;
+        Block b = e.getClickedBlock();
+        if (b == null || b.getWorld() != world || b.getX() != TestArenaBuilder.LEVER_X || b.getY() != TestArenaBuilder.LEVER_Y || b.getZ() != TestArenaBuilder.LEVER_Z) return;
+        e.setCancelled(true);
+        armorTier = (armorTier + 1) % ARMOR_NAMES.length;
+        if (b.getBlockData() instanceof Switch sw) { sw.setPowered(!sw.isPowered()); b.setBlockData(sw, false); }
+        Player p = e.getPlayer();
+        p.playSound(b.getLocation(), Sound.BLOCK_LEVER_CLICK, 0.8f, leverPitch(armorTier));
+        applyArmor();
+        updateArmorText();
+        if (dummy != null) {
+            Location c = dummy.getLocation().add(0, 1, 0);
+            world.spawnParticle(Particle.ENCHANTED_HIT, c, 30, 0.35, 0.6, 0.35, 0.2);
+            Sound equip = switch (armorTier) {
+                case 1 -> Sound.ITEM_ARMOR_EQUIP_LEATHER; case 2 -> Sound.ITEM_ARMOR_EQUIP_IRON;
+                case 3 -> Sound.ITEM_ARMOR_EQUIP_DIAMOND; case 4 -> Sound.ITEM_ARMOR_EQUIP_NETHERITE; default -> Sound.ITEM_ARMOR_EQUIP_GENERIC; };
+            world.playSound(c, equip, 1f, 1f);
+            popup(c.clone().add(0, 1.2, 0), ARMOR_COLORS[armorTier] + "<bold>" + ARMOR_NAMES[armorTier] + (armorTier == 0 ? "" : " armour"), 1.2f, 26);
+        }
+        hits.clear(); comboTotal = 0; lastHitAt = 0;   // fresh numbers for the new armour
+    }
+
+    private static float leverPitch(int tier) { return 0.8f + tier * 0.12f; }
+
+    /** Arrows into the targets: a ring for every hit, a bell and a record for bullseyes. */
+    @EventHandler
+    public void onTarget(io.papermc.paper.event.block.TargetHitEvent e) {
+        if (e.getEntity().getWorld() != world || !(e.getEntity().getShooter() instanceof Player p) || e.getHitBlock() == null) return;
+        int signal = e.getSignalStrength();
+        Location c = e.getHitBlock().getLocation().add(0.5, 0.5, 0.5);
+        double dist = p.getLocation().distance(c);
+        boolean bull = signal >= 13;
+        world.spawnParticle(bull ? Particle.TOTEM_OF_UNDYING : Particle.CRIT, c.clone().add(0, 0, 0.55), bull ? 30 : 8, 0.25, 0.25, 0.05, bull ? 0.3 : 0.1);
+        p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL, bull ? 1f : 0.5f, 0.5f + signal / 15f * 1.5f);
+        popup(c.clone().add(0, 1.0, 1.0), (bull ? "<gold><bold>BULLSEYE!" : "<white>" + signal + "<gray>/15") + "<newline><reset><gray>" + fmt(dist) + "m", bull ? 1.4f : 1.0f, 28);
+        if (bull && dist > bestShot) {
+            boolean beatSomeone = bestShooter != null;
+            bestShot = dist;
+            bestShooter = p.getName();
+            updateArcheryText();
+            for (Player o : world.getPlayers()) {
+                o.sendMessage(Ui.mm("<gold>◎ <white>" + p.getName() + " <gray>hit the longest bullseye" + (beatSomeone ? " yet" : "") + ": <yellow>" + fmt(dist) + "m"));
+                o.playSound(o.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.4f, 1.4f);
+            }
+            world.spawnParticle(Particle.FIREWORK, c, 40, 0.4, 0.6, 0.4, 0.15);
+        }
+    }
+
+    // ------------------------------------------------------------------ pop-ups, cards, new arrivals
+
+    /** A bit of floating text that pops in, drifts up and fades: damage numbers, armour changes, archery scores. */
+    private void popup(Location at, String text, float scale, int life) {
+        TextDisplay td = world.spawn(at, TextDisplay.class, d -> {
+            mark(d);
+            d.text(Ui.mm(text));
+            d.setBillboard(Display.Billboard.CENTER);
+            d.setShadowed(true);
+            d.setBackgroundColor(Color.fromARGB(0, 0, 0, 0));
+            d.setTransformation(new Transformation(new Vector3f(), new AxisAngle4f(), new Vector3f(scale * 0.3f), new AxisAngle4f()));
+        });
+        Bukkit.getScheduler().runTaskLater(plugin, () -> grow(td, 0.25f, scale * 1.2f, 3), 1L);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> grow(td, 1.0f, scale * 0.85f, life - 5), 5L);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> { if (td.isValid()) td.setTextOpacity((byte) 140); }, life - 7L);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> { if (td.isValid()) td.setTextOpacity((byte) 70); }, life - 3L);
+        Bukkit.getScheduler().runTaskLater(plugin, td::remove, life);
+    }
+
+    private static void grow(TextDisplay td, float up, float scale, int ticks) {
+        if (!td.isValid()) return;
+        td.setInterpolationDelay(0);
+        td.setInterpolationDuration(Math.max(1, ticks));
+        td.setTransformation(new Transformation(new Vector3f(0, up, 0), new AxisAngle4f(), new Vector3f(scale), new AxisAngle4f()));
+    }
+
+    /** Staff just put something on the wall: a beam of light, a flash and a chime for everyone in the Arena. */
+    private void newArrival(int slot) {
+        Location f = frameLoc(slot).add(0.3, 0.5, 0.5);
+        for (int i = 0; i < 12; i++) {
+            int step = i;
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                world.spawnParticle(Particle.END_ROD, f.clone().add(0.2, 6 - step * 0.5, 0), 4, 0.05, 0.1, 0.05, 0);
+                if (step == 11) {
+                    world.spawnParticle(Particle.FIREWORK, f, 30, 0.2, 0.3, 0.3, 0.12);
+                    spinBurst(slot);
+                }
+            }, i);
+        }
+        Component msg = Ui.mm("<light_purple>✦ New on the wall: <white>").append(showcase[slot].effectiveName());
+        for (Player p : world.getPlayers()) {
+            p.sendActionBar(msg);
+            p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_RESONATE, 0.7f, 1.3f);
+        }
+    }
+
+    /** Looking at a frame shows a little card (to you only) with the item's name, its first lore lines and a NEW badge. */
+    private void updateCards() {
+        for (Player p : world.getPlayers()) {
+            int slot = -1;
+            if (p.getLocation().getX() < TestArenaBuilder.WALL_X + 10 && Math.abs(p.getLocation().getZ()) < 10) {
+                RayTraceResult r = world.rayTraceEntities(p.getEyeLocation(), p.getEyeLocation().getDirection(), 7, 0.15, en -> en instanceof ItemFrame && ours(en));
+                if (r != null && r.getHitEntity() != null) slot = slotOf(r.getHitEntity());
+            }
+            if (slot < 0 || showcase[slot] == null) { removeCard(p); continue; }
+            if (Objects.equals(cardSlot.get(p.getUniqueId()), slot) && cards.get(p.getUniqueId()) != null && cards.get(p.getUniqueId()).isValid()) continue;
+            removeCard(p);
+            int s = slot;
+            Location at = frameLoc(s).add(0.75, 1.05, 0.5);
+            TextDisplay card = world.spawn(at, TextDisplay.class, d -> {
+                mark(d);
+                d.setVisibleByDefault(false);
+                d.setBillboard(Display.Billboard.CENTER);
+                d.setShadowed(true);
+                d.setLineWidth(200);
+                d.setBackgroundColor(Color.fromARGB(170, 18, 12, 30));
+                d.text(cardText(s));
+                d.setTransformation(new Transformation(new Vector3f(), new AxisAngle4f(), new Vector3f(0.2f), new AxisAngle4f()));
+            });
+            p.showEntity(plugin, card);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> grow(card, 0.1f, 0.6f, 3), 1L);
+            p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_STEP, 0.5f, 1.6f);
+            cards.put(p.getUniqueId(), card);
+            cardSlot.put(p.getUniqueId(), s);
+        }
+    }
+
+    private Component cardText(int slot) {
+        ItemStack it = showcase[slot];
+        boolean fresh = showcaseTime[slot] > 0 && System.currentTimeMillis() - showcaseTime[slot] < 7L * 24 * 3600 * 1000;
+        Component out = Component.empty();
+        if (fresh) out = out.append(Ui.mm("<gradient:#ffd27a:#ff7a1a><bold>★ NEW ★</bold></gradient>")).append(Component.newline());
+        out = out.append(it.effectiveName());
+        List<Component> lore = it.hasItemMeta() && it.getItemMeta().lore() != null ? it.getItemMeta().lore() : List.of();
+        for (int i = 0; i < Math.min(3, lore.size()); i++) out = out.append(Component.newline()).append(lore.get(i));
+        return out.append(Component.newline()).append(Ui.mm("<dark_gray>right-click to grab"));
+    }
+
+    private void removeCard(Player p) {
+        TextDisplay c = cards.remove(p.getUniqueId());
+        cardSlot.remove(p.getUniqueId());
+        if (c != null) c.remove();
+    }
+
     // ------------------------------------------------------------------ animation + upkeep
 
     private void animate() {
@@ -406,6 +625,14 @@ public final class TestArena implements Listener {
         long now = System.currentTimeMillis();
         if (now - lastHitAt > 4000 && !hits.isEmpty()) hits.clear();
         if (tick % 10 == 0) updateDummyText();
+        if (tick % 4 == 0) updateCards();
+        // the dummy's wobble: a quick shake and nod that settles
+        if (dummy != null && dummy.isValid() && wobbleAmp > 0.6) {
+            wobbleT++;
+            dummy.setRotation((float) (Math.sin(wobbleT * 1.9) * wobbleAmp), (float) (Math.abs(Math.cos(wobbleT * 1.9)) * wobbleAmp * 0.7));
+            wobbleAmp *= 0.72;
+            if (wobbleAmp <= 0.6) dummy.setRotation(0f, 0f);
+        }
         // keep the dummy exactly on its spot (wind charges can still shove it)
         if (dummy != null && dummy.isValid() && tick % 20 == 0) {
             Location home = new Location(world, TestArenaBuilder.DUMMY_X, TestArenaBuilder.DUMMY_Y, TestArenaBuilder.DUMMY_Z, 0f, 0f);
