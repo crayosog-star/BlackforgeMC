@@ -103,12 +103,16 @@ public final class TestArena implements Listener {
     private record TestItem(java.util.function.Supplier<ItemStack> make, java.util.function.Predicate<ItemStack> is,
                             java.util.function.Predicate<ItemStack> worn) {}
     private final List<TestItem> testItems = new ArrayList<>();
-    private static final int MAX_TEST_ITEMS = 8;                       // hotbar slots 0-7; slot 8 is the leave bed
+    // hotbar slots 0-7 first (slot 8 is the leave bed), then the top row of the inventory; one per wall frame
+    private static final int MAX_TEST_ITEMS = SLOTS;
+
+    /** Where test item {@code i} lives in the kit: hotbar 0-7, then inventory 9-35 (skipping the leave bed in slot 8). */
+    private static int kitSlot(int i) { return i < 8 ? i : i + 1; }
 
     /** Every new item calls this once (HubModule): it goes on the wall, into every Arena kit, and refills itself there. */
     public void addTestItem(java.util.function.Supplier<ItemStack> make, java.util.function.Predicate<ItemStack> is,
                             java.util.function.Predicate<ItemStack> worn) {
-        if (testItems.size() >= MAX_TEST_ITEMS) { plugin.getLogger().warning("Arena hotbar is full - a test item was not added to the kit"); return; }
+        if (testItems.size() >= MAX_TEST_ITEMS) { plugin.getLogger().warning("Arena wall is full - a test item was not added to the kit"); return; }
         testItems.add(new TestItem(make, is, worn));
         ensureOnWall(make.get(), is);
     }
@@ -327,7 +331,7 @@ public final class TestArena implements Listener {
         kit(p);
         p.sendMessage(Ui.mm("<#7bd88f><bold>Arena test items</bold> <dark_gray>· <gray>they never run out here"));
         if (p.hasPermission("alloy.admin"))
-            p.sendMessage(Ui.mm("<gray>Staff: <white>/jbello /gaia /darkness /surge /lastrite /rimelock /godseye <gray>give one each · Surge has no cooldown here"));
+            p.sendMessage(Ui.mm("<gray>Staff: <white>/jbello /gaia /darkness /surge /lastrite /rimelock /godseye /chain /bonfire <gray>give one each · Surge has no cooldown here"));
         p.showTitle(Title.title(Ui.mm("<gradient:#7bd88f:#2e9e5b><bold>THE ARENA</bold></gradient>"), Ui.mm("<gray>Break things. Responsibly."),
                 Title.Times.times(Duration.ofMillis(250), Duration.ofSeconds(2), Duration.ofMillis(600))));
         p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.2f);
@@ -336,8 +340,9 @@ public final class TestArena implements Listener {
     public void kit(Player p) {
         var inv = p.getInventory();
         inv.clear();
-        // only the BlackForgeMC test items, one per hotbar slot in the order they were added; refill() keeps them topped up
-        for (int i = 0; i < testItems.size(); i++) inv.setItem(i, testItems.get(i).make().get());
+        // only the BlackForgeMC test items, in the order they were added: the hotbar first, then the top inventory row
+        // once the hotbar's full; refill() keeps them topped up
+        for (int i = 0; i < testItems.size(); i++) inv.setItem(kitSlot(i), testItems.get(i).make().get());
         ItemStack leave = Ui.item(Material.RED_BED, "<red><bold>Back to the Hub</bold> <gray>(right-click)");
         leave.editMeta(m -> m.getPersistentDataContainer().set(leaveKey, PersistentDataType.BYTE, (byte) 1));
         inv.setItem(8, leave);
@@ -768,7 +773,7 @@ public final class TestArena implements Listener {
                 if (at >= 0 && !t.worn().test(inv.getItem(at))) continue;      // still there and fresh
                 ItemStack fresh = t.make().get();
                 if (at >= 0) inv.setItem(at, fresh);                          // worn: swap for a fresh one in place
-                else if (inv.getItem(i) == null || inv.getItem(i).getType().isAir()) inv.setItem(i, fresh);
+                else if (inv.getItem(kitSlot(i)) == null || inv.getItem(kitSlot(i)).getType().isAir()) inv.setItem(kitSlot(i), fresh);
                 else inv.addItem(fresh);
                 if (at < 0) p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_STEP, 0.35f, 1.8f);
             }
