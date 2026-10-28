@@ -1,6 +1,7 @@
 # Builds AlloyCore on every pull request: compile, unit tests, then walkcheck (traps, lava, impossible jumps).
-# Same checks tools/automerge.py runs on the server PC before it merges, so a red X here means automerge will
-# refuse the PR too - but here the error is visible on the PR instead of only in tools/autoupdate.log.
+# Build + tests match what tools/automerge.py runs before it merges, so a red X there means automerge refuses the PR
+# too, but here the error shows on the PR. Walkcheck runs with --strict here, so a walkcheck problem also fails the
+# check (automerge only prints walkcheck results).
 name: AlloyCore build
 
 on:
@@ -41,8 +42,12 @@ jobs:
           gradle-version: "9.1.0"
 
       # gradle.properties points the toolchain at the server PC's JDK (a Windows path); point it at this one instead.
-      - name: Build, test, walkcheck
-        run: gradle build walkcheck --no-daemon --stacktrace "-Porg.gradle.java.installations.paths=$JAVA_HOME"
+      - name: Build and test
+        run: gradle build --no-daemon --stacktrace "-Porg.gradle.java.installations.paths=$JAVA_HOME"
+
+      # Plain `gradle walkcheck` only prints problems; --strict makes it fail the check (exit 1) when it finds any.
+      - name: Walkcheck (strict)
+        run: gradle walkcheck --no-daemon "--args=--strict" "-Porg.gradle.java.installations.paths=$JAVA_HOME"
 
       - name: Test report (on failure)
         if: failure()
