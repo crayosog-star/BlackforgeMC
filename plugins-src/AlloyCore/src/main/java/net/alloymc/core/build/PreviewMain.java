@@ -27,6 +27,7 @@ public final class PreviewMain {
         pov(hub, new File(out, "hub_view_from_arcade_gate.png"), 0.5, 103.6, 40.5, 180, -4, 1280, 720);
         pov(hub, new File(out, "hub_view_side.png"), 44.5, 112, 30.5, 125, -14, 1280, 720);
         topDown(hub, new File(out, "hub_top.png"), 6);
+        pov(hub, new File(out, "hub_castle_aerial.png"), 0.5, 240, 300.5, 180, 32, 1600, 900);
         dragons(hub, out);
         night = false;
         Canvas sv = net.alloymc.core.survival.SpawnBuilder.spawn();
@@ -310,12 +311,12 @@ public final class PreviewMain {
         hub.blocks().forEach((k, b) -> sky.set(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k), b));
         List<net.alloymc.core.hub.DragonFlight> fl = List.of(
                 new net.alloymc.core.hub.DragonFlight(net.alloymc.core.hub.DragonFlight.Kind.BLACK, 11, 0.3),
-                new net.alloymc.core.hub.DragonFlight(net.alloymc.core.hub.DragonFlight.Kind.GOLD, 12, 2.4),
                 new net.alloymc.core.hub.DragonFlight(net.alloymc.core.hub.DragonFlight.Kind.SERPENT, 13, 4.4));
+        fl.forEach(d -> d.setOthers(fl));
         for (int t = 0; t < 600; t++) fl.forEach(net.alloymc.core.hub.DragonFlight::step);
         for (var d : fl) voxelize(sky, d.pose());
         pov(sky, new File(out, "hub_dragons_flying.png"), 0.5, 175, 140.5, 180, 25, 1600, 900);
-        String[] names = {"black", "gold", "serpent"};
+        String[] names = {"black", "serpent"};
         for (int i = 0; i < fl.size(); i++) {
             Canvas one = new Canvas();
             voxelize(one, fl.get(i).pose());

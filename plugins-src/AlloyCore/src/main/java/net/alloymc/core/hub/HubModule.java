@@ -59,7 +59,8 @@ public final class HubModule implements Listener {
         for (int cx = -6; cx <= 5; cx++) for (int cz = -6; cz <= 5; cz++) world.addPluginChunkTicket(cx, cz, plugin);
         if (!new File(plugin.getDataFolder(), "hub-built").exists()) build(Bukkit.getConsoleSender());
         else {
-            if (!new File(plugin.getDataFolder(), "hub-biome-v1").exists()) applyBiome();
+            if (!new File(plugin.getDataFolder(), "hub-biome-v2").exists()) applyBiome();
+            if (!new File(plugin.getDataFolder(), "hub-castle-v1").exists()) addCastle();
             if (new File(plugin.getDataFolder(), "hub-dragons-v1").exists() && !new File(plugin.getDataFolder(), "hub-dragons-flying").exists()) removeStatues();
         }
         Bukkit.getScheduler().runTaskLater(plugin, this::spawnHolograms, 40L);
@@ -91,15 +92,16 @@ public final class HubModule implements Listener {
         var canvas = HubBuilder.build();
         world.getChunkAt(0, 0).load();
         // wipe the old hub first so nothing from a previous design is left floating
-        int[] x = {-90};
+        int e = CastleBuilder.EXTENT;
+        int[] x = {-e};
         Bukkit.getScheduler().runTaskTimer(plugin, task -> {
-            for (int n = 0; n < 2 && x[0] <= 90; n++, x[0]++)
-                for (int z = -90; z <= 90; z++)
-                    for (int y = HubLayout.Y - 50; y <= HubLayout.Y + 45; y++) {
+            for (int n = 0; n < 2 && x[0] <= e; n++, x[0]++)
+                for (int z = -e; z <= e; z++)
+                    for (int y = HubLayout.Y - 80; y <= HubLayout.Y + 70; y++) {
                         var b = world.getBlockAt(x[0], y, z);
                         if (!b.getType().isAir()) b.setType(Material.AIR, false);
                     }
-            if (x[0] <= 90) return;
+            if (x[0] <= e) return;
             task.cancel();
             pasteHub(who, canvas, t);
         }, 1L, 1L);
@@ -108,6 +110,7 @@ public final class HubModule implements Listener {
     private void pasteHub(CommandSender who, net.alloymc.core.build.Canvas canvas, long t) {
         Paster.paste(plugin, world, canvas, 6000, () -> {
             try { new File(plugin.getDataFolder(), "hub-built").createNewFile(); } catch (Exception ignored) { }
+            try { new File(plugin.getDataFolder(), "hub-castle-v1").createNewFile(); } catch (Exception ignored) { }
             applyBiome();
             who.sendMessage(Component.text("Hub built: " + canvas.size() + " blocks in " + (System.currentTimeMillis() - t) / 1000 + "s"));
             for (Player p : Bukkit.getOnlinePlayers()) toSpawn(p);
@@ -122,11 +125,12 @@ public final class HubModule implements Listener {
         org.bukkit.block.Biome inferno = io.papermc.paper.registry.RegistryAccess.registryAccess()
                 .getRegistry(io.papermc.paper.registry.RegistryKey.BIOME).get(NamespacedKey.fromString("blackforge:inferno"));
         if (inferno == null) { plugin.getLogger().warning("blackforge:inferno biome missing - is the blackforge datapack in hub/world/datapacks?"); return; }
-        for (int x = -96; x < 96; x += 4)
-            for (int z = -96; z < 96; z += 4)
-                for (int y = HubLayout.Y - 64; y < HubLayout.Y + 64; y += 4) world.setBiome(x, y, z, inferno);
-        for (int cx = -6; cx <= 5; cx++) for (int cz = -6; cz <= 5; cz++) world.refreshChunk(cx, cz);
-        try { new File(plugin.getDataFolder(), "hub-biome-v1").createNewFile(); } catch (Exception ignored) { }
+        int e = (CastleBuilder.EXTENT + 32) / 16 * 16;
+        for (int x = -e; x < e; x += 4)
+            for (int z = -e; z < e; z += 4)
+                for (int y = HubLayout.Y - 96; y < HubLayout.Y + 96; y += 4) world.setBiome(x, y, z, inferno);
+        for (int cx = -e / 16; cx < e / 16; cx++) for (int cz = -e / 16; cz < e / 16; cz++) world.refreshChunk(cx, cz);
+        try { new File(plugin.getDataFolder(), "hub-biome-v2").createNewFile(); } catch (Exception ignored) { }
         plugin.getLogger().info("Hub painted with the blackforge:inferno biome");
     }
 
@@ -373,6 +377,15 @@ public final class HubModule implements Listener {
     }
 
     // ------------------------------------------------------------------ dragons
+
+    /** Raises the castle wall around a hub that was built before it existed. */
+    private void addCastle() {
+        var castle = CastleBuilder.build();
+        Paster.paste(plugin, world, castle, 4000, () -> {
+            try { new File(plugin.getDataFolder(), "hub-castle-v1").createNewFile(); } catch (Exception ignored) { }
+            plugin.getLogger().info("Hub castle built: " + castle.size() + " blocks");
+        });
+    }
 
     /** The dragons fly now: clear the old statue blocks (both versions) out of the sky, leaving every hub block alone. */
     private void removeStatues() {

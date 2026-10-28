@@ -13,7 +13,7 @@ import static net.alloymc.core.hub.HubLayout.Y;
  * the neck and tail curve through every turn. Breath, roars, fireballs and blinks come at random, never on a timer.
  */
 public final class DragonFlight {
-    public enum Kind { BLACK, GOLD, SERPENT }
+    public enum Kind { BLACK, SERPENT }
 
     /** A box drawn by one block display: its corner, its three unit axes (right, up, forward) and its size along each. */
     public record Piece(String block, int light, double[] corner, double[] r, double[] u, double[] f, double sx, double sy, double sz) {}
@@ -51,9 +51,11 @@ public final class DragonFlight {
         z = 0.5 + Math.sin(startAngle) * 70;
         y = Y + 26 + rnd.nextDouble() * 14;
         yaw = startAngle + Math.PI / 2;
-        // a straight trail behind it, so the body has somewhere to be on the first tick
-        double[] f = dir(yaw, 0);
-        for (int i = 0; i < 400; i++) path.addLast(new double[]{x - f[0] * i * speed, y, z - f[2] * i * speed, 0});
+        // a trail behind it along the same circle, so the body has somewhere to be on the first tick
+        for (int i = 0; i < 400; i++) {
+            double a = startAngle - i * speed / 70;
+            path.addLast(new double[]{0.5 + Math.cos(a) * 70, y, 0.5 + Math.sin(a) * 70, 0});
+        }
         breathCooldown = 60 + rnd.nextInt(300);
         roarCooldown = 300 + rnd.nextInt(600);
         fireCooldown = 200 + rnd.nextInt(500);
@@ -81,14 +83,31 @@ public final class DragonFlight {
 
     // ------------------------------------------------------------------ flight
 
+    /** The other dragons in the sky, so they keep their distance from each other. */
+    private List<DragonFlight> others = List.of();
+    public void setOthers(List<DragonFlight> all) { others = all.stream().filter(o -> o != this).toList(); }
+
+    /**
+     * Below LOW a dragon is "low": it has to stay out in the ring between the floating islands and the castle walls
+     * (CastleBuilder.INNER), sweeping along the sides of the hub. Wing tips reach about 22 blocks either side.
+     */
+    private static final double LOW = Y + 30, OUTER = 108;
+
     private void pickTarget() {
-        for (int tries = 0; tries < 60; tries++) {
-            double a = rnd.nextDouble() * Math.PI * 2, r = 22 + rnd.nextDouble() * 64;
+        boolean low = y < LOW;
+        for (int tries = 0; tries < 80; tries++) {
+            double a = rnd.nextDouble() * Math.PI * 2, r, py;
+            // now and then dive down past the edge and sweep along the cliffs, just outside the island
+            if ((low ? rnd.nextDouble() < 0.55 : rnd.nextDouble() < 0.3)) { r = OUTER + rnd.nextDouble() * 4; py = Y - 14 + rnd.nextDouble() * 20; }
+            else { r = 24 + rnd.nextDouble() * 66; py = (r < 60 ? Y + 34 : Y + 32) + rnd.nextDouble() * 20; }
             double px = 0.5 + Math.cos(a) * r, pz = 0.5 + Math.sin(a) * r;
             if (pz < -10) continue;                                  // keep clear of the BLACKFORGE sign in the north
-            if (Math.hypot(px - x, pz - z) < 30) continue;           // somewhere worth flying to
-            double low = r < 60 ? Y + 34 : Y + 28;
-            double py = rnd.nextDouble() < 0.25 ? low + rnd.nextDouble() * 4 : low + rnd.nextDouble() * (Y + 52 - low);
+            if (Math.hypot(px - x, pz - z) < 35) continue;           // somewhere worth flying to
+            boolean crowded = false;                                 // and well away from where the others are and are going
+            for (DragonFlight o : others) crowded |= Math.hypot(px - o.x, pz - o.z) < 60 || Math.hypot(px - o.tx, pz - o.tz) < 60;
+            if (crowded && tries < 60) continue;
+            // low passes stay low around the outside: from low, only climb back in once out past the islands
+            if (low && py < LOW && Math.hypot(x, z) < OUTER - 4) continue;
             tx = px; ty = py; tz = pz;
             return;
         }
@@ -100,11 +119,28 @@ public final class DragonFlight {
         roared = flapped = fireball = false;
         double dx = tx - x, dy = ty - y, dz = tz - z, flat = Math.hypot(dx, dz);
         if (flat < 12) pickTarget();
+        double rad = Math.hypot(x - 0.5, z - 0.5);
         // too far out (or heading for the sign): turn back towards the middle
-        if (Math.hypot(x, z) > 92 || z < -30) { tx = 0.5; tz = 30.5; }
+        if (rad > OUTER + 6) { tx = 0.5; tz = 30.5; ty = Math.max(ty, Y + 34); }
+        for (DragonFlight o : others)                            // another dragon too close: go somewhere else
+            if (Math.hypot(x - o.x, z - o.z) < 40 && age % 40 == 0) pickTarget();
+        dx = tx - x; dy = ty - y; dz = tz - z; flat = Math.hypot(dx, dz);
         double wantYaw = Math.atan2(dz, dx);
+        // low and not yet out past the floating islands: bank outwards and climb, never through them
+        boolean tooLowInside = y < LOW && rad < OUTER - 4;
+        if (tooLowInside) { wantYaw = Math.atan2(Math.max(z - 0.5, 0), x - 0.5); dy = Math.max(dy, 6); }
+        // about to leave the flight ring (the castle walls are out there): curve along it and back in, in good time
+        double[] ahead = dir(yaw, 0);
+        if (Math.hypot(x + ahead[0] * 25 - 0.5, z + ahead[2] * 25 - 0.5) > OUTER + 6) {
+            double ang = Math.atan2(z - 0.5, x - 0.5), left = ang + Math.PI / 2, right = ang - Math.PI / 2;
+            wantYaw = Math.abs(wrap(left - yaw)) < Math.abs(wrap(right - yaw)) ? left + 0.35 : right - 0.35;
+            if (rad > OUTER + 12) wantYaw = ang + Math.PI;   // already past it: straight back in
+        }
+        // the BLACKFORGE sign hangs over the north edge: if the next 25 blocks of flight would reach it, turn south now
+        if (z + ahead[2] * 25 < -40 || z < -40) { wantYaw = Math.atan2(1, -0.3 * Math.signum(x)); tx = x * 0.5; tz = 30.5; }
         if (kind == Kind.SERPENT) wantYaw += 0.45 * Math.sin(age * slither);     // slithering through the air
-        double turn = clamp(wrap(wantYaw - yaw), -agility, agility);
+        double agil = rad > OUTER + 6 ? agility * 2.5 : agility;   // pull hard back into the ring before the castle walls
+        double turn = clamp(wrap(wantYaw - yaw), -agil, agil);
         yaw += turn;
         double wantPitch = clamp(Math.atan2(dy, Math.max(flat, 1)), -0.42, 0.38);
         if (kind == Kind.SERPENT) wantPitch += 0.12 * Math.sin(age * slither * 0.7 + 1);
@@ -113,7 +149,12 @@ public final class DragonFlight {
         speed += (cruise - pitch * 0.45 - speed) * 0.03;                         // faster in a dive, slower climbing
         double[] f = dir(yaw, pitch);
         x += f[0] * speed; y += f[1] * speed; z += f[2] * speed;
-        if (y < Y + 26) y = Y + 26;
+        if (y < Y - 16) y = Y - 16;
+        // hard wall: never further out than the edge of the flight ring, whatever the steering was doing
+        double out = Math.hypot(x - 0.5, z - 0.5);
+        if (out > OUTER + 14) { x = 0.5 + (x - 0.5) * (OUTER + 14) / out; z = 0.5 + (z - 0.5) * (OUTER + 14) / out; }
+        // hard floor over the island and its floating islands, in case a dive comes in too steep
+        if (Math.hypot(x - 0.5, z - 0.5) < OUTER - 10 && y < LOW + 2) y = LOW + 2;
         path.addFirst(new double[]{x, y, z, bank});
         if (path.size() > 400) path.removeLast();
         behave();
@@ -204,8 +245,6 @@ public final class DragonFlight {
 
     private static final Look BLACK = new Look("minecraft:polished_blackstone", "minecraft:blackstone", "minecraft:gilded_blackstone",
             "minecraft:polished_blackstone_bricks", "minecraft:red_nether_bricks", "minecraft:gold_block", "minecraft:magma_block", "minecraft:shroomlight");
-    private static final Look GOLD = new Look("minecraft:gold_block", "minecraft:raw_gold_block", "minecraft:yellow_terracotta",
-            "minecraft:netherite_block", "minecraft:orange_terracotta", "minecraft:netherite_block", "minecraft:netherite_block", "minecraft:shroomlight");
     private static final int BODY_LIGHT = 9;
 
     /** Head shared by every dragon: skull, snout, hinged jaw, glowing eyes that blink, and fire in the mouth. */
@@ -236,7 +275,7 @@ public final class DragonFlight {
     }
 
     private void winged(List<Piece> out, double[][] sp) {
-        Look k = kind == Kind.GOLD ? GOLD : BLACK;
+        Look k = BLACK;
         double[][] h = head(out, sp, k.hide, k.belly, k.eye, "minecraft:shroomlight", 1);
         for (int side : new int[]{-1, 1}) {                                                       // horns
             double[] base = at(h[0], h[1], h[2], h[3], side * 0.75, 0.9, -1.0);

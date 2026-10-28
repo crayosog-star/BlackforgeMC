@@ -53,14 +53,15 @@ final class DragonAnimator {
         this.anchor = new Location(world, 0.5, HubLayout.Y + 30, 0.5);
         for (Entity e : world.getEntitiesByClass(BlockDisplay.class)) if (e.getScoreboardTags().contains(TAG)) e.remove();
         long seed = System.nanoTime();
-        DragonFlight.Kind[] kinds = {DragonFlight.Kind.BLACK, DragonFlight.Kind.GOLD, DragonFlight.Kind.SERPENT};
+        DragonFlight.Kind[] kinds = {DragonFlight.Kind.BLACK, DragonFlight.Kind.SERPENT};
         for (int i = 0; i < kinds.length; i++) {
-            DragonFlight d = new DragonFlight(kinds[i], seed + i * 7919L, i * Math.PI * 2 / 3 + rnd.nextDouble());
+            DragonFlight d = new DragonFlight(kinds[i], seed + i * 7919L, i * Math.PI + rnd.nextDouble());
             flights.add(d);
             List<BlockDisplay> list = new ArrayList<>();
             for (DragonFlight.Piece p : d.pose()) list.add(spawn(p));
             displays.add(list);
         }
+        flights.forEach(d -> d.setOthers(flights));
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 1L);
     }
 
@@ -130,18 +131,21 @@ final class DragonAnimator {
         double[] m = d.mouth(), f = d.breathDir(), fw = d.forward(), h = d.head();
         double v = d.speed();
         Location head = new Location(world, h[0], h[1], h[2]);
+        // real dragon voices: the serpent's is higher and thinner, the blackstone dragon's deep
+        float voice = d.kind == DragonFlight.Kind.SERPENT ? 1.15f : 0.75f;
         if (d.roared) {
-            world.playSound(head, d.kind == DragonFlight.Kind.SERPENT ? Sound.ENTITY_ELDER_GUARDIAN_CURSE : Sound.ENTITY_ENDER_DRAGON_GROWL,
-                    3f, 0.7f + rnd.nextFloat() * 0.3f);
+            world.playSound(head, Sound.ENTITY_ENDER_DRAGON_GROWL, SoundCategory.AMBIENT, 4f, voice + rnd.nextFloat() * 0.15f);
             shockwave(m, fw);
+        } else if (rnd.nextInt(420) == 0) {
+            world.playSound(head, Sound.ENTITY_ENDER_DRAGON_AMBIENT, SoundCategory.AMBIENT, 3f, voice + rnd.nextFloat() * 0.2f);
         }
-        if (d.flapped) world.playSound(head, Sound.ENTITY_ENDER_DRAGON_FLAP, 2.5f, 0.6f + rnd.nextFloat() * 0.4f);
+        if (d.flapped) world.playSound(head, Sound.ENTITY_ENDER_DRAGON_FLAP, SoundCategory.AMBIENT, 2.5f, 0.6f + rnd.nextFloat() * 0.4f);
         if (d.fireball) launch(m, d.breathDir(), fw, v, pal);
         if (d.breathing()) {
             double ramp = d.breathStrength();
             if (rnd.nextInt(9) == 0)
                 world.playSound(new Location(world, m[0], m[1], m[2]), pal == SOUL ? Sound.BLOCK_SOUL_SAND_BREAK : Sound.ITEM_FIRECHARGE_USE, 3f, 0.5f + rnd.nextFloat() * 0.3f);
-            if (ramp > 0.9 && rnd.nextInt(30) == 0) world.playSound(new Location(world, m[0], m[1], m[2]), Sound.ENTITY_BLAZE_SHOOT, 3f, 0.5f);
+            if (ramp > 0.9 && rnd.nextInt(30) == 0) world.playSound(new Location(world, m[0], m[1], m[2]), Sound.ENTITY_ENDER_DRAGON_SHOOT, SoundCategory.AMBIENT, 3f, voice);
             for (int k = 0; k < 6 * ramp + 1; k++) {
                 double dx = f[0] + (rnd.nextDouble() - 0.5) * 0.3, dy = f[1] + (rnd.nextDouble() - 0.5) * 0.3, dz = f[2] + (rnd.nextDouble() - 0.5) * 0.3;
                 // a flame's velocity is direction * speed: add the dragon's own speed so the fire doesn't trail behind it
@@ -186,7 +190,7 @@ final class DragonAnimator {
         double speed = 1.3 + rnd.nextDouble() * 0.5;
         double[] vel = {dir[0] * speed + fw[0] * v, dir[1] * speed + 0.3 + rnd.nextDouble() * 0.3, dir[2] * speed + fw[2] * v};
         fireballs.add(new Fireball(m, vel, 18 + rnd.nextInt(16), pal));
-        world.playSound(new Location(world, m[0], m[1], m[2]), Sound.ENTITY_GHAST_SHOOT, 4f, 0.5f + rnd.nextFloat() * 0.3f);
+        world.playSound(new Location(world, m[0], m[1], m[2]), Sound.ENTITY_ENDER_DRAGON_SHOOT, SoundCategory.AMBIENT, 4f, 0.7f + rnd.nextFloat() * 0.3f);
     }
 
     private void fly() {
@@ -204,7 +208,7 @@ final class DragonAnimator {
             world.spawnParticle(Particle.EXPLOSION_EMITTER, b.x, b.y, b.z, 1, 0, 0, 0, 0, null, true);
             world.spawnParticle(b.pal.flame, b.x, b.y, b.z, 50 + rnd.nextInt(30), 0.4, 0.4, 0.4, 0.3, null, true);
             world.spawnParticle(b.pal.spark, b.x, b.y, b.z, 10, 1.5, 1.5, 1.5, 0, null, true);
-            world.playSound(new Location(world, b.x, b.y, b.z), Sound.ENTITY_GENERIC_EXPLODE, 3f, 0.6f + rnd.nextFloat() * 0.3f);
+            world.playSound(new Location(world, b.x, b.y, b.z), Sound.ENTITY_DRAGON_FIREBALL_EXPLODE, SoundCategory.AMBIENT, 3f, 0.6f + rnd.nextFloat() * 0.3f);
         }
     }
 }
