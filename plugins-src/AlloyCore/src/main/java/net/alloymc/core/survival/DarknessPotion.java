@@ -165,7 +165,7 @@ public final class DarknessPotion implements Listener {
             int n = t[0]++;
             if (n % 15 == 0) v.playSound(v.getLocation(), Sound.ENTITY_WARDEN_HEARTBEAT, SoundCategory.PLAYERS, 1.0f, 1.0f);
             if (n % 6 == 0) phantomSound(v);
-            if (n % 5 == 0) v.getWorld().spawnParticle(Particle.SCULK_SOUL, v.getEyeLocation().add(0, 0.4, 0), 1, 0.3, 0.1, 0.3, 0.01);
+            if (n % 5 != 0) v.getWorld().spawnParticle(Particle.SCULK_SOUL, v.getEyeLocation().add(0, 0.4, 0), 1, 0.6, 0.2, 0.6, 0.02);   // 4 souls per 5 ticks, spread wide
         }, 0L, 1L);
     }
 
@@ -228,7 +228,7 @@ public final class DarknessPotion implements Listener {
                 Location to = m.getLocation().add(rnd.nextDouble() * 6 - 3, 0, rnd.nextDouble() * 6 - 3);
                 m.getPathfinder().moveTo(to, 0.9);
             }
-            if (n % 5 == 0) m.getWorld().spawnParticle(Particle.SCULK_SOUL, m.getEyeLocation().add(0, 0.5, 0), 1, 0.25, 0.05, 0.25, 0.01);
+            if (n % 5 != 0) m.getWorld().spawnParticle(Particle.SCULK_SOUL, m.getEyeLocation().add(0, 0.5, 0), 1, 0.5, 0.1, 0.5, 0.02);   // 4 souls per 5 ticks, spread wide
         }, 0L, 1L);
     }
 
@@ -252,7 +252,13 @@ public final class DarknessPotion implements Listener {
             double a = 2 * Math.PI * i / 16;
             Location edge = c.clone().add(2 * Math.cos(a), 0, 2 * Math.sin(a));
             w.spawnParticle(Particle.SCULK_CHARGE_POP, edge, 1, 0.1, 0.1, 0.1, 0.01);
-            w.spawnParticle(Particle.SCULK_SOUL, edge, 1, 0.1, 0.1, 0.1, 0.03);
+        }
+        // the souls: 4x as many as the old 16, in a ring twice as wide, each flung outward (count 0 = offsets are its direction)
+        for (int i = 0; i < 64; i++) {
+            double a = 2 * Math.PI * i / 64;
+            double cos = Math.cos(a), sin = Math.sin(a);
+            Location edge = c.clone().add(4 * cos, 0, 4 * sin);
+            w.spawnParticle(Particle.SCULK_SOUL, edge, 0, cos, 0.15, sin, 0.08);
         }
         w.playSound(at, Sound.ENTITY_SPLASH_POTION_BREAK, SoundCategory.PLAYERS, 1.0f, 0.6f);
         w.playSound(at, Sound.ENTITY_WARDEN_HEARTBEAT, SoundCategory.PLAYERS, 1.0f, 0.9f);

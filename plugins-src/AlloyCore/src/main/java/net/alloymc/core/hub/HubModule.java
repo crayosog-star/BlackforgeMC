@@ -81,7 +81,7 @@ public final class HubModule implements Listener {
         arena.setDarkness(darkness);
         surge = new net.alloymc.core.survival.Surge(plugin, l -> l.getWorld() == arena.world(), true);   // staff: no cooldown in the Arena
         arena.setSurge(surge);
-        bellows = new net.alloymc.core.survival.GaleBellows(plugin);
+        bellows = new net.alloymc.core.survival.GaleBellows(plugin, l -> l.getWorld() == arena.world());   // never breaks in the Arena
         arena.setBellows(bellows);
         // both potions on the Arena showcase wall (first empty frames; skipped if they're already up)
         arena.ensureOnWall(gaia.item(), gaia::isGaia);

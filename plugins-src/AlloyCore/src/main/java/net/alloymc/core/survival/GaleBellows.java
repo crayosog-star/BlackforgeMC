@@ -52,8 +52,14 @@ public final class GaleBellows implements Listener {
     private final Map<UUID, Long> lastPushed = new HashMap<>();    // target -> when they were last pushed (juggle rule)
     private final Random rnd = new Random();
 
-    public GaleBellows(AlloyCore plugin) {
+    private final java.util.function.Predicate<Location> freeUseAt;   // where blasts don't use up a charge (the hub Arena)
+
+    public GaleBellows(AlloyCore plugin) { this(plugin, l -> false); }
+
+    /** {@code freeUseAt}: where a blast costs no charge, so the bellows never breaks there (the 10 s cooldown still applies). */
+    public GaleBellows(AlloyCore plugin, java.util.function.Predicate<Location> freeUseAt) {
         this.plugin = plugin;
+        this.freeUseAt = freeUseAt;
         this.enabled = plugin.getConfig().getBoolean("gale-bellows.enabled", true);
         // only once the BlackForgeMC resource pack is live: without it the model id renders as the purple/black missing model
         this.customModel = plugin.getConfig().getBoolean("gale-bellows.custom-model", false);
@@ -297,8 +303,12 @@ public final class GaleBellows implements Listener {
         w.playSound(eye, Sound.ENTITY_ENDER_DRAGON_FLAP, SoundCategory.PLAYERS, 0.4f, 1.6f);
     }
 
-    /** Each blast uses one of its 3 charges; the last one breaks it. */
+    /** Each blast uses one of its 3 charges; the last one breaks it. Free where {@link #freeUseAt} says so. */
     private void useUp(Player p, ItemStack held) {
+        if (freeUseAt.test(p.getLocation())) {   // test area: unlimited uses
+            p.sendActionBar(Ui.mm("<#9EE6FF>🌬 <gray>Gale Bellows: <white>unlimited uses <gray>here"));
+            return;
+        }
         int left = uses(held) - 1;
         if (left <= 0) {
             p.getInventory().setItemInMainHand(null);
