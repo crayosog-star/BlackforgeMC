@@ -78,7 +78,7 @@ public final class HubModule implements Listener {
         gaia = new net.alloymc.core.survival.GaiaPotion(plugin, (pl, l) -> l.getWorld() == arena.world());   // never on the hub itself
         darkness = new net.alloymc.core.survival.DarknessPotion(plugin, l -> l.getWorld() == arena.world());
         surge = new net.alloymc.core.survival.Surge(plugin, l -> l.getWorld() == arena.world(), true);   // staff: no cooldown in the Arena
-        bellows = new net.alloymc.core.survival.GaleBellows(plugin);
+        bellows = new net.alloymc.core.survival.GaleBellows(plugin, l -> l.getWorld() == arena.world());   // Arena: no cooldown, never breaks
         // Arena test items: each goes on the showcase wall, into the Arena hotbar (in this order) and never runs out there.
         // EVERY NEW ITEM GETS ONE LINE HERE.
         arena.addTestItem(bellows::item, bellows::isBellows, bellows::isWorn);

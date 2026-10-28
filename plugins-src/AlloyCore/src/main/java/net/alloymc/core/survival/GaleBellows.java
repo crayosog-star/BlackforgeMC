@@ -52,8 +52,14 @@ public final class GaleBellows implements Listener {
     private final Map<UUID, Long> lastPushed = new HashMap<>();    // target -> when they were last pushed (juggle rule)
     private final Random rnd = new Random();
 
-    public GaleBellows(AlloyCore plugin) {
+    private final java.util.function.Predicate<Location> freeUseAt;   // where blasts have no cooldown and use no charge (the hub Arena)
+
+    public GaleBellows(AlloyCore plugin) { this(plugin, l -> false); }
+
+    /** {@code freeUseAt}: where a blast has no cooldown and costs no charge, so the bellows never breaks there. */
+    public GaleBellows(AlloyCore plugin, java.util.function.Predicate<Location> freeUseAt) {
         this.plugin = plugin;
+        this.freeUseAt = freeUseAt;
         this.enabled = plugin.getConfig().getBoolean("gale-bellows.enabled", true);
         // only once the BlackForgeMC resource pack is live: without it the model id renders as the purple/black missing model
         this.customModel = plugin.getConfig().getBoolean("gale-bellows.custom-model", false);
@@ -203,12 +209,38 @@ public final class GaleBellows implements Listener {
             hit.add(t);
         }
 
-        readyAt.put(p.getUniqueId(), now + COOLDOWN_TICKS * 50L);
-        p.setCooldown(held, COOLDOWN_TICKS);
-        castEffects(p, eye, look);
+        boolean free = freeUseAt.test(p.getLocation());   // test area: no cooldown, no charge used
+        if (!free) {
+            readyAt.put(p.getUniqueId(), now + COOLDOWN_TICKS * 50L);
+            p.setCooldown(held, COOLDOWN_TICKS);
+        }
         useUp(p, held);
+        castEffects(p, eye, look);   // three quick slashes; the gust lands on the last one
+        UUID caster = p.getUniqueId();
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            Player q = Bukkit.getPlayer(caster);
+            if (q != null && q.isOnline()) blast(q, hit, look);
+        }, SLASH_TICKS);
 
+        if (free) return;   // no cooldown, so nothing to refill
+        // a quiet "ready" cue when the bellows refills, to the owner only
+        UUID id = p.getUniqueId();
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            Player q = Bukkit.getPlayer(id);
+            if (q != null && readyAt.getOrDefault(id, 0L) <= System.currentTimeMillis() + 50) q.playSound(q, Sound.ITEM_ARMOR_EQUIP_LEATHER, 0.6f, 1.2f);
+        }, COOLDOWN_TICKS);
+    }
+
+    /**
+     * The gust at the end of the slashes: pushes back and deals the 1-heart hit to everyone who was in the cone when
+     * the bellows was swung. Anyone who has since died, left or changed world is skipped.
+     */
+    private void blast(Player p, List<LivingEntity> hit, Vector look) {
+        long now = System.currentTimeMillis();
+        List<LivingEntity> landed = new ArrayList<>();
         for (LivingEntity t : hit) {
+            if (!t.isValid() || t.isDead() || t.getWorld() != p.getWorld()) continue;
+            landed.add(t);
             Long last = lastPushed.get(t.getUniqueId());
             boolean juggled = last != null && now - last < WindCone.JUGGLE_WINDOW_MS;
             lastPushed.put(t.getUniqueId(), now);
@@ -226,14 +258,7 @@ public final class GaleBellows implements Listener {
             hitEffects(t);
             if (t instanceof Player tp) tp.sendActionBar(Ui.mm("<#9EE6FF>🌬 <gray>Blown back by <white>" + p.getName()));
         }
-        if (!hit.isEmpty()) p.sendActionBar(Ui.mm("<#9EE6FF>🌬 <gray>Gust hit <white>" + hit.size() + (hit.size() == 1 ? " target" : " targets")));
-
-        // a quiet "ready" cue when the bellows refills, to the owner only
-        UUID id = p.getUniqueId();
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            Player q = Bukkit.getPlayer(id);
-            if (q != null && readyAt.getOrDefault(id, 0L) <= System.currentTimeMillis() + 50) q.playSound(q, Sound.ITEM_ARMOR_EQUIP_LEATHER, 0.6f, 1.2f);
-        }, COOLDOWN_TICKS);
+        if (!landed.isEmpty()) p.sendActionBar(Ui.mm("<#9EE6FF>🌬 <gray>Gust hit <white>" + landed.size() + (landed.size() == 1 ? " target" : " targets")));
     }
 
     /** Players and hostile mobs only - never pets, villagers, armor stands, displays or anything AlloyCore tags (robots etc). */
@@ -273,35 +298,67 @@ public final class GaleBellows implements Listener {
 
     // ------------------------------------------------------------------ effects
 
+    /** Ticks per slash; three slashes (right, left, right), then the gust. */
+    static final int SLASH_STROKE = 2, SLASH_TICKS = 3 * SLASH_STROKE;
+
+    /**
+     * Three quick slashes of air across the cone - sweeping right, then left, then right, each tilted like a blade
+     * cut - then the gust cloud bursts forward as the push lands. The arcs run along the edge of the hit cone
+     * ({@link WindCone#RANGE}, {@link WindCone#HALF_ANGLE_DEG}), so what you see is what you hit.
+     */
     private void castEffects(Player p, Location eye, Vector look) {
         World w = p.getWorld();
-        Vector side = new Vector(-look.getZ(), 0, look.getX());
-        if (side.lengthSquared() < 1e-6) side = new Vector(1, 0, 0);
-        side.normalize();
+        Vector fwd = look.clone().normalize();
+        Vector right = new Vector(-fwd.getZ(), 0, fwd.getX());   // facing +Z (south), this is -X (west): your right
+        if (right.lengthSquared() < 1e-6) right = new Vector(1, 0, 0);
+        right.normalize();
+        Vector up = right.clone().crossProduct(fwd).normalize();
         Location base = eye.clone().add(0, -0.25, 0);
-        // three rays fanning out across the cone, streaked with small gusts
-        for (double spread : new double[] {-0.45, 0, 0.45}) {
-            Vector ray = look.clone().add(side.clone().multiply(spread)).normalize();
-            for (double d : new double[] {0.5, 1.0, 1.5, 2.0}) {
-                Location at = base.clone().add(ray.clone().multiply(d));
-                w.spawnParticle(Particle.SMALL_GUST, at, 1, 0.05, 0.05, 0.05, 0);
-                Color c = d < 1.0 ? GALE_WHITE : d < 1.8 ? GUST_CYAN : DRAFT_TEAL;
-                w.spawnParticle(Particle.DUST, at, 2, 0.12, 0.12, 0.12, 0, new Particle.DustOptions(c, 1.2f));
+        double r = WindCone.RANGE * 0.8, half = Math.toRadians(WindCone.HALF_ANGLE_DEG + 5);
+        double[] tilt = {0.45, -0.45, 0.3};   // high-to-low, low-to-high, high-to-low across the swing
+        Vector f = fwd, rt = right, u = up;
+        int[] t = {0};
+        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+            int k = t[0]++;
+            if (k < SLASH_TICKS) {
+                int stroke = k / SLASH_STROKE, part = k % SLASH_STROKE;
+                int dir = stroke % 2 == 0 ? 1 : -1;   // 1 sweeps left -> right
+                // this tick draws its share of the arc; the leading edge is bright, the tail fades to teal
+                int pts = 9;
+                for (int i = 0; i <= pts; i++) {
+                    double s = (part + i / (double) pts) / SLASH_STROKE;   // 0..1 along the whole stroke
+                    double a = dir * (-half + 2 * half * s);
+                    double h = tilt[stroke] * dir * (a / half) * -1;
+                    Location at = base.clone().add(f.clone().multiply(r * Math.cos(a))).add(rt.clone().multiply(r * Math.sin(a))).add(u.clone().multiply(h));
+                    Color c = i > pts - 3 ? GALE_WHITE : i > pts / 2 ? GUST_CYAN : DRAFT_TEAL;
+                    w.spawnParticle(Particle.DUST, at, 1, 0.03, 0.03, 0.03, 0, new Particle.DustOptions(c, 1.3f));
+                    if (i == pts) w.spawnParticle(Particle.SMALL_GUST, at, 1, 0, 0, 0, 0);
+                    if (i == pts / 2 && part == 0) w.spawnParticle(Particle.SWEEP_ATTACK, at, 1, 0, 0, 0, 0);
+                }
+                if (part == 0) {
+                    w.playSound(eye, Sound.ENTITY_PLAYER_ATTACK_SWEEP, SoundCategory.PLAYERS, 0.8f, 1.3f + stroke * 0.2f);
+                    w.playSound(eye, Sound.ENTITY_BREEZE_SHOOT, SoundCategory.PLAYERS, 0.35f, 1.6f + stroke * 0.1f);
+                }
+                return;
             }
-        }
-        // puffs fired forward (count 0 makes the offset a direction)
-        for (int i = 0; i < 12; i++) {
-            Vector v = look.clone().add(new Vector(rnd.nextGaussian() * 0.15, rnd.nextGaussian() * 0.1, rnd.nextGaussian() * 0.15));
-            w.spawnParticle(Particle.CLOUD, base.clone().add(look.clone().multiply(0.4)), 0, v.getX(), v.getY(), v.getZ(), 0.35);
-        }
-        w.spawnParticle(Particle.CLOUD, base.clone().add(look.clone().multiply(0.3)), 4, 0.08, 0.08, 0.08, 0.01);   // the bellows' breath
-        w.playSound(eye, Sound.ENTITY_WIND_CHARGE_WIND_BURST, SoundCategory.PLAYERS, 1.0f, 1.2f);
-        w.playSound(eye, Sound.ENTITY_BREEZE_WIND_BURST, SoundCategory.PLAYERS, 0.8f, 0.8f);
-        w.playSound(eye, Sound.ENTITY_ENDER_DRAGON_FLAP, SoundCategory.PLAYERS, 0.4f, 1.6f);
+            task.cancel();
+            // the gust: a cloud burst forward as the push lands (count 0 makes the offset a direction)
+            for (int i = 0; i < 16; i++) {
+                Vector v = f.clone().add(new Vector(rnd.nextGaussian() * 0.2, rnd.nextGaussian() * 0.1, rnd.nextGaussian() * 0.2));
+                w.spawnParticle(Particle.CLOUD, base.clone().add(f.clone().multiply(0.6)), 0, v.getX(), v.getY(), v.getZ(), 0.4);
+            }
+            w.spawnParticle(Particle.GUST, base.clone().add(f.clone().multiply(1.6)), 1, 0, 0, 0, 0);
+            w.playSound(eye, Sound.ENTITY_WIND_CHARGE_WIND_BURST, SoundCategory.PLAYERS, 1.0f, 1.2f);
+            w.playSound(eye, Sound.ENTITY_BREEZE_WIND_BURST, SoundCategory.PLAYERS, 0.8f, 0.8f);
+        }, 0L, 1L);
     }
 
-    /** Each blast uses one of its 3 charges; the last one breaks it. */
+    /** Each blast uses one of its 3 charges; the last one breaks it. Free where {@link #freeUseAt} says so. */
     private void useUp(Player p, ItemStack held) {
+        if (freeUseAt.test(p.getLocation())) {   // test area: unlimited uses
+            p.sendActionBar(Ui.mm("<#9EE6FF>🌬 <gray>Gale Bellows: <white>unlimited uses <gray>here"));
+            return;
+        }
         int left = uses(held) - 1;
         if (left <= 0) {
             p.getInventory().setItemInMainHand(null);
