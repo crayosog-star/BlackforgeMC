@@ -35,7 +35,7 @@ public final class HubModule implements Listener {
     private final net.alloymc.core.survival.Surge surge;   // Surge ability item, usable in the Arena only
     private final net.alloymc.core.survival.LastRite rite;   // Last Rite, Arena only; the test dummy gives a solo practice rite
     private final net.alloymc.core.survival.DarknessPotion darkness;   // Potion of Darkness, darkens players in the Arena only
-    private final net.alloymc.core.survival.Rimelock cage;   // Rimelock, Arena only: a 7 s cage nobody inside can leave
+    private final net.alloymc.core.survival.Rimelock cage;   // Rimelock, Arena only: a 10 s cage only the caster's side can leave
     private final Map<UUID, Long> portalCooldown = new HashMap<>();
     private final Set<UUID> hidingPlayers = new HashSet<>();
     private final List<TextDisplay> holograms = new ArrayList<>();

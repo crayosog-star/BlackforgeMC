@@ -8,8 +8,8 @@ final class CageShape {
     private CageShape() {}
 
     static final double RADIUS = 6.0;
-    static final double WALL_HEIGHT = 5.0;   // what you see; the barrier itself reaches ABOVE
-    static final double BELOW = 3.0, ABOVE = 24.0;
+    static final double WALL_HEIGHT = 16.0;  // what you see; the barrier itself reaches ABOVE
+    static final double BELOW = 3.0, ABOVE = 32.0;
     static final double BODY = 0.35;         // half a player's width: you stop at the glass, not halfway through it
     static final int SEGMENTS = 32;          // glass panels round the wall
 
