@@ -34,9 +34,11 @@ import java.util.concurrent.ThreadLocalRandom;
  *   <li>a giant spinning halo of fire circles the sky above the island</li>
  *   <li>embers rain down and the action bar reads "✦ The forge burns for you, &lt;name&gt; ✦"</li>
  * </ul>
- * Only the joining player sees it: particles have that player as their only receiver, the fireworks are hidden
- * from everyone else, sounds are player-only, and the glowing sign is a client-side block change that is put
- * back when the show ends (a relog or chunk reload also restores it).
+ * Everyone on the hub sees and hears it (Gav's request, 2026-10-27): particles go to every player in the hub world,
+ * the fireworks are ordinary visible entities, each player hears the sounds from the show's direction, and the
+ * glowing sign is a client-side block change sent to everyone and put back for everyone when the show ends
+ * (a relog or chunk reload also restores it). The joining player's action bar says "for you", everyone else's
+ * names them.
  * Real fireworks stay within ~30 blocks (horizontally) of spawn because servers only send fireworks to
  * players within the "misc" entity-tracking range (32 by default); the particle effects go further out.
  */
@@ -104,7 +106,7 @@ public final class WelcomeShow {
     private void stop(BukkitTask task) {
         task.cancel();
         RUNNING.remove(p.getUniqueId());
-        if (p.isOnline() && p.getWorld() == world) restoreSign();
+        restoreSign();
     }
 
     private void frame() {
@@ -118,7 +120,8 @@ public final class WelcomeShow {
         if (t >= 38 && t < 112 && t % 2 == 0) halo();
         if (t == 88) {
             soundFrom(center, Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 0.7f);
-            p.sendActionBar(Ui.mm("<gradient:#fff04d:#ff9500:#ff1a1a>✦ The forge burns for you, " + p.getName() + " ✦</gradient>"));
+            for (Player v : audience())
+                v.sendActionBar(Ui.mm("<gradient:#fff04d:#ff9500:#ff1a1a>✦ The forge burns for " + (v == p ? "you, " : "") + p.getName() + " ✦</gradient>"));
         }
         if (t >= 86) embers();
     }
@@ -167,7 +170,7 @@ public final class WelcomeShow {
             if (want >= 0) s.setBlockData(HEAT[want].createBlockData());
             changes.add(s);
         }
-        if (!changes.isEmpty()) p.sendBlockChanges(changes);
+        if (!changes.isEmpty()) for (Player v : audience()) v.sendBlockChanges(changes);
 
         // sparks and fire spilling off the wave front
         if (t >= 6 && t <= 38) {
@@ -212,7 +215,7 @@ public final class WelcomeShow {
             changes.add(world.getBlockAt(b[0], b[1], b[2]).getState());
             signState[i] = -1;
         }
-        if (!changes.isEmpty()) p.sendBlockChanges(changes);
+        if (!changes.isEmpty()) for (Player v : audience()) v.sendBlockChanges(changes);
     }
 
     // ------------------------------------------------------------------ fireworks ringing the island
@@ -257,13 +260,11 @@ public final class WelcomeShow {
     /** A real firework rocket that only this player can see. */
     private void firework(Vector at, int power, FireworkEffect effect) {
         Firework fw = world.spawn(at.toLocation(world), Firework.class, f -> {
-            f.setVisibleByDefault(false);
             FireworkMeta m = f.getFireworkMeta();
             m.addEffect(effect);
             m.setPower(power);
             f.setFireworkMeta(m);
         });
-        p.showEntity(plugin, fw);
     }
 
     // ------------------------------------------------------------------ halo of fire in the sky
@@ -309,17 +310,24 @@ public final class WelcomeShow {
 
     private void fx(Particle type, Vector at, int count, double ox, double oy, double oz, double extra, Object data) {
         ParticleBuilder b = new ParticleBuilder(type).location(world, at.getX(), at.getY(), at.getZ())
-                .receivers(p).force(true).count(count).offset(ox, oy, oz).extra(extra);
+                .receivers(audience()).force(true).count(count).offset(ox, oy, oz).extra(extra);
         if (data != null) b.data(data);
         b.spawn();
     }
 
-    /** Plays a sound from the direction of a distant source, placed close enough to the player to be heard. */
+    /** Everyone currently in the hub world watches the show. */
+    private List<Player> audience() {
+        return world.getPlayers();
+    }
+
+    /** Plays a sound from the direction of a distant source, placed close enough to each listener to be heard. */
     private void soundFrom(Vector source, Sound s, float volume, float pitch) {
-        Vector eye = p.getEyeLocation().toVector();
-        Vector dir = source.clone().subtract(eye);
-        Vector at = dir.lengthSquared() < 1e-6 ? eye : eye.add(dir.normalize().multiply(Math.min(10, dir.length())));
-        p.playSound(at.toLocation(world), s, volume, pitch);
+        for (Player v : audience()) {
+            Vector eye = v.getEyeLocation().toVector();
+            Vector dir = source.clone().subtract(eye);
+            Vector at = dir.lengthSquared() < 1e-6 ? eye : eye.add(dir.normalize().multiply(Math.min(10, dir.length())));
+            v.playSound(at.toLocation(world), s, volume, pitch);
+        }
     }
 
     /** point on a horizontal circle around {@code c}, {@code up} blocks above it */
