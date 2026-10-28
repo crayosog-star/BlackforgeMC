@@ -5,10 +5,12 @@ import net.alloymc.core.Ui;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.FireworkEffect;
-import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
 import org.bukkit.entity.Firework;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.meta.FireworkMeta;
@@ -24,27 +26,33 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * "The Forge Awakens" - the first-join welcome show (~12.5 seconds).
- * <ol>
- *   <li>A soul-fire rune circle ignites under the player and twin flame helixes climb out of it.</li>
- *   <li>A fireball arcs from the player into the sky and bursts into a double ring.</li>
- *   <li>Ember rockets launch from the island: rings, starbursts, soul-fire bursts, lava willows, crackles.</li>
- *   <li>A giant rotating forge sigil forms, pulls enchanting glyphs into its core, collapses...</li>
- *   <li>...and detonates into a real-firework finale, then embers rain down.</li>
- * </ol>
- * Everything is sent only to the joining player (particle receivers, per-player hidden fireworks, player-only
- * sounds), so a wave of new players never floods the hub for everyone else.
- * The show is staged in front of where the player is facing; at hub spawn that's toward the BLACKFORGE sign.
+ * "The Forge Awakens" - the first-join welcome show. 6 seconds, staged around the whole hub island:
+ * <ul>
+ *   <li>16 fire pillars erupt in a sweep around the island's rim</li>
+ *   <li>a molten wave runs across the BLACKFORGE sign (yellow → orange → red), then the whole sign flares at the finale</li>
+ *   <li>five waves of real fireworks (44 rockets) launch in a ring around the island</li>
+ *   <li>a giant spinning halo of fire circles the sky above the island</li>
+ *   <li>embers rain down and the action bar reads "✦ The forge burns for you, &lt;name&gt; ✦"</li>
+ * </ul>
+ * Only the joining player sees it: particles have that player as their only receiver, the fireworks are hidden
+ * from everyone else, sounds are player-only, and the glowing sign is a client-side block change that is put
+ * back when the show ends (a relog or chunk reload also restores it).
+ * Real fireworks stay within ~30 blocks (horizontally) of spawn because servers only send fireworks to
+ * players within the "misc" entity-tracking range (32 by default); the particle effects go further out.
  */
 public final class WelcomeShow {
 
-    private static final Color WHITE_HOT = Color.fromRGB(0xFFF1C1), GOLD = Color.fromRGB(0xFFC53D),
-            EMBER = Color.fromRGB(0xFF7A1A), CRIMSON = Color.fromRGB(0xE5484D), BLOOD = Color.fromRGB(0x7A0A0A),
-            SOUL = Color.fromRGB(0x4FD1C5);
-    private static final int LENGTH = 250;                       // ticks
-    private static final Set<UUID> RUNNING = new HashSet<>();    // main thread only
+    // vibrant yellow → red palette
+    private static final Color WHITE_HOT = Color.fromRGB(0xFFFBE0), YELLOW = Color.fromRGB(0xFFF04D),
+            GOLD = Color.fromRGB(0xFFC300), AMBER = Color.fromRGB(0xFF9500), ORANGE = Color.fromRGB(0xFF5E00),
+            RED = Color.fromRGB(0xFF1A1A), CRIMSON = Color.fromRGB(0xC8102E);
+    private static final Color[] PALETTE = {YELLOW, GOLD, AMBER, ORANGE, RED, CRIMSON};
 
-    /** Starts the show for {@code p}. Returns false if one is already playing for them. */
+    private static final int LENGTH = 120;                     // 6 seconds
+    private static final double RIM = 46, HALO_R = 42, HALO_UP = 28, FIREWORK_UP = 14;
+    private static final Set<UUID> RUNNING = new HashSet<>();  // main thread only
+
+    /** Starts the show for {@code p} (must be on the hub). Returns false if one is already playing for them. */
     public static boolean play(Plugin plugin, Player p) {
         if (!p.isOnline() || !RUNNING.add(p.getUniqueId())) return false;
         WelcomeShow show = new WelcomeShow(plugin, p);
@@ -52,43 +60,33 @@ public final class WelcomeShow {
         return true;
     }
 
-    private enum Kind { AWAKEN, RING, STARBURST, SOUL, WILLOW, CRACKLE }
-    private record Rocket(int launch, Vector from, Vector to, int flight, Kind kind) { }
-    private record Burst(int start, Vector at, Kind kind) { }
-
     private final Plugin plugin;
     private final Player p;
     private final World world;
-    private final Vector origin, fwd, right, up = new Vector(0, 1, 0), sky;
-    private final List<Rocket> rockets = new ArrayList<>();
-    private final List<Burst> bursts = new ArrayList<>();
+    private final Vector center;        // island centre at plaza level
+    private final double front;         // angle (around the island) the player is facing, so the show opens in view
+    private final List<int[]> sign;     // BLACKFORGE letter blocks: x, y, z
+    private final int[] signState;      // what each letter block currently shows the player (-1 = real block)
+    private final int signMinX, signMaxX;
     private int t = 0;
+
+    private static final Material[] HEAT = {     // molten stages a letter block passes through
+            Material.OCHRE_FROGLIGHT, Material.SHROOMLIGHT, Material.MAGMA_BLOCK, Material.REDSTONE_BLOCK};
 
     private WelcomeShow(Plugin plugin, Player p) {
         this.plugin = plugin;
         this.p = p;
-        Location l = p.getLocation();
-        this.world = l.getWorld();
-        this.origin = l.toVector();
-        double yaw = Math.toRadians(l.getYaw());
-        this.fwd = new Vector(-Math.sin(yaw), 0, Math.cos(yaw));
-        this.right = fwd.clone().crossProduct(up);
-        // centre of the show: 24 blocks ahead, 13 up - inside entity tracking range so the real fireworks show
-        this.sky = rel(origin, 0, 13, 24);
-
-        // ember volleys: launch tick, sideways offset, distance ahead, extra burst height
-        volley(86, -11, 20, 2, Kind.RING);
-        volley(94, 10, 22, 4, Kind.STARBURST);
-        volley(104, 0, 26, 6, Kind.SOUL);
-        volley(112, -6, 24, 0, Kind.WILLOW);
-        volley(120, 12, 20, 1, Kind.RING);
-        volley(128, -12, 22, 5, Kind.CRACKLE);
-        volley(136, 5, 24, 3, Kind.STARBURST);
-        volley(140, -4, 22, 7, Kind.SOUL);
-    }
-
-    private void volley(int launch, double side, double ahead, double height, Kind kind) {
-        rockets.add(new Rocket(launch, rel(origin, side, 0, ahead), rel(origin, side * 0.7, 13 + height, 24 + (ahead - 22) * 0.5), 14, kind));
+        this.world = p.getWorld();
+        this.center = new Vector(HubLayout.SPAWN_X, HubLayout.Y + 1, HubLayout.SPAWN_Z);
+        Vector look = p.getLocation().getDirection();
+        this.front = Math.atan2(look.getZ(), look.getX());
+        this.sign = HubBuilder.signFront();
+        this.signState = new int[sign.size()];
+        java.util.Arrays.fill(signState, -1);
+        int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
+        for (int[] b : sign) { lo = Math.min(lo, b[0]); hi = Math.max(hi, b[0]); }
+        this.signMinX = lo;
+        this.signMaxX = Math.max(lo + 1, hi);
     }
 
     private void tick(BukkitTask task) {
@@ -106,257 +104,201 @@ public final class WelcomeShow {
     private void stop(BukkitTask task) {
         task.cancel();
         RUNNING.remove(p.getUniqueId());
+        if (p.isOnline() && p.getWorld() == world) restoreSign();
     }
 
     private void frame() {
-        rune();
-        if (t == 55) {
-            sound(origin, Sound.ENTITY_BLAZE_SHOOT, 1f, 0.7f);
-            sound(origin, Sound.ITEM_FIRECHARGE_USE, 0.8f, 0.6f);
-        }
-        if (t >= 55 && t < 73) fireball(t - 55);
-        if (t == 73) bursts.add(new Burst(t, sky.clone(), Kind.AWAKEN));
-        for (Rocket r : rockets) rocket(r);
-        bursts.removeIf(b -> !burst(b));
-        if (t >= 150 && t < 198) sigil(t - 150);
-        if (t >= 198) finale(t - 198);
-    }
-
-    // ------------------------------------------------------------------ 1. ignition rune
-
-    private void rune() {
-        if (t > 56) return;
-        Vector c = origin.clone().add(new Vector(0, 0.15, 0));
         if (t == 0) {
-            sound(origin, Sound.BLOCK_BEACON_ACTIVATE, 1f, 1.5f);
-            sound(origin, Sound.ITEM_FIRECHARGE_USE, 0.8f, 0.7f);
+            soundFrom(center, Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 1f, 0.6f);
+            soundFrom(center, Sound.ENTITY_BLAZE_SHOOT, 1f, 0.5f);
         }
-        if (t == 30) sound(origin, Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 0.7f, 1.4f);
-        double spin = t * 0.03;
-        if (t % 2 == 0) {
-            int pts = 40, drawn = (int) Math.ceil(pts * Math.min(1, (t + 2) / 16.0));   // the circle traces itself in
-            for (int i = 0; i < drawn; i++) fx(Particle.SOUL_FIRE_FLAME, flat(c, 2.4, Math.PI * 2 * i / pts + spin), 1, 0, 0, 0, 0);
-            if (t >= 16) {   // eight-point star once the circle closes
-                Particle.DustOptions dust = new Particle.DustOptions(EMBER, 1.0f);
-                for (int k = 0; k < 8; k++)
-                    line(flat(c, 2.4, Math.PI * k / 4 - spin), flat(c, 2.4, Math.PI * (k + 3) / 4 - spin), 6, Particle.DUST, dust);
+        if (t < 64 && t % 2 == 0) pillars();
+        sign();
+        fireworks();
+        if (t >= 38 && t < 112 && t % 2 == 0) halo();
+        if (t == 88) {
+            soundFrom(center, Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 0.7f);
+            p.sendActionBar(Ui.mm("<gradient:#fff04d:#ff9500:#ff1a1a>✦ The forge burns for you, " + p.getName() + " ✦</gradient>"));
+        }
+        if (t >= 86) embers();
+    }
+
+    // ------------------------------------------------------------------ fire pillars around the rim
+
+    private void pillars() {
+        for (int i = 0; i < 16; i++) {
+            int age = t - i;                                     // erupt one per tick...
+            if (age < 0) continue;
+            double a = front + (i % 2 == 0 ? 1 : -1) * Math.PI * ((i + 1) / 2) / 8.0;   // ...fanning both ways round from the front
+            Vector base = ring(center, RIM, a, -2);
+            double h = age < 10 ? 26 * easeOut((age + 1) / 10.0) : t < 50 ? 26 : 26 * Math.max(0, 1 - (t - 50) / 14.0);
+            if (age == 0) {
+                soundFrom(base, Sound.ITEM_FIRECHARGE_USE, 0.6f, (float) rnd(0.6, 0.9));
+                fx(Particle.LAVA, base, 14, 1.2, 0.5, 1.2, 0);
             }
-        }
-        if (t >= 14) {   // twin helix climbing out of the rune
-            Particle.DustTransition dust = new Particle.DustTransition(GOLD, CRIMSON, 1.1f);
-            double h = Math.min(4.5, (t - 14) * 0.18);
-            for (double y = 0; y <= h; y += 0.3)
-                for (int s = 0; s < 2; s++)
-                    fx(Particle.DUST_COLOR_TRANSITION, flat(c.clone().add(new Vector(0, y, 0)), 1.3, y * 1.6 + t * 0.25 + s * Math.PI), 1, 0, 0, 0, 0, dust);
-            if (t % 4 == 0) fx(Particle.ENCHANT, c.clone().add(new Vector(0, 2, 0)), 12, 1.2, 1, 1.2, 0.8);
+            for (double y = 0; y < h; y += 0.9) {
+                double s = y / 26;                                   // yellow at the base, red at the top
+                Color from = mix(YELLOW, ORANGE, s), to = mix(AMBER, CRIMSON, s);
+                double wob = 0.5 + s * 0.6;
+                fx(Particle.DUST_COLOR_TRANSITION, base.clone().add(new Vector(rnd(-wob, wob), y, rnd(-wob, wob))), 1, 0, 0, 0, 0,
+                        new Particle.DustTransition(from, to, 3.6f));
+            }
+            if (h > 2) {
+                Vector top = base.clone().add(new Vector(0, h, 0));
+                fx(Particle.FLAME, top, 6, 0.8, 0.4, 0.8, 0.08);
+                fx(Particle.DUST, top, 3, 1, 0.6, 1, 0, new Particle.DustOptions(WHITE_HOT, 4f));
+            }
         }
     }
 
-    // ------------------------------------------------------------------ 2. fireball
+    // ------------------------------------------------------------------ molten BLACKFORGE sign
 
-    private void fireball(int k) {
-        Vector start = origin.clone().add(new Vector(0, 2.2, 0)), ctrl = rel(origin, 0, 16, 8);
-        Particle.DustOptions core = new Particle.DustOptions(EMBER, 2.5f);
-        for (int sub = 0; sub < 2; sub++) {   // two sub-steps per tick keep the trail continuous
-            Vector pos = bezier(start, ctrl, sky, (k + 0.5 * (sub + 1)) / 18.0);
-            fx(Particle.FLAME, pos, 5, 0.18, 0.18, 0.18, 0.01);
-            fx(Particle.SMALL_FLAME, pos, 2, 0.1, 0.1, 0.1, 0.02);
-            fx(Particle.DUST, pos, 3, 0.25, 0.25, 0.25, 0, core);
+    private void sign() {
+        if (sign.isEmpty()) return;
+        List<BlockState> changes = new ArrayList<>();
+        for (int i = 0; i < sign.size(); i++) {
+            int[] b = sign.get(i);
+            int want = signStage(b);
+            if (want == signState[i]) continue;
+            signState[i] = want;
+            Block block = world.getBlockAt(b[0], b[1], b[2]);
+            if (block.getType().isAir()) continue;               // hub not built - don't draw phantom letters
+            BlockState s = block.getState();
+            if (want >= 0) s.setBlockData(HEAT[want].createBlockData());
+            changes.add(s);
         }
-        if (k % 3 == 0) fx(Particle.LAVA, bezier(start, ctrl, sky, (k + 1) / 18.0), 1, 0, 0, 0, 0);
-    }
+        if (!changes.isEmpty()) p.sendBlockChanges(changes);
 
-    // ------------------------------------------------------------------ 3. ember rockets and bursts
-
-    private void rocket(Rocket r) {
-        int age = t - r.launch();
-        if (age < 0 || age > r.flight()) return;
-        if (age == 0) sound(r.from(), Sound.ENTITY_FIREWORK_ROCKET_LAUNCH, 3f, (float) rnd(0.85, 1.15));
-        for (int sub = 0; sub < 3; sub++) {
-            double s = easeOut(Math.min(1, (age + sub / 3.0) / r.flight()));
-            Vector pos = lerp(r.from(), r.to(), s).add(right.clone().multiply(Math.sin(s * 9 + r.launch()) * 0.25));
-            fx(Particle.FLAME, pos, 1, 0.03, 0.03, 0.03, 0.005);
-            if (sub == 0) fx(Particle.SMALL_FLAME, pos, 1, 0.05, 0.05, 0.05, 0.01);
+        // sparks and fire spilling off the wave front
+        if (t >= 6 && t <= 38) {
+            double frontX = signMinX + (signMaxX - signMinX) * (t - 6) / 30.0;
+            for (int i = 0; i < 10; i++) {
+                int[] b = sign.get(ThreadLocalRandom.current().nextInt(sign.size()));
+                if (Math.abs(b[0] - frontX) > 3) continue;
+                Vector at = new Vector(b[0] + 0.5, b[1] + 0.5, b[2] + 1.3);
+                fx(Particle.FLAME, at, 3, 0.4, 0.4, 0.2, 0.05);
+                fx(Particle.DUST, at, 1, 0.3, 0.3, 0.1, 0, new Particle.DustOptions(YELLOW, 4f));
+                fx(Particle.LAVA, at, 1, 0.3, 0.3, 0.1, 0);
+            }
+            if (t % 8 == 6) soundFrom(new Vector(frontX, b0y(), sign.get(0)[2]), Sound.BLOCK_LAVA_POP, 1f, 0.7f);
         }
-        if (age == r.flight()) bursts.add(new Burst(t, r.to().clone(), r.kind()));
-    }
-
-    /** Draws one frame of a burst; returns false once it has finished. */
-    private boolean burst(Burst b) {
-        int k = t - b.start();
-        Vector c = b.at();
-        switch (b.kind()) {
-            case AWAKEN -> {   // the fireball's burst: a wide white-hot ring with a soul-fire ring inside
-                if (k == 0) {
-                    boom(c, true);
-                    spray(Particle.FLAME, c, 70, 0.4);
-                    spray(Particle.SOUL_FIRE_FLAME, c, 30, 0.25);
-                    fx(Particle.LAVA, c, 12, 0.6, 0.6, 0.6, 0);
-                }
-                double r = 9 * easeOut(Math.min(1, (k + 1) / 10.0));
-                Particle.DustTransition outer = new Particle.DustTransition(WHITE_HOT, EMBER, 2f), inner = new Particle.DustTransition(SOUL, GOLD, 1.4f);
-                for (int i = 0; i < 56; i++) fx(Particle.DUST_COLOR_TRANSITION, facing(c, r, Math.PI * 2 * i / 56), 1, 0, 0, 0, 0, outer);
-                for (int i = 0; i < 32; i++) fx(Particle.DUST_COLOR_TRANSITION, facing(c, r * 0.6, Math.PI * 2 * i / 32 - k * 0.1), 1, 0, 0, 0, 0, inner);
-                return k < 12;
-            }
-            case RING -> {
-                if (k == 0) { boom(c, false); spray(Particle.FLAME, c, 24, 0.12); }
-                double r = 6.5 * easeOut(Math.min(1, (k + 1) / 8.0));
-                Particle.DustTransition dust = k < 4 ? new Particle.DustTransition(WHITE_HOT, GOLD, 1.7f) : new Particle.DustTransition(EMBER, CRIMSON, 1.7f);
-                for (int i = 0; i < 40; i++) fx(Particle.DUST_COLOR_TRANSITION, facing(c, r, Math.PI * 2 * i / 40), 1, 0, 0, 0, 0, dust);
-                if (k == 9) fx(Particle.FIREWORK, c, 30, 3, 3, 3, 0.02);
-                return k < 10;
-            }
-            case STARBURST -> {
-                if (k == 0) {
-                    boom(c, true);
-                    spray(Particle.FLAME, c, 60, 0.32);
-                    spray(Particle.SMALL_FLAME, c, 30, 0.22);
-                    fx(Particle.LAVA, c, 8, 0.5, 0.5, 0.5, 0);
-                }
-                if (k == 6) {
-                    sound(c, Sound.ENTITY_FIREWORK_ROCKET_TWINKLE_FAR, 3f, 1f);
-                    fx(Particle.ELECTRIC_SPARK, c, 40, 3.5, 3.5, 3.5, 0);
-                }
-                return k < 7;
-            }
-            case SOUL -> {   // the "magic" accent: teal soul fire cooling into embers
-                if (k == 0) {
-                    boom(c, false);
-                    sound(c, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 3f, 0.6f);
-                    spray(Particle.SOUL_FIRE_FLAME, c, 50, 0.28);
-                    spray(Particle.END_ROD, c, 18, 0.16);
-                }
-                double r = 4.5 * easeOut(Math.min(1, (k + 1) / 7.0));
-                Particle.DustTransition dust = new Particle.DustTransition(SOUL, EMBER, 1.4f);
-                for (int i = 0; i < 28; i++) fx(Particle.DUST_COLOR_TRANSITION, facing(c, r, Math.PI * 2 * i / 28 + k * 0.08), 1, 0, 0, 0, 0, dust);
-                if (k % 2 == 0) fx(Particle.ENCHANT, c, 25, 2, 2, 2, 1);
-                return k < 8;
-            }
-            case WILLOW -> {   // molten droplets drifting down like a willow
-                if (k == 0) { boom(c, true); spray(Particle.FLAME, c, 36, 0.22); }
-                if (k == 10) sound(c, Sound.BLOCK_LAVA_POP, 3f, 0.8f);
-                double r = Math.min(5, 1 + k * 0.4);
-                for (int i = 0; i < 6; i++) {
-                    Vector d = randomUnit().multiply(r);
-                    d.setY(d.getY() * 0.6 - k * 0.12);
-                    fx(i % 3 == 0 ? Particle.DRIPPING_LAVA : Particle.FALLING_LAVA, c.clone().add(d), 1, 0, 0, 0, 0);
-                }
-                return k < 24;
-            }
-            case CRACKLE -> {
-                if (k == 0) { boom(c, false); fx(Particle.DUST, c, 30, 1.5, 1.5, 1.5, 0, new Particle.DustOptions(GOLD, 2f)); }
-                if (k == 4 || k == 9) sound(c, Sound.ENTITY_FIREWORK_ROCKET_TWINKLE_FAR, 3f, k == 4 ? 1f : 1.3f);
-                if (k >= 3) for (int i = 0; i < 5; i++) {
-                    Vector q = c.clone().add(randomUnit().multiply(rnd(1.5, 5)));
-                    fx(Particle.ELECTRIC_SPARK, q, 3, 0.2, 0.2, 0.2, 0.05);
-                    fx(Particle.WAX_ON, q, 2, 0.2, 0.2, 0.2, 0);
-                }
-                return k < 15;
+        if (t == 88) {   // the whole sign flares with the finale
+            soundFrom(new Vector(0, b0y(), sign.get(0)[2]), Sound.ITEM_FIRECHARGE_USE, 1f, 0.5f);
+            for (int i = 0; i < 40; i++) {
+                int[] b = sign.get(ThreadLocalRandom.current().nextInt(sign.size()));
+                fx(Particle.FLAME, new Vector(b[0] + 0.5, b[1] + 0.5, b[2] + 1.3), 4, 0.5, 0.5, 0.3, 0.06);
             }
         }
-        return false;
     }
 
-    private void boom(Vector c, boolean large) {
-        sound(c, large ? Sound.ENTITY_FIREWORK_ROCKET_LARGE_BLAST_FAR : Sound.ENTITY_FIREWORK_ROCKET_BLAST_FAR, 4f, (float) rnd(0.9, 1.1));
-        fx(Particle.DUST, c, 10, 0.3, 0.3, 0.3, 0, new Particle.DustOptions(WHITE_HOT, 3f));
+    private double b0y() { return sign.get(0)[1]; }
+
+    /** Which heat stage a letter block shows right now, or -1 for its real block. */
+    private int signStage(int[] b) {
+        // a left-to-right wave (ticks 6-36); each block glows yellow → orange → magma → red, 4 ticks each, then cools
+        double reach = 6 + 30.0 * (b[0] - signMinX) / (signMaxX - signMinX) + (b[1] % 3);
+        int age = (int) Math.floor(t - reach);
+        if (age >= 0 && age < 16) return age / 4;
+        // finale flare (ticks 88-111): everything goes white-yellow, then cools through orange and red
+        if (t >= 88 && t < 112) return Math.min(3, (t - 88) / 6);
+        return -1;
     }
 
-    // ------------------------------------------------------------------ 4. forge sigil
+    private void restoreSign() {
+        List<BlockState> changes = new ArrayList<>();
+        for (int i = 0; i < sign.size(); i++) {
+            if (signState[i] < 0) continue;
+            int[] b = sign.get(i);
+            changes.add(world.getBlockAt(b[0], b[1], b[2]).getState());
+            signState[i] = -1;
+        }
+        if (!changes.isEmpty()) p.sendBlockChanges(changes);
+    }
 
-    private void sigil(int k) {
-        // grow over 12 ticks, hold, collapse over the last 8
-        double s = k < 12 ? easeOut((k + 1) / 12.0) : k >= 40 ? Math.max(0.05, 1 - (k - 39) / 8.0) : 1;
-        switch (k) {
-            case 0 -> sound(sky, Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 4f, 0.7f);
-            case 12 -> sound(sky, Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 4f, 1.0f);
-            case 24 -> sound(sky, Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 4f, 1.3f);
-            case 36 -> sound(sky, Sound.BLOCK_BEACON_POWER_SELECT, 4f, 0.8f);
-            case 40 -> sound(sky, Sound.BLOCK_CONDUIT_ACTIVATE, 4f, 1.2f);
+    // ------------------------------------------------------------------ fireworks ringing the island
+
+    private void fireworks() {
+        switch (t) {
+            case 12 -> wave(6, 27, 0, 1, false);
+            case 26 -> wave(6, 25, Math.PI / 6, 1, false);
+            case 40 -> wave(8, 29, 0, 1, false);
+            case 54 -> wave(8, 23, Math.PI / 8, 1, false);
+            case 68 -> wave(12, 27, Math.PI / 12, 1, true);   // finale ring - power 1 rockets burst 1-1.6 s after launch
+            case 76 -> wave(4, 20, Math.PI / 4, 1, true);
             default -> { }
         }
-        if (k % 2 == 0) {
-            double spin = k * 0.05;
-            Particle.DustOptions gold = new Particle.DustOptions(GOLD, 1.6f), crimson = new Particle.DustOptions(CRIMSON, 1.4f),
-                    ember = new Particle.DustOptions(EMBER, 1.2f);
-            Particle.DustTransition star = new Particle.DustTransition(GOLD, BLOOD, 1.3f);
-            for (int i = 0; i < 56; i++) fx(Particle.DUST, facing(sky, 8.5 * s, Math.PI * 2 * i / 56), 1, 0, 0, 0, 0, gold);
-            for (int i = 0; i < 40; i++) fx(Particle.DUST, facing(sky, 6 * s, Math.PI * 2 * i / 40), 1, 0, 0, 0, 0, crimson);
-            for (int i = 0; i < 16; i++) {   // rotating notches between the two circles
-                double a = Math.PI * 2 * i / 16 + spin;
-                line(facing(sky, 6.3 * s, a), facing(sky, 8.2 * s, a), 3, Particle.DUST, ember);
-            }
-            for (int j = 0; j < 8; j++) {    // counter-rotating eight-point star (two squares)
-                double a0 = -spin * 1.5 + Math.PI / 4 * j, a1 = a0 + Math.PI / 2;
-                line(facing(sky, 6 * s, a0), facing(sky, 6 * s, a1), 7, Particle.DUST_COLOR_TRANSITION, star);
-            }
-            fx(Particle.FLAME, sky, 4, 0.3, 0.3, 0.3, 0.01);
-        }
-        if (k >= 20 && k < 44)   // enchanting glyphs pulled into the core
-            for (int i = 0; i < 6; i++) {
-                Vector d = randomUnit().multiply(7 * s + 2);
-                fx(Particle.ENCHANT, sky, 0, d.getX(), d.getY(), d.getZ(), 1);
-            }
     }
 
-    // ------------------------------------------------------------------ 5. finale
-
-    private void finale(int k) {
-        switch (k) {
-            case 0 -> {
-                sound(sky, Sound.ENTITY_GENERIC_EXPLODE, 2f, 1.4f);
-                sound(sky, Sound.ENTITY_FIREWORK_ROCKET_LARGE_BLAST_FAR, 4f, 0.8f);
-                spray(Particle.FLAME, sky, 90, 0.5);
-                spray(Particle.SOUL_FIRE_FLAME, sky, 40, 0.35);
-                fx(Particle.LAVA, sky, 20, 1, 1, 1, 0);
-                fx(Particle.DUST, sky, 25, 0.5, 0.5, 0.5, 0, new Particle.DustOptions(WHITE_HOT, 4f));
-                firework(sky, effect(FireworkEffect.Type.BALL_LARGE, GOLD, EMBER, CRIMSON));
-            }
-            case 5 -> {
-                firework(rel(sky, -8, 3, 2), effect(FireworkEffect.Type.STAR, WHITE_HOT, GOLD, EMBER));
-                firework(rel(sky, 8, 3, 2), effect(FireworkEffect.Type.STAR, WHITE_HOT, GOLD, EMBER));
-            }
-            case 11 -> {
-                firework(rel(sky, -4, 7, 4), effect(FireworkEffect.Type.BURST, CRIMSON, EMBER, BLOOD));
-                firework(rel(sky, 4, 7, 4), effect(FireworkEffect.Type.BURST, SOUL, EMBER, GOLD));
-            }
-            case 17 -> {
-                firework(rel(sky, 0, 9, 6), effect(FireworkEffect.Type.BALL_LARGE, EMBER, GOLD, WHITE_HOT, CRIMSON));
-                sound(origin, Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 0.8f);
-                p.sendActionBar(Ui.mm("<gradient:#ffd27a:#ff5a1a>✦ The forge burns for you, " + p.getName() + " ✦</gradient>"));
-            }
-            default -> { }
-        }
-        if (k >= 4) {   // embers and ash raining back down
-            int n = Math.max(1, 10 - k / 6);
-            Vector above = rel(sky, 0, 4, 0);
-            fx(Particle.FALLING_LAVA, above, n, 9, 2, 9, 0);
-            fx(Particle.ASH, above, n * 3, 10, 3, 10, 0);
-            if (k % 5 == 0) fx(Particle.LAVA, above, 2, 6, 1, 6, 0);
+    private void wave(int n, double r, double offset, int power, boolean big) {
+        for (int i = 0; i < n; i++) {
+            double a = front + offset + Math.PI * 2 * i / n;
+            Vector at = ring(center, r + rnd(-1.5, 1.5), a, FIREWORK_UP);
+            firework(at, power, big ? bigEffect() : randomEffect());
+            if (i % 3 == 0) soundFrom(at, Sound.ENTITY_FIREWORK_ROCKET_LAUNCH, 0.9f, (float) rnd(0.8, 1.2));
         }
     }
 
-    /** last colour is the fade; the rest are the burst colours */
-    private static FireworkEffect effect(FireworkEffect.Type type, Color... colors) {
-        return FireworkEffect.builder().with(type)
-                .withColor(java.util.Arrays.copyOf(colors, colors.length - 1))
-                .withFade(colors[colors.length - 1])
+    private static FireworkEffect randomEffect() {
+        var r = ThreadLocalRandom.current();
+        FireworkEffect.Type[] types = {FireworkEffect.Type.BALL_LARGE, FireworkEffect.Type.BALL, FireworkEffect.Type.STAR, FireworkEffect.Type.BURST};
+        int c = r.nextInt(PALETTE.length - 1);
+        return FireworkEffect.builder().with(types[r.nextInt(types.length)])
+                .withColor(PALETTE[c], PALETTE[c + 1], WHITE_HOT)
+                .withFade(PALETTE[r.nextInt(PALETTE.length)])
+                .flicker(r.nextBoolean()).trail(true).build();
+    }
+
+    private static FireworkEffect bigEffect() {
+        return FireworkEffect.builder().with(FireworkEffect.Type.BALL_LARGE)
+                .withColor(YELLOW, GOLD, ORANGE, RED).withFade(CRIMSON, AMBER)
                 .flicker(true).trail(true).build();
     }
 
-    /** A real firework only this player can see, detonated where we want it. */
-    private void firework(Vector at, FireworkEffect effect) {
-        Firework fw = world.spawn(at.clone().subtract(up).toLocation(world), Firework.class, f -> {
+    /** A real firework rocket that only this player can see. */
+    private void firework(Vector at, int power, FireworkEffect effect) {
+        Firework fw = world.spawn(at.toLocation(world), Firework.class, f -> {
             f.setVisibleByDefault(false);
             FireworkMeta m = f.getFireworkMeta();
             m.addEffect(effect);
-            m.setPower(1);
+            m.setPower(power);
             f.setFireworkMeta(m);
         });
         p.showEntity(plugin, fw);
-        // a couple of ticks' flight so the client is tracking it before it bursts
-        Bukkit.getScheduler().runTaskLater(plugin, () -> { if (fw.isValid()) fw.detonate(); }, 3L);
+    }
+
+    // ------------------------------------------------------------------ halo of fire in the sky
+
+    private void halo() {
+        int k = t - 38;
+        double spin = k * 0.03;
+        double extent = Math.min(Math.PI, Math.PI * (k + 2) / 14.0);   // draws itself both ways from the front
+        double rise = k > 60 ? (k - 60) * 0.5 : 0;                      // lifts away at the end
+        int pts = 110;
+        for (int i = 0; i < pts; i++) {
+            double rel = Math.PI * 2 * i / pts - Math.PI;              // -π..π around the front
+            if (Math.abs(rel) > extent) continue;
+            double a = front + rel + spin;
+            double hue = (Math.sin(a * 3 + k * 0.2) + 1) / 2;          // colour bands chase round the ring
+            Color c = mix(YELLOW, RED, hue);
+            fx(Particle.DUST_COLOR_TRANSITION, ring(center, HALO_R, a, HALO_UP + rise + Math.sin(a * 6 + k * 0.3) * 1.2), 1, 0.2, 0.2, 0.2, 0,
+                    new Particle.DustTransition(c, ORANGE, 4f));
+        }
+        if (k % 4 == 0)
+            for (int i = 0; i < 8; i++) {   // drips of fire falling from the halo
+                double a = rnd(0, Math.PI * 2);
+                fx(Particle.FLAME, ring(center, HALO_R, a, HALO_UP + rise), 0, 0, -1, 0, 0.25);
+            }
+    }
+
+    // ------------------------------------------------------------------ ember rain
+
+    private void embers() {
+        for (int i = 0; i < 18; i++) {
+            double a = rnd(0, Math.PI * 2), r = Math.sqrt(rnd(0.05, 1)) * 44;
+            Vector at = ring(center, r, a, rnd(14, 34));
+            fx(i % 3 == 0 ? Particle.LAVA : Particle.FALLING_LAVA, at, 1, 0, 0, 0, 0);
+            if (i % 2 == 0) fx(Particle.DUST, at, 1, 0, 0, 0, 0, new Particle.DustOptions(PALETTE[i % PALETTE.length], 2.5f));
+        }
     }
 
     // ------------------------------------------------------------------ helpers
@@ -372,53 +314,27 @@ public final class WelcomeShow {
         b.spawn();
     }
 
-    private void sound(Vector at, Sound s, float volume, float pitch) {
+    /** Plays a sound from the direction of a distant source, placed close enough to the player to be heard. */
+    private void soundFrom(Vector source, Sound s, float volume, float pitch) {
+        Vector eye = p.getEyeLocation().toVector();
+        Vector dir = source.clone().subtract(eye);
+        Vector at = dir.lengthSquared() < 1e-6 ? eye : eye.add(dir.normalize().multiply(Math.min(10, dir.length())));
         p.playSound(at.toLocation(world), s, volume, pitch);
     }
 
-    /** Particles flying outward evenly in every direction (count 0 = offset is the velocity). */
-    private void spray(Particle type, Vector c, int n, double speed) {
-        double golden = Math.PI * (3 - Math.sqrt(5));
-        for (int i = 0; i < n; i++) {
-            double y = 1 - 2 * (i + 0.5) / n, q = Math.sqrt(1 - y * y), a = golden * i;
-            fx(type, c, 0, q * Math.cos(a), y, q * Math.sin(a), speed * rnd(0.85, 1.15));
-        }
+    /** point on a horizontal circle around {@code c}, {@code up} blocks above it */
+    private static Vector ring(Vector c, double r, double a, double up) {
+        return c.clone().add(new Vector(Math.cos(a) * r, up, Math.sin(a) * r));
     }
 
-    private void line(Vector a, Vector b, int steps, Particle type, Object data) {
-        for (int i = 0; i <= steps; i++) fx(type, lerp(a, b, (double) i / steps), 1, 0, 0, 0, 0, data);
-    }
-
-    /** base + right*side + up*height + forward*ahead */
-    private Vector rel(Vector base, double side, double height, double ahead) {
-        return base.clone().add(right.clone().multiply(side)).add(up.clone().multiply(height)).add(fwd.clone().multiply(ahead));
-    }
-
-    /** point on a circle lying flat on the ground */
-    private static Vector flat(Vector c, double r, double a) {
-        return c.clone().add(new Vector(Math.cos(a) * r, 0, Math.sin(a) * r));
-    }
-
-    /** point on a circle standing upright, facing the player */
-    private Vector facing(Vector c, double r, double a) {
-        return c.clone().add(right.clone().multiply(Math.cos(a) * r)).add(up.clone().multiply(Math.sin(a) * r));
-    }
-
-    private static Vector lerp(Vector a, Vector b, double s) {
-        return a.clone().multiply(1 - s).add(b.clone().multiply(s));
-    }
-
-    private static Vector bezier(Vector a, Vector ctrl, Vector b, double s) {
-        double u = 1 - s;
-        return a.clone().multiply(u * u).add(ctrl.clone().multiply(2 * u * s)).add(b.clone().multiply(s * s));
+    private static Color mix(Color a, Color b, double s) {
+        s = Math.max(0, Math.min(1, s));
+        return Color.fromRGB((int) Math.round(a.getRed() + (b.getRed() - a.getRed()) * s),
+                (int) Math.round(a.getGreen() + (b.getGreen() - a.getGreen()) * s),
+                (int) Math.round(a.getBlue() + (b.getBlue() - a.getBlue()) * s));
     }
 
     private static double easeOut(double x) { return 1 - Math.pow(1 - x, 3); }
 
     private static double rnd(double lo, double hi) { return ThreadLocalRandom.current().nextDouble(lo, hi); }
-
-    private static Vector randomUnit() {
-        double z = rnd(-1, 1), a = rnd(0, Math.PI * 2), q = Math.sqrt(1 - z * z);
-        return new Vector(q * Math.cos(a), z, q * Math.sin(a));
-    }
 }

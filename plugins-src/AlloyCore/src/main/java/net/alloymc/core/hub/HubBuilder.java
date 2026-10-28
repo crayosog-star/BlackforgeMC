@@ -487,11 +487,26 @@ public final class HubBuilder {
 
     // ------------------------------------------------------------------ lettering
 
+    private static final String SIGN_TEXT = "BLACKFORGE";
+    private static final int SIGN_SCALE = 2, SIGN_SPACING = 1, SIGN_Y0 = Y + 27, SIGN_Z = -76;
+
+    /** Front-layer {x, y, z} of every BLACKFORGE letter block (the face players see from spawn). Used by WelcomeShow. */
+    static java.util.List<int[]> signFront() {
+        java.util.List<int[]> out = new java.util.ArrayList<>();
+        int x0 = -BlockFont.width(SIGN_TEXT, SIGN_SPACING) * SIGN_SCALE / 2;
+        BlockFont.draw(SIGN_TEXT, SIGN_SPACING, (col, row, glyphRow) -> {
+            for (int sx = 0; sx < SIGN_SCALE; sx++)
+                for (int sy = 0; sy < SIGN_SCALE; sy++)
+                    out.add(new int[]{x0 + col * SIGN_SCALE + sx, SIGN_Y0 + row * SIGN_SCALE + sy, SIGN_Z});
+        });
+        return out;
+    }
+
     private void lettering() {
-        String text = "BLACKFORGE";
-        int scale = 2, spacing = 1;
+        String text = SIGN_TEXT;
+        int scale = SIGN_SCALE, spacing = SIGN_SPACING;
         int width = BlockFont.width(text, spacing) * scale;
-        int x0 = -width / 2, y0 = Y + 27, z = -76;
+        int x0 = -width / 2, y0 = SIGN_Y0, z = SIGN_Z;
         BlockFont.draw(text, spacing, (col, row, glyphRow) -> {
             boolean forge = col >= (5 + spacing) * 5;   // "BLACK" | "FORGE"
             String b;

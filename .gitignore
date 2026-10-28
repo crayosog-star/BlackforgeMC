@@ -16,7 +16,8 @@
 !/docs/
 
 # build output and caches
-plugins-src/**/build/
+# Gradle output only. (A plugins-src/**/build/ rule would also hide the source package net/alloymc/core/build/.)
+plugins-src/*/build/
 plugins-src/**/.gradle/
 plugins-src/**/out/
 
