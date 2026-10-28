@@ -33,6 +33,7 @@ import org.joml.Vector3f;
 
 import java.time.Duration;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
@@ -78,6 +79,7 @@ public final class Surge implements Listener {
     private final List<Boost> boosts;
     private final Map<UUID, Active> active = new HashMap<>();
     private final Map<UUID, ItemDisplay> channeling = new HashMap<>();   // mid activation animation
+    private final List<Consumer<Player>> onActivate = new ArrayList<>();  // other abilities reacting to a surge (the Ashen Chain lets go)
     private final Map<UUID, Long> readyAt = new HashMap<>(), noFallUntil = new HashMap<>();
     private final Random rnd = new Random();
 
@@ -151,6 +153,9 @@ public final class Surge implements Listener {
 
     // ------------------------------------------------------------------ activation
 
+    /** Runs the moment a player activates Surge (right-click accepted), before the animation. */
+    public void onActivate(Consumer<Player> listener) { onActivate.add(listener); }
+
     @EventHandler(priority = EventPriority.HIGH)
     public void onUse(PlayerInteractEvent e) {
         Action a = e.getAction();
@@ -176,6 +181,7 @@ public final class Surge implements Listener {
         held.setAmount(held.getAmount() - 1);
         p.getInventory().setItemInMainHand(held.getAmount() > 0 ? held : null);
         readyAt.put(p.getUniqueId(), System.currentTimeMillis() + COOLDOWN_SECONDS * 1000L);
+        onActivate.forEach(l -> l.accept(p));
         channel(p);
     }
 

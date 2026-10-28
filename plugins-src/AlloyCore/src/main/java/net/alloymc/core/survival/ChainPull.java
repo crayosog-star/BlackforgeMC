@@ -32,6 +32,22 @@ public final class ChainPull {
     /** Reeling gives up after this many ticks (2 s). */
     public static final int REEL_MAX_TICKS = 40;
 
+    /** A hooked player is only jerked this far towards the caster: a step, not a drag. */
+    public static final double PLAYER_PULL = 1.0;
+    /** The burning tether on a hooked player snaps if they get further than this from the caster. */
+    public static final double TETHER_SNAP = YANK_RANGE + 4;
+
+    /** The tether burns on the hook (tick 0) and then once a second, while it lasts {@code durationTicks}. */
+    public static boolean burnsOnTick(int tick, int durationTicks) {
+        return tick >= 0 && tick <= durationTicks && tick % 20 == 0;
+    }
+
+    /** Total fire hits a full tether deals (including the one on the hook). */
+    public static int burnHits(int durationTicks) { return Math.max(0, durationTicks) / 20 + 1; }
+
+    /** The tether holds while they're within {@link #TETHER_SNAP} of the caster. */
+    public static boolean tetherHolds(double dist) { return dist <= TETHER_SNAP; }
+
     /** How far a target {@code dist} blocks away gets dragged towards the caster. */
     public static double yankDistance(double dist) {
         return Math.max(0.5, Math.min(YANK_MAX, dist - YANK_STOP));
@@ -42,8 +58,13 @@ public final class ChainPull {
      * {@code dist} blocks away in total. Points from the target back to the caster.
      */
     public static double[] yank(double dx, double dz, double dist) {
+        return pull(dx, dz, yankDistance(dist));
+    }
+
+    /** The velocity that hops a target at offset (dx, dz) from the caster about {@code blocks} towards them. */
+    public static double[] pull(double dx, double dz, double blocks) {
         double h = Math.sqrt(dx * dx + dz * dz);
-        double speed = yankDistance(dist) / BLOCKS_PER_SPEED;
+        double speed = blocks / BLOCKS_PER_SPEED;
         if (h < 0.05) return new double[] {0, YANK_LIFT, 0};   // straight above/below: just lift
         return new double[] {-dx / h * speed, YANK_LIFT, -dz / h * speed};
     }
