@@ -32,5 +32,6 @@ public final class Games {
         a.accept(new net.alloymc.core.arcade.games.hideseek.HideAndSeek());
         a.accept(new net.alloymc.core.arcade.games.buildbattle.BuildBattle());
         a.accept(new net.alloymc.core.arcade.games.speedbuilders.SpeedBuilders());
+        a.accept(new net.alloymc.core.arcade.games.tycoon.ForgeTycoon());
     }
 }
