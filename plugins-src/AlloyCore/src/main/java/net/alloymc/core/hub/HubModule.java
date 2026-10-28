@@ -168,13 +168,9 @@ public final class HubModule implements Listener {
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!p.isOnline()) return;
             plugin.net().broadcastAll(p, Ui.mm("<gold>✦ <gray>Welcome <white><bold>" + p.getName() + "</bold> <gray>to " + Ui.TITLE + "<gray>! They're player <gold>#" + number + "<gray>. Say hi!"));
-            for (int i = 0; i < 3; i++)
-                Bukkit.getScheduler().runTaskLater(plugin, () -> p.getWorld().spawn(p.getLocation().add(0, 1, 0), org.bukkit.entity.Firework.class, fw -> {
-                    var m = fw.getFireworkMeta();
-                    m.addEffect(org.bukkit.FireworkEffect.builder().with(org.bukkit.FireworkEffect.Type.BALL_LARGE).withColor(org.bukkit.Color.ORANGE, org.bukkit.Color.YELLOW).trail(true).build());
-                    m.setPower(1);
-                    fw.setFireworkMeta(m);
-                }), i * 12L);
+            // "The Forge Awakens" firework show, seen only by the new player (started after the
+            // loading screen so the opening rune isn't missed)
+            WelcomeShow.play(plugin, p);
         }, 30L);
         // a short, clickable guide
         Bukkit.getScheduler().runTaskLater(plugin, () -> {

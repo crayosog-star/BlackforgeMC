@@ -105,7 +105,13 @@ public final class AlloyCore extends JavaPlugin implements Listener {
                     case "buildhub" -> { if (hub != null) hub.build(sender); else sender.sendMessage(Component.text("Not a hub server.")); }
                     case "buildarcade" -> { if (arcade != null) arcade.buildAll(sender); else sender.sendMessage(Component.text("Not the arcade server.")); }
                     case "spawn" -> { if (sender instanceof Player p && hub != null) hub.toSpawn(p); }
-                    default -> sender.sendMessage(Component.text("/alloy buildhub | buildarcade | spawn"));
+                    case "welcomeshow" -> {   // replay the first-join show: /alloy welcomeshow [player]
+                        Player target = args.length > 1 ? Bukkit.getPlayerExact(args[1]) : sender instanceof Player p ? p : null;
+                        if (hub == null) sender.sendMessage(Component.text("Not a hub server."));
+                        else if (target == null) sender.sendMessage(Component.text("Player not found."));
+                        else if (!net.alloymc.core.hub.WelcomeShow.play(this, target)) sender.sendMessage(Component.text("A show is already playing for " + target.getName() + "."));
+                    }
+                    default -> sender.sendMessage(Component.text("/alloy buildhub | buildarcade | spawn | welcomeshow [player]"));
                 }
             }
         }
