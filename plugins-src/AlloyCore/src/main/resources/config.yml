@@ -2,7 +2,9 @@
 mode: backend
 
 # Gale Bellows PvP item (survival only). Every player gets one on first join; /jbello gives another if they
-# don't carry one. Set false to stop it firing. Its custom texture needs the resource pack; without it the
-# item looks like a named breeze rod.
+# don't carry one. Set false to stop it firing. Its custom texture needs the resource pack: leave custom-model
+# false until the pack is live (otherwise it shows as the purple/black missing model); until then it is a
+# glinting breeze rod with its name.
 gale-bellows:
   enabled: true
+  custom-model: false

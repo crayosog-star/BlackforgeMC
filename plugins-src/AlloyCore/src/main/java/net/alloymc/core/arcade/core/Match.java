@@ -368,7 +368,9 @@ public abstract class Match {
 
     protected String deathMessage(Player p, Player killer, String how) {
         String v = nameOf(p);
-        if (killer != null) return v + " <gray>was " + (how.equals("void") ? "knocked into the void by " : "killed by ") + nameOf(killer);
+        if (killer != null) return v + " <gray>was " + (how.equals("void") ? "knocked into the void by " : "killed by ") + nameOf(killer)
+                + net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().serialize(
+                        net.alloymc.core.KillFeed.weapon(killer.getInventory().getItemInMainHand()));
         return v + " <gray>" + (how.equals("void") ? "fell into the void" : "died");
     }
 

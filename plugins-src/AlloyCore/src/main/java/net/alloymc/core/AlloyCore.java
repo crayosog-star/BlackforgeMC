@@ -52,6 +52,7 @@ public final class AlloyCore extends JavaPlugin implements Listener {
             case "factions" -> { factions = new net.alloymc.core.factions.FactionsModule(this); Bukkit.getPluginManager().registerEvents(this, this); }
             default -> Bukkit.getPluginManager().registerEvents(this, this);
         }
+        if (survival != null || skyblock != null || factions != null) Bukkit.getPluginManager().registerEvents(new KillFeed(), this);
         if (arcade != null) supporters.setTrailBlocked(arcade::inGame);
         getLogger().info("AlloyCore enabled in " + mode + " mode");
     }

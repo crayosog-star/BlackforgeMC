@@ -43,7 +43,7 @@ public final class GaleBellows implements Listener {
     public static final String NAME = "<gradient:#EAF6FF:#4FC3D9><bold>Gale Bellows</bold></gradient>";
 
     private final AlloyCore plugin;
-    private final boolean enabled;
+    private final boolean enabled, customModel;
     private final NamespacedKey tagKey, uidKey, modelKey, starterKey;
     private final Map<UUID, Long> readyAt = new HashMap<>();       // caster -> when the bellows can fire again
     private final Map<UUID, Long> lastPushed = new HashMap<>();    // target -> when they were last pushed (juggle rule)
@@ -52,6 +52,8 @@ public final class GaleBellows implements Listener {
     public GaleBellows(AlloyCore plugin) {
         this.plugin = plugin;
         this.enabled = plugin.getConfig().getBoolean("gale-bellows.enabled", true);
+        // only once the BlackForgeMC resource pack is live: without it the model id renders as the purple/black missing model
+        this.customModel = plugin.getConfig().getBoolean("gale-bellows.custom-model", false);
         this.tagKey = new NamespacedKey(plugin, "gale_bellows");
         this.uidKey = new NamespacedKey(plugin, "gb_uid");
         this.modelKey = new NamespacedKey("blackforge", "gale_bellows");   // the resource pack's item model
@@ -59,14 +61,14 @@ public final class GaleBellows implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::dupeScan, 600L, 600L);
         // players already online when the plugin (re)loads get theirs too
-        Bukkit.getScheduler().runTask(plugin, () -> Bukkit.getOnlinePlayers().forEach(this::giveStarter));
+        Bukkit.getScheduler().runTask(plugin, () -> Bukkit.getOnlinePlayers().forEach(p -> { repair(p); giveStarter(p); }));
     }
 
     public boolean enabled() { return enabled; }
 
     // ------------------------------------------------------------------ the item
 
-    /** A new Gale Bellows with its own id. Without the resource pack it looks like a named breeze rod. */
+    /** A new Gale Bellows with its own id. Until the resource pack is live (gale-bellows.custom-model) it is a named, glinting breeze rod. */
     public ItemStack item() {
         ItemStack it = new ItemStack(Material.BREEZE_ROD);
         it.editMeta(m -> {
@@ -79,7 +81,8 @@ public final class GaleBellows implements Listener {
                     Ui.mm("<gray>Cooldown: <white>10s"),
                     Ui.mm("<dark_gray>BlackForgeMC PvP item")));
             m.setMaxStackSize(1);
-            m.setItemModel(modelKey);
+            if (customModel) m.setItemModel(modelKey);
+            else m.setEnchantmentGlintOverride(true);
             UseCooldownComponent cd = m.getUseCooldown();
             cd.setCooldownSeconds(COOLDOWN_TICKS / 20f);
             cd.setCooldownGroup(modelKey);   // only the bellows greys out, not every breeze rod
@@ -128,7 +131,15 @@ public final class GaleBellows implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
         Player p = e.getPlayer();
-        Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) giveStarter(p); }, 20L);   // after other join handlers move/fill them
+        Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) { repair(p); giveStarter(p); } }, 20L);   // after other join handlers move/fill them
+    }
+
+    /** Bellows handed out before the resource pack was live point at a model nobody has: swap them back to the breeze rod look. */
+    private void repair(Player p) {
+        if (customModel) return;
+        for (ItemStack it : p.getInventory().getContents())
+            if (isBellows(it) && it.getItemMeta().hasItemModel())
+                it.editMeta(m -> { m.setItemModel(null); m.setEnchantmentGlintOverride(true); });
     }
 
     // ------------------------------------------------------------------ casting
