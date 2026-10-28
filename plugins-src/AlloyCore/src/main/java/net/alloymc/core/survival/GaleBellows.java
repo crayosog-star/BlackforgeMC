@@ -109,6 +109,9 @@ public final class GaleBellows implements Listener {
         return u == null ? USES : u;   // bellows from before uses existed start full
     }
 
+    /** Has this bellows used any of its charges? (The hub Arena swaps worn ones for fresh ones: unlimited uses there.) */
+    public boolean isWorn(ItemStack it) { return isBellows(it) && uses(it) < USES; }
+
     public boolean isBellows(ItemStack it) {
         return it != null && it.getType() == Material.BREEZE_ROD && it.hasItemMeta()
                 && it.getItemMeta().getPersistentDataContainer().has(tagKey, PersistentDataType.BYTE);
