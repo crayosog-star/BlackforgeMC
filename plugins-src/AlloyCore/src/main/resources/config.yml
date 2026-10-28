@@ -46,6 +46,16 @@ ashen-chain:
   enabled: true
   cooldown-seconds: 3   # 0 = no cooldown
 
+# Ashen Bonfire (hub Arena only for now): right-click the ground to kindle a bonfire that heals EVERYONE in its ring
+# (enemies too) for a while. Anyone can snuff it out with a few hits. Staff: /bonfire (/totem).
+ashen-bonfire:
+  enabled: true
+  cooldown-seconds: 20
+  duration-seconds: 10
+  radius: 4
+  heal-hearts-per-second: 1
+  hits: 5
+
 # Last Rite (Survival, Factions, hub Arena): a wave pulls the first enemy it touches into a 1v1 chamber.
 # timeout: both-die | both-weakened (leave empty for the server's default: Survival weakened, Factions/Arena die)
 last-rite:
