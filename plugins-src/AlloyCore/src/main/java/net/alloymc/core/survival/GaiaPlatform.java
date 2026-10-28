@@ -56,7 +56,8 @@ final class GaiaPlatform {
     private final Map<UUID, Location> lastStep = new HashMap<>();
     private final Random rnd = new Random();
     private int tick = 0, barrierLayer = Integer.MIN_VALUE;
-    private boolean bloomed, shattered, done;
+    private boolean bloomed, shattered, done, flared;
+    private static final int BEAM_HEIGHT = 60;            // the sky beam: how far above the platform it reaches
     boolean barriersChanged;
 
     GaiaPlatform(org.bukkit.plugin.Plugin plugin, UUID owner, World world, int cx, int groundY, int cz, List<Cell> cells, double cap) {
@@ -90,6 +91,8 @@ final class GaiaPlatform {
                 if (phase == BloomCurve.Phase.RISE) { carryRiders(t, h); riseEffects(h); }
                 else holdEffects(h);
                 orbitShards(h);
+                if (!flared) { flared = true; flare(h); }
+                spotlight(h);
                 if (tick % HEAL_EVERY == 0) healRiders(h);
                 stepSparkles(h);
             }
@@ -327,6 +330,64 @@ final class GaiaPlatform {
             double bob = Math.sin(tick * 0.15 + i) * 0.25;
             d.teleport(new Location(world, cx + 0.5 + (BloomCurve.RADIUS + 0.9) * Math.cos(a), groundY + h + 0.4 + bob, cz + 0.5 + (BloomCurve.RADIUS + 0.9) * Math.sin(a)));
         }
+    }
+
+    // ------------------------------------------------------------------ the downside: everyone can see you
+
+    /**
+     * The moment it starts rising: a burst of light and a loud call that carries ~64 blocks, so everyone nearby knows
+     * someone just took the high ground.
+     */
+    private void flare(double h) {
+        Location c = centre().add(0, h + 0.5, 0);
+        for (int i = 0; i < 64; i++) {
+            double a = 2 * Math.PI * i / 64;
+            Vector out = new Vector(Math.cos(a), 0.15, Math.sin(a));
+            world.spawnParticle(Particle.END_ROD, c.getX(), c.getY(), c.getZ(), 0, out.getX(), out.getY(), out.getZ(), 0.6, null, true);
+        }
+        world.spawnParticle(Particle.DUST, c.getX(), c.getY(), c.getZ(), 60, 1.5, 0.6, 1.5, 0, new Particle.DustOptions(BLOSSOM_WHITE, 2.5f), true);
+        world.playSound(c, Sound.BLOCK_BEACON_ACTIVATE, SoundCategory.PLAYERS, 4.0f, 1.3f);   // volume 4 carries ~64 blocks
+        world.playSound(c, Sound.ITEM_TRIDENT_THUNDER, SoundCategory.PLAYERS, 1.5f, 1.8f);
+    }
+
+    /**
+     * While it's up: a bright beam into the sky, two sweeping searchlights, a halo on the rim, and every rider
+     * outlined (Glowing, visible through walls). Particles are forced, so they show from far beyond normal range.
+     * It's the trade for the high ground: you can see everyone, and everyone can see you.
+     */
+    private void spotlight(double h) {
+        double top = groundY + h;
+        // the sky beam: a twisting column of light rising out of the centre
+        if (tick % 2 == 0)
+            for (int i = 0; i < BEAM_HEIGHT; i += 2) {
+                double a = tick * 0.25 + i * 0.35, r = 0.35;
+                world.spawnParticle(Particle.END_ROD, cx + 0.5 + r * Math.cos(a), top + 0.5 + i, cz + 0.5 + r * Math.sin(a), 1, 0, 0, 0, 0, null, true);
+                if (i % 6 == 0)
+                    world.spawnParticle(Particle.DUST, cx + 0.5, top + 0.5 + i, cz + 0.5, 1, 0.15, 0.3, 0.15, 0, new Particle.DustOptions(PETAL_PINK, 2.0f), true);
+            }
+        // two searchlights sweeping out and up from the rim, slowly turning
+        if (tick % 2 == 1)
+            for (int beam = 0; beam < 2; beam++) {
+                double a = tick * 0.05 + beam * Math.PI;
+                double ox = cx + 0.5 + BloomCurve.RADIUS * Math.cos(a), oz = cz + 0.5 + BloomCurve.RADIUS * Math.sin(a);
+                for (int k = 1; k <= 14; k++)
+                    world.spawnParticle(Particle.END_ROD, ox + k * 1.1 * Math.cos(a), top + 0.3 + k * 0.9, oz + k * 1.1 * Math.sin(a), 1, 0, 0, 0, 0, null, true);
+            }
+        // a bright halo around the rim
+        if (tick % 4 == 0)
+            for (int i = 0; i < 24; i++) {
+                double a = 2 * Math.PI * i / 24 + tick * 0.02;
+                world.spawnParticle(Particle.DUST, cx + 0.5 + (BloomCurve.RADIUS + 0.3) * Math.cos(a), top + 0.15, cz + 0.5 + (BloomCurve.RADIUS + 0.3) * Math.sin(a),
+                        1, 0, 0, 0, 0, new Particle.DustOptions(BLOSSOM_WHITE, 1.4f), true);
+            }
+        // riders light up: an outline everyone can see, even through walls
+        if (tick % 10 == 0)
+            for (Player p : world.getPlayers()) {
+                if (p.getGameMode() == GameMode.SPECTATOR || !onPlatform(p, h, 0.8, 2.5)) continue;
+                p.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 30, 0, false, false, false));
+                p.sendActionBar(net.kyori.adventure.text.Component.text("✦ You're lit up — everyone can see you up here",
+                        net.kyori.adventure.text.format.TextColor.color(0xFFB3DE)));
+            }
     }
 
     // ------------------------------------------------------------------ shatter + cleanup
