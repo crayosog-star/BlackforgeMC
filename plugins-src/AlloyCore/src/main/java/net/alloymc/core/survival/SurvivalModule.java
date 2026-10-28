@@ -72,7 +72,8 @@ public final class SurvivalModule implements Listener {
         pvp.setEnchants(enchants);
         votes = new Votes(plugin, crates);
         scrap = new Scrap(plugin, crates, tags, enchants);
-        bellows = new GaleBellows(plugin);   // every player gets one on join and can get another with /jbello
+        bellows = new GaleBellows(plugin);   // crate-only: crate rewards and rare Scrapyard supply crates hand them out
+        pvp.setBellows(bellows);
         new SilkSpawners(plugin);
         votes.setScrap(scrap);
         ranks = new Ranks(plugin, crates);
@@ -223,7 +224,10 @@ public final class SurvivalModule implements Listener {
         reg("repairhand", List.of("rh", "fixhand"), (p, a) -> ranks.repairHand(p));
         reg("fly", List.of(), (p, a) -> ranks.fly(p));
         reg("scrap", List.of("scrapshop", "shards"), (p, a) -> scrap.command(p, a));
-        reg("jbello", List.of("bellows", "galebellows"), (p, a) -> bellows.claim(p));
+        reg("jbello", List.of("bellows", "galebellows"), (p, a) -> {   // staff only: players get bellows from crates
+            if (p.hasPermission("alloy.admin")) bellows.give(p);
+            else p.sendMessage(Ui.mm("<#9EE6FF>🌬 <gray>The " + GaleBellows.NAME + " <gray>only comes from <white>crates <gray>and <white>Scrapyard supply drops<gray>."));
+        });
         reg("koth", List.of(), (p, a) -> {
             if (a.length > 0 && p.hasPermission("alloy.admin")) {
                 if (a[0].equalsIgnoreCase("start")) koth.start();
@@ -259,7 +263,13 @@ public final class SurvivalModule implements Listener {
     public boolean admin(CommandSender s, String[] a) {
         if (a.length >= 3 && a[0].equalsIgnoreCase("bellows") && a[1].equalsIgnoreCase("give")) {   // /alloy bellows give <player>
             Player t = Bukkit.getPlayerExact(a[2]);
-            if (t == null) { s.sendMessage(Component.text("Player must be online")); return true; }
+            if (t == null) {
+                var off = Bukkit.getOfflinePlayerIfCached(a[2]);
+                if (off == null) { s.sendMessage(Component.text("Never seen " + a[2] + " - they need to have joined once")); return true; }
+                bellows.queue(off.getUniqueId());
+                s.sendMessage(Component.text(a[2] + " is offline - they get the Gale Bellows the next time they join Survival"));
+                return true;
+            }
             bellows.give(t);
             s.sendMessage(Component.text("Gave a Gale Bellows to " + a[2]));
             return true;

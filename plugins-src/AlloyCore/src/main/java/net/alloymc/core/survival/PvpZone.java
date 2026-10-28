@@ -54,6 +54,9 @@ public final class PvpZone implements Listener {
 
     void setEnchants(CustomEnchants ce) { this.enchants = ce; }
 
+    private GaleBellows bellows;
+    void setBellows(GaleBellows b) { this.bellows = b; }
+
     PvpZone(AlloyCore plugin, World world, Crates crates) {
         this.plugin = plugin;
         this.world = world;
@@ -244,7 +247,8 @@ public final class PvpZone implements Listener {
         new Entry(12, "golden_apple"), new Entry(1.5, "enchanted_golden_apple"),
         new Entry(6, "strength1"), new Entry(3, "strength2"), new Entry(6, "speed1"), new Entry(3, "speed2"),
         new Entry(5, "lava"), new Entry(5, "water"), new Entry(4, "book"),
-        new Entry(0.8, "key_iron"), new Entry(0.25, "key_gold"), new Entry(0.06, "key_netherite"));
+        new Entry(0.8, "key_iron"), new Entry(0.25, "key_gold"), new Entry(0.06, "key_netherite"),
+        new Entry(0.7, "bellows"));   // rare: about 1 in 130 rolls
     private static final double TOTAL = TABLE.stream().mapToDouble(Entry::weight).sum();
 
     private ItemStack roll(Player p) {
@@ -265,6 +269,11 @@ public final class PvpZone implements Listener {
             case "lava" -> new ItemStack(Material.LAVA_BUCKET);
             case "water" -> new ItemStack(Material.WATER_BUCKET);
             case "book" -> enchants != null ? enchants.randomBook() : new ItemStack(Material.GOLDEN_APPLE);
+            case "bellows" -> {
+                if (bellows == null) yield new ItemStack(Material.GOLDEN_APPLE);
+                Bukkit.broadcast(Ui.mm("<gold>☄ <white>" + p.getName() + " <gray>found a rare " + GaleBellows.NAME + " <gray>in a supply crate!"));
+                yield bellows.item();
+            }
             default -> key(p, kind.substring(4));
         };
     }

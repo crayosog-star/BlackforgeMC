@@ -37,6 +37,7 @@ import java.util.*;
 public final class GaleBellows implements Listener {
     public static final int COOLDOWN_TICKS = 200;          // 10 s
     public static final double DAMAGE = 2.0;                // 1 heart
+    public static final int USES = 3;                       // blasts before it breaks
 
     // palette (see the plan's visual guide)
     private static final Color GALE_WHITE = Color.fromRGB(0xEAF6FF), GUST_CYAN = Color.fromRGB(0x9EE6FF), DRAFT_TEAL = Color.fromRGB(0x4FC3D9);
@@ -44,7 +45,9 @@ public final class GaleBellows implements Listener {
 
     private final AlloyCore plugin;
     private final boolean enabled, customModel;
-    private final NamespacedKey tagKey, uidKey, modelKey, starterKey;
+    private final NamespacedKey tagKey, uidKey, modelKey, usesKey;
+    private final java.io.File pendingFile;
+    private final Set<UUID> pending = new HashSet<>();   // owed a bellows the next time they join (given while offline)
     private final Map<UUID, Long> readyAt = new HashMap<>();       // caster -> when the bellows can fire again
     private final Map<UUID, Long> lastPushed = new HashMap<>();    // target -> when they were last pushed (juggle rule)
     private final Random rnd = new Random();
@@ -57,11 +60,13 @@ public final class GaleBellows implements Listener {
         this.tagKey = new NamespacedKey(plugin, "gale_bellows");
         this.uidKey = new NamespacedKey(plugin, "gb_uid");
         this.modelKey = new NamespacedKey("blackforge", "gale_bellows");   // the resource pack's item model
-        this.starterKey = new NamespacedKey(plugin, "gb_starter");         // on the player: already got their free one
+        this.usesKey = new NamespacedKey(plugin, "gb_uses");
+        this.pendingFile = new java.io.File(plugin.getDataFolder(), "bellows-pending.txt");
+        try { if (pendingFile.exists()) for (String l : java.nio.file.Files.readAllLines(pendingFile.toPath())) if (!l.isBlank()) pending.add(UUID.fromString(l.trim())); }
+        catch (Exception ex) { plugin.getLogger().warning("bellows-pending.txt unreadable: " + ex.getMessage()); }
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::dupeScan, 600L, 600L);
-        // players already online when the plugin (re)loads get theirs too
-        Bukkit.getScheduler().runTask(plugin, () -> Bukkit.getOnlinePlayers().forEach(p -> { repair(p); giveStarter(p); }));
+        Bukkit.getScheduler().runTask(plugin, () -> Bukkit.getOnlinePlayers().forEach(p -> { repair(p); deliver(p); }));
     }
 
     public boolean enabled() { return enabled; }
@@ -73,13 +78,7 @@ public final class GaleBellows implements Listener {
         ItemStack it = new ItemStack(Material.BREEZE_ROD);
         it.editMeta(m -> {
             m.displayName(Ui.mm(NAME));
-            m.lore(List.of(
-                    Ui.mm("<gray>Right-click to blast a gust of wind"),
-                    Ui.mm("<gray>Hits everyone <white>2 blocks <gray>in front of you"),
-                    Ui.mm("<gray>for <white>1 heart <gray>and blows them back"),
-                    Ui.mm(""),
-                    Ui.mm("<gray>Cooldown: <white>10s"),
-                    Ui.mm("<dark_gray>BlackForgeMC PvP item")));
+            m.lore(lore(USES));
             m.setMaxStackSize(1);
             if (customModel) m.setItemModel(modelKey);
             else m.setEnchantmentGlintOverride(true);
@@ -89,8 +88,25 @@ public final class GaleBellows implements Listener {
             m.setUseCooldown(cd);
             m.getPersistentDataContainer().set(tagKey, PersistentDataType.BYTE, (byte) 1);
             m.getPersistentDataContainer().set(uidKey, PersistentDataType.STRING, UUID.randomUUID().toString());
+            m.getPersistentDataContainer().set(usesKey, PersistentDataType.INTEGER, USES);
         });
         return it;
+    }
+
+    private static List<net.kyori.adventure.text.Component> lore(int uses) {
+        return List.of(
+                Ui.mm("<gray>Right-click to blast a gust of wind"),
+                Ui.mm("<gray>Hits everyone <white>2 blocks <gray>in front of you"),
+                Ui.mm("<gray>for <white>1 heart <gray>and blows them back"),
+                Ui.mm(""),
+                Ui.mm("<gray>Cooldown: <white>10s"),
+                Ui.mm("<gray>Uses left: " + (uses <= 1 ? "<red>" : "<white>") + uses + "<gray>/" + USES),
+                Ui.mm("<dark_gray>BlackForgeMC PvP item"));
+    }
+
+    private int uses(ItemStack it) {
+        Integer u = it.getItemMeta().getPersistentDataContainer().get(usesKey, PersistentDataType.INTEGER);
+        return u == null ? USES : u;   // bellows from before uses existed start full
     }
 
     public boolean isBellows(ItemStack it) {
@@ -113,25 +129,27 @@ public final class GaleBellows implements Listener {
         return isBellows(p.getItemOnCursor());
     }
 
-    /** /jbello: one into your inventory. Only if you don't already carry one, so the command can't flood the ground with copies. */
-    public void claim(Player p) {
-        if (hasOne(p)) { p.sendMessage(Ui.mm("<#9EE6FF>🌬 <gray>You already have a " + NAME + "<gray> in your inventory.")); return; }
-        if (p.getInventory().firstEmpty() < 0) { p.sendMessage(Ui.mm("<red>Your inventory is full - make a free slot, then /jbello again.")); return; }
+    /** Staff gave a bellows to someone who wasn't on Survival: hand it over the next time they join. */
+    public void queue(UUID id) {
+        pending.add(id);
+        savePending();
+    }
+
+    private void deliver(Player p) {
+        if (!pending.remove(p.getUniqueId())) return;
+        savePending();
         give(p);
     }
 
-    /** Everyone gets one free bellows, once (tracked on the player so it isn't re-given every join). */
-    private void giveStarter(Player p) {
-        var pdc = p.getPersistentDataContainer();
-        if (pdc.has(starterKey, PersistentDataType.BYTE)) return;
-        pdc.set(starterKey, PersistentDataType.BYTE, (byte) 1);
-        if (!hasOne(p)) give(p);
+    private void savePending() {
+        try { java.nio.file.Files.write(pendingFile.toPath(), pending.stream().map(UUID::toString).toList()); }
+        catch (Exception ex) { plugin.getLogger().warning("Couldn't save bellows-pending.txt: " + ex.getMessage()); }
     }
 
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
         Player p = e.getPlayer();
-        Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) { repair(p); giveStarter(p); } }, 20L);   // after other join handlers move/fill them
+        Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) { repair(p); deliver(p); } }, 20L);   // after other join handlers move/fill them
     }
 
     /** Bellows handed out before the resource pack was live point at a model nobody has: swap them back to the breeze rod look. */
@@ -185,6 +203,7 @@ public final class GaleBellows implements Listener {
         readyAt.put(p.getUniqueId(), now + COOLDOWN_TICKS * 50L);
         p.setCooldown(held, COOLDOWN_TICKS);
         castEffects(p, eye, look);
+        useUp(p, held);
 
         for (LivingEntity t : hit) {
             Long last = lastPushed.get(t.getUniqueId());
@@ -276,6 +295,23 @@ public final class GaleBellows implements Listener {
         w.playSound(eye, Sound.ENTITY_WIND_CHARGE_WIND_BURST, SoundCategory.PLAYERS, 1.0f, 1.2f);
         w.playSound(eye, Sound.ENTITY_BREEZE_WIND_BURST, SoundCategory.PLAYERS, 0.8f, 0.8f);
         w.playSound(eye, Sound.ENTITY_ENDER_DRAGON_FLAP, SoundCategory.PLAYERS, 0.4f, 1.6f);
+    }
+
+    /** Each blast uses one of its 3 charges; the last one breaks it. */
+    private void useUp(Player p, ItemStack held) {
+        int left = uses(held) - 1;
+        if (left <= 0) {
+            p.getInventory().setItemInMainHand(null);
+            p.getWorld().playSound(p.getLocation(), Sound.ENTITY_ITEM_BREAK, SoundCategory.PLAYERS, 1f, 0.8f);
+            p.getWorld().spawnParticle(Particle.ITEM, p.getEyeLocation().add(p.getLocation().getDirection().multiply(0.6)), 14, 0.15, 0.15, 0.15, 0.06, held.clone());
+            p.sendMessage(Ui.mm("<#9EE6FF>🌬 <gray>Your " + NAME + " <gray>blew itself apart. Find another in <white>crates <gray>or <white>Scrapyard supply drops<gray>."));
+            return;
+        }
+        held.editMeta(m -> {
+            m.getPersistentDataContainer().set(usesKey, PersistentDataType.INTEGER, left);
+            m.lore(lore(left));
+        });
+        p.sendActionBar(Ui.mm("<#9EE6FF>🌬 <gray>Gale Bellows: <white>" + left + "<gray>/" + USES + " uses left"));
     }
 
     private void hitEffects(LivingEntity t) {

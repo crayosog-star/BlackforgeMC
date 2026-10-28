@@ -22,7 +22,8 @@ def main() -> None:
     ap.add_argument("--format", type=int, required=True, help="resource pack format for the server's Minecraft version")
     args = ap.parse_args()
 
-    meta = {"pack": {"pack_format": args.format, "description": "BlackForgeMC"}}
+    # 1.21.9+ packs declare the formats they support; the old single pack_format is only read by older clients
+    meta = {"pack": {"description": "BlackForgeMC", "min_format": args.format, "max_format": args.format}}
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("pack.mcmeta", json.dumps(meta, indent=2))
