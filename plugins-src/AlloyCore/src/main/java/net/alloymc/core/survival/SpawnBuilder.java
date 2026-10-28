@@ -548,7 +548,7 @@ public final class SpawnBuilder {
         }
         for (int z = z1 + 2; z <= z2 - 2; z += 4) for (int x : new int[]{-9, 0, 9}) {
             int h = Y + 8 + (x2 + 1 - Math.abs(x)) / 2;
-            c.setLate(x, h - 1, z, "minecraft:chain");
+            c.setLate(x, h - 1, z, "minecraft:iron_chain[axis=y]");   // "chain" was renamed iron_chain
             c.setLate(x, h - 2, z, "minecraft:lantern[hanging=true]");
         }
         // the doors: a 5-wide opening in the south wall under a gold arch
