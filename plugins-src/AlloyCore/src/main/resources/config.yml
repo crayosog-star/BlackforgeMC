@@ -8,3 +8,8 @@ mode: backend
 gale-bellows:
   enabled: true
   custom-model: false
+
+# Potion of Gaia (survival only): a pink splash potion that grows a mist, blooms, and rises as an 8-block
+# platform. No resource pack needed. Staff: /gaia. Crates: alloy gaia give {player}. Set false to stop it.
+gaia-potion:
+  enabled: true

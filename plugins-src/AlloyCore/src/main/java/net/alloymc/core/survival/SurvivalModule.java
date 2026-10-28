@@ -38,6 +38,7 @@ public final class SurvivalModule implements Listener {
     private final Votes votes;
     private final Scrap scrap;
     private final GaleBellows bellows;
+    private final GaiaPotion gaia;
     private final Ranks ranks;
     private final HallOfFame hall;
     private final DailyRewards daily;
@@ -74,6 +75,9 @@ public final class SurvivalModule implements Listener {
         scrap = new Scrap(plugin, crates, tags, enchants);
         bellows = new GaleBellows(plugin);   // crate-only: crate rewards and rare Scrapyard supply crates hand them out
         pvp.setBellows(bellows);
+        // Potion of Gaia: works anywhere except spawn and other people's claims (KOTH and the Scrapyard included -
+        // its floor is temporary, only fills air, and always cleans itself up)
+        gaia = new GaiaPotion(plugin, (p, l) -> (l.getWorld() != world || !inSpawn(l.getX(), l.getY(), l.getZ())) && claims.canUse(p, l));
         new SilkSpawners(plugin);
         votes.setScrap(scrap);
         ranks = new Ranks(plugin, crates);
@@ -129,6 +133,7 @@ public final class SurvivalModule implements Listener {
     }
 
     public void shutdown() {
+        gaia.shutdown();   // first: removes every cloud's barrier blocks
         holos.forEach(TextDisplay::remove);
         if (koth.active()) koth.stop(null);
         pvp.shutdown();
@@ -228,6 +233,10 @@ public final class SurvivalModule implements Listener {
             if (p.hasPermission("alloy.admin")) bellows.give(p);
             else p.sendMessage(Ui.mm("<#9EE6FF>🌬 <gray>The " + GaleBellows.NAME + " <gray>only comes from <white>crates <gray>and <white>Scrapyard supply drops<gray>."));
         });
+        reg("gaia", List.of("gaiapotion"), (p, a) -> {   // staff only for now, like the bellows: players will get it from crates
+            if (p.hasPermission("alloy.admin")) gaia.give(p);
+            else p.sendMessage(Ui.mm("<#FFB3DE>✿ <gray>The " + GaiaPotion.NAME + " <gray>isn't available to players yet."));
+        });
         reg("koth", List.of(), (p, a) -> {
             if (a.length > 0 && p.hasPermission("alloy.admin")) {
                 if (a[0].equalsIgnoreCase("start")) koth.start();
@@ -261,6 +270,13 @@ public final class SurvivalModule implements Listener {
 
     /** Console/admin: /alloy crate give <player> <crate> [amount], /alloy koth start|stop, /alloy buildsurvival */
     public boolean admin(CommandSender s, String[] a) {
+        if (a.length >= 3 && a[0].equalsIgnoreCase("gaia") && a[1].equalsIgnoreCase("give")) {   // /alloy gaia give <player> (for crates)
+            Player t = Bukkit.getPlayerExact(a[2]);
+            if (t == null) { s.sendMessage(Component.text("Player must be online")); return true; }
+            gaia.give(t);
+            s.sendMessage(Component.text("Gave a Potion of Gaia to " + a[2]));
+            return true;
+        }
         if (a.length >= 3 && a[0].equalsIgnoreCase("bellows") && a[1].equalsIgnoreCase("give")) {   // /alloy bellows give <player>
             Player t = Bukkit.getPlayerExact(a[2]);
             if (t == null) {
