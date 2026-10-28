@@ -72,6 +72,17 @@ public final class BloomCurve {
         return max * u * u * (3 - 2 * u);   // smoothstep: eases in and out, so riders aren't jolted
     }
 
+    /** The invisible floor's layer (blocks above the ground) at height h: the block whose top is at or just below the surface. */
+    public static int floorLayer(double h) { return (int) Math.floor(h) - 1; }
+
+    /**
+     * Does someone whose feet are this high above the ground need lifting before the floor moves to {@code layer}?
+     * Their feet would be inside the new barrier, and Minecraft lets you drop straight through a block you overlap.
+     */
+    public static boolean feetInside(double feetAboveGround, int layer) {
+        return feetAboveGround >= layer && feetAboveGround < layer + 1;
+    }
+
     /** Rising speed in blocks per second at time t (the derivative of {@link #height}). */
     public static double riseSpeed(double t, double cap) {
         if (t <= HARDEN_END || t >= RISE_END) return 0;

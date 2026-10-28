@@ -209,8 +209,9 @@ final class GaiaPlatform {
             BlockDisplay d = e.getValue();
             if (d.isValid()) d.teleport(new Location(world, cx + e.getKey().dx(), surface - SLAB_THICKNESS, cz + e.getKey().dz()));
         }
-        int layer = (int) Math.floor(h) - 1;   // the block whose top is at or just below the surface
+        int layer = BloomCurve.floorLayer(h);   // the block whose top is at or just below the surface
         if (layer < 0 || layer == barrierLayer) return;
+        liftOnto(layer);   // first, or anyone whose feet are in the new layer falls through it
         clearBarriers();
         barrierLayer = layer;
         for (Cell c : cells) {
@@ -220,6 +221,26 @@ final class GaiaPlatform {
             b.setType(Material.BARRIER, false);
         }
         barriersChanged = true;
+    }
+
+    /**
+     * Anyone on the platform whose feet are inside the block layer the floor is about to move into is lifted onto its
+     * top. Riders are glued to the surface by velocity and often sit a hair below it, which is exactly where the new
+     * layer's top lands; without this they drop through it and the old layer under them is already gone.
+     */
+    private void liftOnto(int layer) {
+        double top = groundY + layer + 1;
+        double reach = BloomCurve.RADIUS + 0.8;   // the barrier cells plus a player's half-width
+        for (Player p : world.getPlayers()) {
+            if (p.getGameMode() == GameMode.SPECTATOR || p.isFlying() || p.isDead()) continue;
+            double dx = p.getX() - (cx + 0.5), dz = p.getZ() - (cz + 0.5);
+            if (dx * dx + dz * dz > reach * reach || !BloomCurve.feetInside(p.getY() - groundY, layer)) continue;
+            Vector v = p.getVelocity();
+            Location to = p.getLocation(); to.setY(top + 0.01);
+            p.teleport(to);
+            p.setVelocity(new Vector(v.getX(), Math.max(0, v.getY()), v.getZ()));
+            p.setFallDistance(0f);
+        }
     }
 
     private boolean onPlatform(Player p, double h, double below, double above) {

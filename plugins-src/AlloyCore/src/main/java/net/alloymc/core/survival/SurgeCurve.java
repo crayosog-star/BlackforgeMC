@@ -46,4 +46,31 @@ public final class SurgeCurve {
     }
 
     public static boolean warning(double t) { return t >= MAX_SECONDS - WARNING_SECONDS; }
+
+    // ------------------------------------------------------------------ the red screen edges
+
+    public static final double EDGE_BASE = 0.55, EDGE_BASE_WARN = 0.3;   // edge strength between heartbeats
+    public static final double EDGE_MAX = 0.995;                         // 1.0 would need an infinite warning distance
+
+    /**
+     * Strength (0..1) of the red screen edges at a surge tick: a "lub-dub" throb on every heartbeat (every 20 ticks,
+     * every 10 in the last stretch, matching the heartbeat sound), easing back to a steady base glow in between.
+     */
+    public static double edgeGlow(int ticks, boolean warn) {
+        int k = Math.floorMod(ticks, warn ? 10 : 20);
+        double lub = Math.exp(-k / 2.0);
+        double dub = k >= 4 ? 0.8 * Math.exp(-(k - 4) / 2.0) : 0;
+        double base = warn ? EDGE_BASE_WARN : EDGE_BASE;
+        return base + (1 - base) * Math.max(lub, dub);
+    }
+
+    /**
+     * World-border warning distance that gives the wanted edge strength. The client tints the screen edges red by
+     * 1 - (distance to border / warning distance), so solve for the warning distance.
+     */
+    public static int warningDistance(double distToEdge, double strength) {
+        double s = Math.max(0, Math.min(EDGE_MAX, strength));
+        double d = Math.max(1, distToEdge);
+        return (int) Math.min(1_000_000, Math.ceil(d / (1 - s)));
+    }
 }

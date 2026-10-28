@@ -23,9 +23,11 @@ darkness-potion:
 # Surge (survival + hub Arena): one-use ability item. 6 s of speed/jump/step-up with a health drain that never goes
 # below half health. Staff: /surge. Crates: alloy surge give {player}. custom-model: true only once the resource pack
 # with the Surge textures is live. Set enabled false to stop it.
+# screen-darkness: the surger's screen stays dark (pulsing Darkness) for the whole surge; false = a short pulse only.
 surge:
   enabled: true
   custom-model: false
+  screen-darkness: true
 
 # Last Rite (Survival, Factions, hub Arena): a wave pulls the first enemy it touches into a 1v1 chamber.
 # timeout: both-die | both-weakened (leave empty for the server's default: Survival weakened, Factions/Arena die)

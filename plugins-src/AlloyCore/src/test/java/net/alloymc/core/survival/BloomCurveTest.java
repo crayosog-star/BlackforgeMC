@@ -100,6 +100,21 @@ class BloomCurveTest {
         assertTrue(cellHard(HARDEN_END, RADIUS));
     }
 
+    @Test void floorTopMatchesTheSurfaceAtTheTop() {
+        for (int cap = 2; cap <= 8; cap++)
+            assertEquals(height(RISE_END, cap), floorLayer(height(RISE_END, cap)) + 1, EPS);   // stand level with the slab
+        assertEquals(-1, floorLayer(0.5));                    // no floor while still on the ground
+        assertEquals(2, floorLayer(3.0));
+    }
+
+    @Test void ridersInsideTheNextLayerAreLifted() {
+        assertTrue(feetInside(2.98, 2));                      // a hair under the surface as the floor moves up: lift
+        assertTrue(feetInside(2.0, 2));                       // standing on the old layer: lift
+        assertFalse(feetInside(3.0, 2));                      // already on top of it
+        assertFalse(feetInside(3.5, 2));                      // mid-jump above it
+        assertFalse(feetInside(1.2, 2));                      // below it (under the platform): left alone
+    }
+
     @Test void fadesToNothing() {
         assertEquals(0, radius(FADE_END), EPS);
         assertTrue(radius(FADE_END - 0.5) < RADIUS);
