@@ -60,12 +60,12 @@ public final class HubModule implements Listener {
         if (!new File(plugin.getDataFolder(), "hub-built").exists()) build(Bukkit.getConsoleSender());
         else {
             if (!new File(plugin.getDataFolder(), "hub-biome-v1").exists()) applyBiome();
-            if (!new File(plugin.getDataFolder(), "hub-dragons-v2").exists()) addDragons();
+            if (new File(plugin.getDataFolder(), "hub-dragons-v1").exists() && !new File(plugin.getDataFolder(), "hub-dragons-flying").exists()) removeStatues();
         }
         Bukkit.getScheduler().runTaskLater(plugin, this::spawnHolograms, 40L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::refresh, 60L, 40L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::ambient, 20L, 10L);
-        new DragonAnimator(plugin, world);
+        dragons = new DragonAnimator(plugin, world);
     }
 
     private void registerJoinCommand() {
@@ -77,7 +77,9 @@ public final class HubModule implements Listener {
         });
     }
 
-    public void shutdown() { holograms.forEach(TextDisplay::remove); }
+    private DragonAnimator dragons;
+
+    public void shutdown() { holograms.forEach(TextDisplay::remove); if (dragons != null) dragons.remove(); }
 
     public Location spawn() {
         return new Location(world, HubLayout.SPAWN_X, HubLayout.SPAWN_Y, HubLayout.SPAWN_Z, HubLayout.SPAWN_YAW, HubLayout.SPAWN_PITCH);
@@ -106,7 +108,6 @@ public final class HubModule implements Listener {
     private void pasteHub(CommandSender who, net.alloymc.core.build.Canvas canvas, long t) {
         Paster.paste(plugin, world, canvas, 6000, () -> {
             try { new File(plugin.getDataFolder(), "hub-built").createNewFile(); } catch (Exception ignored) { }
-            try { new File(plugin.getDataFolder(), "hub-dragons-v2").createNewFile(); } catch (Exception ignored) { }
             applyBiome();
             who.sendMessage(Component.text("Hub built: " + canvas.size() + " blocks in " + (System.currentTimeMillis() - t) / 1000 + "s"));
             for (Player p : Bukkit.getOnlinePlayers()) toSpawn(p);
@@ -373,22 +374,18 @@ public final class HubModule implements Listener {
 
     // ------------------------------------------------------------------ dragons
 
-    /**
-     * Brings a hub built before the current dragons up to date: v1 had a second blackstone dragon in the west, which is
-     * cleared away before the soul serpent and the others are pasted in.
-     */
-    private void addDragons() {
-        boolean hadV1 = new File(plugin.getDataFolder(), "hub-dragons-v1").exists();
+    /** The dragons fly now: clear the old statue blocks (both versions) out of the sky, leaving every hub block alone. */
+    private void removeStatues() {
+        var hub = HubBuilder.build();
         var clear = new net.alloymc.core.build.Canvas();
-        if (hadV1) {
-            var keep = Dragons.build();
-            for (long k : Dragons.build(Dragons.OLD_WEST).blocks().keySet())
-                if (!keep.blocks().containsKey(k))
-                    clear.set(net.alloymc.core.build.Canvas.kx(k), net.alloymc.core.build.Canvas.ky(k), net.alloymc.core.build.Canvas.kz(k), "minecraft:air");
-        }
-        Paster.paste(plugin, world, clear, 6000, () -> Paster.paste(plugin, world, Dragons.build(), 6000, () -> {
-            try { new File(plugin.getDataFolder(), "hub-dragons-v2").createNewFile(); } catch (Exception ignored) { }
-            plugin.getLogger().info(hadV1 ? "Hub dragons upgraded (west dragon is now the soul serpent)" : "Hub dragons added");
-        }));
+        var old = DragonStatues.build();
+        old.blocks().putAll(DragonStatues.build(DragonStatues.OLD_WEST).blocks());
+        for (long k : old.blocks().keySet())
+            if (!hub.blocks().containsKey(k) && !hub.lateBlocks().containsKey(k))
+                clear.set(net.alloymc.core.build.Canvas.kx(k), net.alloymc.core.build.Canvas.ky(k), net.alloymc.core.build.Canvas.kz(k), "minecraft:air");
+        Paster.paste(plugin, world, clear, 6000, () -> {
+            try { new File(plugin.getDataFolder(), "hub-dragons-flying").createNewFile(); } catch (Exception ignored) { }
+            plugin.getLogger().info("Hub dragon statues cleared (" + clear.size() + " blocks) - the dragons fly now");
+        });
     }
 }

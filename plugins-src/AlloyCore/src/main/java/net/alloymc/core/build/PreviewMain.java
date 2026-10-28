@@ -27,11 +27,7 @@ public final class PreviewMain {
         pov(hub, new File(out, "hub_view_from_arcade_gate.png"), 0.5, 103.6, 40.5, 180, -4, 1280, 720);
         pov(hub, new File(out, "hub_view_side.png"), 44.5, 112, 30.5, 125, -14, 1280, 720);
         topDown(hub, new File(out, "hub_top.png"), 6);
-        pov(hub, new File(out, "hub_dragon_east.png"), 20.5, 112, -20.5, -64, -18, 1280, 720);
-        pov(hub, new File(out, "hub_dragon_south.png"), 0.5, 105, 20.5, 0, -31, 1280, 720);
-        pov(hub, new File(out, "hub_dragon_west.png"), -20.5, 112, -20.5, 64, -18, 1280, 720);
-        pov(hub, new File(out, "hub_serpent_close.png"), -40.5, 135, 30.5, 135, 8, 1280, 720);
-        pov(hub, new File(out, "hub_aerial.png"), 0.5, 190, 150.5, 180, 30, 1600, 900);
+        dragons(hub, out);
         night = false;
         Canvas sv = net.alloymc.core.survival.SpawnBuilder.spawn();
         System.out.println("survival spawn blocks: " + sv.size());
@@ -306,6 +302,44 @@ public final class PreviewMain {
                 return new Color(r, g, b, glow ? 254 : 255);
             }
         return new Color(255, 0, 255);
+    }
+
+    /** The flying hub dragons, frozen mid-flight: a wide shot and a close-up of each. */
+    static void dragons(Canvas hub, File out) throws Exception {
+        Canvas sky = new Canvas();
+        hub.blocks().forEach((k, b) -> sky.set(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k), b));
+        List<net.alloymc.core.hub.DragonFlight> fl = List.of(
+                new net.alloymc.core.hub.DragonFlight(net.alloymc.core.hub.DragonFlight.Kind.BLACK, 11, 0.3),
+                new net.alloymc.core.hub.DragonFlight(net.alloymc.core.hub.DragonFlight.Kind.GOLD, 12, 2.4),
+                new net.alloymc.core.hub.DragonFlight(net.alloymc.core.hub.DragonFlight.Kind.SERPENT, 13, 4.4));
+        for (int t = 0; t < 600; t++) fl.forEach(net.alloymc.core.hub.DragonFlight::step);
+        for (var d : fl) voxelize(sky, d.pose());
+        pov(sky, new File(out, "hub_dragons_flying.png"), 0.5, 175, 140.5, 180, 25, 1600, 900);
+        String[] names = {"black", "gold", "serpent"};
+        for (int i = 0; i < fl.size(); i++) {
+            Canvas one = new Canvas();
+            voxelize(one, fl.get(i).pose());
+            double[] h = fl.get(i).head(), f = fl.get(i).forward();
+            // from the side and a little above, far enough back to fit the wings
+            double ex = h[0] - f[2] * 34 - f[0] * 10, ez = h[2] + f[0] * 34 - f[2] * 10, ey = h[1] + 10;
+            float yaw = (float) Math.toDegrees(Math.atan2(-(h[0] - f[0] * 14 - ex), h[2] - f[2] * 14 - ez));
+            float pitch = (float) Math.toDegrees(Math.atan2(ey - h[1], Math.hypot(h[0] - ex, h[2] - ez)));
+            pov(one, new File(out, "hub_dragon_" + names[i] + ".png"), ex, ey, ez, yaw, pitch, 1280, 720);
+        }
+    }
+
+    /** Fills each block-display box with blocks, roughly, so the offline renderer can draw it. */
+    static void voxelize(Canvas c, List<net.alloymc.core.hub.DragonFlight.Piece> pose) {
+        for (var p : pose)
+            for (double a = 0; a <= p.sx(); a += Math.min(0.3, p.sx()))
+                for (double b = 0; b <= p.sy(); b += Math.min(0.3, Math.max(p.sy(), 0.01)))
+                    for (double cc = 0; cc <= p.sz(); cc += Math.min(0.3, p.sz())) {
+                        double x = p.corner()[0] + p.r()[0] * a + p.u()[0] * b + p.f()[0] * cc;
+                        double y = p.corner()[1] + p.r()[1] * a + p.u()[1] * b + p.f()[1] * cc;
+                        double z = p.corner()[2] + p.r()[2] * a + p.u()[2] * b + p.f()[2] * cc;
+                        int bx = (int) Math.floor(x), by = (int) Math.floor(y), bz = (int) Math.floor(z);
+                        if (!c.isSet(bx, by, bz)) c.set(bx, by, bz, p.block());
+                    }
     }
 
     static int clamp(int v) { return Math.max(0, Math.min(255, v)); }

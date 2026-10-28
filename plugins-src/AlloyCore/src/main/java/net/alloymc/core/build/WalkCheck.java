@@ -38,6 +38,7 @@ public final class WalkCheck {
                 if (!clear) bad++;
             }
         }
+        bad += dragons();
         System.out.println(bad == 0 ? "ALL CLEAR" : bad + " build(s) with problems");
         if (bad > 0 && args.length > 0 && args[0].equals("--strict")) System.exit(1);
     }
@@ -46,5 +47,35 @@ public final class WalkCheck {
         Walkability.Report r = new Walkability(c).run(x, y, z);
         System.out.println(r.summary(name));
         return r.ok() ? 0 : 1;
+    }
+
+    /** Flies the hub dragons for two in-game hours on several seeds: no part of any dragon may pass through a hub block. */
+    static int dragons() {
+        Canvas hub = HubBuilder.build();
+        int clips = 0, frames = 0;
+        double low = 1e9;
+        for (long seed = 1; seed <= 6; seed++) {
+            var fl = java.util.List.of(
+                    new net.alloymc.core.hub.DragonFlight(net.alloymc.core.hub.DragonFlight.Kind.BLACK, seed * 31, seed),
+                    new net.alloymc.core.hub.DragonFlight(net.alloymc.core.hub.DragonFlight.Kind.GOLD, seed * 37, seed + 2.1),
+                    new net.alloymc.core.hub.DragonFlight(net.alloymc.core.hub.DragonFlight.Kind.SERPENT, seed * 41, seed + 4.2));
+            for (int t = 0; t < 24000; t++)
+                for (var d : fl) {
+                    d.step();
+                    if (t % 5 != 0) continue;
+                    frames++;
+                    for (var p : d.pose()) {
+                        for (double[] q : new double[][]{{0.5, 0.5, 0.5}, {0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {1, 1, 1}, {1, 0, 1}, {0, 1, 1}, {1, 1, 0}}) {
+                            double x = p.corner()[0] + p.r()[0] * p.sx() * q[0] + p.u()[0] * p.sy() * q[1] + p.f()[0] * p.sz() * q[2];
+                            double y = p.corner()[1] + p.r()[1] * p.sx() * q[0] + p.u()[1] * p.sy() * q[1] + p.f()[1] * p.sz() * q[2];
+                            double z = p.corner()[2] + p.r()[2] * p.sx() * q[0] + p.u()[2] * p.sy() * q[1] + p.f()[2] * p.sz() * q[2];
+                            low = Math.min(low, y);
+                            if (hub.isSet((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z))) { if (clips++ < 8) System.out.println("   clip " + d.kind + " " + p.block() + " at " + (int) x + " " + (int) y + " " + (int) z + " (" + hub.get((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z)) + ")"); break; }
+                        }
+                    }
+                }
+        }
+        System.out.println("hub dragons: " + frames + " poses flown, " + clips + " pieces through a hub block, lowest point y=" + Math.round(low));
+        return clips == 0 ? 0 : 1;
     }
 }
