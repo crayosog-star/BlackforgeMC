@@ -122,7 +122,7 @@ public final class AlloyCore extends JavaPlugin implements Listener {
                         if (hub == null) sender.sendMessage(Component.text("Not a hub server."));
                         else if (target == null) sender.sendMessage(Component.text("Player not found."));
                         else if (!WelcomeShow.play(this, target)) sender.sendMessage(Component.text("A show is already playing for " + target.getName() + "."));
-                        else sender.sendMessage(Component.text("Playing the welcome show for " + target.getName() + " - look up at the sky ahead."));
+                        else sender.sendMessage(Component.text("Welcome show for " + target.getName() + " started (or queued if one is already playing)."));
                     }
                     default -> {
                         if (!sub.isEmpty()) sender.sendMessage(Component.text("Unknown subcommand: " + args[0]));
