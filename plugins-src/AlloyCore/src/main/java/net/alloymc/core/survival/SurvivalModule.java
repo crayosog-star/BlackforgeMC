@@ -38,6 +38,7 @@ public final class SurvivalModule implements Listener {
     private final Votes votes;
     private final Scrap scrap;
     private final GaleBellows bellows;
+    private final JellyLegs jelly;
     private final GaiaPotion gaia;
     private final DarknessPotion darkness;
     private final Surge surge;
@@ -76,6 +77,9 @@ public final class SurvivalModule implements Listener {
         pvp.setEnchants(enchants);
         votes = new Votes(plugin, crates);
         scrap = new Scrap(plugin, crates, tags, enchants);
+        jelly = new JellyLegs(plugin);   // no fall damage: Scrap Shop unlock or crate reward, /jl toggles it
+        jelly.setScrap(scrap);
+        scrap.addJellyLegs(jelly);
         bellows = new GaleBellows(plugin);   // crate-only: crate rewards and rare Scrapyard supply crates hand them out
         pvp.setBellows(bellows);
         // Potion of Gaia: works anywhere except spawn and other people's claims (KOTH and the Scrapyard included -
@@ -257,6 +261,7 @@ public final class SurvivalModule implements Listener {
         reg("repairhand", List.of("rh", "fixhand"), (p, a) -> ranks.repairHand(p));
         reg("fly", List.of(), (p, a) -> ranks.fly(p));
         reg("scrap", List.of("scrapshop", "shards"), (p, a) -> scrap.command(p, a));
+        reg("jl", List.of("jellylegs"), (p, a) -> jelly.toggle(p));
         reg("jbello", List.of("bellows", "galebellows"), (p, a) -> {   // staff only: players get bellows from crates
             if (p.hasPermission("alloy.admin")) bellows.give(p);
             else p.sendMessage(Ui.mm("<#9EE6FF>🌬 <gray>The " + GaleBellows.NAME + " <gray>only comes from <white>crates <gray>and <white>Scrapyard supply drops<gray>."));
@@ -330,6 +335,12 @@ public final class SurvivalModule implements Listener {
             if (t == null) { s.sendMessage(Component.text("Player must be online")); return true; }
             gaia.give(t);
             s.sendMessage(Component.text("Gave a Potion of Gaia to " + a[2]));
+            return true;
+        }
+        if (a.length >= 3 && a[0].equalsIgnoreCase("jellylegs") && a[1].equalsIgnoreCase("give")) {   // /alloy jellylegs give <player> (crates)
+            Player t = Bukkit.getPlayerExact(a[2]);
+            if (t == null) { s.sendMessage(Component.text("Player must be online")); return true; }
+            jelly.giveFromCrate(t);
             return true;
         }
         if (a.length >= 3 && a[0].equalsIgnoreCase("bellows") && a[1].equalsIgnoreCase("give")) {   // /alloy bellows give <player>

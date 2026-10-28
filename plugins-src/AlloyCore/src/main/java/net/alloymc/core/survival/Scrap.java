@@ -50,6 +50,14 @@ public final class Scrap implements Listener {
         for (int t = 1; t <= 3; t++) { int tt = t; offers.add(new Offer("Supplies", Robots.fuelCell(t, 1), cost[t - 1], p -> give(p, Robots.fuelCell(tt, 1)))); }
     }
 
+    /** Jelly Legs (Survival only): a one-time unlock; buying it twice gives the Scrap back. */
+    void addJellyLegs(JellyLegs jl) {
+        offers.add(new Offer("Supplies", icon(Material.SLIME_BALL, "<#7ddc4a><bold>Jelly Legs", "<gray>No fall damage - toggle it with <white>/jl",
+                "<gray>Unlocks for good (Survival)"), JellyLegs.SCRAP_PRICE, p -> {
+            if (!jl.unlock(p)) { add(p, JellyLegs.SCRAP_PRICE, null); p.sendMessage(Ui.mm("<gray>You already have Jelly Legs - your Scrap was refunded.")); }
+        }));
+    }
+
     record Offer(String category, ItemStack icon, int cost, Consumer<Player> give) {}
 
     public static final int PER_KILL = 25, PER_MOB = 1, PER_PLAYTIME = 10, PLAYTIME_MINUTES = 10;
