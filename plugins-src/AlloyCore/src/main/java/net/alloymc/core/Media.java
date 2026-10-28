@@ -61,6 +61,7 @@ public final class Media implements Listener {
                 "<gray> • <red>YouTube<gray>: 100+ subscribers and a BlackForgeMC video with 500+ views",
                 "<gray> • <aqua>TikTok<gray>: 500+ followers and a BlackForgeMC clip with 2,000+ views",
                 "<gray> • <light_purple>Twitch / Kick<gray>: 5+ average viewers streaming BlackForgeMC for 2+ hours",
+                "<yellow>Every video and stream must show the server IP <white>play.blackforgemc.com <yellow>on screen the entire time.",
                 "<gray>Keep it by posting at least one BlackForgeMC video or stream a month.",
                 "<white>Perks: <gray>🎥 MEDIA tag, <white>+3 homes<gray> on top of your rank, the Media role in Discord.",
                 "<gray>Apply in <white>#media-apply<gray> on our Discord: <click:open_url:'" + invite + "'><white><u>" + invite + "</u></click>"))
