@@ -51,6 +51,7 @@ public final class Surge implements Listener {
     // palette (see the plan's visual guide)
     static final Color CRIMSON = Color.fromRGB(0xB3122E), EMBER = Color.fromRGB(0xE8364F), MAGENTA = Color.fromRGB(0xFF2E88),
             ASH = Color.fromRGB(0x3B3438), WITHER_BLACK = Color.fromRGB(0x120A0E), PALE = Color.fromRGB(0xEADFD6);
+    static final Color BLOOD = Color.fromRGB(0x5C0011), DEEP_RED = Color.fromRGB(0x8A0A1E);   // activation burst
 
     private record Boost(Attribute attribute, NamespacedKey key, double amount, AttributeModifier.Operation op) {}
 
@@ -264,22 +265,69 @@ public final class Surge implements Listener {
         // black wither hearts for the look; its real damage is cancelled in onDamage
         p.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, (int) (SurgeCurve.MAX_SECONDS * 20) + 20, 0, false, false, true));
         edges(p, true);
-        p.showTitle(Title.title(Ui.mm("<gradient:#E8364F:#FF2E88><bold>SURGE"), Ui.mm(""),
+        p.showTitle(Title.title(Ui.mm("<gradient:#5C0011:#B3122E:#5C0011><bold>SURGE"), Ui.mm(""),
                 Title.Times.times(Duration.ofMillis(50), Duration.ofMillis(350), Duration.ofMillis(250))));
         p.playSound(p.getLocation(), Sound.ENTITY_WITHER_SHOOT, SoundCategory.PLAYERS, 0.8f, 1.6f);
         p.playSound(p.getLocation(), Sound.BLOCK_BEACON_POWER_SELECT, SoundCategory.PLAYERS, 1.0f, 1.4f);
         setActiveLook(p.getInventory().getItemInMainHand(), true);
 
-        // the burst: a full sphere of petals for the surger, a smaller one everyone sees
-        Location c = p.getLocation().add(0, 1, 0);
-        for (int i = 0; i < 40; i++) {
-            Vector v = new Vector(rnd.nextGaussian(), rnd.nextGaussian(), rnd.nextGaussian()).normalize().multiply(2.5);
-            p.spawnParticle(Particle.DUST_COLOR_TRANSITION, c.clone().add(v), 1, 0, 0, 0, 0, new Particle.DustTransition(CRIMSON, MAGENTA, 1.4f));
-        }
-        w.spawnParticle(Particle.DUST, c, 20, 0.6, 0.6, 0.6, 0, new Particle.DustOptions(CRIMSON, 1.5f));
-        w.spawnParticle(Particle.DUST, c, 10, 0.5, 0.5, 0.5, 0, new Particle.DustOptions(WITHER_BLACK, 1.5f));
+        activationFx(p);
 
         s.task = Bukkit.getScheduler().runTaskTimer(plugin, () -> tick(p, s), 1L, 1L);
+    }
+
+    /**
+     * Activation, all dark red: a burst of dust right in front of the surger's eyes (a screen flash only they see),
+     * a full sphere of petals, then a shockwave rolling out along the ground from the launch spot and a double
+     * spiral climbing round the player for a second. The sphere, shockwave and spiral are seen by everyone nearby.
+     */
+    private void activationFx(Player p) {
+        World w = p.getWorld();
+        Location eye = p.getEyeLocation();
+        Vector f = eye.getDirection();
+        for (int i = 0; i < 70; i++) {   // the screen burst
+            Vector off = new Vector(rnd.nextGaussian(), rnd.nextGaussian(), rnd.nextGaussian()).multiply(0.35);
+            Location at = eye.clone().add(f.clone().multiply(0.7 + rnd.nextDouble() * 0.6)).add(off);
+            p.spawnParticle(Particle.DUST, at, 1, 0, 0, 0, 0, new Particle.DustOptions(rnd.nextBoolean() ? BLOOD : DEEP_RED, 2.0f));
+        }
+        Location c = p.getLocation().add(0, 1, 0);
+        for (int i = 0; i < 60; i++) {   // the sphere
+            Vector v = new Vector(rnd.nextGaussian(), rnd.nextGaussian(), rnd.nextGaussian()).normalize().multiply(2.5);
+            w.spawnParticle(Particle.DUST_COLOR_TRANSITION, c.clone().add(v), 1, 0, 0, 0, 0, new Particle.DustTransition(DEEP_RED, BLOOD, 1.5f));
+        }
+        w.spawnParticle(Particle.DUST, c, 25, 0.6, 0.6, 0.6, 0, new Particle.DustOptions(BLOOD, 1.8f));
+        w.spawnParticle(Particle.DUST, c, 12, 0.5, 0.5, 0.5, 0, new Particle.DustOptions(WITHER_BLACK, 1.5f));
+        w.spawnParticle(Particle.DAMAGE_INDICATOR, c, 8, 0.4, 0.4, 0.4, 0.1);
+
+        Location ground = p.getLocation().add(0, 0.15, 0);   // the shockwave stays where the surge started
+        UUID id = p.getUniqueId();
+        int[] t = {0};
+        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+            int k = t[0]++;
+            Player v = Bukkit.getPlayer(id);
+            if (k >= 20 || v == null || !v.isOnline()) { task.cancel(); return; }
+            if (k < 10) {   // shockwave: 0.6 -> 4.6 blocks over half a second
+                double r = 0.6 + k * 0.45;
+                int pts = 24 + k * 4;
+                Particle.DustOptions dust = new Particle.DustOptions(k < 5 ? DEEP_RED : BLOOD, 1.6f - k * 0.08f);
+                for (int i = 0; i < pts; i++) {
+                    double a = 2 * Math.PI * i / pts;
+                    w.spawnParticle(Particle.DUST, ground.getX() + r * Math.cos(a), ground.getY(), ground.getZ() + r * Math.sin(a), 1, 0, 0, 0, 0, dust);
+                }
+                w.spawnParticle(Particle.CRIMSON_SPORE, ground, 6, r * 0.5, 0.1, r * 0.5, 0);
+            }
+            // spiral: two strands climbing the player, fading from deep red to blood
+            Location base = v.getLocation();
+            Particle.DustOptions dust = new Particle.DustOptions(k < 10 ? DEEP_RED : BLOOD, 1.2f);
+            for (int strand = 0; strand < 2; strand++) {
+                for (int j = 0; j < 3; j++) {
+                    double step = k * 3 + j;
+                    double a = step * 0.35 + strand * Math.PI;
+                    double y = (step % 30) / 30.0 * 2.2;
+                    w.spawnParticle(Particle.DUST, base.getX() + 0.9 * Math.cos(a), base.getY() + y, base.getZ() + 0.9 * Math.sin(a), 1, 0, 0, 0, 0, dust);
+                }
+            }
+        }, 1L, 1L);
     }
 
     /** Staff in a test area (the hub Arena) skip the cooldown so they can try it again and again. */
