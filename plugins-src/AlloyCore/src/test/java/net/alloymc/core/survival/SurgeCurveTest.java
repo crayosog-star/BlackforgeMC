@@ -50,4 +50,26 @@ class SurgeCurveTest {
         assertFalse(SurgeCurve.warning(4.0));
         assertTrue(SurgeCurve.warning(4.6));
     }
+
+    @Test void edgesThrobOnTheHeartbeat() {
+        assertEquals(1.0, SurgeCurve.edgeGlow(0, false), EPS);            // full on the beat
+        assertEquals(1.0, SurgeCurve.edgeGlow(20, false), EPS);           // every second
+        assertTrue(SurgeCurve.edgeGlow(4, false) > SurgeCurve.edgeGlow(3, false));   // the second "dub"
+        assertTrue(SurgeCurve.edgeGlow(19, false) < 0.6);                 // eases back to the base between beats
+        assertTrue(SurgeCurve.edgeGlow(19, false) >= SurgeCurve.EDGE_BASE);
+        assertEquals(1.0, SurgeCurve.edgeGlow(10, true), EPS);            // twice as fast in the last stretch
+        for (int t = 0; t < 200; t++) {
+            double g = SurgeCurve.edgeGlow(t, t > 90);
+            assertTrue(g >= 0 && g <= 1);
+        }
+    }
+
+    @Test void warningDistanceGivesTheWantedStrength() {
+        for (double s : new double[]{0.3, 0.55, 0.9}) {
+            int w = SurgeCurve.warningDistance(200, s);
+            assertEquals(s, 1 - 200.0 / w, 0.01);                         // what the client will compute
+        }
+        assertTrue(SurgeCurve.warningDistance(200, 1.0) <= 1_000_000);    // capped, never overflows
+        assertTrue(SurgeCurve.warningDistance(0, 0.5) >= 1);              // standing on the edge
+    }
 }

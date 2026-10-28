@@ -66,10 +66,11 @@ public final class Surge implements Listener {
         long timeOffset;
         boolean timeRelative;
         WeatherType weather;
+        WorldBorder border;        // the personal border behind the red screen edges
     }
 
     private final AlloyCore plugin;
-    private final boolean enabled, customModel;
+    private final boolean enabled, customModel, screenDarkness;
     private final Predicate<Location> allowedAt;   // where it can be used (supplied by each server)
     private final boolean staffSkipCooldown;       // the hub Arena: staff can test it again and again
     public static final double LAUNCH_SPEED = 1.8; // the one-off dash in the look direction at the strike
@@ -88,6 +89,7 @@ public final class Surge implements Listener {
         this.staffSkipCooldown = staffSkipCooldown;
         this.enabled = plugin.getConfig().getBoolean("surge.enabled", true);
         this.customModel = plugin.getConfig().getBoolean("surge.custom-model", false);   // only once the resource pack is live
+        this.screenDarkness = plugin.getConfig().getBoolean("surge.screen-darkness", true);
         this.tagKey = new NamespacedKey(plugin, "surge_item");
         this.modelKey = new NamespacedKey("blackforge", "surge");
         this.boosts = List.of(
@@ -268,7 +270,7 @@ public final class Surge implements Listener {
         }
         // black wither hearts for the look; its real damage is cancelled in onDamage
         p.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, (int) (SurgeCurve.MAX_SECONDS * 20) + 20, 0, false, false, true));
-        edges(p, true);
+        s.border = edges(p, true);
         darkWorld(p, s, true);
         p.showTitle(Title.title(Ui.mm("<gradient:#5C0011:#B3122E:#5C0011><bold>SURGE"), Ui.mm(""),
                 Title.Times.times(Duration.ofMillis(50), Duration.ofMillis(350), Duration.ofMillis(250))));
@@ -351,14 +353,29 @@ public final class Surge implements Listener {
         p.setFallDistance(0f);
     }
 
-    /** The personal world border trick: a border only this player sees, with a huge warning distance, tints the screen edges red. */
-    private void edges(Player p, boolean on) {
-        if (!on) { p.setWorldBorder(null); return; }
+    private static final double EDGE_SIZE = 400;
+
+    /**
+     * The personal world border trick: a border only this player sees, with a huge warning distance, tints the screen
+     * edges red. While surging, {@link #pulseEdges} makes the red throb with the heartbeat.
+     */
+    private WorldBorder edges(Player p, boolean on) {
+        if (!on) { p.setWorldBorder(null); return null; }
         WorldBorder wb = Bukkit.createWorldBorder();
         wb.setCenter(p.getLocation());
-        wb.setSize(400);
+        wb.setSize(EDGE_SIZE);
         wb.setWarningDistance(1_000_000);   // 200 blocks from the edge out of a million: the red tint is at full strength
         p.setWorldBorder(wb);
+        return wb;
+    }
+
+    /** Throb the red edges: set the warning distance so the client's tint matches {@link SurgeCurve#edgeGlow} this tick. */
+    private void pulseEdges(Player p, Active s, boolean warn) {
+        WorldBorder wb = s.border;
+        if (wb == null) return;
+        Location here = p.getLocation(), c = wb.getCenter();
+        double dist = EDGE_SIZE / 2 - Math.max(Math.abs(here.getX() - c.getX()), Math.abs(here.getZ() - c.getZ()));
+        wb.setWarningDistance(SurgeCurve.warningDistance(dist, SurgeCurve.edgeGlow(s.ticks, warn)));
     }
 
     // ------------------------------------------------------------------ while surging
@@ -368,6 +385,7 @@ public final class Surge implements Listener {
         double t = ++s.ticks / 20.0;
         if (t >= SurgeCurve.MAX_SECONDS) { end(p, "time"); return; }
         boolean warn = SurgeCurve.warning(t);
+        pulseEdges(p, s, warn);
 
         if (s.ticks % 10 == 0 && drain(p, s, t)) { end(p, "drained"); return; }
         if (s.ticks % 2 == 0)
@@ -416,10 +434,13 @@ public final class Surge implements Listener {
         }
     }
 
+    private static final int SURGE_TICKS = (int) (SurgeCurve.MAX_SECONDS * 20);
+
     /**
-     * The surger's own world goes dark for the surge: frozen midnight, rain, and one 1.5 s pulse of Darkness as it starts (left to expire on
-     * its own, so it never strips a real Potion of Darkness hit).
-     * Only they see it. {@code on = false} puts their sky back exactly as it was.
+     * The surger's own world goes dark for the surge: frozen midnight, rain, and Darkness for the whole surge (it pulses
+     * on its own and fades out as the surge ends). With surge.screen-darkness off it is only a 1.5 s pulse at the start.
+     * Only they see it. {@code on = false} puts their sky back exactly as it was, and takes the Darkness off if the surge
+     * ended early, but only if it is ours (a longer real Potion of Darkness hit is left alone).
      */
     private void darkWorld(Player p, Active s, boolean on) {
         if (on) {
@@ -428,9 +449,12 @@ public final class Surge implements Listener {
             s.weather = p.getPlayerWeather();
             p.setPlayerTime(18000, false);
             p.setPlayerWeather(WeatherType.DOWNFALL);
-            p.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, 30, 0, false, false, false));
+            p.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, screenDarkness ? SURGE_TICKS : 30, 0, false, false, false));
             return;
         }
+        PotionEffect dark = p.getPotionEffect(PotionEffectType.DARKNESS);
+        if (screenDarkness && dark != null && !dark.isInfinite() && dark.getAmplifier() == 0 && dark.getDuration() <= SURGE_TICKS - s.ticks + 2)
+            p.removePotionEffect(PotionEffectType.DARKNESS);
         if (s.timeRelative && s.timeOffset == 0) p.resetPlayerTime();
         else p.setPlayerTime(s.timeOffset, s.timeRelative);
         if (s.weather == null) p.resetPlayerWeather();
