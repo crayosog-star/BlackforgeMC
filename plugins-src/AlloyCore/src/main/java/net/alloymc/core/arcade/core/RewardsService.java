@@ -53,6 +53,7 @@ public final class RewardsService {
             long joined = m.joinedAt.getOrDefault(u, System.currentTimeMillis());
             boolean longEnough = (System.currentTimeMillis() - joined) / 1000 >= minSeconds;
             boolean won = m.winners.contains(u);
+            net.alloymc.core.Hooks.arcadeEnd(p, m.game.id, won);
             if (won) pay(p, m, "win", num(m.game.id, "win-money", 150), (long) num(m.game.id, "win-scrap", 15));
             if (longEnough) pay(p, m, "played", num(m.game.id, "play-money", 25), (long) num(m.game.id, "play-scrap", 2));
         }

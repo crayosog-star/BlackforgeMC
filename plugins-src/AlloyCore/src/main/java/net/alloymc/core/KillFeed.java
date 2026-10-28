@@ -17,6 +17,9 @@ import org.bukkit.inventory.ItemStack;
  */
 public final class KillFeed implements Listener {
     private static final Component SKULL = Component.text("☠ ", NamedTextColor.DARK_RED);
+    private final String mode;
+
+    public KillFeed(String mode) { this.mode = mode; }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onDeath(PlayerDeathEvent e) {
@@ -27,6 +30,7 @@ public final class KillFeed implements Listener {
             return;
         }
         e.deathMessage(message(victim, killer, killer.getInventory().getItemInMainHand()));
+        Hooks.kill(killer, victim, mode);
     }
 
     /** "☠ Victim was slain by Killer using [Item]" - the item shows its custom name and can be hovered. */

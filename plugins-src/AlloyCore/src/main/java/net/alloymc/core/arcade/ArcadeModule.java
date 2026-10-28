@@ -42,6 +42,7 @@ public final class ArcadeModule implements Listener, Arcade.Lobby {
         world.setSpawnLocation(lobbySpawn());
         booths.putAll(LobbyBuilder.plates());
         arcade = new Arcade(plugin, this);
+        new Seasons(plugin, arcade);   // monthly ranked seasons and the Weekend Cup
         Games.registerAll(arcade);
         Bukkit.getPluginManager().registerEvents(new LobbyRules(p -> p.getWorld() != world), plugin);
         new net.alloymc.core.SpawnSafety(plugin, l -> l.getWorld() == world, p -> lobbySpawn()).withStuckCommand();

@@ -97,6 +97,12 @@ public final class DailyRewards implements Listener {
         try { data.save(file); } catch (Exception ignored) { }
         p.sendMessage(Ui.mm("<gold>☀ <bold>Daily reward:</bold> " + best.label() + " <gray>| Streak: <white>" + streak + " day" + (streak == 1 ? "" : "s")
                 + (rolls > 1 ? " <gray>(best of " + rolls + " rolls)" : "")));
+        // the streak itself pays too: 10 Scrap a day of streak, up to 150
+        if (streak > 1) {
+            int bonus = Math.min(150, 10 * streak);
+            scrap(p, bonus);
+            p.sendMessage(Ui.mm("<gold>☀ <gray>Streak bonus: <#c6a15b>+" + bonus + " Scrap <dark_gray>(keep it going tomorrow for more)"));
+        }
         if (streak % 7 == 0) {
             crates.give(p, "gold", 1);
             p.sendMessage(Ui.mm("<gold>☀ <bold>" + streak + "-day streak bonus!</bold> <gray>+1 <#ffb52e>Molten Key"));

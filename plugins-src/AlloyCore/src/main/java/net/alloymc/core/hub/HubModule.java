@@ -72,6 +72,7 @@ public final class HubModule implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, this::refresh, 60L, 40L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::ambient, 20L, 10L);
         dragons = new DragonAnimator(plugin, world);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::leaderboards, 60L, 1200L);
         arena = new TestArena(plugin);
         gaia = new net.alloymc.core.survival.GaiaPotion(plugin, (pl, l) -> l.getWorld() == arena.world());   // never on the hub itself
         arena.setGaia(gaia);
@@ -111,7 +112,38 @@ public final class HubModule implements Listener {
 
     private DragonAnimator dragons;
 
-    public void shutdown() { gaia.shutdown(); surge.shutdown(); holograms.forEach(TextDisplay::remove); if (dragons != null) dragons.remove(); arena.shutdown(); }
+    public void shutdown() { gaia.shutdown(); surge.shutdown(); holograms.forEach(TextDisplay::remove); boards.forEach(TextDisplay::remove); if (dragons != null) dragons.remove(); arena.shutdown(); }
+    // ------------------------------------------------------------------ leaderboards
+
+    private final List<TextDisplay> boards = new ArrayList<>();
+
+    /** Two network-wide boards either side of spawn, refreshed every minute from shared/stats. */
+    private void leaderboards() {
+        var stats = plugin.sharedStats();
+        if (stats == null) return;
+        String kills = board("<red><bold>⚔ TOP KILLERS</bold>", stats.top("kills", 10), "kills");
+        String wins = board("<gold><bold>★ ARCADE CHAMPIONS</bold>", stats.top("arcade_wins", 10), "wins");
+        if (boards.size() != 2 || boards.stream().anyMatch(b -> !b.isValid())) {
+            boards.forEach(TextDisplay::remove);
+            boards.clear();
+            boards.add(Ui.hologram(new Location(world, -9.5, HubLayout.Y + 5.5, -7.5), kills, 1.15f));
+            boards.add(Ui.hologram(new Location(world, 10.5, HubLayout.Y + 5.5, -7.5), wins, 1.15f));
+        } else {
+            boards.get(0).text(Ui.mm(kills));
+            boards.get(1).text(Ui.mm(wins));
+        }
+    }
+
+    private static String board(String title, List<net.alloymc.core.SharedStats.Row> rows, String unit) {
+        StringBuilder sb = new StringBuilder(title).append("\n<dark_gray>").append("-".repeat(16));
+        if (rows.isEmpty()) sb.append("\n<gray>Nobody yet - be the first!");
+        for (int i = 0; i < rows.size(); i++) {
+            String medal = i == 0 ? "<gold>" : i == 1 ? "<#d9dde3>" : i == 2 ? "<#c6773a>" : "<gray>";
+            sb.append("\n").append(medal).append(i + 1).append(". <white>").append(rows.get(i).name()).append(" <gray>").append(rows.get(i).value()).append(" ").append(unit);
+        }
+        return sb.toString();
+    }
+
 
     public Location spawn() {
         return new Location(world, HubLayout.SPAWN_X, HubLayout.SPAWN_Y, HubLayout.SPAWN_Z, HubLayout.SPAWN_YAW, HubLayout.SPAWN_PITCH);
@@ -397,6 +429,7 @@ public final class HubModule implements Listener {
                 "<#e5484d>■ <white>Factions <gray>" + net.count("factions"),
                 "<#ffc53d>■ <white>Arcade <gray>" + net.count("arcade"),
                 "  ",
+                "<#7289da>/discord <dark_gray>- <gray>join us",
                 "<gold>" + plugin.getConfig().getString("address", "BlackForgeMC"),
                 "<dark_gray>" + "-".repeat(18) + " "));
         p.sendPlayerListHeaderAndFooter(Ui.mm("\n" + Ui.TITLE + "\n<gray>Forged for fun\n"),

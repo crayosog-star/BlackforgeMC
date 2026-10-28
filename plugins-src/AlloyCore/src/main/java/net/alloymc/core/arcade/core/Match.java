@@ -357,6 +357,7 @@ public abstract class Match {
             arcade.stats().add(killer.getUniqueId(), game.id, "kills", 1);
             arcade.stats().max(killer.getUniqueId(), game.id, "best_streak", s);
             arcade.rewards().kill(this, killer);
+            net.alloymc.core.Hooks.kill(killer, p, "arcade:" + game.id);
             killer.playSound(killer.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.8f, 1.4f);
             for (Player a : assistsOf(p, killer)) arcade.stats().add(a.getUniqueId(), game.id, "assists", 1);
         }

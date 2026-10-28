@@ -29,6 +29,10 @@ public final class AlloyCore extends JavaPlugin implements Listener {
     private SkyblockModule skyblock;
     private net.alloymc.core.factions.FactionsModule factions;
     private Supporters supporters;
+    private File shared;
+    private SharedStats sharedStats;
+    private Cosmetics cosmetics;
+    private Challenges challenges;
 
     @Override
     public void onEnable() {
@@ -37,11 +41,16 @@ public final class AlloyCore extends JavaPlugin implements Listener {
         net = new Net(this);
         economy = new NetEconomy(this);
         new LocatorRange(this);
-        try { Bukkit.getPluginManager().registerEvents(new TestGuard(new File(getServer().getWorldContainer().getCanonicalFile().getParentFile(), "shared")), this); }
-        catch (java.io.IOException e) { getLogger().warning("TestGuard disabled: " + e.getMessage()); }
+        try { shared = new File(getServer().getWorldContainer().getCanonicalFile().getParentFile(), "shared"); }
+        catch (java.io.IOException e) { shared = new File(getServer().getWorldContainer().getAbsoluteFile().getParentFile(), "shared"); }
+        Bukkit.getPluginManager().registerEvents(new TestGuard(shared), this);
+        // network-wide stats and cosmetics listen to the kill/arcade hooks, so they exist before the game modes
+        sharedStats = new SharedStats(shared);
+        cosmetics = new Cosmetics(this, shared);
         // moderation and cheat checks run on every server
         AutoMod automod = new AutoMod(this);
         new Guardian(this, automod.store());
+        new net.alloymc.core.moderation.Punish(this, automod.store(), shared);
         // store supporter ranks: badge, trails, /store - on every server
         supporters = new Supporters(this, mode);
         switch (mode) {
@@ -52,8 +61,12 @@ public final class AlloyCore extends JavaPlugin implements Listener {
             case "factions" -> { factions = new net.alloymc.core.factions.FactionsModule(this); Bukkit.getPluginManager().registerEvents(this, this); }
             default -> Bukkit.getPluginManager().registerEvents(this, this);
         }
-        if (survival != null || skyblock != null || factions != null) Bukkit.getPluginManager().registerEvents(new KillFeed(), this);
+        if (survival != null || skyblock != null || factions != null) Bukkit.getPluginManager().registerEvents(new KillFeed(mode), this);
         if (arcade != null) supporters.setTrailBlocked(arcade::inGame);
+        // /discord, chat tips, /report and the Discord feed - on every server
+        new Community(this, mode, shared);
+        if (survival != null || skyblock != null || factions != null || arcade != null) challenges = new Challenges(this, mode);
+        new HallowEvent(this, mode, cosmetics);
         getLogger().info("AlloyCore enabled in " + mode + " mode");
     }
 
@@ -64,10 +77,13 @@ public final class AlloyCore extends JavaPlugin implements Listener {
         if (survival != null) survival.shutdown();
         if (skyblock != null) skyblock.shutdown();
         if (factions != null) factions.shutdown();
+        if (challenges != null) challenges.save();
     }
 
     public Net net() { return net; }
     public NetEconomy economy() { return economy; }
+    public SharedStats sharedStats() { return sharedStats; }
+    public Cosmetics cosmetics() { return cosmetics; }
 
     @EventHandler
     public void onBackendJoin(PlayerJoinEvent e) {

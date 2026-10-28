@@ -2,7 +2,7 @@
 // Edit these values when the links exist; empty links show as "coming soon".
 const SITE = {
   ip: "blackforgemc.com",
-  discord: "",
+  discord: "https://discord.gg/CChc5MfbD5",
   store: "",
   // Vote pages, once the server is listed: { name: "Minecraft-MP", url: "https://minecraft-mp.com/server/12345/vote/" }.
   // Keep in step with votes.sites in survival/plugins/AlloyCore/config.yml (the in-game /vote list).
