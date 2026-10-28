@@ -75,4 +75,33 @@ class ChainPullTest {
     @Test void grappleReachesFurtherThanYank() {
         assertTrue(ChainPull.GRAPPLE_RANGE > ChainPull.YANK_RANGE);
     }
+
+    // ---- the burning tether on players
+
+    @Test void playersAreJerkedOneBlock() {
+        double[] v = ChainPull.pull(8, 0, ChainPull.PLAYER_PULL);
+        assertTrue(v[0] < 0, "towards the caster");
+        assertEquals(ChainPull.PLAYER_PULL, travelled(-v[0], v[1]), 0.1);
+    }
+
+    @Test void yankStillMatchesAFullDrag() {
+        assertArrayEquals(ChainPull.pull(3, 4, ChainPull.yankDistance(5)), ChainPull.yank(3, 4, 5), EPS);
+    }
+
+    @Test void burnsOnTheHookThenOnceASecond() {
+        int ticks = 60;
+        int hits = 0;
+        for (int t = -1; t <= ticks + 20; t++) if (ChainPull.burnsOnTick(t, ticks)) hits++;
+        assertEquals(4, hits);
+        assertEquals(4, ChainPull.burnHits(ticks));
+        assertTrue(ChainPull.burnsOnTick(0, ticks));
+        assertFalse(ChainPull.burnsOnTick(10, ticks));
+        assertFalse(ChainPull.burnsOnTick(80, ticks));
+    }
+
+    @Test void tetherSnapsWhenOutRun() {
+        assertTrue(ChainPull.tetherHolds(ChainPull.YANK_RANGE));
+        assertTrue(ChainPull.tetherHolds(ChainPull.TETHER_SNAP));
+        assertFalse(ChainPull.tetherHolds(ChainPull.TETHER_SNAP + 0.01));
+    }
 }
