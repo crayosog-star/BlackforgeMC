@@ -62,6 +62,10 @@ public final class Surge implements Listener {
         double drainedTo;          // seconds of drain already charged
         boolean wasOnGround = true;
         Location last;
+        // the player's own sky before the surge, put back exactly afterwards (Factions sets its own night sky)
+        long timeOffset;
+        boolean timeRelative;
+        WeatherType weather;
     }
 
     private final AlloyCore plugin;
@@ -265,6 +269,7 @@ public final class Surge implements Listener {
         // black wither hearts for the look; its real damage is cancelled in onDamage
         p.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, (int) (SurgeCurve.MAX_SECONDS * 20) + 20, 0, false, false, true));
         edges(p, true);
+        darkWorld(p, s, true);
         p.showTitle(Title.title(Ui.mm("<gradient:#5C0011:#B3122E:#5C0011><bold>SURGE"), Ui.mm(""),
                 Title.Times.times(Duration.ofMillis(50), Duration.ofMillis(350), Duration.ofMillis(250))));
         p.playSound(p.getLocation(), Sound.ENTITY_WITHER_SHOOT, SoundCategory.PLAYERS, 0.8f, 1.6f);
@@ -352,7 +357,7 @@ public final class Surge implements Listener {
         WorldBorder wb = Bukkit.createWorldBorder();
         wb.setCenter(p.getLocation());
         wb.setSize(400);
-        wb.setWarningDistance(1000);
+        wb.setWarningDistance(1_000_000);   // 200 blocks from the edge out of a million: the red tint is at full strength
         p.setWorldBorder(wb);
     }
 
@@ -366,16 +371,16 @@ public final class Surge implements Listener {
 
         if (s.ticks % 10 == 0 && drain(p, s, t)) { end(p, "drained"); return; }
         if (s.ticks % 2 == 0)
-            p.sendActionBar(Ui.mm((warn ? "<#8a7f85>" : "<#E8364F>") + "✦ " + SurgeCurve.meter(SurgeCurve.MAX_SECONDS - t)));
+            p.sendActionBar(Ui.mm((warn ? "<#8a7f85>" : "<#8A0A1E>") + "☠ " + SurgeCurve.meter(SurgeCurve.MAX_SECONDS - t)));
 
         Location here = p.getLocation();
         double moved = s.last.getWorld() == here.getWorld() ? Math.hypot(here.getX() - s.last.getX(), here.getZ() - s.last.getZ()) : 0;
         s.last = here;
-        Color from = warn ? ASH : CRIMSON, to = warn ? ASH : MAGENTA;
+        Color from = warn ? ASH : DEEP_RED, to = warn ? ASH : WITHER_BLACK;
 
-        // only the surger sees this layer: rose dust drifting in a 6-block bubble
+        // only the surger sees this layer: blood-red dust darkening to black, drifting in a 6-block bubble
         if (s.ticks % 2 == 0)
-            for (int i = 0; i < 4; i++) {
+            for (int i = 0; i < 8; i++) {
                 Vector v = new Vector(rnd.nextGaussian(), rnd.nextGaussian() * 0.6, rnd.nextGaussian()).normalize().multiply(1.5 + rnd.nextDouble() * 4.5);
                 p.spawnParticle(Particle.DUST_COLOR_TRANSITION, here.clone().add(0, 1.2, 0).add(v), 1, 0, 0, 0, 0, new Particle.DustTransition(from, to, 1.0f));
             }
@@ -393,8 +398,8 @@ public final class Surge implements Listener {
         }
         // heartbeat ring along the ground, faster in the last stretch
         if (s.ticks % (warn ? 10 : 20) == 0) {
-            p.playSound(here, Sound.ENTITY_WARDEN_HEARTBEAT, SoundCategory.PLAYERS, 0.7f, warn ? 1.3f : 1.0f);
-            ring(p, here, 1.6, warn ? ASH : MAGENTA);
+            p.playSound(here, Sound.ENTITY_WARDEN_HEARTBEAT, SoundCategory.PLAYERS, 1.0f, warn ? 1.3f : 0.9f);
+            ring(p, here, 1.6, warn ? ASH : DEEP_RED);
         }
         // landing a jump: a crimson bloom where you touch down
         boolean onGround = p.isOnGround();
@@ -403,10 +408,56 @@ public final class Surge implements Listener {
             p.getWorld().spawnParticle(Particle.DUST, here.clone().add(0, 0.1, 0), 6, 0.4, 0.05, 0.4, 0, new Particle.DustOptions(CRIMSON, 1.2f));
         }
         s.wasOnGround = onGround;
-        // what everyone else sees: a thin petal trail
-        if (s.ticks % 2 == 0)
-            p.getWorld().spawnParticle(Particle.DUST, here.clone().add(0, 0.3, 0), 1, 0.15, 0.1, 0.15, 0, new Particle.DustOptions(warn ? ASH : CRIMSON, 1.0f));
-        if (s.ticks % 40 == 0) p.playSound(here, Sound.ENTITY_WITHER_AMBIENT, SoundCategory.PLAYERS, 0.15f, 1.5f);
+        // what everyone else sees: a dark aura that makes it obvious you're surging
+        aura(p, here, s.ticks, warn);
+        if (s.ticks % 40 == 0) {
+            p.playSound(here, Sound.ENTITY_WITHER_AMBIENT, SoundCategory.PLAYERS, 0.15f, 1.5f);
+            p.playSound(here, Sound.BLOCK_BEACON_AMBIENT, SoundCategory.PLAYERS, 0.9f, 0.5f);   // a low drone, surger only
+        }
+    }
+
+    /**
+     * The surger's own world goes dark for the surge: frozen midnight, rain, and one 1.5 s pulse of Darkness as it starts (left to expire on
+     * its own, so it never strips a real Potion of Darkness hit).
+     * Only they see it. {@code on = false} puts their sky back exactly as it was.
+     */
+    private void darkWorld(Player p, Active s, boolean on) {
+        if (on) {
+            s.timeOffset = p.getPlayerTimeOffset();
+            s.timeRelative = p.isPlayerTimeRelative();
+            s.weather = p.getPlayerWeather();
+            p.setPlayerTime(18000, false);
+            p.setPlayerWeather(WeatherType.DOWNFALL);
+            p.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, 30, 0, false, false, false));
+            return;
+        }
+        if (s.timeRelative && s.timeOffset == 0) p.resetPlayerTime();
+        else p.setPlayerTime(s.timeOffset, s.timeRelative);
+        if (s.weather == null) p.resetPlayerWeather();
+        else p.setPlayerWeather(s.weather);
+    }
+
+    /**
+     * What everyone sees while you surge: two blood-red rings spinning opposite ways round your body, dark red drips
+     * falling off you, black smoke trailing behind and crimson spores. Turns grey in the last stretch.
+     */
+    private void aura(Player p, Location here, int tick, boolean warn) {
+        World w = p.getWorld();
+        Particle.DustOptions ringA = new Particle.DustOptions(warn ? ASH : DEEP_RED, 1.3f), ringB = new Particle.DustOptions(warn ? ASH : BLOOD, 1.3f);
+        double spin = tick * 0.35;
+        for (int i = 0; i < 3; i++) {
+            double a = spin + i * 2 * Math.PI / 3, b = -spin + i * 2 * Math.PI / 3 + Math.PI / 3;
+            w.spawnParticle(Particle.DUST, here.getX() + 0.85 * Math.cos(a), here.getY() + 0.5, here.getZ() + 0.85 * Math.sin(a), 1, 0, 0, 0, 0, ringA);
+            w.spawnParticle(Particle.DUST, here.getX() + 0.75 * Math.cos(b), here.getY() + 1.4, here.getZ() + 0.75 * Math.sin(b), 1, 0, 0, 0, 0, ringB);
+        }
+        if (tick % 2 == 0) {
+            w.spawnParticle(Particle.LARGE_SMOKE, here.clone().add(0, 0.6, 0), 2, 0.25, 0.4, 0.25, 0.005);
+            w.spawnParticle(Particle.DUST, here.clone().add(0, 1.0, 0), 3, 0.3, 0.5, 0.3, 0, new Particle.DustOptions(WITHER_BLACK, 1.6f));
+        }
+        if (!warn && tick % 3 == 0) {
+            w.spawnParticle(Particle.FALLING_DUST, here.clone().add(0, 1.6, 0), 2, 0.3, 0.3, 0.3, 0, Material.NETHER_WART_BLOCK.createBlockData());
+            w.spawnParticle(Particle.CRIMSON_SPORE, here.clone().add(0, 1.0, 0), 4, 0.6, 0.6, 0.6, 0);
+        }
     }
 
     private void ring(Player p, Location at, double r, Color c) {
@@ -447,6 +498,7 @@ public final class Surge implements Listener {
         clearBoosts(p);
         if (p.hasPotionEffect(PotionEffectType.WITHER)) p.removePotionEffect(PotionEffectType.WITHER);
         edges(p, false);
+        darkWorld(p, s, false);
         for (ItemStack it : p.getInventory().getContents()) setActiveLook(it, false);
         long now = System.currentTimeMillis();
         readyAt.put(p.getUniqueId(), now + COOLDOWN_SECONDS * 1000L);   // the 30 s runs from the end of the surge
