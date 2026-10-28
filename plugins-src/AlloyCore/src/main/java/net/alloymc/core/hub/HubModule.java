@@ -80,7 +80,7 @@ public final class HubModule implements Listener {
                 l -> l.getWorld() == arena.world());   // Arena: no refund (refill covers it), new cloud replaces your old one
         darkness = new net.alloymc.core.survival.DarknessPotion(plugin, l -> l.getWorld() == arena.world());
         surge = new net.alloymc.core.survival.Surge(plugin, l -> l.getWorld() == arena.world(), true);   // staff: no cooldown in the Arena
-        bellows = new net.alloymc.core.survival.GaleBellows(plugin, l -> l.getWorld() == arena.world());   // Arena: no cooldown, never breaks
+        bellows = new net.alloymc.core.survival.GaleBellows(plugin, l -> l.getWorld() == arena.world(), arena::isTestDummy);   // Arena: no cooldown, never breaks; can hit the Test Dummy
         // Arena test items: each goes on the showcase wall, into the Arena hotbar (in this order) and never runs out there.
         // EVERY NEW ITEM GETS ONE LINE HERE.
         arena.addTestItem(bellows::item, bellows::isBellows, bellows::isWorn);

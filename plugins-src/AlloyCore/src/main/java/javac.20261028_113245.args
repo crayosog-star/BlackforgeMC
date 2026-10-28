@@ -1,0 +1,7 @@
+-d
+/tmp/claude-0/-home-claude/2b41f577-1257-5ccf-bc1f-c505a505861e/scratchpad/jc
+-proc:none
+-Xmaxerrs
+5000
+net/alloymc/core/survival/GaleBellows.java
+net/alloymc/core/survival/WindCone.java
