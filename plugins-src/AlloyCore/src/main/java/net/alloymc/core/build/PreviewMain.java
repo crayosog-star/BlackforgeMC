@@ -29,6 +29,8 @@ public final class PreviewMain {
         topDown(hub, new File(out, "hub_top.png"), 6);
         pov(hub, new File(out, "hub_dragon_east.png"), 20.5, 112, -20.5, -64, -18, 1280, 720);
         pov(hub, new File(out, "hub_dragon_south.png"), 0.5, 105, 20.5, 0, -31, 1280, 720);
+        pov(hub, new File(out, "hub_dragon_west.png"), -20.5, 112, -20.5, 64, -18, 1280, 720);
+        pov(hub, new File(out, "hub_serpent_close.png"), -40.5, 135, 30.5, 135, 8, 1280, 720);
         pov(hub, new File(out, "hub_aerial.png"), 0.5, 190, 150.5, 180, 30, 1600, 900);
         night = false;
         Canvas sv = net.alloymc.core.survival.SpawnBuilder.spawn();

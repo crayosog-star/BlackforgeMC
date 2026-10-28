@@ -7,26 +7,63 @@ import java.util.List;
 import static net.alloymc.core.hub.HubLayout.Y;
 
 /**
- * Three dragon statues gliding in the sky around the hub, sculpted from a smooth shape so they look right at any heading.
- * The blocks are part of {@link HubBuilder}; the fire they breathe is particles played by {@link HubModule}.
+ * Three dragon statues gliding in the sky around the hub, sculpted from smooth shapes so they look right at any heading:
+ * a blackstone dragon, a gold one, and a long wingless soul serpent that breathes blue fire.
+ * The blocks are part of {@link HubBuilder}; the fire and the rest of the animation are played by {@link DragonAnimator}.
  *
  * Shapes are written in dragon space: u points forward (towards the snout), v up, w out to the dragon's right.
  */
 public final class Dragons {
     private Dragons() {}
 
-    /** A dragon statue: body origin, heading in degrees (0 = +X, 90 = +Z) and whether it is cast in gold. */
-    public record Dragon(double ox, double oy, double oz, double heading, boolean gold) {
+    public enum Kind {
+        //      mouth u, v, breath pitch, eye u, v, w,       eye block,                  blink block
+        BLACK  (19.5, 4.8, 24, 15.6, 6.9, 1.35, "minecraft:shroomlight", "minecraft:polished_blackstone"),
+        GOLD   (19.5, 4.8, 24, 15.6, 6.9, 1.35, "minecraft:shroomlight", "minecraft:gold_block"),
+        SERPENT(20.6, -0.6, 14, 16.3, 1.4, 1.45, "minecraft:sea_lantern", "minecraft:dark_prismarine");
+
+        final double mouthU, mouthV, breathPitch, eyeU, eyeV, eyeW;
+        public final String eye, eyelid;
+
+        Kind(double mouthU, double mouthV, double breathPitch, double eyeU, double eyeV, double eyeW, String eye, String eyelid) {
+            this.mouthU = mouthU; this.mouthV = mouthV; this.breathPitch = breathPitch;
+            this.eyeU = eyeU; this.eyeV = eyeV; this.eyeW = eyeW; this.eye = eye; this.eyelid = eyelid;
+        }
+    }
+
+    /** A dragon statue: body origin, heading in degrees (0 = +X, 90 = +Z) and which design it is. */
+    public record Dragon(double ox, double oy, double oz, double heading, Kind kind) {
         double cos() { return Math.cos(Math.toRadians(heading)); }
         double sin() { return Math.sin(Math.toRadians(heading)); }
 
         /** World position of the open mouth, where the fire comes from. */
-        public double[] mouth() { return toWorld(MOUTH_U, MOUTH_V, 0); }
+        public double[] mouth() { return toWorld(kind.mouthU, kind.mouthV, 0); }
 
-        /** Unit direction of the fire: straight ahead and angled down. */
-        public double[] breath() {
-            double p = Math.toRadians(BREATH_PITCH);
-            return new double[]{cos() * Math.cos(p), -Math.sin(p), sin() * Math.cos(p)};
+        /** World position of the nostrils, just above the mouth. */
+        public double[] nose() { return toWorld(kind.mouthU, kind.mouthV + 1.4, 0); }
+
+        /** World centres of the two eyes. */
+        public double[][] eyes() {
+            return new double[][]{toWorld(kind.eyeU, kind.eyeV, kind.eyeW), toWorld(kind.eyeU, kind.eyeV, -kind.eyeW)};
+        }
+
+        /** Points that trail embers in the wind: wing tips and tail for the winged dragons, spine humps for the serpent. */
+        public double[][] trails() {
+            if (kind == Kind.SERPENT) {
+                double[] a = spine(0.02), b = spine(0.3), c = spine(0.55), e = spine(0.8);
+                return new double[][]{toWorld(a[0], a[1], a[2]), toWorld(b[0], b[1] + 2.5, b[2]),
+                        toWorld(c[0], c[1] + 2.5, c[2]), toWorld(e[0], e[1] + 2.5, e[2])};
+            }
+            return new double[][]{toWorld(-3.8, 9.4, 22.9), toWorld(-3.8, 9.4, -22.9), toWorld(-34, spineV(-31), spineW(-31))};
+        }
+
+        /** Unit forward direction. */
+        public double[] forward() { return new double[]{cos(), 0, sin()}; }
+
+        /** Unit direction of the fire, angled down and swung {@code sweep} degrees to the side. */
+        public double[] breath(double sweep) {
+            double p = Math.toRadians(kind.breathPitch), h = Math.toRadians(heading + sweep);
+            return new double[]{Math.cos(h) * Math.cos(p), -Math.sin(p), Math.sin(h) * Math.cos(p)};
         }
 
         double[] toWorld(double u, double v, double w) {
@@ -36,11 +73,12 @@ public final class Dragons {
 
     /** Circling the island anticlockwise, side-on to spawn, clear of the BLACKFORGE sign in the north. */
     public static final List<Dragon> ALL = List.of(
-            new Dragon(62.5, Y + 27, 0.5, 90, false),      // east, flying south
-            new Dragon(0.5, Y + 34, 70.5, 180, true),      // south, over the arcade gate, flying west
-            new Dragon(-62.5, Y + 25, 0.5, 270, false));   // west, flying north
+            new Dragon(62.5, Y + 27, 0.5, 90, Kind.BLACK),      // east, flying south
+            new Dragon(0.5, Y + 34, 70.5, 180, Kind.GOLD),      // south, over the arcade gate, flying west
+            new Dragon(-62.5, Y + 29, 0.5, 270, Kind.SERPENT)); // west, flying north
 
-    static final double MOUTH_U = 19.5, MOUTH_V = 4.8, BREATH_PITCH = 24;
+    /** The first version's west dragon (a second blackstone one), cleared when upgrading a hub to the serpent. */
+    public static final Dragon OLD_WEST = new Dragon(-62.5, Y + 25, 0.5, 270, Kind.BLACK);
 
     /** Just the dragons, for pasting into a hub that was built before they existed. */
     public static Canvas build() {
@@ -49,26 +87,108 @@ public final class Dragons {
         return c;
     }
 
+    /** One dragon on its own. */
+    public static Canvas build(Dragon d) {
+        Canvas c = new Canvas();
+        sculpt(c, d);
+        return c;
+    }
+
     static void addTo(Canvas c) {
         for (Dragon d : ALL) sculpt(c, d);
     }
 
     private static void sculpt(Canvas c, Dragon d) {
-        int r = 42;
+        if (d.kind == Kind.SERPENT) serpentBody(c, d);
+        int r = 48;
         int bx = (int) Math.floor(d.ox), bz = (int) Math.floor(d.oz), by = (int) Math.floor(d.oy);
         for (int x = bx - r; x <= bx + r; x++)
             for (int z = bz - r; z <= bz + r; z++) {
                 double px = x + 0.5 - d.ox, pz = z + 0.5 - d.oz;
                 double u = px * d.cos() + pz * d.sin(), w = -px * d.sin() + pz * d.cos();
-                if (u < -34 || u > 22 || Math.abs(w) > 24) continue;
+                if (d.kind == Kind.SERPENT ? u < -30 || u > 23 || Math.abs(w) > 12 : u < -34 || u > 22 || Math.abs(w) > 24) continue;
                 for (int y = by - 9; y <= by + 16; y++) {
-                    String b = block(u, y + 0.5 - d.oy, w, d.gold);
+                    double v = y + 0.5 - d.oy;
+                    String b = d.kind == Kind.SERPENT ? serpentPart(u, v, w) : block(u, v, w, d.kind == Kind.GOLD);
                     if (b != null && !c.isSet(x, y, z)) c.set(x, y, z, b);
                 }
             }
     }
 
-    // ------------------------------------------------------------------ shape
+    // ------------------------------------------------------------------ soul serpent
+
+    private static final String S_HIDE = "minecraft:dark_prismarine", S_BAND = "minecraft:prismarine_bricks",
+            S_BELLY = "minecraft:calcite", S_FIN = "minecraft:warped_wart_block", S_BONE = "minecraft:bone_block",
+            S_GLOW = "minecraft:sea_lantern";
+    private static final double S_TAIL = -46, S_LEN = 59;
+
+    /** Spine point {u, v, w} at s (0 = tail tip, 1 = where the neck meets the head); it straightens out towards the head. */
+    static double[] spine(double s) {
+        double env = Math.min(1, (1 - s) / 0.15);
+        return new double[]{S_TAIL + S_LEN * s,
+                5.5 * Math.sin(2 * Math.PI * s + 0.8) * env,
+                8 * Math.sin(2 * Math.PI * 1.25 * s) * env * (0.5 + 0.5 * (1 - s))};
+    }
+
+    private static double serpentRadius(double s) {
+        if (s > 0.9) return 2.5 - (s - 0.9) * 7;
+        return 0.5 + 2.0 * Math.pow(Math.min(1, s / 0.35), 0.8);
+    }
+
+    /** Stamps the coiling body as a chain of spheres, with a fin running along its back and a tuft on the tail. */
+    private static void serpentBody(Canvas c, Dragon d) {
+        for (double s = 0; s <= 1; s += 0.0015) {
+            double[] p = spine(s);
+            double r = serpentRadius(s);
+            double[] wc = d.toWorld(p[0], p[1], p[2]);
+            boolean band = Math.floorMod((int) Math.floor(s * S_LEN / 2.5), 2) == 0;
+            int ri = (int) Math.ceil(r) + 1;
+            for (int x = (int) Math.floor(wc[0]) - ri; x <= wc[0] + ri; x++)
+                for (int y = (int) Math.floor(wc[1]) - ri; y <= wc[1] + ri; y++)
+                    for (int z = (int) Math.floor(wc[2]) - ri; z <= wc[2] + ri; z++) {
+                        double dx = x + 0.5 - wc[0], dy = y + 0.5 - wc[1], dz = z + 0.5 - wc[2];
+                        if (dx * dx + dy * dy + dz * dz > r * r || c.isSet(x, y, z)) continue;
+                        c.set(x, y, z, dy < -r * 0.45 ? S_BELLY : band ? S_HIDE : S_BAND);
+                    }
+            if (s > 0.06 && s < 0.93 && Math.floorMod((int) Math.floor(s * S_LEN / 1.5), 2) == 0)
+                for (double k = 0.4; k <= 0.4 + r * 0.6; k += 0.4) {
+                    int x = (int) Math.floor(wc[0]), y = (int) Math.floor(wc[1] + r + k), z = (int) Math.floor(wc[2]);
+                    if (!c.isSet(x, y, z)) c.set(x, y, z, S_FIN);
+                }
+        }
+        double[] t = spine(0);
+        double[] tw = d.toWorld(t[0] - 1.2, t[1], t[2]);
+        for (int x = (int) tw[0] - 2; x <= tw[0] + 2; x++)
+            for (int y = (int) tw[1] - 2; y <= tw[1] + 2; y++)
+                for (int z = (int) tw[2] - 2; z <= tw[2] + 2; z++)
+                    if (Math.pow(x + 0.5 - tw[0], 2) + Math.pow(y + 0.5 - tw[1], 2) + Math.pow(z + 0.5 - tw[2], 2) <= 2.6 && !c.isSet(x, y, z))
+                        c.set(x, y, z, S_FIN);
+    }
+
+    /** The serpent's head (long snout, open jaw, antlers, whiskers) and its four small clawed legs. */
+    private static String serpentPart(double u, double v, double w) {
+        double aw = Math.abs(w);
+        if (dist(u, v, aw, 16.3, 1.4, 1.45) < 0.75) return S_GLOW;                                // eyes
+        if (dist(u, v, w, 18.0, -0.6, 0) < 0.8) return S_GLOW;                                    // soul fire in the mouth
+        if (ell(u - 15, v - 0.6, w, 3.2, 1.7, 1.8)) return v > 1.7 ? S_BAND : S_HIDE;
+        if (capsule(u, v, w, 16, 0.5, 0, 20.6, 0.2, 0, 1.15, 0.85)) return S_HIDE;
+        if (capsule(u, v, w, 15.5, -0.7, 0, 19.9, -1.9, 0, 0.75, 0.55)) return S_BELLY;
+        if (capsule(u, v, aw, 14, 2, 1, 10.5, 4.6, 2.1, 0.55, 0.4)) return S_BONE;                // antlers
+        if (capsule(u, v, aw, 12.2, 3.4, 1.6, 12.8, 5.8, 2.8, 0.45, 0.35)) return S_BONE;
+        if (capsule(u, v, aw, 12.5, 1.6, 1.0, 8.5, 2.8, 2.4, 0.6, 0.4)) return S_FIN;             // mane
+        if (capsule(u, v, aw, 19.5, 0.1, 0.9, 15, -2, 3.5, 0.5, 0.45)) return S_FIN;              // whiskers
+        if (capsule(u, v, aw, 15, -2, 3.5, 10, -2.6, 5, 0.45, 0.4)) return S_FIN;
+        for (double s : new double[]{0.42, 0.72}) {                                                // legs
+            double[] p = spine(s);
+            double sw = p[2], side = w - sw;
+            double lw = Math.abs(side);
+            if (capsule(u, v, lw, p[0], p[1] - 1, 1.2, p[0] + 1.5, p[1] - 4, 2.4, 0.75, 0.55)) return S_HIDE;
+            if (capsule(u, v, lw, p[0] + 1.5, p[1] - 4, 2.4, p[0] + 2.8, p[1] - 4.3, 2.4, 0.45, 0.35)) return S_BONE;
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------ winged dragons
 
     private static String block(double u, double v, double w, boolean gold) {
         String hide = gold ? "minecraft:gold_block" : "minecraft:polished_blackstone";
