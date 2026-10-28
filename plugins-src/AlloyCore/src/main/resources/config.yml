@@ -40,9 +40,10 @@ rimelock:
 gods-eye:
   enabled: true
 
-# Ashen Chain (hub Arena only for now): right-click a block (24 away) to drag yourself to it. Right-click a player
-# (12 away) to chain them: they're pulled 1 block closer and burn for burn-seconds (burn-damage on the hook and every
-# second, credited to the caster). They break free with Surge, their own chain, water, cover, or by getting 16 away.
+# Ashen Chain (hub Arena only for now): right-click to grapple - drag yourself to the block you aim at (24 away).
+# Left-click to strike - a skillshot (12 away, or point-blank) that chains a player: they're pulled 1 block closer and
+# burn for burn-seconds (burn-damage on the hook and every second, credited to the caster). They break free with
+# Surge, their own chain, water, cover, or by getting 16 away.
 # Hostile mobs are still hooked for 1 heart and dragged to you. Sneak to let go. Staff: /ashenchain (/chain, /tether).
 ashen-chain:
   enabled: true

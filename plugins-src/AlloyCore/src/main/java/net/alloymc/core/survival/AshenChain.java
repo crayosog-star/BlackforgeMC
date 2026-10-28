@@ -27,10 +27,15 @@ import java.util.function.Predicate;
 
 /**
  * Ashen Chain: a BlackForgeMC ability item with a dark, ashen look - a rusted chain wreathed in soul fire.
- * Right-click a block (up to 24 away) and the chain bites into it and drags you there. Sneak to let go of a block
- * early. No fall damage while you're being reeled in, or for 2 s after. The pull maths lives in {@link ChainPull}.
+ * Two inputs: right-click grapples, left-click strikes.
  *
- * Right-click a player (up to 12 away) and it chains them: they're jerked 1 block towards you and burn with soul fire
+ * Right-click (grapple): the chain bites into the block you're looking at (up to 24 away) and drags you there. It
+ * passes through players and mobs. Sneak to let go early. No fall damage while you're being reeled in, or for 2 s
+ * after. The pull maths lives in {@link ChainPull}.
+ *
+ * Left-click (strike): a skillshot along your aim, up to 12 blocks, stopped by blocks. Point-blank works too: hitting
+ * a player or mob with the chain in hand fires it at them instead of punching. A miss costs the normal cooldown.
+ * Hitting a player chains them: they're jerked 1 block towards you and burn with soul fire
  * for a few seconds (fire damage credited to you, so Fire Resistance stops it), and the chain stays drawn between you.
  * Landing it puts the chain on a longer cooldown. They break free with Surge ({@link #breakFree}), by grappling away
  * with their own Ashen Chain, by getting into water, by putting a block between you, or by getting
@@ -61,6 +66,7 @@ public final class AshenChain implements Listener {
     private final int playerCooldownTicks, burnTicks;
     private final double burnDamage;
     private final Map<UUID, Tether> tethers = new HashMap<>();      // chained target -> its burning tether
+    private boolean dealing;   // true while the chain itself is hurting / probing someone, so onMelee lets it through
 
     /** A burning chain between a caster and the player (or Test Dummy) they hooked. */
     private static final class Tether {
@@ -93,8 +99,8 @@ public final class AshenChain implements Listener {
                     Ui.mm("<dark_gray><italic>Forged from the ash of a fallen knight."),
                     Ui.mm("<dark_gray><italic>It drags the living into the dark."),
                     Ui.mm(""),
-                    Ui.mm("<gray>Right-click a <white>block <gray>to drag yourself to it"),
-                    Ui.mm("<gray>Right-click a <white>player <gray>to chain them: <white>1 block <gray>closer,"),
+                    Ui.mm("<white>Right-click<gray>: grapple to the block you aim at"),
+                    Ui.mm("<white>Left-click<gray>: strike - a player hit is chained, <white>1 block <gray>closer,"),
                     Ui.mm("<gray>burning for <white>" + secs(burnTicks) + " <dark_gray>(" + hearts(burnDamage * ChainPull.burnHits(burnTicks)) + "❤)"),
                     Ui.mm("<gray>They break free with <white>Surge<gray>, their own chain,"),
                     Ui.mm("<gray>water, cover, or by out-running it"),
@@ -121,62 +127,101 @@ public final class AshenChain implements Listener {
 
     // ------------------------------------------------------------------ casting
 
+    /** Right-click grapples, left-click strikes (see the class notes). */
     @EventHandler(priority = EventPriority.HIGH)
     public void onUse(PlayerInteractEvent e) {
         if (e.getHand() != EquipmentSlot.HAND) return;
         Action a = e.getAction();
-        if (a != Action.RIGHT_CLICK_AIR && a != Action.RIGHT_CLICK_BLOCK) return;
+        boolean right = a == Action.RIGHT_CLICK_AIR || a == Action.RIGHT_CLICK_BLOCK;
+        boolean left = a == Action.LEFT_CLICK_AIR || a == Action.LEFT_CLICK_BLOCK;
+        if (!right && !left) return;
         Player p = e.getPlayer();
         if (!isChain(p.getInventory().getItemInMainHand())) return;
         Block clicked = e.getClickedBlock();
         if (a == Action.RIGHT_CLICK_BLOCK && clicked != null && clicked.getType().isInteractable() && !p.isSneaking()) return;
-        e.setCancelled(true);   // never place it as a chain block
-        if (p.getGameMode() == GameMode.SPECTATOR) return;
-        if (!enabled) { p.sendActionBar(Ui.mm("<gray>The Ashen Chain isn't switched on yet.")); return; }
-        if (!allowedAt.test(p.getLocation())) { p.sendActionBar(Ui.mm("<gray>The " + NAME + " <gray>only works in the <white>Arena <gray>for now.")); return; }
-        if (active.containsKey(p.getUniqueId())) return;   // one chain at a time
+        e.setCancelled(true);   // never place it as a chain block, never start mining with it
+        if (!ready(p)) return;
+        if (right) grapple(p); else strike(p, null);
+    }
+
+    /**
+     * Point-blank: attacking a player or mob with the chain in hand fires it at them instead of punching. The swing
+     * that comes with the attack also fires a left-click, but the one-chain-at-a-time check stops a second cast.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onMelee(EntityDamageByEntityEvent e) {
+        if (dealing || !(e.getDamager() instanceof Player p) || e.getCause() != EntityDamageEvent.DamageCause.ENTITY_ATTACK) return;
+        if (!isChain(p.getInventory().getItemInMainHand())) return;
+        e.setCancelled(true);   // the chain isn't a club
+        if (e.getEntity() instanceof LivingEntity t && canTarget(p, t) && ready(p)) strike(p, t);
+    }
+
+    /** All the checks before a cast; starts the cooldown when it says yes. */
+    private boolean ready(Player p) {
+        if (p.getGameMode() == GameMode.SPECTATOR) return false;
+        if (!enabled) { p.sendActionBar(Ui.mm("<gray>The Ashen Chain isn't switched on yet.")); return false; }
+        if (!allowedAt.test(p.getLocation())) { p.sendActionBar(Ui.mm("<gray>The " + NAME + " <gray>only works in the <white>Arena <gray>for now.")); return false; }
+        if (active.containsKey(p.getUniqueId())) return false;   // one chain at a time
         long now = System.currentTimeMillis(), ready = readyAt.getOrDefault(p.getUniqueId(), 0L);
         if (ready > now) {
             p.sendActionBar(Ui.mm("<#C2541B>⛓ <gray>The embers are still cooling... <white>" + String.format(Locale.ROOT, "%.1f", (ready - now) / 1000.0) + "s"));
-            return;
+            return false;
         }
         if (cooldownTicks > 0) {
             readyAt.put(p.getUniqueId(), now + cooldownTicks * 50L);
             p.setCooldown(Material.IRON_CHAIN, cooldownTicks);
         }
-        cast(p);
+        return true;
     }
 
-    private void cast(Player p) {
+    /** Right-click: bite into the block you're aiming at and get dragged there. Players and mobs don't stop it. */
+    private void grapple(Player p) {
         Location eye = p.getEyeLocation();
         Vector dir = eye.getDirection().normalize();
         World w = p.getWorld();
         p.swingMainHand();
-
-        RayTraceResult blockHit = w.rayTraceBlocks(eye, dir, ChainPull.GRAPPLE_RANGE, FluidCollisionMode.NEVER, true);
-        double blockDist = blockHit == null ? Double.MAX_VALUE : blockHit.getHitPosition().distance(eye.toVector());
-        RayTraceResult entHit = w.rayTraceEntities(eye, dir, ChainPull.YANK_RANGE, 0.5,
-                en -> en instanceof LivingEntity le && canTarget(p, le));
-        LivingEntity target = null;
-        if (entHit != null && entHit.getHitEntity() instanceof LivingEntity le
-                && entHit.getHitPosition().distance(eye.toVector()) < blockDist) target = le;   // never through a wall
-
         throwSounds(p);
-        if (target != null) {
-            if (!alsoTarget.test(target) && !allowed(p, target)) {   // the dummy counts every damage event: no probe for it
-                p.sendActionBar(Ui.mm("<#C2541B>⛓ <gray>The chain won't bite here."));
-                fly(p, target.getLocation().add(0, target.getHeight() * 0.6, 0), () -> slack(p));
-                return;
-            }
-            LivingEntity t = target;
-            fly(p, t.getLocation().add(0, t.getHeight() * 0.6, 0), () -> hook(p, t));
-        } else if (blockHit != null) {
-            Location anchor = blockHit.getHitPosition().toLocation(w);
-            Block b = blockHit.getHitBlock();
-            fly(p, anchor, () -> anchor(p, anchor, b));
-        } else {
-            fly(p, eye.clone().add(dir.multiply(ChainPull.YANK_RANGE)), () -> slack(p));   // into the void: it falls slack
+        RayTraceResult blockHit = w.rayTraceBlocks(eye, dir, ChainPull.GRAPPLE_RANGE, FluidCollisionMode.NEVER, true);
+        if (blockHit == null) {   // into the open air: it falls slack
+            fly(p, eye.clone().add(dir.multiply(ChainPull.GRAPPLE_RANGE)), () -> slack(p));
+            return;
         }
+        Location anchor = blockHit.getHitPosition().toLocation(w);
+        Block b = blockHit.getHitBlock();
+        fly(p, anchor, () -> anchor(p, anchor, b));
+    }
+
+    /**
+     * Left-click: throw the chain along your aim at a player or hostile mob, up to {@link ChainPull#YANK_RANGE}, never
+     * through a wall. {@code point} is someone you just hit point-blank (skips the aim). A miss just falls slack.
+     */
+    private void strike(Player p, LivingEntity point) {
+        Location eye = p.getEyeLocation();
+        Vector dir = eye.getDirection().normalize();
+        World w = p.getWorld();
+        p.swingMainHand();
+        throwSounds(p);
+        LivingEntity target = point;
+        RayTraceResult blockHit = w.rayTraceBlocks(eye, dir, ChainPull.YANK_RANGE, FluidCollisionMode.NEVER, true);
+        if (target == null) {
+            double blockDist = blockHit == null ? Double.MAX_VALUE : blockHit.getHitPosition().distance(eye.toVector());
+            RayTraceResult entHit = w.rayTraceEntities(eye, dir, ChainPull.YANK_RANGE, 0.5,
+                    en -> en instanceof LivingEntity le && canTarget(p, le));
+            if (entHit != null && entHit.getHitEntity() instanceof LivingEntity le
+                    && entHit.getHitPosition().distance(eye.toVector()) < blockDist) target = le;   // never through a wall
+        }
+        if (target == null) {   // missed: the chain clatters off the wall, or falls slack in the air
+            Location end = blockHit != null ? blockHit.getHitPosition().toLocation(w) : eye.clone().add(dir.multiply(ChainPull.YANK_RANGE));
+            fly(p, end, () -> slack(p));
+            return;
+        }
+        if (!alsoTarget.test(target) && !allowed(p, target)) {   // the dummy counts every damage event: no probe for it
+            p.sendActionBar(Ui.mm("<#C2541B>⛓ <gray>The chain won't bite here."));
+            fly(p, chest(target), () -> slack(p));
+            return;
+        }
+        LivingEntity t = target;
+        fly(p, chest(t), () -> hook(p, t));
     }
 
     /** The hook flies out from the hand to {@code to} at {@link #THROW_SPEED}, drawing the chain behind it, then {@code then}. */
@@ -208,7 +253,8 @@ public final class AshenChain implements Listener {
         Location chest = t.getLocation().add(0, t.getHeight() * 0.6, 0);
         boolean dummy = alsoTarget.test(t);
 
-        t.damage(DAMAGE, p);   // a real damage event: kill credit, combat tags and arena rules all apply
+        dealing = true;
+        try { t.damage(DAMAGE, p); } finally { dealing = false; }   // a real damage event: kill credit, combat tags and arena rules all apply
         if (!dummy) {
             double[] v = ChainPull.yank(t.getX() - p.getX(), t.getZ() - p.getZ(), dist);
             // vanilla knocks them away from us for that hit, so set the drag on the next tick to replace it
@@ -325,7 +371,8 @@ public final class AshenChain implements Listener {
         if (burnDamage <= 0) return;
         DamageSource src = DamageSource.builder(DamageType.ON_FIRE).withCausingEntity(caster).withDirectEntity(caster).build();
         Vector before = t.getVelocity();
-        t.damage(burnDamage, src);
+        dealing = true;
+        try { t.damage(burnDamage, src); } finally { dealing = false; }
         if (t.isValid() && !t.isDead() && t.getVelocity().distanceSquared(before) > 1e-4) t.setVelocity(before);
     }
 
@@ -515,7 +562,8 @@ public final class AshenChain implements Listener {
     private boolean allowed(Player caster, LivingEntity t) {
         DamageSource src = DamageSource.builder(DamageType.PLAYER_ATTACK).withCausingEntity(caster).withDirectEntity(caster).build();
         EntityDamageByEntityEvent probe = new EntityDamageByEntityEvent(caster, t, EntityDamageEvent.DamageCause.ENTITY_ATTACK, src, DAMAGE);
-        Bukkit.getPluginManager().callEvent(probe);
+        dealing = true;
+        try { Bukkit.getPluginManager().callEvent(probe); } finally { dealing = false; }
         return !probe.isCancelled();
     }
 
