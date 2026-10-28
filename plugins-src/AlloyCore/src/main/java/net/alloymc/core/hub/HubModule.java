@@ -33,6 +33,10 @@ public final class HubModule implements Listener {
     private final Set<UUID> hidingPlayers = new HashSet<>();
     private final List<TextDisplay> holograms = new ArrayList<>();
     private final Map<String, TextDisplay> gateHolos = new HashMap<>();
+    /** Get "The Forge Awakens" show every time they join the hub, not just the first time: GavVFX and Causee. */
+    private static final Set<UUID> SHOW_EVERY_JOIN = Set.of(
+            UUID.fromString("f2aef66f-fb87-4635-8c61-4b116baaa5b5"),
+            UUID.fromString("8c67e820-3611-42b8-9f5f-d355d31f9ca9"));
 
     private static final String[][] MENU = {
         // server, slot, material, title, description
@@ -153,6 +157,10 @@ public final class HubModule implements Listener {
             p.showTitle(Title.title(Ui.mm(Ui.TITLE), Ui.mm("<gray>Welcome back, <white>" + p.getName()),
                     Title.Times.times(Duration.ofMillis(300), Duration.ofSeconds(3), Duration.ofMillis(800))));
             p.playSound(p.getLocation(), Sound.BLOCK_ANVIL_LAND, 0.4f, 1.4f);
+            if (SHOW_EVERY_JOIN.contains(p.getUniqueId())) {
+                // after the loading screen, same delay as the first-join show
+                Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) WelcomeShow.play(plugin, p); }, 30L);
+            }
         }
         for (UUID id : hidingPlayers) { Player h = Bukkit.getPlayer(id); if (h != null) h.hidePlayer(plugin, p); }
         Bukkit.getScheduler().runTaskLater(plugin, () -> refreshPlayer(p), 5L);
