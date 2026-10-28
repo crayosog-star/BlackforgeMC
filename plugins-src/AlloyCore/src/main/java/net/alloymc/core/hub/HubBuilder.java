@@ -28,6 +28,7 @@ public final class HubBuilder {
         b.floatingIslands();
         b.goldInlay();
         b.lettering();
+        CastleBuilder.addTo(b.c);
         return b.c;
     }
 

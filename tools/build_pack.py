@@ -2,7 +2,7 @@
 
 Usage:  python tools/build_pack.py --format <pack format>
 
-The pack format must match the Minecraft version the servers run (26.3 = 97; check the Minecraft wiki's
+The pack format must match the Minecraft version the servers run (check the Minecraft wiki's
 "Pack format" page for 26.3). It's passed in rather than stored so a wrong guess never ships.
 This script only builds the zip; it does not upload it or touch any server.
 """
@@ -22,7 +22,7 @@ def main() -> None:
     ap.add_argument("--format", type=int, required=True, help="resource pack format for the server's Minecraft version")
     args = ap.parse_args()
 
-    # Since 1.21.9 packs declare a supported range (min_format/max_format) instead of a single pack_format.
+    # 1.21.9+ packs declare the formats they support; the old single pack_format is only read by older clients
     meta = {"pack": {"description": "BlackForgeMC", "min_format": args.format, "max_format": args.format}}
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:

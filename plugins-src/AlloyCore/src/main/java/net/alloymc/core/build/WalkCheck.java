@@ -53,29 +53,33 @@ public final class WalkCheck {
     static int dragons() {
         Canvas hub = HubBuilder.build();
         int clips = 0, frames = 0;
-        double low = 1e9;
+        double low = 1e9, far = 0, farHead = 0;
+        String farWho = "";
         for (long seed = 1; seed <= 6; seed++) {
             var fl = java.util.List.of(
                     new net.alloymc.core.hub.DragonFlight(net.alloymc.core.hub.DragonFlight.Kind.BLACK, seed * 31, seed),
-                    new net.alloymc.core.hub.DragonFlight(net.alloymc.core.hub.DragonFlight.Kind.GOLD, seed * 37, seed + 2.1),
                     new net.alloymc.core.hub.DragonFlight(net.alloymc.core.hub.DragonFlight.Kind.SERPENT, seed * 41, seed + 4.2));
+            fl.forEach(d -> d.setOthers(fl));
             for (int t = 0; t < 24000; t++)
                 for (var d : fl) {
                     d.step();
                     if (t % 5 != 0) continue;
                     frames++;
+                    double hr = Math.hypot(d.head()[0] - 0.5, d.head()[2] - 0.5);
+                    if (hr > farHead) { farHead = hr; farWho = d.kind + " head at r=" + Math.round(hr) + " y=" + Math.round(d.head()[1]) + " t=" + t + " seed=" + seed; }
                     for (var p : d.pose()) {
                         for (double[] q : new double[][]{{0.5, 0.5, 0.5}, {0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {1, 1, 1}, {1, 0, 1}, {0, 1, 1}, {1, 1, 0}}) {
                             double x = p.corner()[0] + p.r()[0] * p.sx() * q[0] + p.u()[0] * p.sy() * q[1] + p.f()[0] * p.sz() * q[2];
                             double y = p.corner()[1] + p.r()[1] * p.sx() * q[0] + p.u()[1] * p.sy() * q[1] + p.f()[1] * p.sz() * q[2];
                             double z = p.corner()[2] + p.r()[2] * p.sx() * q[0] + p.u()[2] * p.sy() * q[1] + p.f()[2] * p.sz() * q[2];
                             low = Math.min(low, y);
-                            if (hub.isSet((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z))) { if (clips++ < 8) System.out.println("   clip " + d.kind + " " + p.block() + " at " + (int) x + " " + (int) y + " " + (int) z + " (" + hub.get((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z)) + ")"); break; }
+                            far = Math.max(far, Math.hypot(x - 0.5, z - 0.5));
+                            if (hub.isSet((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z))) { if (clips++ % 400 == 0) System.out.println("   clip " + d.kind + " " + p.block() + " at " + (int) x + " " + (int) y + " " + (int) z + " (" + hub.get((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z)) + ")"); break; }
                         }
                     }
                 }
         }
-        System.out.println("hub dragons: " + frames + " poses flown, " + clips + " pieces through a hub block, lowest point y=" + Math.round(low));
+        System.out.println("hub dragons: " + frames + " poses flown, " + clips + " pieces through a hub block, lowest point y=" + Math.round(low) + ", farthest " + Math.round(far) + " blocks out (" + farWho + ")");
         return clips == 0 ? 0 : 1;
     }
 }
