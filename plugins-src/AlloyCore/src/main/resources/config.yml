@@ -25,3 +25,14 @@ darkness-potion:
 surge:
   enabled: true
   custom-model: false
+
+# Last Rite (Survival, Factions, hub Arena): a wave pulls the first enemy it touches into a 1v1 chamber.
+# timeout: both-die | both-weakened (leave empty for the server's default: Survival weakened, Factions/Arena die)
+last-rite:
+  enabled: true
+  charges-needed: 3        # player kills to charge a scroll
+  cooldown-seconds: 300    # after a rite (a miss: 30 s)
+  duel-seconds: 40
+  timeout: ''
+  allow-totems: true
+  chamber-slots: 8         # rites at once per server
