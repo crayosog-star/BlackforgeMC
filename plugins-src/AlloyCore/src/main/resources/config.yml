@@ -14,7 +14,7 @@ gale-bellows:
 gaia-potion:
   enabled: true
 
-# Potion of Darkness (survival + hub Arena): splash potion; 2.5 s of Darkness for players where PvP is on, confuses
+# Potion of Darkness (survival + hub Arena): splash potion; 5.5 s of total darkness for players where PvP is on, confuses
 # mobs anywhere. Staff: /darkness. Crates: alloy darkness give {player}. Set false to stop it.
 darkness-potion:
   enabled: true

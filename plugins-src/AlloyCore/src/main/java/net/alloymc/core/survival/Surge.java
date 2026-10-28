@@ -66,6 +66,8 @@ public final class Surge implements Listener {
     private final AlloyCore plugin;
     private final boolean enabled, customModel;
     private final Predicate<Location> allowedAt;   // where it can be used (supplied by each server)
+    private final boolean staffSkipCooldown;       // the hub Arena: staff can test it again and again
+    public static final double LAUNCH_SPEED = 1.8; // the one-off dash in the look direction at the strike
     private final NamespacedKey tagKey, modelKey;
     private final List<Boost> boosts;
     private final Map<UUID, Active> active = new HashMap<>();
@@ -73,9 +75,12 @@ public final class Surge implements Listener {
     private final Map<UUID, Long> readyAt = new HashMap<>(), noFallUntil = new HashMap<>();
     private final Random rnd = new Random();
 
-    public Surge(AlloyCore plugin, Predicate<Location> allowedAt) {
+    public Surge(AlloyCore plugin, Predicate<Location> allowedAt) { this(plugin, allowedAt, false); }
+
+    public Surge(AlloyCore plugin, Predicate<Location> allowedAt, boolean staffSkipCooldown) {
         this.plugin = plugin;
         this.allowedAt = allowedAt;
+        this.staffSkipCooldown = staffSkipCooldown;
         this.enabled = plugin.getConfig().getBoolean("surge.enabled", true);
         this.customModel = plugin.getConfig().getBoolean("surge.custom-model", false);   // only once the resource pack is live
         this.tagKey = new NamespacedKey(plugin, "surge_item");
@@ -152,7 +157,7 @@ public final class Surge implements Listener {
         if (p.getGameMode() == GameMode.SPECTATOR) return;
         if (!allowedAt.test(p.getLocation())) { p.sendActionBar(Ui.mm("<#FF2E88>✦ <gray>You can't surge here.")); return; }
         long left = readyAt.getOrDefault(p.getUniqueId(), 0L) - System.currentTimeMillis();
-        if (left > 0) { p.sendActionBar(Ui.mm("<#FF2E88>✦ <gray>Surge is recharging... <white>" + (left / 1000 + 1) + "s")); return; }
+        if (left > 0 && !testing(p)) { p.sendActionBar(Ui.mm("<#FF2E88>✦ <gray>Surge is recharging... <white>" + (left / 1000 + 1) + "s")); return; }
         double max = maxHealth(p);
         if (!SurgeCurve.canStart(p.getHealth(), max)) {
             p.sendActionBar(Ui.mm("<#FF2E88>✦ <gray>Too weak to surge - you need more than <white>half health<gray>."));
@@ -224,7 +229,9 @@ public final class Surge implements Listener {
                 p.spawnParticle(Particle.DUST_COLOR_TRANSITION, pt, 1, 0, 0, 0, 0, new Particle.DustTransition(CRIMSON, MAGENTA, 1.2f));
             }
             if (n % 3 == 0) p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, SoundCategory.PLAYERS, 0.6f, (float) (0.8 + progress));
-            if (n >= CHANNEL_TICKS) {   // burst
+            if (n >= CHANNEL_TICKS) {   // burst: the bolt comes down on the rose, right in front of you
+                p.getWorld().strikeLightningEffect(at);
+                p.playSound(p.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, SoundCategory.PLAYERS, 0.8f, 1.2f);
                 p.getWorld().spawnParticle(Particle.DUST, at, 30, 0.3, 0.3, 0.3, 0, new Particle.DustOptions(MAGENTA, 1.6f));
                 p.getWorld().spawnParticle(Particle.DUST, at, 20, 0.3, 0.3, 0.3, 0, new Particle.DustOptions(WITHER_BLACK, 1.4f));
                 rose.remove();
@@ -247,6 +254,7 @@ public final class Surge implements Listener {
         active.put(p.getUniqueId(), s);
 
         w.strikeLightningEffect(p.getLocation());   // visual only: no damage, no fire
+        launch(p);
         for (Boost b : boosts) {
             AttributeInstance ai = p.getAttribute(b.attribute());
             if (ai == null) continue;
@@ -272,6 +280,22 @@ public final class Surge implements Listener {
         w.spawnParticle(Particle.DUST, c, 10, 0.5, 0.5, 0.5, 0, new Particle.DustOptions(WITHER_BLACK, 1.5f));
 
         s.task = Bukkit.getScheduler().runTaskTimer(plugin, () -> tick(p, s), 1L, 1L);
+    }
+
+    /** Staff in a test area (the hub Arena) skip the cooldown so they can try it again and again. */
+    private boolean testing(Player p) { return staffSkipCooldown && p.hasPermission("alloy.admin"); }
+
+    /**
+     * The strike throws you forward: one big instant push the way you're looking (a dash, not flight), with a little
+     * lift so it clears the ground. Fall damage is off for the whole surge, so the landing never hurts.
+     */
+    private void launch(Player p) {
+        Vector look = p.getLocation().getDirection();
+        Vector flat = look.clone().setY(0);
+        Vector push = flat.lengthSquared() < 1e-6 ? new Vector() : flat.normalize().multiply(LAUNCH_SPEED);
+        push.setY(Math.max(0.35, Math.min(0.9, look.getY() * 1.2 + 0.35)));
+        p.setVelocity(push);
+        p.setFallDistance(0f);
     }
 
     /** The personal world border trick: a border only this player sees, with a huge warning distance, tints the screen edges red. */
@@ -379,7 +403,8 @@ public final class Surge implements Listener {
         long now = System.currentTimeMillis();
         readyAt.put(p.getUniqueId(), now + COOLDOWN_SECONDS * 1000L);   // the 30 s runs from the end of the surge
         noFallUntil.put(p.getUniqueId(), now + 1000);   // land safely from a last surge jump
-        p.setCooldown(item(), COOLDOWN_SECONDS * 20);
+        if (testing(p)) readyAt.remove(p.getUniqueId());
+        else p.setCooldown(item(), COOLDOWN_SECONDS * 20);
         if (reason == null || !p.isOnline()) return;
         Location c = p.getLocation().add(0, 1, 0);
         for (int i = 0; i < 24; i++) {   // petals fall inward and vanish
