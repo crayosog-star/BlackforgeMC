@@ -45,10 +45,13 @@ public final class AuctionHouse implements Listener {
     private final Map<UUID, List<ItemStack>> collection = new HashMap<>();
     private final Map<UUID, Double> unpaidNotice = new HashMap<>();
 
-    AuctionHouse(AlloyCore plugin, Economy eco) {
+    AuctionHouse(AlloyCore plugin, Economy eco) { this(plugin, eco, "auctions.yml"); }
+
+    /** A separate auction house with its own listings file (Skyblock and OneBlock each have one, so items never cross). */
+    AuctionHouse(AlloyCore plugin, Economy eco, String fileName) {
         this.plugin = plugin;
         this.eco = eco;
-        this.file = new File(plugin.getDataFolder(), "auctions.yml");
+        this.file = new File(plugin.getDataFolder(), fileName);
         load();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::expire, 1200L, 1200L);
@@ -159,7 +162,8 @@ public final class AuctionHouse implements Listener {
 
     private enum View { BROWSE, MINE, COLLECT, CONFIRM }
 
-    private static final class Menu implements InventoryHolder {
+    private final class Menu implements InventoryHolder {
+        final AuctionHouse owner = AuctionHouse.this;
         final View view; final int page; final List<String> ids = new ArrayList<>(); String confirmId; Inventory inv;
         Menu(View view, int page) { this.view = view; this.page = page; }
         public Inventory getInventory() { return inv; }
@@ -246,11 +250,11 @@ public final class AuctionHouse implements Listener {
     }
 
     @EventHandler
-    public void onDrag(InventoryDragEvent e) { if (e.getInventory().getHolder() instanceof Menu) e.setCancelled(true); }
+    public void onDrag(InventoryDragEvent e) { if (e.getInventory().getHolder() instanceof Menu m && m.owner == this) e.setCancelled(true); }
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {
-        if (!(e.getInventory().getHolder() instanceof Menu m)) return;
+        if (!(e.getInventory().getHolder() instanceof Menu m) || m.owner != this) return;
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
         int slot = e.getRawSlot();

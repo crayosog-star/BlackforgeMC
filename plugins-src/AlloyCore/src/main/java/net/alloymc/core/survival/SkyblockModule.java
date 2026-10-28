@@ -50,13 +50,25 @@ public final class SkyblockModule implements Listener {
     private final OneBlockExtras oneblockExtras;
     private final List<TextDisplay> holos = new ArrayList<>();
     private final Map<UUID, Long> gateCooldown = new HashMap<>();
-    private AuctionHouse ah;
+    private AuctionHouse ah, ahOneBlock;
+    private final SkyHub skyHub;
+    private final InventoryGroups groups;
+    private final Crates obCrates;
     private Economy eco;
 
     public SkyblockModule(AlloyCore plugin) {
         this.plugin = plugin;
         this.world = Bukkit.getWorlds().getFirst();
         crates = new Crates(plugin, world, CRATES, Y + 2);
+        // the Skyblock Hub picks the game; Skyblock and OneBlock keep separate inventories, crates and auction houses
+        skyHub = new SkyHub(plugin, world, spawn());
+        groups = new InventoryGroups(plugin, skyHub::groupOf);
+        skyHub.setGroups(groups);
+        obCrates = new Crates(plugin, skyHub.oneblockSpawnWorld(), SkyHub.OB_CRATES, SkyHub.Y + 1);
+        skyHub.onFirstVisit((p, game) -> {
+            crates.give(p, "iron", 1);
+            p.sendMessage(Ui.mm("<gray>A welcome <white>Cinder Key <gray>for your first trip to " + (game.equals(SkyHub.ONEBLOCK) ? "<#b06bff>OneBlock" : "<#4fd1c5>Skyblock") + "<gray>!"));
+        });
         tags = new NameTags(plugin);
         enchants = new CustomEnchants(plugin);
         scrap = new Scrap(plugin, crates, tags, enchants);
@@ -90,6 +102,7 @@ public final class SkyblockModule implements Listener {
             spawners.setEconomy(eco);
             robots.setEconomy(eco);
             ah = new AuctionHouse(plugin, eco);
+            ahOneBlock = new AuctionHouse(plugin, eco, "auctions-oneblock.yml");
             tags.setEconomy(eco);
             daily.setEconomy(eco);
             hall.setEconomy(eco);
@@ -100,6 +113,7 @@ public final class SkyblockModule implements Listener {
 
     public void shutdown() {
         holos.forEach(TextDisplay::remove);
+        skyHub.shutdown();
         scrap.save();
         robots.save();
         oneblockExtras.shutdown();
@@ -277,9 +291,16 @@ public final class SkyblockModule implements Listener {
     }
 
     private void registerCommands() {
-        reg("spawn", List.of(), (p, a) -> p.teleportAsync(spawn()));
+        reg("spawn", List.of(), (p, a) -> p.teleportAsync(skyHub.spawnFor(p)));
+        reg("skyhub", List.of("skyblockhub", "gamepicker"), (p, a) -> p.teleportAsync(skyHub.hubSpawn()));
         reg("istop", List.of("obtop", "oneblocktop"), (p, a) -> istop(p));
-        reg("ah", List.of("auction", "auctionhouse"), (p, a) -> { if (ah != null) ah.command(p, a); });
+        reg("ah", List.of("auction", "auctionhouse"), (p, a) -> {
+            switch (skyHub.groupOf(p.getLocation())) {
+                case SkyHub.ONEBLOCK -> { if (ahOneBlock != null) ahOneBlock.command(p, a); }
+                case SkyHub.SKYBLOCK -> { if (ah != null) ah.command(p, a); }
+                default -> p.sendMessage(Ui.mm("<gray>Pick a game first - Skyblock and OneBlock each have their own auction house."));
+            }
+        });
         reg("scrap", List.of("scrapshop", "shards"), (p, a) -> scrap.command(p, a));
         reg("daily", List.of("dailyreward", "reward"), (p, a) -> daily.claim(p));
         reg("tags", List.of("tag", "namecolor", "colors"), (p, a) -> tags.open(p));
@@ -328,16 +349,8 @@ public final class SkyblockModule implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
         Player p = e.getPlayer();
-        // the main world is only the harbor now: anyone not on an island lands at spawn
-        if (p.getWorld() == world && !inSpawn(p.getX(), p.getY(), p.getZ())) p.teleport(spawn());
-        if (!p.hasPlayedBefore()) {
-            p.teleport(spawn());
-            Bukkit.broadcast(Ui.mm("<#4fd1c5>✦ <gray>Welcome <white>" + p.getName() + " <gray>to BlackForgeMC Skyblock!"));
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                crates.give(p, "iron", 1);
-                p.sendMessage(Ui.mm("<#4fd1c5>Walk through the <bold>Island Gate</bold> <gray>(north of the fountain) <#4fd1c5>or type <white>/is <#4fd1c5>to get your island!"));
-            }, 40L);
-        }
+        // everyone lands in the Skyblock Hub (SkyHub); the welcome key comes on the first trip into each game
+        if (!p.hasPlayedBefore()) Bukkit.broadcast(Ui.mm("<#4fd1c5>✦ <gray>Welcome <white>" + p.getName() + " <gray>to BlackForgeMC Skyblock!"));
     }
 
     @EventHandler
@@ -353,8 +366,9 @@ public final class SkyblockModule implements Listener {
         gateCooldown.put(p.getUniqueId(), now + 3000);
         p.setVelocity(new org.bukkit.util.Vector(0, 0.3, 0.8));
         p.playSound(p.getLocation(), Sound.BLOCK_PORTAL_TRAVEL, 0.3f, 1.6f);
-        // BentoBox: go to your island, or create one / open the picker for new players
-        p.performCommand(sky ? "island" : "ob");
+        // the Island Gate goes to your island (or creates one); the other gate leads back to the Skyblock Hub
+        if (sky) p.performCommand("island");
+        else p.teleport(skyHub.hubSpawn());
     }
 
     /** Market: bell = auction house, smithing table = Scrap Shop, ender chest = daily reward. */
@@ -403,7 +417,7 @@ public final class SkyblockModule implements Listener {
         holos.clear();
         world.getEntitiesByClass(TextDisplay.class).stream().filter(t -> protectedHere(t.getLocation())).forEach(TextDisplay::remove);
         holos.add(Ui.hologram(new Location(world, SKY_GATE_X + 0.5, Y + 9.5, GATE_Z + 3.5), "<#4fd1c5><bold>SKYBLOCK</bold><newline><gray>Classic island • <white>/is", 1.5f));
-        holos.add(Ui.hologram(new Location(world, OB_GATE_X + 0.5, Y + 9.5, GATE_Z + 3.5), "<#b06bff><bold>ONEBLOCK</bold><newline><gray>Start on one block • <white>/ob<newline><gray>Top islands: <white>/istop", 1.5f));
+        holos.add(Ui.hologram(new Location(world, OB_GATE_X + 0.5, Y + 9.5, GATE_Z + 3.5), "<#b06bff><bold>SKYBLOCK HUB</bold><newline><gray>Back to the game picker • <white>/skyhub", 1.5f));
         holos.add(Ui.hologram(new Location(world, 0.5, Y + 3.2, 13.5),
                 Ui.TITLE + " <white><bold>SKYBLOCK & ONEBLOCK</bold><newline><gray>Classic island: <#4fd1c5>/is</#4fd1c5> • OneBlock: <#b06bff>/ob</#b06bff> (or walk into a gate)<newline><gray>Crates <white>west</white> • Hall of Fame <white>east</white> • Market <white>south</white>"
                         + "<newline><gold>/ah <gray>• <#c6a15b>/scrap <gray>• <gold>/daily <gray>• <light_purple>/tags <gray>• <white>/ranks", 1.0f));
@@ -411,11 +425,12 @@ public final class SkyblockModule implements Listener {
                 "<gold><bold>MARKET</bold><newline><gray>Bell: <white>Auction House<gray> • Forge: <#c6a15b>Scrap Shop<gray> • Chest: <gold>Daily Reward", 1.0f));
         holos.add(Ui.hologram(new Location(world, 26.5, Y + 8.5, 0.5), "<gradient:#ffd27a:#ff7a1a><bold>HALL OF FAME</bold></gradient>", 1.5f));
         crates.spawnHolograms();
+        obCrates.spawnHolograms();
         Bukkit.getScheduler().runTaskLater(plugin, hall::refresh, 5L);
     }
 
     private void everySecond() {
-        if ((holos.isEmpty() || holos.stream().anyMatch(t -> !t.isValid()) || crates.hologramsMissing()) && new File(plugin.getDataFolder(), "skyblock-built").exists()) spawnHolograms();
+        if ((holos.isEmpty() || holos.stream().anyMatch(t -> !t.isValid()) || crates.hologramsMissing() || obCrates.hologramsMissing()) && new File(plugin.getDataFolder(), "skyblock-built").exists()) spawnHolograms();
         if (hall.hologramsMissing() && Bukkit.getCurrentTick() % 5 == 0) hall.refresh();
         for (Player p : Bukkit.getOnlinePlayers()) {
             Ranks.Rank r = ranks.of(p);
