@@ -41,6 +41,7 @@ public final class SurvivalModule implements Listener {
     private final GaiaPotion gaia;
     private final DarknessPotion darkness;
     private final Surge surge;
+    private final LastRite rite;
     private final Ranks ranks;
     private final HallOfFame hall;
     private final DailyRewards daily;
@@ -83,6 +84,8 @@ public final class SurvivalModule implements Listener {
         // Potion of Darkness: darkens players only where PvP is on (KOTH + Scrapyard); confuses mobs anywhere
         surge = new Surge(plugin, l -> l.getWorld() != world || !inSpawn(l.getX(), l.getY(), l.getZ()));   // anywhere but spawn
         darkness = new DarknessPotion(plugin, l -> l.getWorld() == world && (inArena(l.getX(), l.getY(), l.getZ()) || inPvp(l.getX(), l.getY(), l.getZ())));
+        // Last Rite: read anywhere but spawn; who it can catch follows the PvP rules (KOTH + Scrapyard). A draw leaves both on 2 hearts here.
+        rite = new LastRite(plugin, l -> l.getWorld() != world || !inSpawn(l.getX(), l.getY(), l.getZ()), false, null, RiteChambers.Timeout.BOTH_WEAKENED);
         new SilkSpawners(plugin);
         votes.setScrap(scrap);
         ranks = new Ranks(plugin, crates);
@@ -140,6 +143,7 @@ public final class SurvivalModule implements Listener {
     public void shutdown() {
         gaia.shutdown();   // first: removes every cloud's barrier blocks
         surge.shutdown();
+        rite.shutdown();   // undoes any running rite: both duellists go home as they were
         holos.forEach(TextDisplay::remove);
         if (koth.active()) koth.stop(null);
         pvp.shutdown();
@@ -247,6 +251,10 @@ public final class SurvivalModule implements Listener {
             if (p.hasPermission("alloy.admin")) darkness.give(p);
             else p.sendMessage(Ui.mm("<#6E2C83>☠ <gray>The " + DarknessPotion.NAME + " <gray>isn't available to players yet."));
         });
+        reg("lastrite", List.of("rite"), (p, a) -> {   // staff only for now: players will get it from crates
+            if (p.hasPermission("alloy.admin")) rite.give(p);
+            else p.sendMessage(Ui.mm("<#B66CFF>✦ <gray>" + LastRite.NAME + " <gray>isn't available to players yet."));
+        });
         reg("surge", List.of(), (p, a) -> {   // staff only for now: players get it from the Arena kit / crates later
             if (p.hasPermission("alloy.admin")) surge.give(p);
             else p.sendMessage(Ui.mm("<#FF2E88>✦ <gray>" + Surge.NAME + " <gray>isn't available to players yet."));
@@ -284,6 +292,7 @@ public final class SurvivalModule implements Listener {
 
     /** Console/admin: /alloy crate give <player> <crate> [amount], /alloy koth start|stop, /alloy buildsurvival */
     public boolean admin(CommandSender s, String[] a) {
+        if (rite.admin(s, a)) return true;   // /alloy rite give <player> (for crates)
         if (a.length >= 3 && a[0].equalsIgnoreCase("surge") && a[1].equalsIgnoreCase("give")) {   // /alloy surge give <player> (for crates)
             Player t = Bukkit.getPlayerExact(a[2]);
             if (t == null) { s.sendMessage(Component.text("Player must be online")); return true; }

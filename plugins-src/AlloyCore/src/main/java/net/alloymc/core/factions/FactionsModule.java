@@ -44,6 +44,7 @@ public final class FactionsModule implements Listener {
     private final int border;
     private boolean ending;
     private TextDisplay seasonBoard;
+    private final net.alloymc.core.survival.LastRite rite;   // Last Rite: works anywhere but spawn; a draw kills both
 
     public FactionsModule(AlloyCore plugin) {
         this.plugin = plugin;
@@ -71,9 +72,11 @@ public final class FactionsModule implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, this::ambient, 40L, 5L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::everyMinute, 200L, 1200L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::refreshBoard, 100L, 200L);
+        rite = new net.alloymc.core.survival.LastRite(plugin, l -> l.getWorld() != world || !inSpawn(l), false, null,
+                net.alloymc.core.survival.RiteChambers.Timeout.BOTH_DIE);
     }
 
-    public void shutdown() { holos.forEach(TextDisplay::remove); }
+    public void shutdown() { rite.shutdown(); holos.forEach(TextDisplay::remove); }
 
     public Location spawn() { double[] s = FactionsBuilder.spawn(); return new Location(world, s[0], s[1], s[2], 180, 0); }
 
@@ -440,6 +443,7 @@ public final class FactionsModule implements Listener {
     /** /alloy season ... (staff). Returns true if handled. */
     public boolean admin(CommandSender s, String[] a) {
         if (a.length == 0) return false;
+        if (rite.admin(s, a)) return true;   // /alloy rite give <player>
         switch (a[0].toLowerCase()) {
             case "buildfactions" -> { build(s); return true; }
             case "season" -> {

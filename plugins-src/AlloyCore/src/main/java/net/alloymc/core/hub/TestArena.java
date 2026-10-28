@@ -86,6 +86,9 @@ public final class TestArena implements Listener {
     private String bestShooter;
 
     private LivingEntity dummy;
+
+    /** The Test Dummy: a Last Rite wave that touches it opens a solo practice rite. */
+    public boolean isTestDummy(Entity e) { return dummy != null && dummy.equals(e); }
     private TextDisplay dummyHolo, wallHolo, spawnHolo;
     private boolean ready;
     private long tick;

@@ -37,6 +37,10 @@ public final class PreviewMain {
         pov(ta, new File(out, "arena_spawn_view.png"), 0.5, 102.62, 13.5, 180, -4, 1280, 720);
         pov(ta, new File(out, "arena_showcase_view.png"), -4.5, 102.62, 0.5, 90, -8, 1280, 720);
         pov(ta, new File(out, "arena_aerial.png"), 0.5, 140, 50.5, 180, 32, 1600, 900);
+        Canvas rc = net.alloymc.core.survival.RiteChamberBuilder.build();
+        System.out.println("last rite chamber blocks: " + rc.size());
+        pov(rc, new File(out, "rite_chamber_caster_view.png"), 3.5, 102.62, 5.5, -90, 4, 1280, 720);
+        pov(rc, new File(out, "rite_chamber_corner.png"), 0.5, 106.5, 0.5, -60, 28, 1280, 720);
         Canvas sv = net.alloymc.core.survival.SpawnBuilder.spawn();
         System.out.println("survival spawn blocks: " + sv.size());
         render(sv, new File(out, "survival_spawn.png"), 0, 9);

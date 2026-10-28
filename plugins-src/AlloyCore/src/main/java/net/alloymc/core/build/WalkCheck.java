@@ -16,6 +16,8 @@ public final class WalkCheck {
         bad += check("factions spawn", net.alloymc.core.factions.FactionsBuilder.build(), f[0], f[1], f[2]);
         bad += check("arena", net.alloymc.core.hub.TestArenaBuilder.build(), net.alloymc.core.hub.TestArenaBuilder.SPAWN_X,
                 net.alloymc.core.hub.TestArenaBuilder.SPAWN_Y, net.alloymc.core.hub.TestArenaBuilder.SPAWN_Z);
+        bad += check("last rite chamber", net.alloymc.core.survival.RiteChamberBuilder.build(), net.alloymc.core.survival.RiteChamberBuilder.CASTER_X,
+                net.alloymc.core.survival.RiteChamberBuilder.Y + 1, net.alloymc.core.survival.RiteChamberBuilder.SPAWN_Z);
         double[] a = net.alloymc.core.arcade.LobbyBuilder.spawn();
         bad += check("arcade lobby", net.alloymc.core.arcade.LobbyBuilder.build(), a[0], a[1], a[2]);
         bad += check("koth arena", net.alloymc.core.survival.SpawnBuilder.arena(), net.alloymc.core.survival.SurvivalLayout.KOTH_X + 20.5,

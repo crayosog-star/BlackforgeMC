@@ -33,6 +33,7 @@ public final class HubModule implements Listener {
     private final net.alloymc.core.survival.GaiaPotion gaia;   // Potion of Gaia, usable in the Arena only
     private final net.alloymc.core.survival.GaleBellows bellows;   // Gale Bellows, works in the Arena (PvP is on there)
     private final net.alloymc.core.survival.Surge surge;   // Surge ability item, usable in the Arena only
+    private final net.alloymc.core.survival.LastRite rite;   // Last Rite, Arena only; the test dummy gives a solo practice rite
     private final net.alloymc.core.survival.DarknessPotion darkness;   // Potion of Darkness, darkens players in the Arena only
     private final Map<UUID, Long> portalCooldown = new HashMap<>();
     private final Set<UUID> hidingPlayers = new HashSet<>();
@@ -57,7 +58,7 @@ public final class HubModule implements Listener {
         LobbyRules.setupWorld(plugin, world, 18000);   // midnight under the Inferno biome's red sky
         world.setSpawnLocation(spawn());
         // the Arena (item testing ground) is free to shuffle, drop and pick up items; everything else stays locked
-        Bukkit.getPluginManager().registerEvents(new LobbyRules(p -> false).allowItems(p -> p.getWorld().getName().equals(TestArena.WORLD)), plugin);
+        Bukkit.getPluginManager().registerEvents(new LobbyRules(p -> false).allowItems(p -> p.getWorld().getName().equals(TestArena.WORLD) || p.getWorld().getName().equals(net.alloymc.core.survival.RiteChambers.WORLD)), plugin);
         new net.alloymc.core.SpawnSafety(plugin, l -> l.getWorld() == world, p -> spawn()).withStuckCommand();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         registerJoinCommand();   // the clickable links in the first-join guide run /alloyjoin
@@ -85,11 +86,15 @@ public final class HubModule implements Listener {
         arena.addTestItem(gaia::item, gaia::isGaia);
         arena.addTestItem(darkness::item, darkness::isDarkness);
         arena.addTestItem(surge::item, surge::isSurge);
+        rite = new net.alloymc.core.survival.LastRite(plugin, l -> l.getWorld() == arena.world(), true, arena::isTestDummy,
+                net.alloymc.core.survival.RiteChambers.Timeout.BOTH_DIE);
+        arena.addTestItem(rite::item, rite::isRite, rite::isWorn);
         // staff test commands, Arena only: one item each
         testCommand("jbello", List.of("bellows", "galebellows"), () -> bellows.item());
         testCommand("gaia", List.of("gaiapotion"), () -> gaia.item());
         testCommand("darkness", List.of("darknesspotion"), () -> darkness.item());
         testCommand("surge", List.of(), () -> surge.item());
+        testCommand("lastrite", List.of("rite"), () -> rite.item());
     }
 
     public TestArena arena() { return arena; }
@@ -133,7 +138,7 @@ public final class HubModule implements Listener {
 
     private DragonAnimator dragons;
 
-    public void shutdown() { gaia.shutdown(); surge.shutdown(); holograms.forEach(TextDisplay::remove); boards.forEach(TextDisplay::remove); if (dragons != null) dragons.remove(); arena.shutdown(); }
+    public void shutdown() { gaia.shutdown(); surge.shutdown(); rite.shutdown(); holograms.forEach(TextDisplay::remove); boards.forEach(TextDisplay::remove); if (dragons != null) dragons.remove(); arena.shutdown(); }
     // ------------------------------------------------------------------ leaderboards
 
     private final List<TextDisplay> boards = new ArrayList<>();
