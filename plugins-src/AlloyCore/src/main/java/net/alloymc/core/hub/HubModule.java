@@ -35,6 +35,7 @@ public final class HubModule implements Listener {
     private final net.alloymc.core.survival.Surge surge;   // Surge ability item, usable in the Arena only
     private final net.alloymc.core.survival.LastRite rite;   // Last Rite, Arena only; the test dummy gives a solo practice rite
     private final net.alloymc.core.survival.DarknessPotion darkness;   // Potion of Darkness, darkens players in the Arena only
+    private final net.alloymc.core.survival.GodsEye eye;   // Gods-eye, Arena only: marks the closest player for 10 s
     private final net.alloymc.core.survival.Rimelock cage;   // Rimelock, Arena only: a 10 s cage only the caster's side can leave
     private final Map<UUID, Long> portalCooldown = new HashMap<>();
     private final Set<UUID> hidingPlayers = new HashSet<>();
@@ -93,6 +94,8 @@ public final class HubModule implements Listener {
         arena.addTestItem(rite::item, rite::isRite, rite::isWorn);
         cage = new net.alloymc.core.survival.Rimelock(plugin, l -> l.getWorld() == arena.world());   // Arena only; never used up
         arena.addTestItem(cage::item, cage::isCage);
+        eye = new net.alloymc.core.survival.GodsEye(plugin, l -> l.getWorld() == arena.world());   // Arena only; never used up
+        arena.addTestItem(eye::item, eye::isEye);
         // staff test commands, Arena only: one item each
         testCommand("jbello", List.of("bellows", "galebellows"), () -> bellows.item());
         testCommand("gaia", List.of("gaiapotion"), () -> gaia.item());
@@ -100,6 +103,7 @@ public final class HubModule implements Listener {
         testCommand("surge", List.of(), () -> surge.item());
         testCommand("lastrite", List.of("rite"), () -> rite.item());
         testCommand("rimelock", List.of("cage"), () -> cage.item());
+        testCommand("godseye", List.of("eye"), () -> eye.item());
     }
 
     public TestArena arena() { return arena; }
@@ -143,7 +147,7 @@ public final class HubModule implements Listener {
 
     private DragonAnimator dragons;
 
-    public void shutdown() { gaia.shutdown(); surge.shutdown(); rite.shutdown(); cage.shutdown(); holograms.forEach(TextDisplay::remove); boards.forEach(TextDisplay::remove); if (dragons != null) dragons.remove(); arena.shutdown(); }
+    public void shutdown() { gaia.shutdown(); surge.shutdown(); rite.shutdown(); cage.shutdown(); eye.shutdown(); holograms.forEach(TextDisplay::remove); boards.forEach(TextDisplay::remove); if (dragons != null) dragons.remove(); arena.shutdown(); }
     // ------------------------------------------------------------------ leaderboards
 
     private final List<TextDisplay> boards = new ArrayList<>();
