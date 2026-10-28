@@ -89,6 +89,20 @@ public final class TestArena implements Listener {
 
     /** The Test Dummy: a Last Rite wave that touches it opens a solo practice rite. */
     public boolean isTestDummy(Entity e) { return dummy != null && dummy.equals(e); }
+
+    /**
+     * The practice zombie, east of the dummy: unlike the dummy it isn't pinned, so it takes knockback and can be
+     * pulled (the Ashen Chain, wind charges...). It never fights back, never burns in daylight, heals after every hit
+     * and goes home after a few quiet seconds or if it's knocked too far.
+     */
+    private Zombie practice;
+    private long practiceHitAt;
+    private static final double PRACTICE_X = 6.5, PRACTICE_Z = -1.5, PRACTICE_HEALTH = 200;
+
+    public boolean isPracticeZombie(Entity e) { return practice != null && practice.equals(e); }
+
+    /** Anything in the Arena abilities may treat as a practice target (the dummy and the zombie). */
+    public boolean isPracticeTarget(Entity e) { return isTestDummy(e) || isPracticeZombie(e); }
     private TextDisplay dummyHolo, wallHolo, spawnHolo;
     private boolean ready;
     private long tick;
@@ -198,7 +212,7 @@ public final class TestArena implements Listener {
 
     private void removeEntities() {
         for (Entity e : world.getEntities()) if (ours(e)) e.remove();
-        dummy = null; dummyHolo = wallHolo = spawnHolo = armorHolo = archeryHolo = null;
+        dummy = null; practice = null; dummyHolo = wallHolo = spawnHolo = armorHolo = archeryHolo = null;
         cards.clear(); cardSlot.clear();
         Arrays.fill(frames, null);
     }
@@ -206,12 +220,13 @@ public final class TestArena implements Listener {
     private void spawnEntities() {
         removeEntities();
         spawnDummy();
+        spawnPractice();
         for (int i = 0; i < SLOTS; i++) spawnFrame(i);
         dummyHolo = Ui.hologram(new Location(world, TestArenaBuilder.DUMMY_X, TestArenaBuilder.DUMMY_Y + 2.7, TestArenaBuilder.DUMMY_Z), "", 1.0f);
         wallHolo = Ui.hologram(new Location(world, TestArenaBuilder.WALL_X + 1.6, TestArenaBuilder.Y + 10.2, 0.5), "", 1.4f);
         spawnHolo = Ui.hologram(new Location(world, TestArenaBuilder.SPAWN_X, TestArenaBuilder.Y + 3.4, TestArenaBuilder.SPAWN_Z - 3),
                 "<gradient:#7bd88f:#2e9e5b><bold>THE ARENA</bold></gradient><newline><gray>Test your gear on the <white>dummy"
-                        + "<newline><gray>Grab new items from the <light_purple>showcase wall <gray>(west)<newline><gray>Flip the <white>lever <gray>to armour the dummy<newline><gray>/arena kit <dark_gray>· <gray>/hub to leave", 1.1f);
+                        + "<newline><gray>Pull and knock around the <red>practice zombie <gray>(east)<newline><gray>Grab new items from the <light_purple>showcase wall <gray>(west)<newline><gray>Flip the <white>lever <gray>to armour the dummy<newline><gray>/arena kit <dark_gray>· <gray>/hub to leave", 1.1f);
         armorHolo = Ui.hologram(new Location(world, TestArenaBuilder.LEVER_X + 0.5, TestArenaBuilder.LEVER_Y + 0.9, TestArenaBuilder.LEVER_Z + 0.5), "", 0.8f);
         archeryHolo = Ui.hologram(new Location(world, 0.5, TestArenaBuilder.Y + 4.4, TestArenaBuilder.TARGET_Z + 0.5), "", 1.1f);
         for (TextDisplay td : List.of(dummyHolo, wallHolo, spawnHolo, armorHolo, archeryHolo)) mark(td);
@@ -237,6 +252,56 @@ public final class TestArena implements Listener {
             h.setHealth(DUMMY_HEALTH);
         });
         applyArmor();
+    }
+
+    private Location practiceHome() {
+        int bx = (int) Math.floor(PRACTICE_X), bz = (int) Math.floor(PRACTICE_Z);
+        return new Location(world, PRACTICE_X, world.getHighestBlockYAt(bx, bz) + 1, PRACTICE_Z, 270f, 0f);   // facing west, at the dummy
+    }
+
+    private void spawnPractice() {
+        practice = world.spawn(practiceHome(), Zombie.class, false, z -> {
+            mark(z);
+            z.setAdult();
+            z.setAware(false);                                         // no AI: it never chases or hits anyone, but physics still move it
+            z.setShouldBurnInDay(false);
+            z.setSilent(true);
+            z.setRemoveWhenFarAway(false);
+            z.setCanPickupItems(false);
+            z.customName(Ui.mm("<red><bold>Practice Zombie</bold> <gray>· pull me"));
+            z.setCustomNameVisible(true);
+            setBase(z, Attribute.MAX_HEALTH, PRACTICE_HEALTH);
+            setBase(z, Attribute.KNOCKBACK_RESISTANCE, 0);
+            z.setHealth(PRACTICE_HEALTH);
+            var eq = z.getEquipment();
+            if (eq != null) eq.clear();
+        });
+    }
+
+    /** It heals after every hit (next tick, so the hit still shows) and remembers when it was last hit. */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPracticeHit(EntityDamageEvent e) {
+        if (!isPracticeZombie(e.getEntity())) return;
+        practiceHitAt = System.currentTimeMillis();
+        Zombie z = practice;
+        Bukkit.getScheduler().runTask(plugin, () -> { if (z.isValid() && !z.isDead()) z.setHealth(PRACTICE_HEALTH); });
+    }
+
+    /** Once a second: respawn it if it's gone, send it home if it's been knocked far or left alone for 6 s. */
+    private void practiceUpkeep() {
+        if (practice == null || !practice.isValid() || practice.isDead()) {
+            if (world.isChunkLoaded((int) PRACTICE_X >> 4, (int) PRACTICE_Z >> 4)) spawnPractice();
+            return;
+        }
+        Location home = practiceHome(), at = practice.getLocation();
+        boolean far = at.getWorld() != world || at.distanceSquared(home) > 14 * 14 || at.getY() < TestArenaBuilder.Y - 3;
+        boolean idle = System.currentTimeMillis() - practiceHitAt > 6000 && at.distanceSquared(home) > 0.5;
+        if (far || idle) {
+            practice.teleport(home);
+            practice.setFireTicks(0);
+            practice.setVelocity(new org.bukkit.util.Vector());
+            world.spawnParticle(Particle.CLOUD, home.clone().add(0, 1, 0), 8, 0.3, 0.5, 0.3, 0.02);
+        }
     }
 
     private void applyArmor() {
@@ -725,6 +790,7 @@ public final class TestArena implements Listener {
             Location home = new Location(world, TestArenaBuilder.DUMMY_X, TestArenaBuilder.DUMMY_Y, TestArenaBuilder.DUMMY_Z, 0f, 0f);
             if (dummy.getLocation().distanceSquared(home) > 0.25) dummy.teleport(home);
         } else if ((dummy == null || !dummy.isValid()) && tick % 100 == 0 && world.isChunkLoaded(0, 0)) spawnDummy();
+        if (tick % 20 == 0) practiceUpkeep();
         // showcase title: a shimmering gradient that slides back and forth
         double phase = Math.sin(tick / 20.0);
         if (wallHolo != null && wallHolo.isValid() && tick % 4 == 0)
