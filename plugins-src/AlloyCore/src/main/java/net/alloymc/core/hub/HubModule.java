@@ -54,6 +54,7 @@ public final class HubModule implements Listener {
         Bukkit.getPluginManager().registerEvents(new LobbyRules(p -> false), plugin);
         new net.alloymc.core.SpawnSafety(plugin, l -> l.getWorld() == world, p -> spawn()).withStuckCommand();
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        registerJoinCommand();   // the clickable links in the first-join guide run /alloyjoin
         // keep the whole hub loaded: holograms survive, lava keeps flowing, first joins are instant
         for (int cx = -6; cx <= 5; cx++) for (int cz = -6; cz <= 5; cz++) world.addPluginChunkTicket(cx, cz, plugin);
         if (!new File(plugin.getDataFolder(), "hub-built").exists()) build(Bukkit.getConsoleSender());

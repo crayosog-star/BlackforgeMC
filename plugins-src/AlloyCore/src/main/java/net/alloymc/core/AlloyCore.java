@@ -80,6 +80,17 @@ public final class AlloyCore extends JavaPlugin implements Listener {
         if (!cmd.isEmpty()) Bukkit.getScheduler().runTaskLater(this, () -> { if (p.isOnline()) p.performCommand(cmd); }, 20L);
     }
 
+    /**
+     * Suggests /alloy's core subcommands. Only the first word is completed; everything else keeps the
+     * default (online player names), and the survival/skyblock/factions subcommands still work when typed.
+     */
+    @Override
+    public java.util.List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
+        if (!command.getName().equalsIgnoreCase("alloy") || args.length != 1) return null;
+        return java.util.stream.Stream.of("buildhub", "buildarcade", "spawn", "welcomeshow", "thanks")
+                .filter(s -> s.startsWith(args[0].toLowerCase())).toList();
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         switch (command.getName().toLowerCase()) {
@@ -111,8 +122,12 @@ public final class AlloyCore extends JavaPlugin implements Listener {
                         if (hub == null) sender.sendMessage(Component.text("Not a hub server."));
                         else if (target == null) sender.sendMessage(Component.text("Player not found."));
                         else if (!WelcomeShow.play(this, target)) sender.sendMessage(Component.text("A show is already playing for " + target.getName() + "."));
+                        else sender.sendMessage(Component.text("Playing the welcome show for " + target.getName() + " - look up at the sky ahead."));
                     }
-                    default -> sender.sendMessage(Component.text("/alloy buildhub | buildarcade | spawn | welcomeshow [player]"));
+                    default -> {
+                        if (!sub.isEmpty()) sender.sendMessage(Component.text("Unknown subcommand: " + args[0]));
+                        sender.sendMessage(Component.text("/alloy buildhub | buildarcade | spawn | welcomeshow [player]"));
+                    }
                 }
             }
         }
