@@ -6,6 +6,10 @@ When origin/main has new commits:
   3. restart each backend to install it - empty servers right away, servers with players after a
      5-minute in-game countdown
 Website/docs/tools-only changes are just pulled. Everything is logged to tools/autoupdate.log.
+
+Restart requests: staff type /alloy restart <server|all|this> [now] in game, which drops a file in
+tools/restart-requests/. Each run handles those first: the servers restart the same safe way (empty right away,
+players get the countdown), or immediately with "now".
 """
 import os, re, subprocess, sys, time
 from datetime import datetime
@@ -18,6 +22,7 @@ LOCK = TOOLS / "autoupdate.lock"
 SERVERS = ["hub", "skyblock", "survival", "factions", "arcade"]
 NEEDS_DEPLOY = ("plugins-src/", "datapacks/", "branding/server-icon.png", "tools/deploy.py")
 COUNTDOWN = [300, 60, 30, 10]   # seconds-left warnings for servers with players
+REQUESTS = TOOLS / "restart-requests"   # written by /alloy restart in game
 NO_WINDOW = 0x08000000
 
 
@@ -57,9 +62,11 @@ def build():
     return code == 0
 
 
-def install(short):
+def install(short, servers=SERVERS, notice=None):
+    """Restart servers safely: empty ones now, ones with players after the countdown. notice(when) is the warning text."""
+    if notice is None: notice = lambda when: f"Server update ({short}) installs in {when} - this server will restart for about a minute."
     pending = []
-    for s in SERVERS:
+    for s in servers:
         n = players(s)
         if n < 0: log(f"{s}: not responding - skipped (it will pick up the new jar at its next restart via deploy)"); continue
         if n == 0: log(f"{s}: empty - restarting now"); netctl("restart", s)
@@ -71,15 +78,44 @@ def install(short):
         if left > warn: time.sleep(left - warn); left = warn
         when = f"{warn // 60} minutes" if warn >= 60 else f"{warn} seconds"
         for s in pending:
-            if players(s) > 0: say(s, f"Server update ({short}) installs in {when} - this server will restart for about a minute.")
+            if players(s) > 0: say(s, notice(when))
     time.sleep(left)
     for s in pending: log(f"{s}: restarting"); netctl("restart", s)
+
+
+def restart_requests():
+    """Handle /alloy restart requests from the game. Returns True if any were handled."""
+    if not REQUESTS.is_dir(): return False
+    files = sorted(REQUESTS.glob("restart-*.txt"))
+    if not files: return False
+    servers, now, who = [], False, []
+    for f in files:
+        try:
+            parts = f.read_text(encoding="utf-8").split()
+            for s in parts[0].split(","):
+                if s in SERVERS and s not in servers: servers.append(s)
+            now = now or (len(parts) > 1 and parts[1] == "now")
+            if len(parts) > 2: who.append(parts[2])
+        except Exception as e:
+            log(f"bad restart request {f.name}: {e}")
+        f.unlink(missing_ok=True)   # handled (or unreadable): never act on the same request twice
+    if not servers: return True
+    log(f"restart requested by {', '.join(sorted(set(who))) or '?'}: {servers}{' (now)' if now else ''}")
+    if now:
+        for s in servers:
+            if players(s) > 0: say(s, "This server is restarting now (requested by staff) - back in about a minute.")
+            log(f"{s}: restarting (requested, now)"); netctl("restart", s)
+    else:
+        install("restart", servers, lambda when: f"This server restarts in {when} (requested by staff) - back in about a minute.")
+    log("requested restart done")
+    return True
 
 
 def main():
     if LOCK.exists() and time.time() - LOCK.stat().st_mtime < 3600: return   # another run is mid-update
     LOCK.write_text(str(os.getpid()))
     try:
+        restart_requests()   # staff asked in game: handled before (and independently of) any update
         code, out = git("fetch", "--quiet", "origin", "main")
         if code != 0: log("fetch failed: " + out.strip()[:300]); return
         head, remote = git("rev-parse", "HEAD")[1].strip(), git("rev-parse", "origin/main")[1].strip()

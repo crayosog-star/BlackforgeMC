@@ -135,6 +135,25 @@ public final class AlloyCore extends JavaPlugin implements Listener {
                     case "buildarena" -> { if (hub != null) hub.arena().build(sender); else sender.sendMessage(Component.text("Not a hub server.")); }
                     case "buildarcade" -> { if (arcade != null) arcade.buildAll(sender); else sender.sendMessage(Component.text("Not the arcade server.")); }
                     case "spawn" -> { if (sender instanceof Player p && hub != null) hub.toSpawn(p); }
+                    case "restart" -> {   // /alloy restart <server|all|this> [now]: the host's auto-updater does the restart
+                        String[] rest = java.util.Arrays.copyOfRange(args, 1, args.length);
+                        RestartRequest.Parsed req = RestartRequest.parse(rest, mode);
+                        if (req == null) {
+                            sender.sendMessage(Component.text("/alloy restart <hub|skyblock|survival|factions|arcade|all|this> [now]"));
+                            break;
+                        }
+                        try {
+                            RestartRequest.write(getDataFolder(), req, sender.getName());
+                            String what = String.join(", ", req.servers()) + (req.now() ? " (now, no countdown)" : " (countdown if players are on)");
+                            sender.sendMessage(Component.text("Restart requested: " + what + ". The host picks it up within a few minutes."));
+                            getLogger().info(sender.getName() + " requested a restart of " + what);
+                            for (Player staff : Bukkit.getOnlinePlayers())
+                                if (staff != sender && staff.hasPermission("alloy.admin")) staff.sendMessage(Component.text("[Staff] " + sender.getName() + " requested a restart: " + what));
+                        } catch (Exception ex) {
+                            sender.sendMessage(Component.text("Couldn't request a restart: " + ex.getMessage()));
+                            getLogger().warning("restart request failed: " + ex);
+                        }
+                    }
                     case "welcomeshow" -> {   // replay the first-join show: /alloy welcomeshow [player]
                         Player target = args.length > 1 ? Bukkit.getPlayerExact(args[1]) : sender instanceof Player p ? p : null;
                         if (hub == null) sender.sendMessage(Component.text("Not a hub server."));
@@ -144,7 +163,7 @@ public final class AlloyCore extends JavaPlugin implements Listener {
                     }
                     default -> {
                         if (!sub.isEmpty()) sender.sendMessage(Component.text("Unknown subcommand: " + args[0]));
-                        sender.sendMessage(Component.text("/alloy buildhub | buildarena | buildarcade | spawn | welcomeshow [player]"));
+                        sender.sendMessage(Component.text("/alloy buildhub | buildarena | buildarcade | spawn | welcomeshow [player] | restart <server|all|this> [now]"));
                     }
                 }
             }

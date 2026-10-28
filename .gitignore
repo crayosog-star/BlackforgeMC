@@ -32,4 +32,5 @@ tools/**/*.log
 tools/__pycache__/
 *.secret
 tools/autoupdate.lock
+tools/restart-requests/
 tools/automerge_state.json
