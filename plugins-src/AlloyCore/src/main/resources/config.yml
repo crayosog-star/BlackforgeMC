@@ -40,6 +40,12 @@ rimelock:
 gods-eye:
   enabled: true
 
+# Ashen Chain (hub Arena only for now): right-click a block (24 away) to drag yourself to it, or a player/hostile
+# mob (12 away) to hook them for 1 heart and drag them to you. Sneak to let go. Staff: /ashenchain (/chain, /tether).
+ashen-chain:
+  enabled: true
+  cooldown-seconds: 3   # 0 = no cooldown
+
 # Last Rite (Survival, Factions, hub Arena): a wave pulls the first enemy it touches into a 1v1 chamber.
 # timeout: both-die | both-weakened (leave empty for the server's default: Survival weakened, Factions/Arena die)
 last-rite:
