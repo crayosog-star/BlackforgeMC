@@ -29,6 +29,11 @@ surge:
   custom-model: false
   screen-darkness: true
 
+# Rimelock (hub Arena only for now): leap, slam, and a 6-block-radius cage holds for 7 s. Nobody inside can leave,
+# mobs included; anyone can walk in; no hits cross the wall either way. Staff: /rimelock (/cage). Set false to stop it.
+rimelock:
+  enabled: true
+
 # Last Rite (Survival, Factions, hub Arena): a wave pulls the first enemy it touches into a 1v1 chamber.
 # timeout: both-die | both-weakened (leave empty for the server's default: Survival weakened, Factions/Arena die)
 last-rite:
