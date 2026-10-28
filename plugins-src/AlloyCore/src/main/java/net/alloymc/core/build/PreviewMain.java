@@ -27,6 +27,9 @@ public final class PreviewMain {
         pov(hub, new File(out, "hub_view_from_arcade_gate.png"), 0.5, 103.6, 40.5, 180, -4, 1280, 720);
         pov(hub, new File(out, "hub_view_side.png"), 44.5, 112, 30.5, 125, -14, 1280, 720);
         topDown(hub, new File(out, "hub_top.png"), 6);
+        pov(hub, new File(out, "hub_dragon_east.png"), 20.5, 112, -20.5, -64, -18, 1280, 720);
+        pov(hub, new File(out, "hub_dragon_south.png"), 0.5, 105, 20.5, 0, -31, 1280, 720);
+        pov(hub, new File(out, "hub_aerial.png"), 0.5, 190, 150.5, 180, 30, 1600, 900);
         night = false;
         Canvas sv = net.alloymc.core.survival.SpawnBuilder.spawn();
         System.out.println("survival spawn blocks: " + sv.size());

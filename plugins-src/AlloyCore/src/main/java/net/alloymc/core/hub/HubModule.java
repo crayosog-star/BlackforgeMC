@@ -58,10 +58,14 @@ public final class HubModule implements Listener {
         // keep the whole hub loaded: holograms survive, lava keeps flowing, first joins are instant
         for (int cx = -6; cx <= 5; cx++) for (int cz = -6; cz <= 5; cz++) world.addPluginChunkTicket(cx, cz, plugin);
         if (!new File(plugin.getDataFolder(), "hub-built").exists()) build(Bukkit.getConsoleSender());
-        else if (!new File(plugin.getDataFolder(), "hub-biome-v1").exists()) applyBiome();
+        else {
+            if (!new File(plugin.getDataFolder(), "hub-biome-v1").exists()) applyBiome();
+            if (!new File(plugin.getDataFolder(), "hub-dragons-v1").exists()) addDragons();
+        }
         Bukkit.getScheduler().runTaskLater(plugin, this::spawnHolograms, 40L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::refresh, 60L, 40L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::ambient, 20L, 10L);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::dragonFire, 40L, 2L);
     }
 
     private void registerJoinCommand() {
@@ -102,6 +106,7 @@ public final class HubModule implements Listener {
     private void pasteHub(CommandSender who, net.alloymc.core.build.Canvas canvas, long t) {
         Paster.paste(plugin, world, canvas, 6000, () -> {
             try { new File(plugin.getDataFolder(), "hub-built").createNewFile(); } catch (Exception ignored) { }
+            try { new File(plugin.getDataFolder(), "hub-dragons-v1").createNewFile(); } catch (Exception ignored) { }
             applyBiome();
             who.sendMessage(Component.text("Hub built: " + canvas.size() + " blocks in " + (System.currentTimeMillis() - t) / 1000 + "s"));
             for (Player p : Bukkit.getOnlinePlayers()) toSpawn(p);
@@ -364,5 +369,57 @@ public final class HubModule implements Listener {
         }
         for (HubLayout.Gate g : HubLayout.GATES)
             world.spawnParticle(Particle.PORTAL, g.cx() + 0.5, HubLayout.Y + 5, g.cz() + 0.5, 10, g.alongX() ? 2 : 0.3, 2.5, g.alongX() ? 0.3 : 2, 0.2);
+    }
+
+    // ------------------------------------------------------------------ dragons
+
+    /** Pastes the sky dragons into a hub that was built before they were added. */
+    private void addDragons() {
+        Paster.paste(plugin, world, Dragons.build(), 6000, () -> {
+            try { new File(plugin.getDataFolder(), "hub-dragons-v1").createNewFile(); } catch (Exception ignored) { }
+            plugin.getLogger().info("Hub dragons added");
+        });
+    }
+
+    private static final int BREATH_PERIOD = 220, BREATH_LENGTH = 60;
+    private static final Particle.DustTransition[] FIRE_DUST = {
+            new Particle.DustTransition(Color.fromRGB(255, 240, 120), Color.fromRGB(255, 120, 20), 3.2f),
+            new Particle.DustTransition(Color.fromRGB(255, 150, 30), Color.fromRGB(200, 30, 10), 3.8f)};
+    private int fireTick;
+
+    /** Each dragon breathes a cone of fire for 3 seconds out of every 11, staggered so they take turns. */
+    private void dragonFire() {
+        fireTick += 2;
+        if (world.getPlayers().isEmpty()) return;
+        for (int i = 0; i < Dragons.ALL.size(); i++) {
+            Dragons.Dragon d = Dragons.ALL.get(i);
+            int t = Math.floorMod(fireTick - i * BREATH_PERIOD / Dragons.ALL.size(), BREATH_PERIOD);
+            if (t >= BREATH_LENGTH) continue;
+            double[] m = d.mouth(), f = d.breath();
+            if (t == 0) {
+                world.playSound(new Location(world, m[0], m[1], m[2]), Sound.ENTITY_BLAZE_SHOOT, 4f, 0.5f);
+                if ((fireTick / BREATH_PERIOD + i) % 3 == 0)
+                    world.playSound(new Location(world, m[0], m[1], m[2]), Sound.ENTITY_ENDER_DRAGON_GROWL, 3f, 0.9f);
+            } else if (t % 10 == 0) {
+                world.playSound(new Location(world, m[0], m[1], m[2]), Sound.ITEM_FIRECHARGE_USE, 3f, 0.6f);
+            }
+            double ramp = Math.min(1, Math.min(t, BREATH_LENGTH - t) / 10.0);   // flare up, then die down
+            // fast flames streaming out of the mouth
+            for (int k = 0; k < 10 * ramp + 2; k++) {
+                double dx = f[0] + (Math.random() - 0.5) * 0.25, dy = f[1] + (Math.random() - 0.5) * 0.25, dz = f[2] + (Math.random() - 0.5) * 0.25;
+                world.spawnParticle(Particle.FLAME, m[0], m[1], m[2], 0, dx, dy, dz, 0.55 + Math.random() * 0.35, null, true);
+            }
+            // a glowing cone of fire that widens away from the mouth, so it reads from across the island
+            for (int k = 0; k < 14 * ramp; k++) {
+                double s = Math.random() * 11 * ramp, spread = 0.3 + s * 0.22;
+                world.spawnParticle(Particle.DUST_COLOR_TRANSITION, m[0] + f[0] * s, m[1] + f[1] * s, m[2] + f[2] * s, 1,
+                        spread, spread, spread, 0, FIRE_DUST[s < 4 ? 0 : 1], true);
+            }
+            if (Math.random() < 0.5) {
+                double s = 8 + Math.random() * 4;
+                world.spawnParticle(Particle.LARGE_SMOKE, m[0] + f[0] * s, m[1] + f[1] * s, m[2] + f[2] * s, 2, 1, 1, 1, 0.02, null, true);
+            }
+            if (Math.random() < 0.3) world.spawnParticle(Particle.LAVA, m[0], m[1], m[2], 1, 0.3, 0.3, 0.3, 0, null, true);
+        }
     }
 }
