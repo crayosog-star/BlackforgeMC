@@ -21,8 +21,14 @@ import java.util.function.Predicate;
  */
 public final class LobbyRules implements Listener {
     private final Predicate<Player> exempt;
+    private Predicate<Player> itemsFree = p -> false;
 
     public LobbyRules(Predicate<Player> exempt) { this.exempt = exempt; }
+
+    /** Players for whom this is true may still move, drop and pick up items (e.g. in the hub's Arena) while every other rule stays on. */
+    public LobbyRules allowItems(Predicate<Player> who) { this.itemsFree = who; return this; }
+
+    private boolean itemsOk(Player p) { return free(p) || itemsFree.test(p); }
 
     public static void setupWorld(AlloyCore plugin, World w, long time) {
         w.setTime(time);
@@ -81,17 +87,17 @@ public final class LobbyRules implements Listener {
     }
 
     @EventHandler
-    public void onDrop(PlayerDropItemEvent e) { if (!free(e.getPlayer())) e.setCancelled(true); }
+    public void onDrop(PlayerDropItemEvent e) { if (!itemsOk(e.getPlayer())) e.setCancelled(true); }
 
     @EventHandler
-    public void onPickup(EntityPickupItemEvent e) { if (e.getEntity() instanceof Player p && !free(p)) e.setCancelled(true); }
+    public void onPickup(EntityPickupItemEvent e) { if (e.getEntity() instanceof Player p && !itemsOk(p)) e.setCancelled(true); }
 
     @EventHandler
-    public void onSwap(PlayerSwapHandItemsEvent e) { if (!free(e.getPlayer())) e.setCancelled(true); }
+    public void onSwap(PlayerSwapHandItemsEvent e) { if (!itemsOk(e.getPlayer())) e.setCancelled(true); }
 
     @EventHandler
     public void onInvClick(InventoryClickEvent e) {
-        if (e.getWhoClicked() instanceof Player p && !free(p) && e.getClickedInventory() == p.getInventory()) e.setCancelled(true);
+        if (e.getWhoClicked() instanceof Player p && !itemsOk(p) && e.getClickedInventory() == p.getInventory()) e.setCancelled(true);
     }
 
     @EventHandler public void onIgnite(BlockIgniteEvent e) { e.setCancelled(true); }

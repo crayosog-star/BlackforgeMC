@@ -88,7 +88,7 @@ public final class AlloyCore extends JavaPlugin implements Listener {
     @Override
     public java.util.List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
         if (!command.getName().equalsIgnoreCase("alloy") || args.length != 1) return null;
-        return java.util.stream.Stream.of("buildhub", "buildarcade", "spawn", "welcomeshow", "thanks")
+        return java.util.stream.Stream.of("buildhub", "buildarena", "buildarcade", "spawn", "welcomeshow", "thanks")
                 .filter(s -> s.startsWith(args[0].toLowerCase())).toList();
     }
 
@@ -116,6 +116,7 @@ public final class AlloyCore extends JavaPlugin implements Listener {
                 String sub = args.length > 0 ? args[0].toLowerCase() : "";
                 switch (sub) {
                     case "buildhub" -> { if (hub != null) hub.build(sender); else sender.sendMessage(Component.text("Not a hub server.")); }
+                    case "buildarena" -> { if (hub != null) hub.arena().build(sender); else sender.sendMessage(Component.text("Not a hub server.")); }
                     case "buildarcade" -> { if (arcade != null) arcade.buildAll(sender); else sender.sendMessage(Component.text("Not the arcade server.")); }
                     case "spawn" -> { if (sender instanceof Player p && hub != null) hub.toSpawn(p); }
                     case "welcomeshow" -> {   // replay the first-join show: /alloy welcomeshow [player]
@@ -127,7 +128,7 @@ public final class AlloyCore extends JavaPlugin implements Listener {
                     }
                     default -> {
                         if (!sub.isEmpty()) sender.sendMessage(Component.text("Unknown subcommand: " + args[0]));
-                        sender.sendMessage(Component.text("/alloy buildhub | buildarcade | spawn | welcomeshow [player]"));
+                        sender.sendMessage(Component.text("/alloy buildhub | buildarena | buildarcade | spawn | welcomeshow [player]"));
                     }
                 }
             }
