@@ -430,6 +430,26 @@ public final class TestArena implements Listener {
         spinBurst(slot);
     }
 
+    /**
+     * Make sure an item is on the showcase wall: if no frame already shows one ({@code same}), it goes into the first
+     * empty frame (with the NEW badge and arrival effects). Does nothing if it's already there or the wall is full,
+     * so it's safe to call on every start.
+     */
+    public void ensureOnWall(ItemStack item, java.util.function.Predicate<ItemStack> same) {
+        for (ItemStack s : showcase) if (s != null && same.test(s)) return;
+        for (int slot = 0; slot < SLOTS; slot++) {
+            if (showcase[slot] != null) continue;
+            showcase[slot] = item.asOne();
+            showcaseTime[slot] = System.currentTimeMillis();
+            if (frames[slot] != null && frames[slot].isValid()) { frames[slot].setItem(showcase[slot].clone(), false); newArrival(slot); }
+            saveShowcase();
+            cardSlot.clear();
+            plugin.getLogger().info("Arena showcase: added " + net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(item.effectiveName()) + " to slot " + (slot + 1));
+            return;
+        }
+        plugin.getLogger().warning("Arena showcase is full - couldn't add a new item");
+    }
+
     /** A quick little spin when someone takes an item. */
     private void spinBurst(int slot) {
         ItemFrame f = frames[slot];

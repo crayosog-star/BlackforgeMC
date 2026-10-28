@@ -76,6 +76,9 @@ public final class HubModule implements Listener {
         arena.setGaia(gaia);
         darkness = new net.alloymc.core.survival.DarknessPotion(plugin, l -> l.getWorld() == arena.world());
         arena.setDarkness(darkness);
+        // both potions on the Arena showcase wall (first empty frames; skipped if they're already up)
+        arena.ensureOnWall(gaia.item(), gaia::isGaia);
+        arena.ensureOnWall(darkness.item(), darkness::isDarkness);
     }
 
     public TestArena arena() { return arena; }
