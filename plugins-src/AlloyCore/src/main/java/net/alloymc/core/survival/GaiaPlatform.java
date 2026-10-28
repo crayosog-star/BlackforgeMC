@@ -67,6 +67,9 @@ final class GaiaPlatform {
     }
 
     boolean done() { return done; }
+
+    /** Shattering or finished: on its way out, so it no longer counts as the owner's cloud or blocks a new one. */
+    boolean fading() { return done || BloomCurve.phase(tick / 20.0).ordinal() >= BloomCurve.Phase.FADE.ordinal(); }
     Map<Block, BlockData> barriers() { return barriers; }
     Location centre() { return new Location(world, cx + 0.5, groundY, cz + 0.5); }
 
