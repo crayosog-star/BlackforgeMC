@@ -9,6 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 JAR = ROOT / "plugins-src" / "AlloyCore" / "build" / "libs" / "AlloyCore.jar"
 OWNER = {"uuid": "f2aef66f-fb87-4635-8c61-4b116baaa5b5", "name": "GavVFX", "level": 4, "bypassesPlayerLimit": True}
+# permanent ops: re-added on every deploy, so a rebuilt or wiped server never loses them
+PERMANENT_OPS = [OWNER, {"uuid": "8c67e820-3611-42b8-9f5f-d355d31f9ca9", "name": "Causee", "level": 4, "bypassesPlayerLimit": True}]
 ADDRESS = "blackforgemc.com"
 
 SERVERS = {
@@ -71,8 +73,9 @@ for name, s in SERVERS.items():
     })
     ops = d / "ops.json"
     cur = json.loads(ops.read_text()) if ops.exists() and ops.read_text().strip() else []
-    if not any(o["uuid"] == OWNER["uuid"] for o in cur):
-        cur.append(OWNER)
+    for op in PERMANENT_OPS:
+        if not any(o["uuid"] == op["uuid"] for o in cur):
+            cur.append(op)
     ops.write_text(json.dumps(cur, indent=2))
     if s["mode"] in ("hub", "factions"):   # blackforge:inferno (hub) and blackforge:ember_night (factions spawn) biomes
         dp = d / "world" / "datapacks" / "blackforge"
