@@ -98,7 +98,7 @@ public final class HubModule implements Listener {
         arena.addTestItem(cage::item, cage::isCage);
         eye = new net.alloymc.core.survival.GodsEye(plugin, l -> l.getWorld() == arena.world());   // Arena only; never used up
         arena.addTestItem(eye::item, eye::isEye);
-        chain = new net.alloymc.core.survival.AshenChain(plugin, l -> l.getWorld() == arena.world(), arena::isTestDummy);   // Arena only; never used up
+        chain = new net.alloymc.core.survival.AshenChain(plugin, l -> l.getWorld() == arena.world(), arena::isPracticeTarget, arena::isTestDummy);   // Arena only; never used up; the dummy is pinned, the practice zombie can be pulled
         surge.onActivate(p -> chain.breakFree(p, "Surge"));   // Surge tears you loose from a burning chain
         arena.addTestItem(chain::item, chain::isChain);
         bonfire = new net.alloymc.core.survival.AshenBonfire(plugin, l -> l.getWorld() == arena.world());   // Arena only; never used up
