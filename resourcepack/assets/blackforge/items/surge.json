@@ -1,0 +1,9 @@
+{
+  "model": {
+    "type": "minecraft:condition",
+    "property": "minecraft:custom_model_data",
+    "index": 0,
+    "on_true": { "type": "minecraft:model", "model": "blackforge:item/surge_active" },
+    "on_false": { "type": "minecraft:model", "model": "blackforge:item/surge_idle" }
+  }
+}
