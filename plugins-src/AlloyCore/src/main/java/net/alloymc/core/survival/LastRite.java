@@ -73,17 +73,23 @@ public final class LastRite implements Listener {
         boolean cancelled;
     }
 
-    /** One ground block the wave will cross: where its plate sits, how far down the lane, how far off the centre line. */
-    private record Cell(int x, int y, int z, double along, double lateral) {}
+    /** One row of the highlighted lane: how far down the lane its centre is, and the ground block it sits on. */
+    private record Row(double along, int y) {}
 
-    /** The highlighted path: a glowing plate on every ground block the wave will cross, revealed row by row. */
+    /**
+     * The highlighted path: a ribbon of thin strips turned to the lane's direction (so its edges are straight lines
+     * at any angle), one per block along the lane, revealed row by row. Each strip is a glass middle and two amethyst
+     * edges. No glow: glow draws through terrain, which made strips hidden behind grass show up as stray outlines.
+     */
     private final class Lane {
-        final List<Cell> cells;
-        final List<BlockDisplay> plates = new ArrayList<>();
-        final List<Double> plateAlong = new ArrayList<>();
+        final List<Row> rows;
+        final double ox, oz;
+        final double[] f;
+        final float yaw;
+        final List<BlockDisplay[]> strips = new ArrayList<>();
         final Set<Integer> flared = new HashSet<>();
         final Set<Long> ghosted = new HashSet<>();
-        Lane(List<Cell> cells) { this.cells = cells; }
+        Lane(List<Row> rows, double ox, double oz, double[] f, float yaw) { this.rows = rows; this.ox = ox; this.oz = oz; this.f = f; this.yaw = yaw; }
     }
 
     /**
@@ -266,7 +272,8 @@ public final class LastRite implements Listener {
         // the aim is locked the moment the rite is read, so the highlighted lane is exactly where the wave goes
         Location origin = p.getLocation().clone();
         float yaw = origin.getYaw();
-        c.lane = new Lane(laneCells(w, origin.getX(), origin.getY(), origin.getZ(), RiteSweep.facing(yaw)));
+        double[] f = RiteSweep.facing(yaw);
+        c.lane = new Lane(laneRows(w, origin.getX(), origin.getY(), origin.getZ(), f), origin.getX(), origin.getZ(), f, yaw);
         p.swingMainHand();
         p.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, WINDUP_TICKS + 4, 4, false, false, false));
         w.playSound(p.getLocation(), Sound.ENTITY_WARDEN_SONIC_CHARGE, SoundCategory.PLAYERS, 1.0f, 0.8f);
@@ -343,69 +350,112 @@ public final class LastRite implements Listener {
 
     // ------------------------------------------------------------------ the highlighted lane
 
+    private static final double ROW = 1.0, EDGE = 0.35;           // strip depth along the lane, amethyst edge width
+    // ground tops searched, relative to the caster's feet: one step up, three down. The wall stays at the caster's
+    // height (it can't catch anyone standing lower than that), so the lane doesn't climb cliffs or follow drops either.
+    private static final int[] GROUND_SEARCH = {-1, 0, -2, 1, -3};
+
     /**
-     * Every block column the wave will cross (centre inside the 5-wide lane), with the ground surface nearest the
-     * caster's feet level (so a ceiling above or a cave below doesn't steal the plate). Columns with no ground nearby
-     * (a drop, the void) get no plate. Sorted by distance down the lane.
+     * One row per block down the lane. Each row samples ten points across the lane's width and sits on the most common
+     * ground height among them, so a lone flower pot, stump or hole doesn't make the ribbon jump. Leaves are never
+     * ground (no more strips floating in trees), and only ground the wall can actually catch someone on counts.
+     * Rows with too little ground under them (a drop, the void) are left out; a single row that pokes up or down
+     * between two level neighbours is flattened to match them.
      */
-    private static List<Cell> laneCells(World w, double ox, double oy, double oz, double[] f) {
-        Map<Long, Cell> cells = new LinkedHashMap<>();
+    private static List<Row> laneRows(World w, double ox, double oy, double oz, double[] f) {
         double[] side = {-f[1], f[0]};
         int feet = (int) Math.floor(oy + 0.01);
-        for (double a = RiteSweep.START; a <= RiteSweep.START + RiteSweep.RANGE; a += 0.4)
-            for (double s = -RiteSweep.WIDTH / 2; s <= RiteSweep.WIDTH / 2; s += 0.4) {
+        List<Row> raw = new ArrayList<>();
+        for (double a = RiteSweep.START + ROW / 2; a <= RiteSweep.START + RiteSweep.RANGE; a += ROW) {
+            Map<Integer, Integer> votes = new HashMap<>();
+            int found = 0;
+            for (double s = -RiteSweep.WIDTH / 2 + 0.25; s < RiteSweep.WIDTH / 2; s += 0.5) {
                 int x = (int) Math.floor(ox + f[0] * a + side[0] * s), z = (int) Math.floor(oz + f[1] * a + side[1] * s);
-                long key = ((long) x << 32) ^ (z & 0xffffffffL);
-                if (cells.containsKey(key)) continue;
-                double ca = RiteSweep.along(ox, oz, f, x + 0.5, z + 0.5), cl = RiteSweep.lateral(ox, oz, f, x + 0.5, z + 0.5);
-                if (cl > RiteSweep.WIDTH / 2 || ca < RiteSweep.START - 0.5 || ca > RiteSweep.START + RiteSweep.RANGE) continue;
-                int top = Integer.MIN_VALUE;
-                for (int k = 0; k <= 8 && top == Integer.MIN_VALUE; k++) {   // feet-1, feet, feet-2, feet+1, feet-3, ...
-                    int y = feet - 1 + ((k % 2 == 0) ? -k / 2 : (k + 1) / 2);
-                    if (w.getBlockAt(x, y, z).isSolid() && !w.getBlockAt(x, y + 1, z).isSolid()) top = y;
-                }
-                if (top == Integer.MIN_VALUE) continue;
-                cells.put(key, new Cell(x, top, z, ca, cl));
+                int y = groundAt(w, x, z, feet);
+                if (y == Integer.MIN_VALUE) continue;
+                votes.merge(y, 1, Integer::sum);
+                found++;
             }
-        List<Cell> out = new ArrayList<>(cells.values());
-        out.sort(Comparator.comparingDouble(Cell::along));
+            if (found < 4) { raw.add(null); continue; }
+            int best = Integer.MIN_VALUE, bestVotes = -1;
+            for (var e : votes.entrySet()) {   // most votes; a tie goes to the height nearest the caster's ground
+                int y = e.getKey(), v = e.getValue();
+                if (v > bestVotes || (v == bestVotes && Math.abs(y - (feet - 1)) < Math.abs(best - (feet - 1)))) { best = y; bestVotes = v; }
+            }
+            raw.add(new Row(a, best));
+        }
+        List<Row> out = new ArrayList<>();
+        for (int i = 0; i < raw.size(); i++) {
+            Row r = raw.get(i);
+            if (r == null) continue;
+            Row prev = i > 0 ? raw.get(i - 1) : null, next = i + 1 < raw.size() ? raw.get(i + 1) : null;
+            if (prev != null && next != null && prev.y() == next.y() && r.y() != prev.y()) r = new Row(r.along(), prev.y());
+            out.add(r);
+        }
         return out;
     }
 
-    /** The lane draws itself out from the caster's feet over the windup: plates pop up row by row, edges in amethyst. */
+    /** The top of the ground in this column near the caster's feet, or MIN_VALUE if there's none in reach. */
+    private static int groundAt(World w, int x, int z, int feet) {
+        for (int off : GROUND_SEARCH) {
+            int y = feet + off;
+            var b = w.getBlockAt(x, y, z);
+            if (b.isSolid() && !Tag.LEAVES.isTagged(b.getType()) && !w.getBlockAt(x, y + 1, z).isSolid()) return y;
+        }
+        return Integer.MIN_VALUE;
+    }
+
+    /** A thin strip in the lane's own frame: {@code width} across (centred on {@code x}), height h, one row deep. */
+    private static Transformation strip(float width, float x, float h) {
+        return new Transformation(new Vector3f(x - width / 2, 0.005f, (float) -ROW / 2), new AxisAngle4f(),
+                new Vector3f(width, h, (float) ROW), new AxisAngle4f());
+    }
+
+    private static final float MID_W = (float) (RiteSweep.WIDTH - 2 * EDGE), EDGE_X = (float) (RiteSweep.WIDTH / 2 - EDGE / 2);
+
+    /** The lane draws itself out from the caster's feet over the windup: each row unrolls sideways from the centre line. */
     private void revealLane(World w, Lane lane, int n) {
         if (lane == null) return;
         int span = WINDUP_TICKS - 5;
-        int want = (int) Math.min(lane.cells.size(), Math.ceil(lane.cells.size() * Math.min(1.0, n / (double) span)));
-        for (int i = lane.plates.size(); i < want; i++) {
-            Cell c = lane.cells.get(i);
-            boolean edge = c.lateral() > RiteSweep.WIDTH / 2 - 0.75;
-            BlockData look = (edge ? Material.AMETHYST_BLOCK : Material.PURPLE_STAINED_GLASS).createBlockData();
-            BlockDisplay plate = w.spawn(new Location(w, c.x(), c.y() + 1, c.z()), BlockDisplay.class, d -> {
-                d.setBlock(look);
-                d.setPersistent(false);
-                d.setGlowing(true);
-                d.setGlowColorOverride(edge ? BONE : VIOLET);
-                d.setBrightness(new Display.Brightness(15, 15));
-                d.setTransformation(plate(0.15f, 0.01f));
-            });
-            live.add(plate);
-            lane.plates.add(plate);
-            lane.plateAlong.add(c.along());
-            Bukkit.getScheduler().runTaskLater(plugin, () -> grow(plate, plate(0.94f, 0.06f), 3), 1L);
-            if (rnd.nextInt(3) == 0) w.spawnParticle(Particle.DUST, c.x() + 0.5, c.y() + 1.15, c.z() + 0.5, 2, 0.2, 0.05, 0.2, 0, new Particle.DustOptions(VIOLET, 1.0f));
-            if (i % 14 == 0) w.playSound(new Location(w, c.x() + 0.5, c.y() + 1, c.z() + 0.5), Sound.BLOCK_SCULK_SPREAD, SoundCategory.PLAYERS, 1.0f, 0.7f);
+        int want = (int) Math.min(lane.rows.size(), Math.ceil(lane.rows.size() * Math.min(1.0, n / (double) span)));
+        for (int i = lane.strips.size(); i < want; i++) {
+            Row r = lane.rows.get(i);
+            Location at = new Location(w, lane.ox + lane.f[0] * r.along(), r.y() + 1, lane.oz + lane.f[1] * r.along(), lane.yaw, 0);
+            BlockDisplay mid = stripDisplay(w, at, Material.PURPLE_STAINED_GLASS, strip(0.2f, 0, 0.01f));
+            BlockDisplay left = stripDisplay(w, at, Material.AMETHYST_BLOCK, strip(0.01f, 0, 0.01f));
+            BlockDisplay right = stripDisplay(w, at, Material.AMETHYST_BLOCK, strip(0.01f, 0, 0.01f));
+            lane.strips.add(new BlockDisplay[]{mid, left, right});
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                grow(mid, strip(MID_W, 0, 0.05f), 4);
+                grow(left, strip((float) EDGE, -EDGE_X, 0.07f), 4);
+                grow(right, strip((float) EDGE, EDGE_X, 0.07f), 4);
+            }, 1L);
+            if (i % 2 == 0) w.spawnParticle(Particle.DUST, at.clone().add(0, 0.15, 0), 3, 0.8, 0.05, 0.3, 0, new Particle.DustOptions(VIOLET, 1.0f));
+            if (i % 5 == 0) w.playSound(at, Sound.BLOCK_SCULK_SPREAD, SoundCategory.PLAYERS, 1.0f, 0.7f);
         }
         // the lane's two long edges shimmer while it waits
-        if (n > span && !lane.cells.isEmpty() && n % 2 == 0)
-            for (Cell c : lane.cells)
-                if (c.lateral() > RiteSweep.WIDTH / 2 - 0.75 && rnd.nextInt(4) == 0)
-                    w.spawnParticle(Particle.END_ROD, c.x() + 0.5, c.y() + 1.2, c.z() + 0.5, 1, 0.1, 0.05, 0.1, 0.005);
+        if (n > span && n % 2 == 0) {
+            double[] side = {-lane.f[1], lane.f[0]};
+            for (Row r : lane.rows)
+                for (int e = -1; e <= 1; e += 2)
+                    if (rnd.nextInt(4) == 0) {
+                        double s = e * (RiteSweep.WIDTH / 2 - EDGE / 2);
+                        w.spawnParticle(Particle.END_ROD, lane.ox + lane.f[0] * r.along() + side[0] * s, r.y() + 1.2,
+                                lane.oz + lane.f[1] * r.along() + side[1] * s, 1, 0.05, 0.05, 0.3, 0.005);
+                    }
+        }
     }
 
-    /** A thin square slab centred on its block: side s (of 1), height h. */
-    private static Transformation plate(float s, float h) {
-        return new Transformation(new Vector3f(0.5f - s / 2, 0.005f, 0.5f - s / 2), new AxisAngle4f(), new Vector3f(s, h, s), new AxisAngle4f());
+    private BlockDisplay stripDisplay(World w, Location at, Material m, Transformation start) {
+        BlockData look = m.createBlockData();
+        BlockDisplay d = w.spawn(at, BlockDisplay.class, e -> {
+            e.setBlock(look);
+            e.setPersistent(false);
+            e.setBrightness(new Display.Brightness(15, 15));
+            e.setTransformation(start);
+        });
+        live.add(d);
+        return d;
     }
 
     private static void grow(Display d, Transformation to, int ticks) {
@@ -415,40 +465,44 @@ public final class LastRite implements Listener {
         d.setTransformation(to);
     }
 
-    /** As the wall reaches a row it flares white, then sinks back into the ground. */
+    /** Pulls a row's strips in to the centre line, then removes them. */
+    private void closeRow(BlockDisplay[] row, long delay, int ticks) {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            grow(row[0], strip(0.02f, 0, 0.01f), ticks);
+            grow(row[1], strip(0.01f, 0, 0.01f), ticks);
+            grow(row[2], strip(0.01f, 0, 0.01f), ticks);
+        }, delay);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> { for (BlockDisplay d : row) { d.remove(); live.remove(d); } }, delay + ticks + 2);
+    }
+
+    /** As the wall reaches a row it flares white, then closes in to the centre line behind the wall. */
     private void flareLane(World w, Lane lane, double upTo) {
         if (lane == null) return;
-        for (int i = 0; i < lane.plates.size(); i++) {
-            if (lane.plateAlong.get(i) > upTo || !lane.flared.add(i)) continue;
-            BlockDisplay plate = lane.plates.get(i);
-            if (!plate.isValid()) continue;
-            plate.setBlock(Material.WHITE_STAINED_GLASS.createBlockData());
-            grow(plate, plate(1.0f, 0.12f), 2);
-            Location c = plate.getLocation().add(0.5, 0.2, 0.5);
-            if (rnd.nextInt(3) == 0) w.spawnParticle(Particle.SCULK_SOUL, c, 1, 0.2, 0.05, 0.2, 0.02);
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                if (!plate.isValid()) return;
-                plate.setBlock(Material.PURPLE_STAINED_GLASS.createBlockData());
-                grow(plate, plate(0.01f, 0.01f), 10);
-            }, 4L);
-            Bukkit.getScheduler().runTaskLater(plugin, () -> { plate.remove(); live.remove(plate); }, 15L);
+        for (int i = 0; i < lane.strips.size(); i++) {
+            if (lane.rows.get(i).along() > upTo || !lane.flared.add(i)) continue;
+            BlockDisplay[] row = lane.strips.get(i);
+            BlockDisplay mid = row[0];
+            if (!mid.isValid()) continue;
+            mid.setBlock(Material.WHITE_STAINED_GLASS.createBlockData());
+            grow(mid, strip(MID_W, 0, 0.12f), 2);
+            if (rnd.nextInt(3) == 0) w.spawnParticle(Particle.SCULK_SOUL, mid.getLocation().add(0, 0.2, 0), 1, 0.6, 0.05, 0.2, 0.02);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> { if (mid.isValid()) mid.setBlock(Material.PURPLE_STAINED_GLASS.createBlockData()); }, 4L);
+            closeRow(row, 4L, 10);
         }
     }
 
-    /** Whatever is left of the lane past {@code from} drains away, the far end last (all of it when from < 0). */
+    /** Whatever is left of the lane past {@code from} closes up, the far end last (all of it when from < 0). */
     private void fadeLane(Lane lane, double from, boolean quick) {
         if (lane == null) return;
-        for (int i = 0; i < lane.plates.size(); i++) {
-            if (lane.flared.contains(i) || lane.plateAlong.get(i) < from) continue;
-            BlockDisplay plate = lane.plates.get(i);
-            long delay = quick ? 1 : 1 + (long) ((lane.plateAlong.get(i) - Math.max(0, from)) * 0.6);
-            Bukkit.getScheduler().runTaskLater(plugin, () -> grow(plate, plate(0.01f, 0.01f), 6), delay);
-            Bukkit.getScheduler().runTaskLater(plugin, () -> { plate.remove(); live.remove(plate); }, delay + 8);
+        for (int i = 0; i < lane.strips.size(); i++) {
+            double a = lane.rows.get(i).along();
+            if (lane.flared.contains(i) || a < from) continue;
+            closeRow(lane.strips.get(i), quick ? 1 : 1 + (long) ((a - Math.max(0, from)) * 0.6), 6);
         }
     }
 
     /**
-     * Through walls: every solid block inside the wall's slab this tick is outlined by a violet-glowing ghost of itself
+     * Through walls: every full, solid block (not leaves or see-through blocks) inside the wall's slab this tick is outlined by a violet-glowing ghost of itself
      * that swells and dissolves - you can watch the wave pass through a house from outside it.
      */
     private void ghostBlocks(World w, Lane lane, double ox, double oy, double oz, double[] f, double from, double to) {
@@ -463,7 +517,8 @@ public final class LastRite implements Listener {
                     long key = ((long) (x & 0x3ffffff) << 38) | ((long) (z & 0x3ffffff) << 12) | (y & 0xfff);
                     if (lane.ghosted.contains(key)) continue;
                     var b = w.getBlockAt(x, y, z);
-                    if (!b.isSolid() || b.getType().isAir()) continue;
+                    // only real walls: leaves, glass, fences, slabs and the like made big flat purple patches
+                    if (!b.getType().isOccluding() || Tag.LEAVES.isTagged(b.getType())) continue;
                     lane.ghosted.add(key);
                     made++;
                     BlockData data = b.getBlockData().clone();
