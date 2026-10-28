@@ -52,11 +52,11 @@ public final class GaleBellows implements Listener {
     private final Map<UUID, Long> lastPushed = new HashMap<>();    // target -> when they were last pushed (juggle rule)
     private final Random rnd = new Random();
 
-    private final java.util.function.Predicate<Location> freeUseAt;   // where blasts don't use up a charge (the hub Arena)
+    private final java.util.function.Predicate<Location> freeUseAt;   // where blasts have no cooldown and use no charge (the hub Arena)
 
     public GaleBellows(AlloyCore plugin) { this(plugin, l -> false); }
 
-    /** {@code freeUseAt}: where a blast costs no charge, so the bellows never breaks there (the 10 s cooldown still applies). */
+    /** {@code freeUseAt}: where a blast has no cooldown and costs no charge, so the bellows never breaks there. */
     public GaleBellows(AlloyCore plugin, java.util.function.Predicate<Location> freeUseAt) {
         this.plugin = plugin;
         this.freeUseAt = freeUseAt;
@@ -206,8 +206,11 @@ public final class GaleBellows implements Listener {
             hit.add(t);
         }
 
-        readyAt.put(p.getUniqueId(), now + COOLDOWN_TICKS * 50L);
-        p.setCooldown(held, COOLDOWN_TICKS);
+        boolean free = freeUseAt.test(p.getLocation());   // test area: no cooldown, no charge used
+        if (!free) {
+            readyAt.put(p.getUniqueId(), now + COOLDOWN_TICKS * 50L);
+            p.setCooldown(held, COOLDOWN_TICKS);
+        }
         castEffects(p, eye, look);
         useUp(p, held);
 
@@ -231,6 +234,7 @@ public final class GaleBellows implements Listener {
         }
         if (!hit.isEmpty()) p.sendActionBar(Ui.mm("<#9EE6FF>🌬 <gray>Gust hit <white>" + hit.size() + (hit.size() == 1 ? " target" : " targets")));
 
+        if (free) return;   // no cooldown, so nothing to refill
         // a quiet "ready" cue when the bellows refills, to the owner only
         UUID id = p.getUniqueId();
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
