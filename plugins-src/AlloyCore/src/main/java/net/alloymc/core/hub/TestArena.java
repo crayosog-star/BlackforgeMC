@@ -15,7 +15,6 @@ import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.type.Switch;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -99,6 +98,8 @@ public final class TestArena implements Listener {
     public void setDarkness(net.alloymc.core.survival.DarknessPotion d) { this.darkness = d; }
     private net.alloymc.core.survival.Surge surge;                  // one Surge in every kit, if set
     public void setSurge(net.alloymc.core.survival.Surge s) { this.surge = s; }
+    private net.alloymc.core.survival.GaleBellows bellows;          // a Gale Bellows in every kit, if set
+    public void setBellows(net.alloymc.core.survival.GaleBellows b) { this.bellows = b; }
     // the current combo on the dummy: hits within 4 s of each other
     private final Deque<double[]> hits = new ArrayDeque<>();   // {time ms, damage}
     private double lastHit, comboTotal;
@@ -305,6 +306,9 @@ public final class TestArena implements Listener {
         p.setFlying(false);
         p.setAllowFlight(p.getGameMode() == GameMode.CREATIVE);
         kit(p);
+        p.sendMessage(Ui.mm("<#7bd88f><bold>Arena test items</bold> <dark_gray>· <white>/arena kit <gray>refills everything"));
+        if (p.hasPermission("alloy.admin"))
+            p.sendMessage(Ui.mm("<gray>Staff: <white>/jbello /gaia /darkness /surge <gray>give one each · Surge has no cooldown here"));
         p.showTitle(Title.title(Ui.mm("<gradient:#7bd88f:#2e9e5b><bold>THE ARENA</bold></gradient>"), Ui.mm("<gray>Break things. Responsibly."),
                 Title.Times.times(Duration.ofMillis(250), Duration.ofSeconds(2), Duration.ofMillis(600))));
         p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.2f);
@@ -313,24 +317,14 @@ public final class TestArena implements Listener {
     public void kit(Player p) {
         var inv = p.getInventory();
         inv.clear();
-        inv.setItem(0, new ItemStack(Material.NETHERITE_SWORD));
-        inv.setItem(1, new ItemStack(Material.NETHERITE_AXE));
-        inv.setItem(2, new ItemStack(Material.MACE));
-        ItemStack bow = new ItemStack(Material.BOW);
-        bow.addEnchantment(Enchantment.INFINITY, 1);
-        inv.setItem(3, bow);
-        inv.setItem(13, new ItemStack(Material.CROSSBOW));   // hotbar slot 5 holds the Potion of Darkness
-        if (darkness != null) inv.setItem(4, darkness.item());
-        ItemStack trident = new ItemStack(Material.TRIDENT);
-        trident.addEnchantment(Enchantment.LOYALTY, 3);
-        inv.setItem(5, trident);
-        inv.setItem(15, new ItemStack(Material.WIND_CHARGE, 64));   // hotbar slot 7 holds Surge
-        if (surge != null) inv.setItem(6, surge.item());
-        if (gaia != null) inv.setItem(7, gaia.item());
+        // only the BlackForgeMC test items: /arena kit refills them (the potions and Surge are used up)
+        if (bellows != null) inv.setItem(0, bellows.item());
+        if (gaia != null) inv.setItem(1, gaia.item());
+        if (darkness != null) inv.setItem(2, darkness.item());
+        if (surge != null) inv.setItem(3, surge.item());
         ItemStack leave = Ui.item(Material.RED_BED, "<red><bold>Back to the Hub</bold> <gray>(right-click)");
         leave.editMeta(m -> m.getPersistentDataContainer().set(leaveKey, PersistentDataType.BYTE, (byte) 1));
         inv.setItem(8, leave);
-        inv.setItem(17, new ItemStack(Material.ARROW, 64));
         inv.setHeldItemSlot(0);
     }
 

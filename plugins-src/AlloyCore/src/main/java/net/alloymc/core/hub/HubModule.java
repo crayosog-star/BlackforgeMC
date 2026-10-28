@@ -31,6 +31,7 @@ public final class HubModule implements Listener {
     private final World world;
     private final TestArena arena;
     private final net.alloymc.core.survival.GaiaPotion gaia;   // Potion of Gaia, usable in the Arena only
+    private final net.alloymc.core.survival.GaleBellows bellows;   // Gale Bellows, works in the Arena (PvP is on there)
     private final net.alloymc.core.survival.Surge surge;   // Surge ability item, usable in the Arena only
     private final net.alloymc.core.survival.DarknessPotion darkness;   // Potion of Darkness, darkens players in the Arena only
     private final Map<UUID, Long> portalCooldown = new HashMap<>();
@@ -78,15 +79,38 @@ public final class HubModule implements Listener {
         arena.setGaia(gaia);
         darkness = new net.alloymc.core.survival.DarknessPotion(plugin, l -> l.getWorld() == arena.world());
         arena.setDarkness(darkness);
-        surge = new net.alloymc.core.survival.Surge(plugin, l -> l.getWorld() == arena.world());
+        surge = new net.alloymc.core.survival.Surge(plugin, l -> l.getWorld() == arena.world(), true);   // staff: no cooldown in the Arena
         arena.setSurge(surge);
+        bellows = new net.alloymc.core.survival.GaleBellows(plugin);
+        arena.setBellows(bellows);
         // both potions on the Arena showcase wall (first empty frames; skipped if they're already up)
         arena.ensureOnWall(gaia.item(), gaia::isGaia);
         arena.ensureOnWall(darkness.item(), darkness::isDarkness);
         arena.ensureOnWall(surge.item(), surge::isSurge);
+        arena.ensureOnWall(bellows.item(), bellows::isBellows);
+        // staff test commands, Arena only: one item each
+        testCommand("jbello", List.of("bellows", "galebellows"), () -> bellows.item());
+        testCommand("gaia", List.of("gaiapotion"), () -> gaia.item());
+        testCommand("darkness", List.of("darknesspotion"), () -> darkness.item());
+        testCommand("surge", List.of(), () -> surge.item());
     }
 
     public TestArena arena() { return arena; }
+
+    /** A staff-only command that hands out one test item, inside the Arena. */
+    private void testCommand(String name, List<String> aliases, java.util.function.Supplier<ItemStack> item) {
+        Bukkit.getCommandMap().register("alloy", new org.bukkit.command.Command(name, "Arena test item (staff)", "/" + name, aliases) {
+            @Override public boolean execute(org.bukkit.command.CommandSender s, String label, String[] a) {
+                if (!(s instanceof Player p)) return true;
+                if (!p.hasPermission("alloy.admin")) { p.sendMessage(Ui.mm("<gray>Test items are staff-only. Grab them from the Arena wall or <white>/arena kit<gray>.")); return true; }
+                if (!arena.inArena(p)) { p.sendMessage(Ui.mm("<gray>Go to the Arena first: <white>/arena")); return true; }
+                ItemStack it = item.get();
+                p.getInventory().addItem(it).values().forEach(left -> p.getWorld().dropItemNaturally(p.getLocation(), left));
+                p.sendActionBar(Ui.mm("<green>+ <white>").append(it.effectiveName()));
+                return true;
+            }
+        });
+    }
 
     private void registerJoinCommand() {
         Bukkit.getCommandMap().register("alloy", new org.bukkit.command.Command("alloyjoin", "Join a game mode", "/alloyjoin <server>", List.of()) {
