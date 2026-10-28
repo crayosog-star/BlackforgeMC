@@ -28,15 +28,15 @@ import org.bukkit.util.Vector;
 import java.util.*;
 
 /**
- * Gale Bellows: a BlackForgeMC PvP item (Survival only). Right-click to blast a short cone of wind that hits everything about
- * 2 blocks in front of you for 1 heart and shoves it back. 10 second cooldown. The cone maths lives in {@link WindCone}.
+ * Gale Bellows: a BlackForgeMC PvP item. Right-click to slash a short cone of wind (left to right) that hits everything about
+ * 2 blocks in front of you for 2.5 hearts and throws it back at least 3 blocks. Cooldown comes from
+ * {@code gale-bellows.cooldown-seconds} (0 = none). The cone maths lives in {@link WindCone}.
  *
  * Every hit goes through a normal damage event first, so spawn protection, claims and the "PvP only in the arena"
  * rule decide who can be pushed - the bellows never bypasses them.
  */
 public final class GaleBellows implements Listener {
-    public static final int COOLDOWN_TICKS = 200;          // 10 s
-    public static final double DAMAGE = 2.0;                // 1 heart
+    public static final double DAMAGE = 5.0;                // 2.5 hearts before armour
     public static final int USES = 3;                       // blasts before it breaks
 
     // palette (see the plan's visual guide)
@@ -45,6 +45,7 @@ public final class GaleBellows implements Listener {
 
     private final AlloyCore plugin;
     private final boolean enabled, customModel;
+    private final int cooldownTicks;   // 0 = no cooldown
     private final NamespacedKey tagKey, uidKey, modelKey, usesKey;
     private final java.io.File pendingFile;
     private final Set<UUID> pending = new HashSet<>();   // owed a bellows the next time they join (given while offline)
@@ -53,14 +54,20 @@ public final class GaleBellows implements Listener {
     private final Random rnd = new Random();
 
     private final java.util.function.Predicate<Location> freeUseAt;   // where blasts have no cooldown and use no charge (the hub Arena)
+    private final java.util.function.Predicate<Entity> alsoTarget;     // AlloyCore-tagged entities it may still hit (the Arena Test Dummy)
 
-    public GaleBellows(AlloyCore plugin) { this(plugin, l -> false); }
+    public GaleBellows(AlloyCore plugin) { this(plugin, l -> false, e -> false); }
 
-    /** {@code freeUseAt}: where a blast has no cooldown and costs no charge, so the bellows never breaks there. */
-    public GaleBellows(AlloyCore plugin, java.util.function.Predicate<Location> freeUseAt) {
+    /**
+     * {@code freeUseAt}: where a blast has no cooldown and costs no charge, so the bellows never breaks there.
+     * {@code alsoTarget}: AlloyCore's own entities that it may still hit (normally it never touches them).
+     */
+    public GaleBellows(AlloyCore plugin, java.util.function.Predicate<Location> freeUseAt, java.util.function.Predicate<Entity> alsoTarget) {
         this.plugin = plugin;
         this.freeUseAt = freeUseAt;
+        this.alsoTarget = alsoTarget;
         this.enabled = plugin.getConfig().getBoolean("gale-bellows.enabled", true);
+        this.cooldownTicks = Math.max(0, (int) Math.round(plugin.getConfig().getDouble("gale-bellows.cooldown-seconds", 0) * 20));
         // only once the BlackForgeMC resource pack is live: without it the model id renders as the purple/black missing model
         this.customModel = plugin.getConfig().getBoolean("gale-bellows.custom-model", false);
         this.tagKey = new NamespacedKey(plugin, "gale_bellows");
@@ -88,10 +95,12 @@ public final class GaleBellows implements Listener {
             m.setMaxStackSize(1);
             if (customModel) m.setItemModel(modelKey);
             else m.setEnchantmentGlintOverride(true);
-            UseCooldownComponent cd = m.getUseCooldown();
-            cd.setCooldownSeconds(COOLDOWN_TICKS / 20f);
-            cd.setCooldownGroup(modelKey);   // only the bellows greys out, not every breeze rod
-            m.setUseCooldown(cd);
+            if (cooldownTicks > 0) {
+                UseCooldownComponent cd = m.getUseCooldown();
+                cd.setCooldownSeconds(cooldownTicks / 20f);
+                cd.setCooldownGroup(modelKey);   // only the bellows greys out, not every breeze rod
+                m.setUseCooldown(cd);
+            }
             m.getPersistentDataContainer().set(tagKey, PersistentDataType.BYTE, (byte) 1);
             m.getPersistentDataContainer().set(uidKey, PersistentDataType.STRING, UUID.randomUUID().toString());
             m.getPersistentDataContainer().set(usesKey, PersistentDataType.INTEGER, USES);
@@ -99,13 +108,13 @@ public final class GaleBellows implements Listener {
         return it;
     }
 
-    private static List<net.kyori.adventure.text.Component> lore(int uses) {
+    private List<net.kyori.adventure.text.Component> lore(int uses) {
         return List.of(
-                Ui.mm("<gray>Right-click to blast a gust of wind"),
+                Ui.mm("<gray>Right-click to slash a gust of wind"),
                 Ui.mm("<gray>Hits everyone <white>2 blocks <gray>in front of you"),
-                Ui.mm("<gray>for <white>1 heart <gray>and blows them back"),
+                Ui.mm("<gray>for <white>2.5 hearts <gray>and blows them back"),
                 Ui.mm(""),
-                Ui.mm("<gray>Cooldown: <white>10s"),
+                Ui.mm(cooldownTicks > 0 ? "<gray>Cooldown: <white>" + String.format(Locale.ROOT, "%.0f", cooldownTicks / 20.0) + "s" : "<gray>Cooldown: <white>none"),
                 Ui.mm("<gray>Uses left: " + (uses <= 1 ? "<red>" : "<white>") + uses + "<gray>/" + USES),
                 Ui.mm("<dark_gray>BlackForgeMC PvP item"));
     }
@@ -205,34 +214,34 @@ public final class GaleBellows implements Listener {
             double dx = box.getCenterX() - eye.getX(), dz = box.getCenterZ() - eye.getZ();
             if (!WindCone.hits(look.getX(), look.getY(), look.getZ(), dx, dz, box.getMinY() - eye.getY(), box.getMaxY() - eye.getY())) continue;
             if (blocked(eye, t)) continue;
-            if (!allowed(p, t)) continue;
+            if (!alsoTarget.test(t) && !allowed(p, t)) continue;   // the dummy counts every damage event, so no probe for it
             hit.add(t);
         }
 
-        boolean free = freeUseAt.test(p.getLocation());   // test area: no cooldown, no charge used
-        if (!free) {
-            readyAt.put(p.getUniqueId(), now + COOLDOWN_TICKS * 50L);
-            p.setCooldown(held, COOLDOWN_TICKS);
+        boolean noCooldown = cooldownTicks <= 0 || freeUseAt.test(p.getLocation());   // test area: no cooldown, no charge used
+        if (!noCooldown) {
+            readyAt.put(p.getUniqueId(), now + cooldownTicks * 50L);
+            p.setCooldown(held, cooldownTicks);
         }
         useUp(p, held);
-        castEffects(p, eye, look);   // three quick slashes; the gust lands on the last one
+        castEffects(p, eye, look);   // one left-to-right slash; the gust lands as it finishes
         UUID caster = p.getUniqueId();
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             Player q = Bukkit.getPlayer(caster);
             if (q != null && q.isOnline()) blast(q, hit, look);
         }, SLASH_TICKS);
 
-        if (free) return;   // no cooldown, so nothing to refill
+        if (noCooldown) return;   // nothing to refill
         // a quiet "ready" cue when the bellows refills, to the owner only
         UUID id = p.getUniqueId();
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             Player q = Bukkit.getPlayer(id);
             if (q != null && readyAt.getOrDefault(id, 0L) <= System.currentTimeMillis() + 50) q.playSound(q, Sound.ITEM_ARMOR_EQUIP_LEATHER, 0.6f, 1.2f);
-        }, COOLDOWN_TICKS);
+        }, cooldownTicks);
     }
 
     /**
-     * The gust at the end of the slashes: pushes back and deals the 1-heart hit to everyone who was in the cone when
+     * The gust at the end of the slash: throws back and deals the 2.5-heart hit to everyone who was in the cone when
      * the bellows was swung. Anyone who has since died, left or changed world is skipped.
      */
     private void blast(Player p, List<LivingEntity> hit, Vector look) {
@@ -247,15 +256,17 @@ public final class GaleBellows implements Listener {
             AttributeInstance kb = t.getAttribute(Attribute.KNOCKBACK_RESISTANCE);
             double[] v = WindCone.push(t.getX() - p.getX(), t.getZ() - p.getZ(), look.getX(), look.getZ(),
                     kb == null ? 0 : kb.getValue(), !t.isOnGround(), juggled);
-            // the 1-heart hit: a real damage event, so kill credit, combat tags and the arena rules all apply
+            // the hit: a real damage event, so kill credit, combat tags and the arena rules all apply
             t.damage(DAMAGE, p);
             // vanilla adds its own knockback for that hit, so set ours on the next tick to replace it
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            // (never on the Test Dummy: it's pinned to its post)
+            if (!alsoTarget.test(t)) Bukkit.getScheduler().runTask(plugin, () -> {
                 if (!t.isValid() || t.isDead()) return;
                 double vy = v[1] > 0 ? v[1] : t.getVelocity().getY();
                 t.setVelocity(new Vector(v[0], vy, v[2]));
             });
             hitEffects(t);
+            if (!alsoTarget.test(t)) trail(t);
             if (t instanceof Player tp) tp.sendActionBar(Ui.mm("<#9EE6FF>🌬 <gray>Blown back by <white>" + p.getName()));
         }
         if (!landed.isEmpty()) p.sendActionBar(Ui.mm("<#9EE6FF>🌬 <gray>Gust hit <white>" + landed.size() + (landed.size() == 1 ? " target" : " targets")));
@@ -263,7 +274,9 @@ public final class GaleBellows implements Listener {
 
     /** Players and hostile mobs only - never pets, villagers, armor stands, displays or anything AlloyCore tags (robots etc). */
     private boolean canTarget(Player caster, LivingEntity t) {
-        if (t == caster || t.isDead() || t.isInvulnerable() || t instanceof ArmorStand) return false;
+        if (t == caster || t.isDead() || t instanceof ArmorStand) return false;
+        if (alsoTarget.test(t)) return true;   // e.g. the Arena Test Dummy: damage numbers, but it's pinned and won't fly
+        if (t.isInvulnerable()) return false;
         if (t instanceof Player tp) {
             GameMode gm = tp.getGameMode();
             if (gm == GameMode.CREATIVE || gm == GameMode.SPECTATOR) return false;
@@ -298,59 +311,81 @@ public final class GaleBellows implements Listener {
 
     // ------------------------------------------------------------------ effects
 
-    /** Ticks per slash; three slashes (right, left, right), then the gust. */
-    static final int SLASH_STROKE = 2, SLASH_TICKS = 3 * SLASH_STROKE;
+    /** The slash sweeps left to right over this many ticks; the gust and the hit land as it finishes (0.15 s). */
+    static final int SLASH_TICKS = 3;
 
     /**
-     * Three quick slashes of air across the cone - sweeping right, then left, then right, each tilted like a blade
-     * cut - then the gust cloud bursts forward as the push lands. The arcs run along the edge of the hit cone
-     * ({@link WindCone#RANGE}, {@link WindCone#HALF_ANGLE_DEG}), so what you see is what you hit.
+     * One big diagonal slash of air, sweeping from your left to your right (high on the left, low on the right) -
+     * a thick crescent with a bright white cutting edge, sweep marks along it and an afterimage that hangs for a
+     * moment - then a shockwave of cloud and gust bursts forward as the hit lands. The arc follows the hit cone
+     * ({@link WindCone#RANGE}, {@link WindCone#HALF_ANGLE_DEG}), so what you see is roughly what you hit.
      */
     private void castEffects(Player p, Location eye, Vector look) {
         World w = p.getWorld();
+        p.swingMainHand();
         Vector fwd = look.clone().normalize();
         Vector right = new Vector(-fwd.getZ(), 0, fwd.getX());   // facing +Z (south), this is -X (west): your right
         if (right.lengthSquared() < 1e-6) right = new Vector(1, 0, 0);
         right.normalize();
         Vector up = right.clone().crossProduct(fwd).normalize();
-        Location base = eye.clone().add(0, -0.25, 0);
-        double r = WindCone.RANGE * 0.8, half = Math.toRadians(WindCone.HALF_ANGLE_DEG + 5);
-        double[] tilt = {0.45, -0.45, 0.3};   // high-to-low, low-to-high, high-to-low across the swing
+        Location base = eye.clone().add(0, -0.3, 0);
+        double r = WindCone.RANGE * 0.85, half = Math.toRadians(WindCone.HALF_ANGLE_DEG + 20), tilt = 0.7;
+        double[] band = {-0.35, 0, 0.35};   // the crescent's thickness: inner, middle, outer (cutting edge)
         Vector f = fwd, rt = right, u = up;
+        w.playSound(eye, Sound.ENTITY_PLAYER_ATTACK_SWEEP, SoundCategory.PLAYERS, 1.2f, 0.7f);
+        w.playSound(eye, Sound.ITEM_TRIDENT_RIPTIDE_1, SoundCategory.PLAYERS, 0.7f, 1.6f);
+        w.playSound(eye, Sound.ENTITY_BREEZE_SHOOT, SoundCategory.PLAYERS, 0.8f, 1.2f);
         int[] t = {0};
+        int linger = 4;   // afterimage ticks after the sweep
         Bukkit.getScheduler().runTaskTimer(plugin, task -> {
             int k = t[0]++;
             if (k < SLASH_TICKS) {
-                int stroke = k / SLASH_STROKE, part = k % SLASH_STROKE;
-                int dir = stroke % 2 == 0 ? 1 : -1;   // 1 sweeps left -> right
-                // this tick draws its share of the arc; the leading edge is bright, the tail fades to teal
-                int pts = 9;
+                // this tick's share of the arc, left -> right; earlier parts are redrawn as the trail
+                int pts = 16;
                 for (int i = 0; i <= pts; i++) {
-                    double s = (part + i / (double) pts) / SLASH_STROKE;   // 0..1 along the whole stroke
-                    double a = dir * (-half + 2 * half * s);
-                    double h = tilt[stroke] * dir * (a / half) * -1;
-                    Location at = base.clone().add(f.clone().multiply(r * Math.cos(a))).add(rt.clone().multiply(r * Math.sin(a))).add(u.clone().multiply(h));
-                    Color c = i > pts - 3 ? GALE_WHITE : i > pts / 2 ? GUST_CYAN : DRAFT_TEAL;
-                    w.spawnParticle(Particle.DUST, at, 1, 0.03, 0.03, 0.03, 0, new Particle.DustOptions(c, 1.3f));
-                    if (i == pts) w.spawnParticle(Particle.SMALL_GUST, at, 1, 0, 0, 0, 0);
-                    if (i == pts / 2 && part == 0) w.spawnParticle(Particle.SWEEP_ATTACK, at, 1, 0, 0, 0, 0);
-                }
-                if (part == 0) {
-                    w.playSound(eye, Sound.ENTITY_PLAYER_ATTACK_SWEEP, SoundCategory.PLAYERS, 0.8f, 1.3f + stroke * 0.2f);
-                    w.playSound(eye, Sound.ENTITY_BREEZE_SHOOT, SoundCategory.PLAYERS, 0.35f, 1.6f + stroke * 0.1f);
+                    double s = (k + i / (double) pts) / SLASH_TICKS;   // 0..1 along the whole sweep
+                    double ang = -half + 2 * half * s;               // negative = your left
+                    double h = -tilt * (ang / half);                  // high on the left, low on the right
+                    for (int b = 0; b < band.length; b++) {
+                        Location at = arc(base, f, rt, u, r + band[b], ang, h);
+                        Color c = b == 2 ? GALE_WHITE : b == 1 ? GUST_CYAN : DRAFT_TEAL;
+                        w.spawnParticle(Particle.DUST, at, 2, 0.04, 0.04, 0.04, 0, new Particle.DustOptions(c, b == 2 ? 2.0f : 1.6f));
+                    }
+                    if (i % 4 == 0) w.spawnParticle(Particle.SWEEP_ATTACK, arc(base, f, rt, u, r, ang, h), 1, 0, 0, 0, 0);
+                    if (i == pts) {   // the leading tip
+                        Location tip = arc(base, f, rt, u, r + 0.2, ang, h);
+                        w.spawnParticle(Particle.SMALL_GUST, tip, 2, 0.1, 0.1, 0.1, 0);
+                        w.spawnParticle(Particle.CLOUD, tip, 3, 0.05, 0.05, 0.05, 0.03);
+                    }
                 }
                 return;
             }
-            task.cancel();
-            // the gust: a cloud burst forward as the push lands (count 0 makes the offset a direction)
-            for (int i = 0; i < 16; i++) {
-                Vector v = f.clone().add(new Vector(rnd.nextGaussian() * 0.2, rnd.nextGaussian() * 0.1, rnd.nextGaussian() * 0.2));
-                w.spawnParticle(Particle.CLOUD, base.clone().add(f.clone().multiply(0.6)), 0, v.getX(), v.getY(), v.getZ(), 0.4);
+            if (k == SLASH_TICKS) {
+                // the shockwave: clouds blasting outward through the cone (count 0 makes the offset a direction)
+                Location mid = base.clone().add(f.clone().multiply(0.8));
+                for (int i = 0; i < 40; i++) {
+                    double ang = -half + 2 * half * rnd.nextDouble();
+                    Vector d = f.clone().multiply(Math.cos(ang)).add(rt.clone().multiply(Math.sin(ang))).add(new Vector(0, rnd.nextGaussian() * 0.12, 0));
+                    w.spawnParticle(Particle.CLOUD, mid, 0, d.getX(), d.getY(), d.getZ(), 0.55 + rnd.nextDouble() * 0.35);
+                }
+                w.spawnParticle(Particle.GUST, base.clone().add(f.clone().multiply(1.4)), 2, 0.3, 0.2, 0.3, 0);
+                w.spawnParticle(Particle.GUST, base.clone().add(f.clone().multiply(2.4)), 3, 0.5, 0.3, 0.5, 0);
+                w.playSound(eye, Sound.ENTITY_WIND_CHARGE_WIND_BURST, SoundCategory.PLAYERS, 1.3f, 0.9f);
+                w.playSound(eye, Sound.ENTITY_BREEZE_WIND_BURST, SoundCategory.PLAYERS, 1.0f, 0.6f);
             }
-            w.spawnParticle(Particle.GUST, base.clone().add(f.clone().multiply(1.6)), 1, 0, 0, 0, 0);
-            w.playSound(eye, Sound.ENTITY_WIND_CHARGE_WIND_BURST, SoundCategory.PLAYERS, 1.0f, 1.2f);
-            w.playSound(eye, Sound.ENTITY_BREEZE_WIND_BURST, SoundCategory.PLAYERS, 0.8f, 0.8f);
+            if (k >= SLASH_TICKS + linger) { task.cancel(); return; }
+            // afterimage: the whole crescent hangs for a moment, thinning out
+            int pts = 24 - (k - SLASH_TICKS) * 5;
+            for (int i = 0; i <= pts; i++) {
+                double ang = -half + 2 * half * i / pts, h = -tilt * (ang / half);
+                w.spawnParticle(Particle.DUST, arc(base, f, rt, u, r + 0.35, ang, h), 1, 0.02, 0.02, 0.02, 0, new Particle.DustOptions(GUST_CYAN, 1.0f));
+            }
         }, 0L, 1L);
+    }
+
+    /** A point on the slash: {@code ang} radians round from straight ahead (negative = left), {@code h} blocks up or down. */
+    private static Location arc(Location base, Vector f, Vector rt, Vector u, double r, double ang, double h) {
+        return base.clone().add(f.clone().multiply(r * Math.cos(ang))).add(rt.clone().multiply(r * Math.sin(ang))).add(u.clone().multiply(h));
     }
 
     /** Each blast uses one of its 3 charges; the last one breaks it. Free where {@link #freeUseAt} says so. */
@@ -376,8 +411,23 @@ public final class GaleBellows implements Listener {
 
     private void hitEffects(LivingEntity t) {
         Location chest = t.getLocation().add(0, t.getHeight() * 0.6, 0);
-        t.getWorld().spawnParticle(Particle.GUST, chest, 1, 0, 0, 0, 0);
-        t.getWorld().playSound(chest, Sound.ENTITY_WIND_CHARGE_WIND_BURST, SoundCategory.PLAYERS, 0.7f, 1.0f);
+        World w = t.getWorld();
+        w.spawnParticle(Particle.GUST, chest, 2, 0.2, 0.2, 0.2, 0);
+        w.spawnParticle(Particle.SWEEP_ATTACK, chest, 2, 0.3, 0.2, 0.3, 0);
+        w.spawnParticle(Particle.CLOUD, chest, 12, 0.2, 0.3, 0.2, 0.12);
+        w.playSound(chest, Sound.ENTITY_WIND_CHARGE_WIND_BURST, SoundCategory.PLAYERS, 1.0f, 0.9f);
+        w.playSound(chest, Sound.ENTITY_PLAYER_ATTACK_KNOCKBACK, SoundCategory.PLAYERS, 1.0f, 0.8f);
+    }
+
+    /** A streak of wind behind whoever got hit while they fly (0.75 s). */
+    private void trail(LivingEntity t) {
+        int[] n = {0};
+        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+            if (n[0]++ >= 15 || !t.isValid() || t.isDead()) { task.cancel(); return; }
+            Location at = t.getLocation().add(0, t.getHeight() * 0.5, 0);
+            t.getWorld().spawnParticle(Particle.CLOUD, at, 2, 0.15, 0.25, 0.15, 0.01);
+            t.getWorld().spawnParticle(Particle.DUST, at, 2, 0.2, 0.3, 0.2, 0, new Particle.DustOptions(GALE_WHITE, 1.4f));
+        }, 1L, 1L);
     }
 
     // ------------------------------------------------------------------ housekeeping

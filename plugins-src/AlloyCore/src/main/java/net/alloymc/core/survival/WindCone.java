@@ -18,6 +18,11 @@ public final class WindCone {
     /** A target pushed again within this window takes reduced push (stops two players juggling one target). */
     public static final long JUGGLE_WINDOW_MS = 3000;
     public static final double JUGGLE_FACTOR = 0.5;
+    /**
+     * Knockback resistance and the juggle rule never cut the push below this share of full strength. 0.45 throws a
+     * grounded player about 3.8 blocks (full strength is ~11), so every hit knocks back at least 3 blocks.
+     */
+    public static final double MIN_SCALE = 0.45;
 
     private static final double COS_HALF = Math.cos(Math.toRadians(HALF_ANGLE_DEG));
 
@@ -53,7 +58,7 @@ public final class WindCone {
      * The push velocity {x, y, z}. Direction is the horizontal line from caster to target, so off-centre targets
      * fan outward; if the target is straight above or below, the caster's horizontal look direction is used.
      *
-     * @param kbResistance the target's knockback resistance (0..1), as in vanilla
+     * @param kbResistance the target's knockback resistance (0..1), as in vanilla, but never below {@link #MIN_SCALE}
      * @param airborne     targets already in the air get no extra lift (stops sky-high launches)
      * @param juggled      target was pushed within {@link #JUGGLE_WINDOW_MS}
      */
@@ -65,7 +70,7 @@ public final class WindCone {
             double lh = Math.sqrt(lookX * lookX + lookZ * lookZ);
             if (lh < 1e-9) { ux = 0; uz = 0; } else { ux = lookX / lh; uz = lookZ / lh; }
         }
-        double scale = (1.0 - Math.max(0.0, Math.min(1.0, kbResistance))) * (juggled ? JUGGLE_FACTOR : 1.0);
+        double scale = Math.max(MIN_SCALE, (1.0 - Math.max(0.0, Math.min(1.0, kbResistance))) * (juggled ? JUGGLE_FACTOR : 1.0));
         double y = airborne ? 0.0 : LIFT * scale;
         return new double[] {ux * PUSH * scale, y, uz * PUSH * scale};
     }

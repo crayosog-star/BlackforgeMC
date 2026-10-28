@@ -63,7 +63,14 @@ class WindConeTest {
         assertEquals(full[0] * 0.6, tank[0], 1e-9);
         assertEquals(full[1] * 0.6, tank[1], 1e-9);
         double[] immune = WindCone.push(2, 0, LX, LZ, 1.0, false, false);
-        assertEquals(0, immune[0], 1e-9);
+        assertEquals(full[0] * WindCone.MIN_SCALE, immune[0], 1e-9);   // still knocked back at least 3 blocks
+    }
+
+    @Test void neverBelowTheFloor() {
+        double[] full = WindCone.push(2, 0, LX, LZ, 0, false, false);
+        double[] worst = WindCone.push(2, 0, LX, LZ, 0.4, false, true);   // netherite + juggled = 0.3 before the floor
+        assertEquals(full[0] * WindCone.MIN_SCALE, worst[0], 1e-9);
+        assertEquals(full[1] * WindCone.MIN_SCALE, worst[1], 1e-9);
     }
 
     @Test void juggledTargetsTakeHalf() {
