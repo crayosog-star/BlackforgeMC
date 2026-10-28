@@ -24,6 +24,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.hanging.HangingBreakEvent;
 import org.bukkit.event.player.*;
 import org.bukkit.inventory.EquipmentSlot;
@@ -89,6 +90,13 @@ public final class TestArena implements Listener {
     private TextDisplay dummyHolo, wallHolo, spawnHolo;
     private boolean ready;
     private long tick;
+    private net.alloymc.core.survival.GaiaPotion gaia;                // a Potion of Gaia in every kit, if set
+    private final Set<UUID> diedHere = new HashSet<>();                // respawn back in the Arena, not the hub
+
+    /** Give every Arena kit a Potion of Gaia (its splash and platform are handled by {@code g}). */
+    public void setGaia(net.alloymc.core.survival.GaiaPotion g) { this.gaia = g; }
+    private net.alloymc.core.survival.DarknessPotion darkness;     // a Potion of Darkness in every kit, if set
+    public void setDarkness(net.alloymc.core.survival.DarknessPotion d) { this.darkness = d; }
     // the current combo on the dummy: hits within 4 s of each other
     private final Deque<double[]> hits = new ArrayDeque<>();   // {time ms, damage}
     private double lastHit, comboTotal;
@@ -309,11 +317,13 @@ public final class TestArena implements Listener {
         ItemStack bow = new ItemStack(Material.BOW);
         bow.addEnchantment(Enchantment.INFINITY, 1);
         inv.setItem(3, bow);
-        inv.setItem(4, new ItemStack(Material.CROSSBOW));
+        inv.setItem(13, new ItemStack(Material.CROSSBOW));   // hotbar slot 5 holds the Potion of Darkness
+        if (darkness != null) inv.setItem(4, darkness.item());
         ItemStack trident = new ItemStack(Material.TRIDENT);
         trident.addEnchantment(Enchantment.LOYALTY, 3);
         inv.setItem(5, trident);
         inv.setItem(6, new ItemStack(Material.WIND_CHARGE, 64));
+        if (gaia != null) inv.setItem(7, gaia.item());
         ItemStack leave = Ui.item(Material.RED_BED, "<red><bold>Back to the Hub</bold> <gray>(right-click)");
         leave.editMeta(m -> m.getPersistentDataContainer().set(leaveKey, PersistentDataType.BYTE, (byte) 1));
         inv.setItem(8, leave);
@@ -341,7 +351,46 @@ public final class TestArena implements Listener {
     }
 
     @EventHandler
-    public void onQuit(PlayerQuitEvent e) { grabCooldown.remove(e.getPlayer().getUniqueId()); removeCard(e.getPlayer()); }
+    public void onQuit(PlayerQuitEvent e) { grabCooldown.remove(e.getPlayer().getUniqueId()); removeCard(e.getPlayer()); diedHere.remove(e.getPlayer().getUniqueId()); }
+
+    // ------------------------------------------------------------------ PvP
+
+    private static Player attacker(Entity damager) {
+        if (damager instanceof Player p) return p;
+        if (damager instanceof Projectile pr && pr.getShooter() instanceof Player p) return p;
+        return null;
+    }
+
+    /**
+     * PvP is on in the Arena. The hub's lobby rules cancel every hit on a player (NORMAL priority); this runs after
+     * them and lets player-on-player hits through, but only when both players are in the Arena. Falls, the void
+     * and everything else stay harmless.
+     */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onPvp(EntityDamageByEntityEvent e) {
+        if (!(e.getEntity() instanceof Player victim) || victim.getWorld() != world) return;
+        Player by = attacker(e.getDamager());
+        if (by == null || by == victim || by.getWorld() != world) return;
+        if (by.getGameMode() == GameMode.CREATIVE || by.getGameMode() == GameMode.SPECTATOR) return;
+        e.setCancelled(false);
+    }
+
+    /** Dying in the Arena costs nothing: keep the kit, drop nothing, and come straight back. */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onArenaDeath(PlayerDeathEvent e) {
+        Player p = e.getPlayer();
+        if (p.getWorld() != world) return;
+        e.setKeepInventory(true);
+        e.getDrops().clear();
+        e.setKeepLevel(true);
+        e.setDroppedExp(0);
+        diedHere.add(p.getUniqueId());
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onArenaRespawn(PlayerRespawnEvent e) {
+        if (diedHere.remove(e.getPlayer().getUniqueId())) e.setRespawnLocation(spawn());
+    }
 
     // ------------------------------------------------------------------ showcase wall
 
@@ -379,6 +428,26 @@ public final class TestArena implements Listener {
         p.playSound(p.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.8f, 0.8f + rnd.nextFloat() * 0.6f);
         p.sendActionBar(Ui.mm("<green>+ <white>").append(give.effectiveName()));
         spinBurst(slot);
+    }
+
+    /**
+     * Make sure an item is on the showcase wall: if no frame already shows one ({@code same}), it goes into the first
+     * empty frame (with the NEW badge and arrival effects). Does nothing if it's already there or the wall is full,
+     * so it's safe to call on every start.
+     */
+    public void ensureOnWall(ItemStack item, java.util.function.Predicate<ItemStack> same) {
+        for (ItemStack s : showcase) if (s != null && same.test(s)) return;
+        for (int slot = 0; slot < SLOTS; slot++) {
+            if (showcase[slot] != null) continue;
+            showcase[slot] = item.asOne();
+            showcaseTime[slot] = System.currentTimeMillis();
+            if (frames[slot] != null && frames[slot].isValid()) { frames[slot].setItem(showcase[slot].clone(), false); newArrival(slot); }
+            saveShowcase();
+            cardSlot.clear();
+            plugin.getLogger().info("Arena showcase: added " + net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(item.effectiveName()) + " to slot " + (slot + 1));
+            return;
+        }
+        plugin.getLogger().warning("Arena showcase is full - couldn't add a new item");
     }
 
     /** A quick little spin when someone takes an item. */

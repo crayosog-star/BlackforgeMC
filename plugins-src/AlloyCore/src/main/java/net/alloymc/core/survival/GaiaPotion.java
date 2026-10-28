@@ -151,7 +151,7 @@ public final class GaiaPotion implements Listener {
                 if (dist > BloomCurve.RADIUS) continue;
                 Block base = w.getBlockAt(cx + dx, gy, cz + dz);
                 if (!base.getType().isAir()) continue;   // a bump in the terrain: not part of the cloud
-                if (!mayUse.test(p, base.getLocation())) { fizzle(p, at, "Gaia won't grow in spawn or in someone else's claim."); return; }
+                if (!mayUse.test(p, base.getLocation())) { fizzle(p, at, "Gaia can't grow here: not in spawn, someone else's claim, or the hub outside the Arena."); return; }
                 // headroom: the floor layer plus 2 blocks above the surface must be air
                 for (int k = 1; k <= (int) BloomCurve.MAX_RISE + 2; k++)
                     if (!w.getBlockAt(cx + dx, gy + k, cz + dz).getType().isAir()) { cap = Math.min(cap, k - 2); break; }
