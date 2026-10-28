@@ -137,7 +137,25 @@ public final class SurvivalModule implements Listener {
         if (!new File(plugin.getDataFolder(), "survival-built").exists()) build(Bukkit.getConsoleSender());
         else if (!new File(plugin.getDataFolder(), "spawn-v2").exists()) rebuildSpawn(Bukkit.getConsoleSender());
         else if (!new File(plugin.getDataFolder(), "pvp-built").exists()) buildPvp(Bukkit.getConsoleSender());
+        else if (!new File(plugin.getDataFolder(), "spawn-chains-v1").exists()) Bukkit.getScheduler().runTaskLater(plugin, this::repairChains, 60L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::everySecond, 40L, 20L);
+    }
+
+    /**
+     * One-off repair: the trading hall's lantern chains used the old block id "minecraft:chain", which the paster
+     * replaced with stone. Puts real chains back wherever the build has one and the world still shows that stone.
+     */
+    private void repairChains() {
+        org.bukkit.block.data.BlockData chain = Bukkit.createBlockData("minecraft:iron_chain[axis=y]");
+        int fixed = 0;
+        for (var e : SpawnBuilder.spawn().lateBlocks().entrySet()) {
+            if (!e.getValue().startsWith("minecraft:iron_chain")) continue;
+            long k = e.getKey();
+            org.bukkit.block.Block b = world.getBlockAt(net.alloymc.core.build.Canvas.kx(k), net.alloymc.core.build.Canvas.ky(k), net.alloymc.core.build.Canvas.kz(k));
+            if (b.getType() == Material.STONE) { b.setBlockData(chain, false); fixed++; }
+        }
+        try { new File(plugin.getDataFolder(), "spawn-chains-v1").createNewFile(); } catch (Exception ignored) { }
+        plugin.getLogger().info("Survival spawn: " + fixed + " lantern chains repaired");
     }
 
     public void shutdown() {
