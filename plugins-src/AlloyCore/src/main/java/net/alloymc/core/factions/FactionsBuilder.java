@@ -199,19 +199,51 @@ public final class FactionsBuilder {
         }
     }
 
-    /** "FACTIONS" in red-gold letters above the north gate. */
+    /** Radius of the arc the FACTIONS sign is bent around (centred on the island, like its edge). */
+    static final double SIGN_R = 51;
+
+    /**
+     * "FACTIONS" in red-gold letters above the north gate, bent around the island so the word wraps along its
+     * edge: every column of the lettering sits on a circle centred on (0, 0), facing inward toward spawn.
+     */
     private void sign() {
         String text = "FACTIONS";
-        int scale = 2, spacing = 1, width = BlockFont.width(text, spacing) * scale, x0 = -width / 2, y0 = 22, z = -R - 4;
+        int scale = 2, spacing = 1, width = BlockFont.width(text, spacing) * scale, y0 = 22;
+        java.util.Map<Long, String> glyph = new java.util.HashMap<>();   // flat sign space (u across, v up) -> block
         BlockFont.draw(text, spacing, (col, row, glyphRow) -> {
             String b = glyphRow <= 1 ? "shroomlight" : glyphRow <= 4 ? "red_nether_bricks" : "nether_bricks";
-            for (int sx = 0; sx < scale; sx++) for (int sy = 0; sy < scale; sy++) {
-                int x = x0 + col * scale + sx, y = y0 + row * scale + sy;
-                set(x, y, z, b); set(x, y, z + 1, b);
-                for (int ox = -1; ox <= 1; ox++) for (int oy = -1; oy <= 1; oy++) if (get(x + ox, y + oy, z - 1) == null) set(x + ox, y + oy, z - 1, "gold_block");
-            }
+            for (int sx = 0; sx < scale; sx++) for (int sy = 0; sy < scale; sy++) glyph.put(key(col * scale + sx, row * scale + sy), b);
         });
-        for (int s : new int[]{-1, 1}) for (int y = 14; y < 22; y++) set(s * (width / 2 - 4), y, z - 1, "iron_chain[axis=y]");
+        // letters: two blocks deep on the inner face of the arc
+        for (var e : glyph.entrySet()) {
+            int u = (int) (e.getKey() >> 32), v = (int) (long) e.getKey().intValue();
+            for (double r : new double[]{SIGN_R - 1, SIGN_R}) bend(u, v, y0, width, r, e.getValue(), true);
+        }
+        // gold backing plate one block outward, a cell wider than the letters all round
+        for (var e : glyph.entrySet()) {
+            int u = (int) (e.getKey() >> 32), v = e.getKey().intValue();
+            for (int du = -1; du <= 1; du++) for (int dv = -1; dv <= 1; dv++) bend(u + du, v + dv, y0, width, SIGN_R + 1, "gold_block", false);
+        }
+        // chains from under each end of the word down to the rock below, where there is any
+        for (int end : new int[]{6, width - 7}) {
+            double a = -Math.PI / 2 + (end + 0.5 - width / 2.0) / SIGN_R;
+            int x = (int) Math.floor(Math.cos(a) * (SIGN_R + 1)), z = (int) Math.floor(Math.sin(a) * (SIGN_R + 1));
+            int ground = y0 - 1;
+            while (ground > -2 && empty(x, ground, z)) ground--;
+            if (ground <= -2) continue;
+            for (int y = ground + 1; y < y0; y++) if (empty(x, y, z)) set(x, y, z, "iron_chain[axis=y]");
+        }
+    }
+
+    private static long key(int u, int v) { return ((long) u << 32) | (v & 0xFFFFFFFFL); }
+
+    /** Sets sign-space cell (u, v) on the arc of radius r (sampling across the cell so curved rows have no gaps). */
+    private void bend(int u, int v, int y0, int width, double r, String b, boolean overwrite) {
+        for (double s = u + 0.125; s < u + 1; s += 0.25) {
+            double a = -Math.PI / 2 + (s - width / 2.0) / SIGN_R;
+            int x = (int) Math.floor(Math.cos(a) * r), z = (int) Math.floor(Math.sin(a) * r);
+            if (overwrite || get(x, y0 + v, z) == null) set(x, y0 + v, z, b);
+        }
     }
 
     // ------------------------------------------------------------------ the warriors
