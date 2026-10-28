@@ -11,6 +11,7 @@ For each open, non-draft PR into main by colinosbo, oldest first:
   3. push main - GitHub marks the PR as merged
 Then, if anything merged touched the plugin/datapacks: install like autoupdate.py does (empty servers restart
 now, servers with players after a 5-minute in-game countdown).
+Every run starts with autoupdate.main(), so anything merged into main on GitHub by anyone else is installed too.
 Reading PRs uses GitHub's public API (no login); merging is a normal git push with this PC's git credentials.
 """
 import json
@@ -41,6 +42,9 @@ def full_check():
 
 
 def main():
+    # First catch up with main itself: PRs merged on GitHub (not Colin's) are pulled, built and installed here,
+    # and /alloy restart requests are handled. Nothing else runs autoupdate.py on a schedule.
+    au.main()
     try:
         prs = open_prs()
     except Exception as e:  # network / rate limit: try again next run
