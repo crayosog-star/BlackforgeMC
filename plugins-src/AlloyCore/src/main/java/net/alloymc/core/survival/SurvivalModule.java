@@ -37,6 +37,7 @@ public final class SurvivalModule implements Listener {
     private final CustomEnchants enchants;
     private final Votes votes;
     private final Scrap scrap;
+    private final GaleBellows bellows;
     private final Ranks ranks;
     private final HallOfFame hall;
     private final DailyRewards daily;
@@ -71,6 +72,7 @@ public final class SurvivalModule implements Listener {
         pvp.setEnchants(enchants);
         votes = new Votes(plugin, crates);
         scrap = new Scrap(plugin, crates, tags, enchants);
+        bellows = new GaleBellows(plugin);   // every player gets one on join and can get another with /jbello
         new SilkSpawners(plugin);
         votes.setScrap(scrap);
         ranks = new Ranks(plugin, crates);
@@ -221,6 +223,7 @@ public final class SurvivalModule implements Listener {
         reg("repairhand", List.of("rh", "fixhand"), (p, a) -> ranks.repairHand(p));
         reg("fly", List.of(), (p, a) -> ranks.fly(p));
         reg("scrap", List.of("scrapshop", "shards"), (p, a) -> scrap.command(p, a));
+        reg("jbello", List.of("bellows", "galebellows"), (p, a) -> bellows.claim(p));
         reg("koth", List.of(), (p, a) -> {
             if (a.length > 0 && p.hasPermission("alloy.admin")) {
                 if (a[0].equalsIgnoreCase("start")) koth.start();
@@ -254,6 +257,13 @@ public final class SurvivalModule implements Listener {
 
     /** Console/admin: /alloy crate give <player> <crate> [amount], /alloy koth start|stop, /alloy buildsurvival */
     public boolean admin(CommandSender s, String[] a) {
+        if (a.length >= 3 && a[0].equalsIgnoreCase("bellows") && a[1].equalsIgnoreCase("give")) {   // /alloy bellows give <player>
+            Player t = Bukkit.getPlayerExact(a[2]);
+            if (t == null) { s.sendMessage(Component.text("Player must be online")); return true; }
+            bellows.give(t);
+            s.sendMessage(Component.text("Gave a Gale Bellows to " + a[2]));
+            return true;
+        }
         if (a.length >= 4 && a[0].equalsIgnoreCase("crate") && a[1].equalsIgnoreCase("give")) {
             Player t = Bukkit.getPlayerExact(a[2]);
             int amount = a.length > 4 ? Integer.parseInt(a[4]) : 1;
