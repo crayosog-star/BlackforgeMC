@@ -76,18 +76,15 @@ public final class HubModule implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, this::leaderboards, 60L, 1200L);
         arena = new TestArena(plugin);
         gaia = new net.alloymc.core.survival.GaiaPotion(plugin, (pl, l) -> l.getWorld() == arena.world());   // never on the hub itself
-        arena.setGaia(gaia);
         darkness = new net.alloymc.core.survival.DarknessPotion(plugin, l -> l.getWorld() == arena.world());
-        arena.setDarkness(darkness);
         surge = new net.alloymc.core.survival.Surge(plugin, l -> l.getWorld() == arena.world(), true);   // staff: no cooldown in the Arena
-        arena.setSurge(surge);
         bellows = new net.alloymc.core.survival.GaleBellows(plugin);
-        arena.setBellows(bellows);
-        // both potions on the Arena showcase wall (first empty frames; skipped if they're already up)
-        arena.ensureOnWall(gaia.item(), gaia::isGaia);
-        arena.ensureOnWall(darkness.item(), darkness::isDarkness);
-        arena.ensureOnWall(surge.item(), surge::isSurge);
-        arena.ensureOnWall(bellows.item(), bellows::isBellows);
+        // Arena test items: each goes on the showcase wall, into the Arena hotbar (in this order) and never runs out there.
+        // EVERY NEW ITEM GETS ONE LINE HERE.
+        arena.addTestItem(bellows::item, bellows::isBellows, bellows::isWorn);
+        arena.addTestItem(gaia::item, gaia::isGaia);
+        arena.addTestItem(darkness::item, darkness::isDarkness);
+        arena.addTestItem(surge::item, surge::isSurge);
         // staff test commands, Arena only: one item each
         testCommand("jbello", List.of("bellows", "galebellows"), () -> bellows.item());
         testCommand("gaia", List.of("gaiapotion"), () -> gaia.item());

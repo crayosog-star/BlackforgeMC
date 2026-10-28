@@ -89,17 +89,28 @@ public final class TestArena implements Listener {
     private TextDisplay dummyHolo, wallHolo, spawnHolo;
     private boolean ready;
     private long tick;
-    private net.alloymc.core.survival.GaiaPotion gaia;                // a Potion of Gaia in every kit, if set
     private final Set<UUID> diedHere = new HashSet<>();                // respawn back in the Arena, not the hub
 
-    /** Give every Arena kit a Potion of Gaia (its splash and platform are handled by {@code g}). */
-    public void setGaia(net.alloymc.core.survival.GaiaPotion g) { this.gaia = g; }
-    private net.alloymc.core.survival.DarknessPotion darkness;     // a Potion of Darkness in every kit, if set
-    public void setDarkness(net.alloymc.core.survival.DarknessPotion d) { this.darkness = d; }
-    private net.alloymc.core.survival.Surge surge;                  // one Surge in every kit, if set
-    public void setSurge(net.alloymc.core.survival.Surge s) { this.surge = s; }
-    private net.alloymc.core.survival.GaleBellows bellows;          // a Gale Bellows in every kit, if set
-    public void setBellows(net.alloymc.core.survival.GaleBellows b) { this.bellows = b; }
+
+    /**
+     * A BlackForgeMC test item: how to make a fresh one, how to recognise it, and when one in a player's inventory
+     * counts as worn (e.g. a Gale Bellows with charges used). Registered items go on the showcase wall and into the
+     * hotbar in registration order, and never run out in the Arena.
+     */
+    private record TestItem(java.util.function.Supplier<ItemStack> make, java.util.function.Predicate<ItemStack> is,
+                            java.util.function.Predicate<ItemStack> worn) {}
+    private final List<TestItem> testItems = new ArrayList<>();
+    private static final int MAX_TEST_ITEMS = 8;                       // hotbar slots 0-7; slot 8 is the leave bed
+
+    /** Every new item calls this once (HubModule): it goes on the wall, into every Arena kit, and refills itself there. */
+    public void addTestItem(java.util.function.Supplier<ItemStack> make, java.util.function.Predicate<ItemStack> is,
+                            java.util.function.Predicate<ItemStack> worn) {
+        if (testItems.size() >= MAX_TEST_ITEMS) { plugin.getLogger().warning("Arena hotbar is full - a test item was not added to the kit"); return; }
+        testItems.add(new TestItem(make, is, worn));
+        ensureOnWall(make.get(), is);
+    }
+
+    public void addTestItem(java.util.function.Supplier<ItemStack> make, java.util.function.Predicate<ItemStack> is) { addTestItem(make, is, it -> false); }
     // the current combo on the dummy: hits within 4 s of each other
     private final Deque<double[]> hits = new ArrayDeque<>();   // {time ms, damage}
     private double lastHit, comboTotal;
@@ -127,6 +138,7 @@ public final class TestArena implements Listener {
         else Bukkit.getScheduler().runTaskLater(plugin, this::spawnEntities, 40L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::animate, 60L, 2L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::cleanup, 200L, 200L);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::refill, 20L, 5L);
     }
 
     public World world() { return world; }
@@ -306,7 +318,7 @@ public final class TestArena implements Listener {
         p.setFlying(false);
         p.setAllowFlight(p.getGameMode() == GameMode.CREATIVE);
         kit(p);
-        p.sendMessage(Ui.mm("<#7bd88f><bold>Arena test items</bold> <dark_gray>· <white>/arena kit <gray>refills everything"));
+        p.sendMessage(Ui.mm("<#7bd88f><bold>Arena test items</bold> <dark_gray>· <gray>they never run out here"));
         if (p.hasPermission("alloy.admin"))
             p.sendMessage(Ui.mm("<gray>Staff: <white>/jbello /gaia /darkness /surge <gray>give one each · Surge has no cooldown here"));
         p.showTitle(Title.title(Ui.mm("<gradient:#7bd88f:#2e9e5b><bold>THE ARENA</bold></gradient>"), Ui.mm("<gray>Break things. Responsibly."),
@@ -317,11 +329,8 @@ public final class TestArena implements Listener {
     public void kit(Player p) {
         var inv = p.getInventory();
         inv.clear();
-        // only the BlackForgeMC test items: /arena kit refills them (the potions and Surge are used up)
-        if (bellows != null) inv.setItem(0, bellows.item());
-        if (gaia != null) inv.setItem(1, gaia.item());
-        if (darkness != null) inv.setItem(2, darkness.item());
-        if (surge != null) inv.setItem(3, surge.item());
+        // only the BlackForgeMC test items, one per hotbar slot in the order they were added; refill() keeps them topped up
+        for (int i = 0; i < testItems.size(); i++) inv.setItem(i, testItems.get(i).make().get());
         ItemStack leave = Ui.item(Material.RED_BED, "<red><bold>Back to the Hub</bold> <gray>(right-click)");
         leave.editMeta(m -> m.getPersistentDataContainer().set(leaveKey, PersistentDataType.BYTE, (byte) 1));
         inv.setItem(8, leave);
@@ -735,6 +744,36 @@ public final class TestArena implements Listener {
         if (tick % 4 == 0) world.spawnParticle(Particle.ENCHANT, fx + 2.5, TestArenaBuilder.GRID_Y0 + 2.5, TestArenaBuilder.GRID_Z0 + 2.5, 6, 1.2, 1.5, 1.8, 0.6);
         // fireflies around the glade
         if (tick % 8 == 0) world.spawnParticle(Particle.GLOW, rnd.nextDouble() * 36 - 18, TestArenaBuilder.Y + 1.5 + rnd.nextDouble() * 3, rnd.nextDouble() * 36 - 18, 1, 0, 0, 0, 0);
+    }
+
+    /**
+     * Unlimited uses: a test item that's been thrown, used up or worn comes straight back to its hotbar slot (or the
+     * first free slot if something else is there). Cooldowns are the player's own and stay, so nothing gets spammy.
+     */
+    private void refill() {
+        for (Player p : world.getPlayers()) {
+            if (p.isDead()) continue;
+            var inv = p.getInventory();
+            for (int i = 0; i < testItems.size(); i++) {
+                TestItem t = testItems.get(i);
+                int at = -1;
+                for (int s = 0; s < inv.getSize() && at < 0; s++) { ItemStack it = inv.getItem(s); if (it != null && t.is().test(it)) at = s; }
+                if (at >= 0 && !t.worn().test(inv.getItem(at))) continue;      // still there and fresh
+                ItemStack fresh = t.make().get();
+                if (at >= 0) inv.setItem(at, fresh);                          // worn: swap for a fresh one in place
+                else if (inv.getItem(i) == null || inv.getItem(i).getType().isAir()) inv.setItem(i, fresh);
+                else inv.addItem(fresh);
+                if (at < 0) p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_STEP, 0.35f, 1.8f);
+            }
+        }
+    }
+
+    /** Test items stay in your hands: with unlimited refills, dropping them would just litter the glade. */
+    @EventHandler(ignoreCancelled = true)
+    public void onDropTestItem(PlayerDropItemEvent e) {
+        if (e.getPlayer().getWorld() != world) return;
+        ItemStack it = e.getItemDrop().getItemStack();
+        for (TestItem t : testItems) if (t.is().test(it)) { e.setCancelled(true); return; }
     }
 
     /** Arrows, thrown tridents and dropped items don't pile up. */
