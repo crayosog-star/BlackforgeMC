@@ -387,9 +387,9 @@ public final class Rimelock implements Listener {
         return new Transformation(corner, q, new Vector3f(w, h, th), new Quaternionf());
     }
 
-    private static Transformation post(double angle, float h) {
+    private static Transformation post(double angle, float h, float lift) {
         float s = 0.2f;
-        Vector3f at = new Vector3f((float) (Math.cos(angle) * CageShape.RADIUS) - s / 2, 0, (float) (Math.sin(angle) * CageShape.RADIUS) - s / 2);
+        Vector3f at = new Vector3f((float) (Math.cos(angle) * CageShape.RADIUS) - s / 2, lift, (float) (Math.sin(angle) * CageShape.RADIUS) - s / 2);
         return new Transformation(at, new Quaternionf(), new Vector3f(s, h, s), new Quaternionf());
     }
 
@@ -423,11 +423,46 @@ public final class Rimelock implements Listener {
         BukkitTask task;
         int t;
 
+        /**
+         * Per pane: how far below the caster's landing height the ground under it is (0..BELOW). The panes, the glowing
+         * base line and the posts reach down that far, so the wall meets the ground on a slope instead of hovering
+         * over it. The barrier already reaches BELOW down, so this only makes the glass match it.
+         */
+        final float[] drop = new float[CageShape.SEGMENTS];
+
         Cage(UUID owner, String ownerName, World world, double cx, double y, double cz) {
             this.owner = owner; this.ownerName = ownerName; this.world = world; this.cx = cx; this.y = y; this.cz = cz;
+            for (int i = 0; i < CageShape.SEGMENTS; i++) drop[i] = groundDrop(CageShape.panelAngle(i));
             this.friends = new Side(blue);
             this.foes = new Side(red);
         }
+
+        /** Lowest ground under a pane: samples its middle and both ends (just outside the glass), deepest wins. */
+        private float groundDrop(double a) {
+            double half = CageShape.panelWidth() / 2, r = CageShape.RADIUS + 0.2;
+            double tx = -Math.sin(a), tz = Math.cos(a);   // along the wall
+            float worst = 0;
+            for (double s = -half; s <= half + 1e-6; s += half) {
+                double x = cx + Math.cos(a) * r + tx * s, z = cz + Math.sin(a) * r + tz * s;
+                worst = Math.max(worst, dropAt((int) Math.floor(x), (int) Math.floor(z)));
+            }
+            return worst;
+        }
+
+        /** How far the ground in this column sits below the cage's base (0 if it's level or higher, capped at BELOW). */
+        private float dropAt(int bx, int bz) {
+            int feet = (int) Math.floor(y + 0.01);
+            if (world.getBlockAt(bx, feet, bz).isSolid()) return 0;           // ground at (or over) the base: no gap
+            for (int by = feet - 1; by >= feet - (int) CageShape.BELOW; by--)
+                if (world.getBlockAt(bx, by, bz).isSolid()) return (float) Math.max(0, y - (by + 1));
+            return (float) CageShape.BELOW;                                    // a drop: go as deep as the barrier does
+        }
+
+        /** Drop at an edge between two panes (where a post stands): the deeper of the two. */
+        private float edgeDrop(int i) { return Math.max(drop[Math.floorMod(i - 1, CageShape.SEGMENTS)], drop[i % CageShape.SEGMENTS]); }
+
+        /** Drop under whichever pane covers this angle. */
+        private float dropAtAngle(double a) { return drop[CageShape.panelIndex(a)]; }
 
         int left() { return DURATION_TICKS - t; }
         boolean inside(Location l) { return l.getWorld() == world && CageShape.inside(cx, y, cz, l.getX(), l.getY(), l.getZ()); }
@@ -470,28 +505,30 @@ public final class Rimelock implements Listener {
                 for (int i = 0; i < n; i++) {
                     double a = CageShape.panelAngle(i);
                     int at = 2 + i / 4;   // the wave runs round the circle in ~8 ticks
-                    BlockDisplay pane = block(pal.glint(), slab(a, CageShape.RADIUS, w, 0.01f, 0.05f, 0), null, 15);
-                    BlockDisplay top = block(pal.frame(), slab(a, CageShape.RADIUS, w, 0.12f, 0.14f, 0), pal.sky(), 15);
-                    BlockDisplay floor = block(pal.glass(), slab(a, CageShape.RADIUS - 0.05, 0.01f, 0.03f, 0.8f, 0.01f), pal.sky(), 15);
+                    float dp = drop[i];    // pane, base line and post start at the ground under this pane
+                    BlockDisplay pane = block(pal.glint(), slab(a, CageShape.RADIUS, w, 0.01f, 0.05f, -dp), null, 15);
+                    BlockDisplay top = block(pal.frame(), slab(a, CageShape.RADIUS, w, 0.12f, 0.14f, -dp), pal.sky(), 15);
+                    BlockDisplay floor = block(pal.glass(), slab(a, CageShape.RADIUS - 0.05, 0.01f, 0.03f, 0.8f, 0.01f - dp), pal.sky(), 15);
                     panes[i] = pane; tops[i] = top; floors[i] = floor; lit[i] = true; bright[i] = 15;
-                    later(5, () -> move(floor, slab(a, CageShape.RADIUS - 0.05, w, 0.03f, 0.8f, 0.01f), 4));   // unrolls as the shockwave arrives
+                    later(5, () -> move(floor, slab(a, CageShape.RADIUS - 0.05, w, 0.03f, 0.8f, 0.01f - dp), 4));   // unrolls as the shockwave arrives
                     later(at, () -> {
-                        move(pane, slab(a, CageShape.RADIUS, w, h * OVERSHOOT, 0.05f, 0), RISE_TICKS);
+                        move(pane, slab(a, CageShape.RADIUS, w, h * OVERSHOOT + dp, 0.05f, -dp), RISE_TICKS);
                         move(top, slab(a, CageShape.RADIUS, w, 0.12f, 0.14f, h * OVERSHOOT), RISE_TICKS);
                     });
                     int idx = i;
                     later(at + RISE_TICKS, () -> {
-                        move(pane, slab(a, CageShape.RADIUS, w, h, 0.05f, 0), SETTLE_TICKS);
+                        move(pane, slab(a, CageShape.RADIUS, w, h + dp, 0.05f, -dp), SETTLE_TICKS);
                         move(top, slab(a, CageShape.RADIUS, w, 0.12f, 0.14f, h), SETTLE_TICKS);
                         if (pane.isValid()) pane.setBlock(pal.glass());
                         lit[idx] = false;
                     });
                     if (i % 4 == 0) {   // a glowing post every 4 panes, a spinning crystal over it
                         double e = CageShape.edgeAngle(i);
-                        BlockDisplay post = block(pal.frame(), post(e, 0.01f), pal.sky(), 15);
+                        float pd = edgeDrop(i);
+                        BlockDisplay post = block(pal.frame(), post(e, 0.01f, -pd), pal.sky(), 15);
                         posts.add(post);
-                        later(at, () -> move(post, post(e, (h + 0.4f) * OVERSHOOT), RISE_TICKS));
-                        later(at + RISE_TICKS, () -> move(post, post(e, h + 0.4f), SETTLE_TICKS));
+                        later(at, () -> move(post, post(e, (h + 0.4f) * OVERSHOOT + pd, -pd), RISE_TICKS));
+                        later(at + RISE_TICKS, () -> move(post, post(e, h + 0.4f + pd, -pd), SETTLE_TICKS));
                         ItemDisplay gem = world.spawn(center(), ItemDisplay.class, d -> {
                             d.setPersistent(false);
                             d.setVisibleByDefault(false);
@@ -545,8 +582,11 @@ public final class Rimelock implements Listener {
                     if (b != bright[i]) { pane.setBrightness(new Display.Brightness(b, 15)); bright[i] = b; }
                 }
                 float h = (float) CageShape.WALL_HEIGHT;
-                for (int k = 0; k < streaks.size(); k++)
-                    move(streaks.get(k), slab(glintAt + k * Math.PI + 0.12, CageShape.RADIUS - 0.09, 0.22f, h, 0.05f, 0), 2);
+                for (int k = 0; k < streaks.size(); k++) {
+                    double sa = glintAt + k * Math.PI + 0.12;
+                    float sd = dropAtAngle(sa);
+                    move(streaks.get(k), slab(sa, CageShape.RADIUS - 0.09, 0.22f, h + sd, 0.05f, -sd), 2);
+                }
             }
 
             /** Each crystal turns a quarter and bobs, a beat behind its neighbour. */
@@ -586,9 +626,9 @@ public final class Rimelock implements Listener {
                         float out = 1.5f + r.nextFloat() * 2f, up = r.nextFloat() * 4f;
                         move(panes[i], slab(a, CageShape.RADIUS + out, w * 0.15f, h * 0.12f, 0.05f, up + h * 0.3f), BREAK_TICKS);
                         move(tops[i], slab(a, CageShape.RADIUS + out * 0.8, w * 0.2f, 0.05f, 0.05f, h + up), BREAK_TICKS);
-                        move(floors[i], slab(a, CageShape.RADIUS - 0.05, 0.01f, 0.03f, 0.8f, 0.01f), BREAK_TICKS);
+                        move(floors[i], slab(a, CageShape.RADIUS - 0.05, 0.01f, 0.03f, 0.8f, 0.01f - drop[i]), BREAK_TICKS);
                     }
-                    for (int k = 0; k < posts.size(); k++) move(posts.get(k), post(CageShape.edgeAngle(k * 4), 0.01f), BREAK_TICKS);
+                    for (int k = 0; k < posts.size(); k++) move(posts.get(k), post(CageShape.edgeAngle(k * 4), 0.01f, -edgeDrop(k * 4)), BREAK_TICKS);
                     for (BlockDisplay s : streaks) s.remove();
                     for (int k = 0; k < crystals.size(); k++) move(crystals.get(k), crystal(CageShape.edgeAngle(k * 4), 0.01f, (float) Math.PI * 3, 1.5f), BREAK_TICKS);
                 });

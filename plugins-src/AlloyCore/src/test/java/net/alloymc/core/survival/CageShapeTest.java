@@ -49,4 +49,15 @@ class CageShapeTest {
         assertTrue(CageShape.panelWidth() > chord);
         assertTrue(CageShape.panelWidth() < chord * 1.1);
     }
+
+    @Test void panelIndexFindsThePaneAtAnyAngle() {
+        double step = 2 * Math.PI / CageShape.SEGMENTS;
+        for (int i = 0; i < CageShape.SEGMENTS; i++) {
+            assertEquals(i, CageShape.panelIndex(CageShape.panelAngle(i)), "middle of " + i);
+            assertEquals(i, CageShape.panelIndex(CageShape.panelAngle(i) + 2 * Math.PI * 3), "wrapped " + i);
+            assertEquals(i, CageShape.panelIndex(CageShape.panelAngle(i) - 2 * Math.PI), "negative " + i);
+        }
+        assertEquals(CageShape.SEGMENTS - 1, CageShape.panelIndex(-step / 2));
+        assertEquals(0, CageShape.panelIndex(0));
+    }
 }

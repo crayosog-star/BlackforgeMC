@@ -31,6 +31,12 @@ final class CageShape {
     /** Angle (radians, round from +X towards +Z) of the middle of panel {@code i}. */
     static double panelAngle(int i) { return (i + 0.5) * 2 * Math.PI / SEGMENTS; }
 
+    /** Which panel covers the angle {@code a} (radians, any value, wraps round). */
+    static int panelIndex(double a) {
+        double turn = a / (2 * Math.PI);
+        return Math.floorMod((int) Math.floor((turn - Math.floor(turn)) * SEGMENTS), SEGMENTS);
+    }
+
     /** Angle of the edge between panel {@code i - 1} and panel {@code i} (where the posts stand). */
     static double edgeAngle(int i) { return i * 2 * Math.PI / SEGMENTS; }
 
