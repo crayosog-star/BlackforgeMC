@@ -32,18 +32,17 @@ public final class ChainPull {
     /** Reeling gives up after this many ticks (2 s). */
     public static final int REEL_MAX_TICKS = 40;
 
-    /** A hooked player is only jerked this far towards the caster: a step, not a drag. */
+    /** A hooked player is pulled exactly this far towards the caster: a step, not a drag. */
     public static final double PLAYER_PULL = 1.0;
+    /** The pull never brings them closer than this to the caster (no stepping into each other). */
+    public static final double PULL_MIN_GAP = 1.0;
     /** The burning tether on a hooked player snaps if they get further than this from the caster. */
     public static final double TETHER_SNAP = YANK_RANGE + 4;
 
-    /** The tether burns on the hook (tick 0) and then once a second, while it lasts {@code durationTicks}. */
-    public static boolean burnsOnTick(int tick, int durationTicks) {
-        return tick >= 0 && tick <= durationTicks && tick % 20 == 0;
+    /** How far a player standing {@code dist} blocks (horizontally) from the caster is pulled: 1 block, less if already close. */
+    public static double pullStep(double dist) {
+        return Math.max(0, Math.min(PLAYER_PULL, dist - PULL_MIN_GAP));
     }
-
-    /** Total fire hits a full tether deals (including the one on the hook). */
-    public static int burnHits(int durationTicks) { return Math.max(0, durationTicks) / 20 + 1; }
 
     /** The tether holds while they're within {@link #TETHER_SNAP} of the caster. */
     public static boolean tetherHolds(double dist) { return dist <= TETHER_SNAP; }
