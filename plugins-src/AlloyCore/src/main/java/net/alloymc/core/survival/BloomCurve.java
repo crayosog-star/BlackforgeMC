@@ -1,27 +1,30 @@
 package net.alloymc.core.survival;
 
 /**
- * Timing for the Potion of Gaia: how big the mist is and how high the platform is at each moment.
+ * Timing for the Potion of Gaia: how big the mist is, how solid the platform is, and how high it is at each moment.
  * Pure maths (no Bukkit), so it can be unit tested. Time is in seconds after the splash.
  *
- *   grow   0.0 - 2.5   radius 0.5 -> 3.5, cubic ease-in: barely moves at first, then faster and faster
- *   bloom  2.5 - 3.0   overshoots to 4.6, then snaps back to 3.5
- *   rise   3.0 - 5.5   platform climbs 8 blocks, easing in and out
- *   hold   5.5 - 11.5  stays at the top
- *   fade  11.5 - 13.0  shrinks away
+ *   mist    0.0 - 2.5   particles only; radius 0.5 -> 3.5, cubic ease-in: barely moves at first, then faster and faster
+ *   bloom   2.5 - 3.0   the fog flares out to 4.6, then snaps back to 3.5
+ *   harden  3.0 - 4.5   blocks fade in from the centre outward, thin and dim at first, thickening as the mist thins
+ *   rise    4.5 - 7.0   the solid platform climbs 8 blocks, easing in and out
+ *   hold    7.0 - 13.0  stays at the top (riders slowly heal)
+ *   fade   13.0 - 14.5  shatters and drifts down
  */
 public final class BloomCurve {
     private BloomCurve() {}
 
-    public static final double GROW_END = 2.5, BLOOM_PEAK = 2.75, BLOOM_END = 3.0, RISE_END = 5.5, HOLD_END = 11.5, FADE_END = 13.0;
+    public static final double GROW_END = 2.5, BLOOM_PEAK = 2.75, BLOOM_END = 3.0, HARDEN_END = 4.5,
+            RISE_END = 7.0, HOLD_END = 13.0, FADE_END = 14.5;
     public static final double START_RADIUS = 0.5, RADIUS = 3.5, BLOOM_RADIUS = 4.6;
     public static final double MAX_RISE = 8.0;
 
-    public enum Phase { GROW, BLOOM, RISE, HOLD, FADE, DONE }
+    public enum Phase { GROW, BLOOM, HARDEN, RISE, HOLD, FADE, DONE }
 
     public static Phase phase(double t) {
         if (t < GROW_END) return Phase.GROW;
         if (t < BLOOM_END) return Phase.BLOOM;
+        if (t < HARDEN_END) return Phase.HARDEN;
         if (t < RISE_END) return Phase.RISE;
         if (t < HOLD_END) return Phase.HOLD;
         if (t < FADE_END) return Phase.FADE;
@@ -44,20 +47,33 @@ public final class BloomCurve {
         return Math.max(0, Math.min(1, t / GROW_END));
     }
 
+    /** How hard the platform is, 0 (pure mist) .. 1 (solid). Rises through the harden phase. */
+    public static double hardness(double t) {
+        if (t <= BLOOM_END) return 0;
+        if (t >= HARDEN_END) return 1;
+        return (t - BLOOM_END) / (HARDEN_END - BLOOM_END);
+    }
+
+    /** Has the cell at this distance from the centre hardened yet? It spreads from the centre outward. */
+    public static boolean cellHard(double t, double dist) {
+        double h = hardness(t);
+        return h > 0 && dist <= h * (RADIUS + 0.01);
+    }
+
     /** Platform height above the ground in blocks, capped by {@code cap} (headroom above the cloud). */
     public static double height(double t, double cap) {
         double max = Math.min(MAX_RISE, cap);
-        if (t <= BLOOM_END) return 0;
+        if (t <= HARDEN_END) return 0;
         if (t >= RISE_END) return max;
-        double u = (t - BLOOM_END) / (RISE_END - BLOOM_END);
+        double u = (t - HARDEN_END) / (RISE_END - HARDEN_END);
         return max * u * u * (3 - 2 * u);   // smoothstep: eases in and out, so riders aren't jolted
     }
 
     /** Rising speed in blocks per second at time t (the derivative of {@link #height}). */
     public static double riseSpeed(double t, double cap) {
-        if (t <= BLOOM_END || t >= RISE_END) return 0;
-        double max = Math.min(MAX_RISE, cap), span = RISE_END - BLOOM_END;
-        double u = (t - BLOOM_END) / span;
+        if (t <= HARDEN_END || t >= RISE_END) return 0;
+        double max = Math.min(MAX_RISE, cap), span = RISE_END - HARDEN_END;
+        double u = (t - HARDEN_END) / span;
         return max * 6 * u * (1 - u) / span;
     }
 }

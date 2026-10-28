@@ -36,15 +36,15 @@ class BloomCurveTest {
     }
 
     @Test void risesExactlyEightBlocks() {
-        assertEquals(0, BloomCurve.height(3.0, 99), EPS);
-        assertEquals(8, BloomCurve.height(5.5, 99), EPS);
-        assertEquals(8, BloomCurve.height(9.0, 99), EPS);
-        assertEquals(4, BloomCurve.height(4.25, 99), 1e-6);   // halfway in time = halfway up
+        assertEquals(0, BloomCurve.height(4.5, 99), EPS);    // nothing rises until it has hardened
+        assertEquals(8, BloomCurve.height(7.0, 99), EPS);
+        assertEquals(8, BloomCurve.height(10.0, 99), EPS);
+        assertEquals(4, BloomCurve.height(5.75, 99), 1e-6);   // halfway in time = halfway up
     }
 
     @Test void riseNeverGoesDown() {
         double last = 0;
-        for (double t = 3.0; t <= 5.5; t += 0.05) {
+        for (double t = 4.5; t <= 7.0; t += 0.05) {
             double h = BloomCurve.height(t, 99);
             assertTrue(h >= last - EPS);
             last = h;
@@ -52,29 +52,40 @@ class BloomCurveTest {
     }
 
     @Test void lowCeilingCapsTheRise() {
-        assertEquals(3, BloomCurve.height(6.0, 3), EPS);
-        assertTrue(BloomCurve.height(4.0, 3) <= 3);
+        assertEquals(3, BloomCurve.height(8.0, 3), EPS);
+        assertTrue(BloomCurve.height(6.0, 3) <= 3);
     }
 
     @Test void riseSpeedMatchesTheHeight() {
-        double t = 4.0, dt = 1e-4;
+        double t = 5.5, dt = 1e-4;
         double numeric = (BloomCurve.height(t + dt, 99) - BloomCurve.height(t - dt, 99)) / (2 * dt);
         assertEquals(numeric, BloomCurve.riseSpeed(t, 99), 1e-4);
         assertEquals(0, BloomCurve.riseSpeed(2.0, 99), EPS);
-        assertEquals(0, BloomCurve.riseSpeed(6.0, 99), EPS);
+        assertEquals(0, BloomCurve.riseSpeed(8.0, 99), EPS);
     }
 
     @Test void phasesInOrder() {
         assertEquals(BloomCurve.Phase.GROW, BloomCurve.phase(1));
         assertEquals(BloomCurve.Phase.BLOOM, BloomCurve.phase(2.8));
-        assertEquals(BloomCurve.Phase.RISE, BloomCurve.phase(4));
-        assertEquals(BloomCurve.Phase.HOLD, BloomCurve.phase(8));
-        assertEquals(BloomCurve.Phase.FADE, BloomCurve.phase(12));
-        assertEquals(BloomCurve.Phase.DONE, BloomCurve.phase(13));
+        assertEquals(BloomCurve.Phase.HARDEN, BloomCurve.phase(3.5));
+        assertEquals(BloomCurve.Phase.RISE, BloomCurve.phase(5));
+        assertEquals(BloomCurve.Phase.HOLD, BloomCurve.phase(10));
+        assertEquals(BloomCurve.Phase.FADE, BloomCurve.phase(14));
+        assertEquals(BloomCurve.Phase.DONE, BloomCurve.phase(14.5));
+    }
+
+    @Test void hardensFromTheCentreOutward() {
+        assertEquals(0, BloomCurve.hardness(3.0), EPS);
+        assertEquals(1, BloomCurve.hardness(4.5), EPS);
+        assertFalse(BloomCurve.cellHard(2.0, 0));             // still pure mist
+        assertTrue(BloomCurve.cellHard(3.4, 0.5));            // centre first...
+        assertFalse(BloomCurve.cellHard(3.4, 3.0));           // ...edge later
+        assertTrue(BloomCurve.cellHard(4.5, BloomCurve.RADIUS));
     }
 
     @Test void fadesToNothing() {
-        assertEquals(0, BloomCurve.radius(13.0), EPS);
-        assertTrue(BloomCurve.radius(12.0) < BloomCurve.RADIUS);
+        assertEquals(0, BloomCurve.radius(14.5), EPS);
+        assertTrue(BloomCurve.radius(14.0) < BloomCurve.RADIUS);
+        assertEquals(BloomCurve.RADIUS, BloomCurve.radius(12.0), EPS);
     }
 }

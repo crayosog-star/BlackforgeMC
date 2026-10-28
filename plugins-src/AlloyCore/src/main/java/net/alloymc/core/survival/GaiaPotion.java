@@ -29,7 +29,8 @@ import java.util.function.BiPredicate;
  * an 8-block platform carrying whoever stands on it, then fades with Slow Falling for its riders.
  * Timing lives in {@link BloomCurve}; one running cloud is a {@link GaiaPlatform}.
  *
- * Safety: never in spawn or someone else's claim; never replaces a block (the floor only fills air);
+ * Safety: never in spawn or someone else's claim; the floor only fills air or plants (grass, flowers) and puts back
+ * exactly what was there;
  * every barrier is logged to gaia-barriers.txt and removed on shutdown and again on the next start.
  */
 public final class GaiaPotion implements Listener {
@@ -70,6 +71,7 @@ public final class GaiaPotion implements Listener {
                     Ui.mm("<gray>Throw it to grow a cloud of mist"),
                     Ui.mm("<gray>It blooms, then rises <white>8 blocks"),
                     Ui.mm("<gray>carrying anyone standing on it"),
+                    Ui.mm("<gray>and slowly <white>heals<gray> them while they ride"),
                     Ui.mm(""),
                     Ui.mm("<gray>Cooldown: <white>" + COOLDOWN_SECONDS + "s"),
                     Ui.mm("<dark_gray>BlackForgeMC item")));
@@ -150,17 +152,17 @@ public final class GaiaPotion implements Listener {
                 double dist = Math.sqrt(dx * dx + dz * dz);
                 if (dist > BloomCurve.RADIUS) continue;
                 Block base = w.getBlockAt(cx + dx, gy, cz + dz);
-                if (!base.getType().isAir()) continue;   // a bump in the terrain: not part of the cloud
+                if (!GaiaPlatform.open(base)) continue;   // a bump in the terrain: not part of the cloud (grass and flowers count as open)
                 if (!mayUse.test(p, base.getLocation())) { fizzle(p, at, "Gaia can't grow here: not in spawn, someone else's claim, or the hub outside the Arena."); return; }
                 // headroom: the floor layer plus 2 blocks above the surface must be air
                 for (int k = 1; k <= (int) BloomCurve.MAX_RISE + 2; k++)
-                    if (!w.getBlockAt(cx + dx, gy + k, cz + dz).getType().isAir()) { cap = Math.min(cap, k - 2); break; }
+                    if (!GaiaPlatform.open(w.getBlockAt(cx + dx, gy + k, cz + dz))) { cap = Math.min(cap, k - 2); break; }
                 cells.add(new GaiaPlatform.Cell(dx, dz, dist));
             }
         if (cells.size() < MIN_CELLS) { fizzle(p, at, "Not enough flat ground here."); return; }
         if (cap < 2) { fizzle(p, at, "Not enough room above to rise."); return; }
 
-        active.add(new GaiaPlatform(p.getUniqueId(), w, cx, gy, cz, cells, cap));
+        active.add(new GaiaPlatform(plugin, p.getUniqueId(), w, cx, gy, cz, cells, cap));
         Location c = new Location(w, cx + 0.5, gy + 0.2, cz + 0.5);
         w.spawnParticle(Particle.DUST, c, 25, 0.4, 0.2, 0.4, 0, new Particle.DustOptions(GaiaPlatform.PETAL_PINK, 1.4f));
         if (cap < BloomCurve.MAX_RISE) p.sendActionBar(Ui.mm("<#FFB3DE>✿ <gray>Low ceiling - the cloud will only rise <white>" + (int) cap + " <gray>blocks"));
@@ -170,12 +172,12 @@ public final class GaiaPotion implements Listener {
     private static Integer groundAt(World w, int x, int y, int z) {
         for (int up = 0; up <= 3; up++) {
             Block b = w.getBlockAt(x, y + up, z);
-            if (b.getType().isAir()) { y = y + up; break; }
+            if (GaiaPlatform.open(b)) { y = y + up; break; }
             if (up == 3) return null;
         }
         for (int down = 0; down <= 6; down++) {
             Block b = w.getBlockAt(x, y - down, z), below = b.getRelative(0, -1, 0);
-            if (b.getType().isAir() && below.getType().isSolid()) return y - down;
+            if (GaiaPlatform.open(b) && below.getType().isSolid()) return y - down;
         }
         return null;
     }
@@ -210,7 +212,11 @@ public final class GaiaPotion implements Listener {
     /** Every barrier currently placed by a cloud, so a crash can't leave invisible blocks behind. */
     private void saveLog() {
         List<String> lines = new ArrayList<>();
-        for (GaiaPlatform g : active) for (Block b : g.barriers()) lines.add(b.getWorld().getName() + " " + b.getX() + " " + b.getY() + " " + b.getZ());
+        for (GaiaPlatform g : active)
+            for (var e : g.barriers().entrySet()) {   // the block that was there goes in the log too, so a crash restores grass, not air
+                Block b = e.getKey();
+                lines.add(b.getWorld().getName() + " " + b.getX() + " " + b.getY() + " " + b.getZ() + " " + e.getValue().getAsString());
+            }
         try {
             if (lines.isEmpty()) Files.deleteIfExists(barrierLog.toPath());
             else Files.write(barrierLog.toPath(), lines);
@@ -224,11 +230,15 @@ public final class GaiaPotion implements Listener {
         try {
             for (String l : Files.readAllLines(barrierLog.toPath())) {
                 String[] s = l.trim().split(" ");
-                if (s.length != 4) continue;
+                if (s.length < 4) continue;
                 World w = Bukkit.getWorld(s[0]);
                 if (w == null) continue;
                 Block b = w.getBlockAt(Integer.parseInt(s[1]), Integer.parseInt(s[2]), Integer.parseInt(s[3]));
-                if (b.getType() == Material.BARRIER) { b.setType(Material.AIR, false); n++; }
+                if (b.getType() != Material.BARRIER) continue;
+                org.bukkit.block.data.BlockData was = null;
+                if (s.length >= 5) try { was = Bukkit.createBlockData(s[4]); } catch (IllegalArgumentException ignored) { }
+                if (was != null) b.setBlockData(was, false); else b.setType(Material.AIR, false);
+                n++;
             }
             Files.deleteIfExists(barrierLog.toPath());
         } catch (Exception ex) { plugin.getLogger().warning("gaia-barriers.txt cleanup failed: " + ex.getMessage()); }
