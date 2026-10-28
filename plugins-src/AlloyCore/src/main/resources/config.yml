@@ -18,3 +18,10 @@ gaia-potion:
 # mobs anywhere. Staff: /darkness. Crates: alloy darkness give {player}. Set false to stop it.
 darkness-potion:
   enabled: true
+
+# Surge (survival + hub Arena): one-use ability item. 6 s of speed/jump/step-up with a health drain that never goes
+# below half health. Staff: /surge. Crates: alloy surge give {player}. custom-model: true only once the resource pack
+# with the Surge textures is live. Set enabled false to stop it.
+surge:
+  enabled: true
+  custom-model: false

@@ -97,6 +97,8 @@ public final class TestArena implements Listener {
     public void setGaia(net.alloymc.core.survival.GaiaPotion g) { this.gaia = g; }
     private net.alloymc.core.survival.DarknessPotion darkness;     // a Potion of Darkness in every kit, if set
     public void setDarkness(net.alloymc.core.survival.DarknessPotion d) { this.darkness = d; }
+    private net.alloymc.core.survival.Surge surge;                  // one Surge in every kit, if set
+    public void setSurge(net.alloymc.core.survival.Surge s) { this.surge = s; }
     // the current combo on the dummy: hits within 4 s of each other
     private final Deque<double[]> hits = new ArrayDeque<>();   // {time ms, damage}
     private double lastHit, comboTotal;
@@ -322,7 +324,8 @@ public final class TestArena implements Listener {
         ItemStack trident = new ItemStack(Material.TRIDENT);
         trident.addEnchantment(Enchantment.LOYALTY, 3);
         inv.setItem(5, trident);
-        inv.setItem(6, new ItemStack(Material.WIND_CHARGE, 64));
+        inv.setItem(15, new ItemStack(Material.WIND_CHARGE, 64));   // hotbar slot 7 holds Surge
+        if (surge != null) inv.setItem(6, surge.item());
         if (gaia != null) inv.setItem(7, gaia.item());
         ItemStack leave = Ui.item(Material.RED_BED, "<red><bold>Back to the Hub</bold> <gray>(right-click)");
         leave.editMeta(m -> m.getPersistentDataContainer().set(leaveKey, PersistentDataType.BYTE, (byte) 1));

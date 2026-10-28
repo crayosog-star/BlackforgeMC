@@ -40,6 +40,7 @@ public final class SurvivalModule implements Listener {
     private final GaleBellows bellows;
     private final GaiaPotion gaia;
     private final DarknessPotion darkness;
+    private final Surge surge;
     private final Ranks ranks;
     private final HallOfFame hall;
     private final DailyRewards daily;
@@ -80,6 +81,7 @@ public final class SurvivalModule implements Listener {
         // its floor is temporary, only fills air, and always cleans itself up)
         gaia = new GaiaPotion(plugin, (p, l) -> (l.getWorld() != world || !inSpawn(l.getX(), l.getY(), l.getZ())) && claims.canUse(p, l));
         // Potion of Darkness: darkens players only where PvP is on (KOTH + Scrapyard); confuses mobs anywhere
+        surge = new Surge(plugin, l -> l.getWorld() != world || !inSpawn(l.getX(), l.getY(), l.getZ()));   // anywhere but spawn
         darkness = new DarknessPotion(plugin, l -> l.getWorld() == world && (inArena(l.getX(), l.getY(), l.getZ()) || inPvp(l.getX(), l.getY(), l.getZ())));
         new SilkSpawners(plugin);
         votes.setScrap(scrap);
@@ -137,6 +139,7 @@ public final class SurvivalModule implements Listener {
 
     public void shutdown() {
         gaia.shutdown();   // first: removes every cloud's barrier blocks
+        surge.shutdown();
         holos.forEach(TextDisplay::remove);
         if (koth.active()) koth.stop(null);
         pvp.shutdown();
@@ -244,6 +247,10 @@ public final class SurvivalModule implements Listener {
             if (p.hasPermission("alloy.admin")) darkness.give(p);
             else p.sendMessage(Ui.mm("<#6E2C83>☠ <gray>The " + DarknessPotion.NAME + " <gray>isn't available to players yet."));
         });
+        reg("surge", List.of(), (p, a) -> {   // staff only for now: players get it from the Arena kit / crates later
+            if (p.hasPermission("alloy.admin")) surge.give(p);
+            else p.sendMessage(Ui.mm("<#FF2E88>✦ <gray>" + Surge.NAME + " <gray>isn't available to players yet."));
+        });
         reg("koth", List.of(), (p, a) -> {
             if (a.length > 0 && p.hasPermission("alloy.admin")) {
                 if (a[0].equalsIgnoreCase("start")) koth.start();
@@ -277,6 +284,13 @@ public final class SurvivalModule implements Listener {
 
     /** Console/admin: /alloy crate give <player> <crate> [amount], /alloy koth start|stop, /alloy buildsurvival */
     public boolean admin(CommandSender s, String[] a) {
+        if (a.length >= 3 && a[0].equalsIgnoreCase("surge") && a[1].equalsIgnoreCase("give")) {   // /alloy surge give <player> (for crates)
+            Player t = Bukkit.getPlayerExact(a[2]);
+            if (t == null) { s.sendMessage(Component.text("Player must be online")); return true; }
+            surge.give(t);
+            s.sendMessage(Component.text("Gave Surge to " + a[2]));
+            return true;
+        }
         if (a.length >= 3 && a[0].equalsIgnoreCase("darkness") && a[1].equalsIgnoreCase("give")) {   // /alloy darkness give <player> (for crates)
             Player t = Bukkit.getPlayerExact(a[2]);
             if (t == null) { s.sendMessage(Component.text("Player must be online")); return true; }
