@@ -30,7 +30,7 @@ import java.util.function.Predicate;
  * enemy's position mirrored left/right) and a heartbeat. Mobs it hits anywhere are confused for 2.5 s: they lose
  * their target, can't pick a new one, and stagger around. Does no damage.
  */
-public final class DarknessPotion implements Listener {
+public final class DarknessPotion implements Listener, Hackable {
     public static final String NAME = "<gradient:#6E2C83:#8C1C2E><bold>Potion of Darkness</bold></gradient>";
     public static final int DARK_TICKS = 110;         // 5.5 s of solid dark for players
     public static final int MOB_CONFUSE_TICKS = 50;   // 2.5 s of confusion for mobs
@@ -280,5 +280,30 @@ public final class DarknessPotion implements Listener {
         darkUntil.values().removeIf(t -> t < now);
         immuneUntil.values().removeIf(t -> t < now);
         confusedUntil.values().removeIf(t -> t < now);
+    }
+
+    /**
+     * EMP: anyone inside the wave who's under this potion's darkness is cleared of it, the phantom footsteps stop,
+     * and confused mobs inside it come back to their senses. (Cleanses the EMP caster too.)
+     */
+    @Override
+    public int hack(Location center, double radius, Player caster) {
+        int n = 0;
+        long now = System.currentTimeMillis();
+        for (UUID id : new ArrayList<>(darkUntil.keySet())) {
+            Player p = Bukkit.getPlayer(id);
+            if (p == null || darkUntil.get(id) < now || !EmpWave.reaches(center, p.getLocation(), radius)) continue;
+            darkUntil.remove(id);
+            p.removePotionEffect(org.bukkit.potion.PotionEffectType.BLINDNESS);
+            p.removePotionEffect(org.bukkit.potion.PotionEffectType.DARKNESS);
+            n++;
+        }
+        for (UUID id : new ArrayList<>(confusedUntil.keySet())) {
+            Entity m = Bukkit.getEntity(id);
+            if (m == null || confusedUntil.get(id) < now || !EmpWave.reaches(center, m.getLocation(), radius)) continue;
+            confusedUntil.remove(id);
+            n++;
+        }
+        return n;
     }
 }

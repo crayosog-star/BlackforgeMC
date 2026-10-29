@@ -45,7 +45,7 @@ import java.util.function.Predicate;
  *
  * Every change is temporary and removed on end, death, quit, world change and shutdown (and checked again on join).
  */
-public final class Surge implements Listener {
+public final class Surge implements Listener, Hackable {
     public static final String NAME = "<gradient:#B3122E:#FF2E88><bold>Surge</bold></gradient>";
     public static final int COOLDOWN_SECONDS = 30;
 
@@ -544,6 +544,7 @@ public final class Surge implements Listener {
         p.playSound(p.getLocation(), Sound.BLOCK_RESPAWN_ANCHOR_DEPLETE, SoundCategory.PLAYERS, 0.6f, 1.4f);
         switch (reason) {
             case "drained" -> p.sendActionBar(Ui.mm("<#8a7f85>✦ Surge burned out at half health"));
+            case "hacked" -> p.sendActionBar(Ui.mm("<#B6FF3B>⚡ <gray>Your Surge was <white>shut down <gray>by an EMP"));
             default -> p.sendActionBar(Ui.mm("<#8a7f85>✦ Surge faded"));
         }
     }
@@ -576,6 +577,27 @@ public final class Surge implements Listener {
     @EventHandler public void onQuit(PlayerQuitEvent e) { end(e.getPlayer(), null); }
     @EventHandler public void onWorld(PlayerChangedWorldEvent e) { end(e.getPlayer(), null); }
     @EventHandler public void onJoin(PlayerJoinEvent e) { clearLeftovers(e.getPlayer()); }
+
+    /** EMP: ends every surge (and every surge still charging up) inside the wave, except the caster's own. */
+    @Override
+    public int hack(Location center, double radius, Player caster) {
+        int n = 0;
+        for (UUID id : new ArrayList<>(channeling.keySet())) {
+            Player p = Bukkit.getPlayer(id);
+            if (p == null || id.equals(caster.getUniqueId()) || !EmpWave.reaches(center, p.getLocation(), radius)) continue;
+            ItemDisplay rose = channeling.remove(id);
+            if (rose != null && rose.isValid()) rose.remove();   // the charge-up loop sees it gone and stops: no surge
+            p.sendActionBar(Ui.mm("<#B6FF3B>⚡ <gray>Your Surge was <white>shut down <gray>by an EMP"));
+            n++;
+        }
+        for (UUID id : new ArrayList<>(active.keySet())) {
+            Player p = Bukkit.getPlayer(id);
+            if (p == null || id.equals(caster.getUniqueId()) || !EmpWave.reaches(center, p.getLocation(), radius)) continue;
+            end(p, "hacked");
+            n++;
+        }
+        return n;
+    }
 
     /** Server stopping: end every surge cleanly. */
     public void shutdown() {

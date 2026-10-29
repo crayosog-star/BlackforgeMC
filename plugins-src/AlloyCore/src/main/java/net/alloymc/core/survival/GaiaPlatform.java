@@ -452,6 +452,20 @@ final class GaiaPlatform {
         barriers.clear();
     }
 
+    /**
+     * EMP: break it up right now, whatever stage it's at. Riders get the same Slow Falling as a normal fade, the
+     * barriers go, and it jumps straight to the fade so the pieces drift down and it's gone. Safe to call twice.
+     */
+    void collapse() {
+        if (done || shattered) return;
+        double t = tick / 20.0;
+        BloomCurve.Phase phase = BloomCurve.phase(t);
+        double h = phase == BloomCurve.Phase.RISE || phase == BloomCurve.Phase.HOLD ? BloomCurve.height(t, cap) : 0;
+        shattered = true;
+        shatter(h);
+        tick = (int) Math.ceil(BloomCurve.HOLD_END * 20);
+    }
+
     /** Take everything down now: displays, shards and every barrier this cloud placed. Safe to call twice. */
     void remove() {
         for (BlockDisplay d : shown.values()) if (d.isValid()) d.remove();

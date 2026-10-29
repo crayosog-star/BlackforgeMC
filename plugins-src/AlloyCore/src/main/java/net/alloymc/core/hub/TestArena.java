@@ -396,7 +396,7 @@ public final class TestArena implements Listener {
         kit(p);
         p.sendMessage(Ui.mm("<#7bd88f><bold>Arena test items</bold> <dark_gray>· <gray>they never run out here"));
         if (p.hasPermission("alloy.admin"))
-            p.sendMessage(Ui.mm("<gray>Staff: <white>/jbello /gaia /darkness /surge /lastrite /rimelock /godseye /chain /bonfire <gray>give one each · Surge has no cooldown here"));
+            p.sendMessage(Ui.mm("<gray>Staff: <white>/jbello /gaia /darkness /surge /lastrite /rimelock /godseye /chain /bonfire /emp <gray>give one each · Surge has no cooldown here"));
         p.showTitle(Title.title(Ui.mm("<gradient:#7bd88f:#2e9e5b><bold>THE ARENA</bold></gradient>"), Ui.mm("<gray>Break things. Responsibly."),
                 Title.Times.times(Duration.ofMillis(250), Duration.ofSeconds(2), Duration.ofMillis(600))));
         p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.2f);

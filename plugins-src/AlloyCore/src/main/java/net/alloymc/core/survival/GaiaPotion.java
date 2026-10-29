@@ -33,7 +33,7 @@ import java.util.function.BiPredicate;
  * exactly what was there;
  * every barrier is logged to gaia-barriers.txt and removed on shutdown and again on the next start.
  */
-public final class GaiaPotion implements Listener {
+public final class GaiaPotion implements Listener, Hackable {
     public static final String NAME = "<gradient:#FFB3DE:#B48CFF><bold>Potion of Gaia</bold></gradient>";
     public static final int COOLDOWN_SECONDS = 20;
     private static final int MAX_ACTIVE = 6;          // per server, so a mass-throw can't flood entities
@@ -264,6 +264,20 @@ public final class GaiaPotion implements Listener {
             Files.deleteIfExists(barrierLog.toPath());
         } catch (Exception ex) { plugin.getLogger().warning("gaia-barriers.txt cleanup failed: " + ex.getMessage()); }
         if (n > 0) plugin.getLogger().info("Removed " + n + " leftover Potion of Gaia barrier blocks");
+    }
+
+    /** EMP: any cloud the wave touches collapses at once (not the EMP caster's own). */
+    @Override
+    public int hack(Location center, double radius, Player caster) {
+        int n = 0;
+        for (GaiaPlatform g : new ArrayList<>(active)) {
+            if (g.fading() || g.owner.equals(caster.getUniqueId()) || !EmpWave.reaches(center, g.centre(), radius, BloomCurve.RADIUS)) continue;
+            g.collapse();
+            Player owner = Bukkit.getPlayer(g.owner);
+            if (owner != null) owner.sendActionBar(Ui.mm("<#B6FF3B>⚡ <gray>Your " + NAME + " <gray>was <white>shut down <gray>by an EMP"));
+            n++;
+        }
+        return n;
     }
 
     /** Server stopping: take every cloud down now. */

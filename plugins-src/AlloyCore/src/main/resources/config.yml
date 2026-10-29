@@ -33,6 +33,14 @@ surge:
   custom-model: false
   screen-darkness: true
 
+# EMP (hub Arena only for now): right-click to launch up; at the top a wave rolls out `radius` blocks (10 = a
+# 20-block-wide circle) and shuts down every other player's ability inside it (cages fall, surges end, chains snap...),
+# strips everyone else's potion effects and cleanses the caster's debuffs. One use. Staff: /emp. Set enabled false to stop it.
+emp:
+  enabled: true
+  radius: 10
+  cooldown-seconds: 45
+
 # Rimelock (hub Arena only for now): leap, slam, and a 16-block-tall, 6-block-radius cage holds for 10 s. Nobody
 # inside can leave, mobs included, except the caster (and their team, once teams exist); anyone can walk in; no hits
 # cross the wall either way. The caster's side sees it blue, everyone else red. Staff: /rimelock (/cage).

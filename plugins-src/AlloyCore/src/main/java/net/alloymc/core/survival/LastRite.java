@@ -46,7 +46,7 @@ import java.util.function.Predicate;
  * already in a rite, never creative/spectator, never right after they survived one (30 s immunity).
  * The wave maths is in {@link RiteSweep}; the duel, the chamber and the return are in {@link RiteChambers}.
  */
-public final class LastRite implements Listener {
+public final class LastRite implements Listener, Hackable {
     public static final String NAME = "<gradient:#3A0A52:#B66CFF:#3A0A52><bold>Last Rite</bold></gradient>";
     static final Color VIOLET = Color.fromRGB(0xB66CFF), DEEP = Color.fromRGB(0x5A1A8C), INK = Color.fromRGB(0x12061C),
             BONE = Color.fromRGB(0xEDE4F7), BLOOD = Color.fromRGB(0x7A0F2A);
@@ -63,6 +63,8 @@ public final class LastRite implements Listener {
     private final Map<UUID, Long> readyAt = new HashMap<>();
     private final Map<UUID, Cast> casting = new HashMap<>();
     private final Set<UUID> sealing = new HashSet<>();
+    private final Map<UUID, Location> waves = new HashMap<>();   // caster -> where their rolling wall is now
+    private final Set<UUID> jammedWaves = new HashSet<>();       // walls an EMP caught: dissolve next tick
     private final Set<Display> live = new HashSet<>();          // every display the rite has out, removed on shutdown
     private final Random rnd = new Random();
 
@@ -119,7 +121,34 @@ public final class LastRite implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
+    /**
+     * EMP: a rite being read inside the wave breaks (no wave), and a wall already rolling dissolves the moment the
+     * wave touches it. Not the EMP caster's own. Rites already sealed in a chamber are out of reach.
+     */
+    @Override
+    public int hack(Location center, double radius, Player caster) {
+        int n = 0;
+        for (Map.Entry<UUID, Cast> e : new ArrayList<>(casting.entrySet())) {
+            Player p = Bukkit.getPlayer(e.getKey());
+            if (p == null || e.getKey().equals(caster.getUniqueId()) || e.getValue().cancelled || !EmpWave.reaches(center, p.getLocation(), radius)) continue;
+            e.getValue().cancelled = true;
+            fizzleMsg(p, "An EMP broke your rite. It wasn't read.");
+            n++;
+        }
+        for (Map.Entry<UUID, Location> e : new ArrayList<>(waves.entrySet())) {
+            if (e.getKey().equals(caster.getUniqueId()) || jammedWaves.contains(e.getKey())
+                    || !EmpWave.reaches(center, e.getValue(), radius, RiteSweep.WIDTH / 2)) continue;
+            jammedWaves.add(e.getKey());
+            Player p = Bukkit.getPlayer(e.getKey());
+            if (p != null) fizzleMsg(p, "An EMP shut down your rite.");
+            n++;
+        }
+        return n;
+    }
+
     public void shutdown() {
+        waves.clear();
+        jammedWaves.clear();
         casting.values().forEach(c -> c.runes.forEach(Entity::remove));
         casting.clear();
         live.forEach(Entity::remove);
@@ -589,14 +618,17 @@ public final class LastRite implements Listener {
             Player caster = Bukkit.getPlayer(casterId);
             double from = RiteSweep.reach(n - 1), to = RiteSweep.reach(n);
             Location at = wallAt(origin, fwd, to, yaw);
+            if (jammedWaves.remove(casterId)) { task.cancel(); waves.remove(casterId); dissolve(wall); fadeLane(lane, -1, true); return; }
+            waves.put(casterId, at);
             if (wall.isValid()) wall.teleport(at);
             waveFx(w, at, fwd, side, n, oy);
             flareLane(w, lane, to);
             ghostBlocks(w, lane, ox, oy, oz, f, from, to);
-            if (caster == null || !caster.isOnline() || caster.isDead() || caster.getWorld() != w) { task.cancel(); dissolve(wall); fadeLane(lane, -1, true); return; }
+            if (caster == null || !caster.isOnline() || caster.isDead() || caster.getWorld() != w) { task.cancel(); waves.remove(casterId); dissolve(wall); fadeLane(lane, -1, true); return; }
             LivingEntity hit = firstCaught(caster, w, ox, oy, oz, f, from, to);
             if (hit != null) {
                 task.cancel();
+                waves.remove(casterId);
                 shatter(wall, at);
                 fadeLane(lane, to, false);
                 seal(caster, hit);
@@ -604,6 +636,7 @@ public final class LastRite implements Listener {
             }
             if (n >= RiteSweep.travelTicks()) {
                 task.cancel();
+                waves.remove(casterId);
                 dissolve(wall);
                 fadeLane(lane, -1, false);
                 miss(caster);
