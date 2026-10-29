@@ -63,25 +63,13 @@ final class ForgeWarsMaps {
         k.disc(0, 0, 0, PLAZA_R + 0.5, t.core());
         k.ring(0, 0, 0, PLAZA_R - 0.5, PLAZA_R + 0.5, t.coreRim());
         d.point("core", Pt.of(0.5, 1, 0.5));
-        // emerald pedestals: one block up, between the plaza and the outer ring
-        int[][] em = teams >= 8 ? new int[][]{{-10, -10}, {10, -10}, {-10, 10}, {10, 10}} : new int[][]{{-13, 0}, {13, 0}, {0, -13}, {0, 13}};
+        // emerald pedestals: one block up, each in its own ruined shrine, off the approach lines
+        int[][] em = teams >= 8 ? new int[][]{{11, 5}, {-5, 11}, {-11, -5}, {5, -11}} : new int[][]{{-8, -8}, {8, -8}, {-8, 8}, {8, 8}};
         for (int[] e : em) {
             for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) k.set(e[0] + dx, 1, e[1] + dz, dx == 0 && dz == 0 ? "emerald_block" : t.accent());
             d.add("emerald_generators", Pt.of(e[0] + 0.5, 2, e[1] + 0.5));
         }
-        // four low braziers round the plaza
-        for (int i = 0; i < 4; i++) {
-            double a = Math.PI / 4 + i * Math.PI / 2;
-            int x = (int) Math.round(Math.cos(a) * (PLAZA_R + 2)), z = (int) Math.round(Math.sin(a) * (PLAZA_R + 2));
-            k.set(x, 1, z, t.accent());
-            k.set(x, 2, z, t.light());
-        }
-        // lamp posts round the outer ring (off the east/west axis, where the stairways come up)
-        for (int i = 0; i < 8; i++) {
-            double a = Math.PI * 2 * i / 8 + Math.PI / 8;
-            int x = (int) Math.round(Math.cos(a) * 24), z = (int) Math.round(Math.sin(a) * 24);
-            for (int y = 1; y <= 4; y++) k.set(x, y, z, y == 4 ? t.light() : t.accent());
-        }
+        new Ruin(k, seed, teams, em).build();
         Cave c = new Cave(k, seed);
         c.carve();
         c.ledges();
@@ -102,6 +90,295 @@ final class ForgeWarsMaps {
                 double wob = (MapKit.noise(x / 4.0 + 50, z / 4.0 + y / 6.0, 91) - 0.5) * 3;
                 if (Math.sqrt(x * x + z * z) > r + wob || k.isSet(x, y, z)) continue;
                 k.set(x, y, z, y > -4 ? t.mid() : k.rnd.nextInt(4) == 0 ? "tuff" : t.bottom());
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ the Fallen Keep (the Core surface)
+
+    /**
+     * The Core's surface is the ruin of an old keep, gone wild: a broken curtain wall round an inner ward with a gate
+     * facing every team's bridge line, ruined towers set in the wall between the gates (climb the vines inside to the
+     * top), a broken colonnade round the plaza with fallen columns for cover, a ruined shrine round each emerald
+     * generator, and in the outer bailey the crypt stairs to the Undercroft, a great cherry tree and a fairy ring.
+     *
+     * Always kept clear: the plaza and launch shaft, a 5-wide approach line from every team's side to the plaza, and
+     * the two crypt stairways.
+     */
+    private static final class Ruin {
+        static final double WALL_IN = 18, WALL_OUT = 20, WALL_MID = 19, GATE = 2.8;
+        final MapKit k;
+        final long seed;
+        final double[] teamAng;
+        final int[][] pedestals;
+        final java.util.Set<Long> built = new java.util.HashSet<>();   // castle blocks, for the vines
+
+        Ruin(MapKit k, long seed, int teams, int[][] pedestals) {
+            this.k = k; this.seed = seed; this.pedestals = pedestals;
+            teamAng = new double[teams];
+            for (int i = 0; i < teams; i++) teamAng[i] = angle(Math.cos(Math.PI * 2 * i / teams - Math.PI / 2), Math.sin(Math.PI * 2 * i / teams - Math.PI / 2));
+        }
+
+        static long key(int x, int y, int z) { return (((long) x + 512) << 40) | (((long) y + 512) << 20) | (z + 512); }
+        static double wrap(double a) { a %= Math.PI * 2; if (a > Math.PI) a -= Math.PI * 2; if (a < -Math.PI) a += Math.PI * 2; return a; }
+
+        // ---- where nothing may be built
+        boolean corridor(double x, double z) {
+            for (double a : teamAng) {
+                double along = x * Math.cos(a) + z * Math.sin(a), perp = Math.abs(-x * Math.sin(a) + z * Math.cos(a));
+                if (along > PLAZA_R && perp < 3) return true;
+            }
+            return false;
+        }
+        static boolean stairs(int x, int z) { return Math.abs(x) >= 17 && Math.abs(x) <= 27 && Math.abs(z) <= 3; }
+        boolean nearPedestal(int x, int z, int r) { for (int[] p : pedestals) if (Math.abs(x - p[0]) <= r && Math.abs(z - p[1]) <= r) return true; return false; }
+        boolean clear(int x, int z) { return Math.hypot(x, z) < PLAZA_R + 1.5 || corridor(x, z) || stairs(x, z) || nearPedestal(x, z, 1); }
+
+        String stone() { int r = k.rnd.nextInt(20); return r < 7 ? "stone_bricks" : r < 14 ? "mossy_stone_bricks" : r < 18 ? "cracked_stone_bricks" : "mossy_cobblestone"; }
+        String slab() { return k.rnd.nextBoolean() ? "stone_brick_slab[type=bottom]" : "mossy_stone_brick_slab[type=bottom]"; }
+        void put(int x, int y, int z, String b) { k.set(x, y, z, b); built.add(key(x, y, z)); }
+        void clearAt(int x, int y, int z) { k.set(x, y, z, "air"); built.remove(key(x, y, z)); }
+        boolean empty(int x, int y, int z) { String b = k.get(x, y, z); return b == null || b.equals("minecraft:air"); }
+
+        void build() {
+            curtain();
+            towers();
+            colonnade();
+            shrines();
+            bailey();
+            groundcover();
+            ivy();
+        }
+
+        /**
+         * Wall height in half blocks at this angle: rubble at each gate, rising along the wall so the wall-tops can be
+         * climbed from the gates, capped by noise (up to 7 blocks) so some stretches have fallen to breaches.
+         */
+        int wallHalf(double ang) {
+            double arc = Double.MAX_VALUE;
+            for (double a : teamAng) arc = Math.min(arc, Math.abs(wrap(ang - a)) * WALL_MID);
+            // half a block per block for the first 4 blocks out of the gate (walk up), then a block per block (hop up),
+            // so the wall is ~6 high where it meets a tower and the lower tower tops join the wall-walk
+            double out = arc - GATE;
+            int ramp = out <= 0 ? 0 : out <= 4 ? (int) Math.floor(out) : 4 + (int) Math.floor((out - 4) * 2);
+            int cap = (int) Math.round(MapKit.noise(Math.cos(ang) * 1.7 + 30, Math.sin(ang) * 1.7 + 30, seed + 21) * 26 - 3);
+            return Math.max(0, Math.min(14, Math.min(cap, ramp)));
+        }
+
+        void curtain() {
+            for (int x = -21; x <= 21; x++) for (int z = -21; z <= 21; z++) {
+                double d = Math.hypot(x, z);
+                if (d < WALL_IN || d >= WALL_OUT || stairs(x, z)) continue;
+                double ang = angle(x, z);
+                int h2 = wallHalf(ang);
+                if (h2 <= 0) { if (!corridor(x, z) && k.rnd.nextInt(3) == 0) put(x, 1, z, slab()); continue; }   // breach: rubble
+                int full = h2 / 2;
+                for (int y = 1; y <= full; y++) put(x, y, z, stone());
+                if (h2 % 2 == 1) put(x, full + 1, z, slab());
+                else if (d >= WALL_MID && full >= 3 && Math.floorMod((int) Math.floor(ang * WALL_MID / 1.5), 2) == 0)
+                    put(x, full + 1, z, stone());   // merlons on the outer edge; the inner edge stays a walkway
+            }
+        }
+
+        /** Four ruined towers in the wall between the gates, all different heights, hollow, with vines to climb. */
+        void towers() {
+            int[] hs = {11, 7, 9, 6};
+            for (int i = 0; i < 4; i++) {
+                double ang = teamAng[0] + Math.PI / teamAng.length + i * Math.PI / 2;
+                int cx = (int) Math.round(Math.cos(ang) * WALL_MID), cz = (int) Math.round(Math.sin(ang) * WALL_MID), h = hs[i];
+                int ox, oz;   // outward, snapped to an axis
+                if (Math.abs(Math.cos(ang)) >= Math.abs(Math.sin(ang))) { ox = (int) Math.signum(Math.cos(ang)); oz = 0; } else { ox = 0; oz = (int) Math.signum(Math.sin(ang)); }
+                for (int dx = -4; dx <= 4; dx++) for (int dz = -4; dz <= 4; dz++) {
+                    double dd = Math.hypot(dx, dz);
+                    int x = cx + dx, z = cz + dz;
+                    if (dd > 3.3) continue;
+                    if (dd >= 1.9) {
+                        for (int y = 1; y <= h; y++) {
+                            if (y >= h - 1 && MapKit.noise(x / 2.0 + y, z / 2.0, seed + 31) < 0.45) continue;   // broken top
+                            put(x, y, z, stone());
+                        }
+                        if (MapKit.noise(x / 2.0, z / 2.0 + 9, seed + 33) > 0.5) put(x, h + 1, z, stone());   // what's left of the parapet
+                    } else {
+                        for (int y = 1; y < h; y++) clearAt(x, y, z);
+                        if (!(dx == ox && dz == oz)) put(x, h, z, k.rnd.nextInt(3) == 0 ? "moss_block" : stone());   // floor of the top
+                    }
+                }
+                // doorway on the courtyard side
+                for (int s = 2; s <= 3; s++) for (int y = 1; y <= 2; y++) clearAt(cx - ox * s, y, cz - oz * s);
+                String face = face(ox, oz);
+                // inside: vines up the far wall through a hole in the top floor
+                for (int y = 1; y <= h; y++) k.set(cx + ox, y, cz + oz, "vine[" + face + "=true]");
+                // outside: an ivy strip up the outer face
+                String back = face(-ox, -oz);
+                for (int y = 1; y <= h - 2; y++) if (empty(cx + ox * 4, y, cz + oz * 4)) k.set(cx + ox * 4, y, cz + oz * 4, "vine[" + back + "=true]");
+            }
+        }
+
+        static String face(int dx, int dz) { return dx > 0 ? "east" : dx < 0 ? "west" : dz > 0 ? "south" : "north"; }
+
+        /** A broken ring of columns round the plaza: some still carry an arch, some have fallen across the ground. */
+        void colonnade() {
+            int[] hs = {6, 2, 6, 1, 5, 3, 0, 6};
+            int[][] at = new int[8][];
+            for (int i = 0; i < 8; i++) {
+                double ang = Math.PI / 8 + i * Math.PI / 4;
+                int x = (int) Math.round(Math.cos(ang) * 9.5), z = (int) Math.round(Math.sin(ang) * 9.5);
+                at[i] = new int[]{x, z};
+                if (clear(x, z) || nearPedestal(x, z, 3)) { hs[i] = -1; continue; }
+                int h = hs[i];
+                for (int y = 1; y <= h; y++) put(x, y, z, y == 1 || (h >= 5 && y == h) ? "chiseled_stone_bricks" : stone());
+                if (h == 0) put(x, 1, z, slab());
+                if (h <= 3) {   // the rest of it lies on the ground, along the ring
+                    int tx = (int) Math.round(-Math.sin(ang)), tz = (int) Math.round(Math.cos(ang));
+                    if (tx == 0 && tz == 0) tx = 1;
+                    for (int s = 2; s <= 2 + (5 - h); s++) {
+                        int fx = x + tx * s, fz = z + tz * s;
+                        if (clear(fx, fz) || nearPedestal(fx, fz, 3)) break;
+                        put(fx, 1, fz, s == 2 + (5 - h) ? "chiseled_stone_bricks" : stone());
+                    }
+                }
+            }
+            // arches between neighbouring columns that still stand, with glow berries hanging off them
+            for (int i = 0; i < 8; i++) {
+                int j = (i + 1) % 8;
+                if (hs[i] < 5 || hs[j] < 5) continue;
+                double a0 = Math.PI / 8 + i * Math.PI / 4, a1 = a0 + Math.PI / 4;
+                for (double a = a0; a <= a1 + 1e-6; a += 0.03) {
+                    int x = (int) Math.round(Math.cos(a) * 9.5), z = (int) Math.round(Math.sin(a) * 9.5);
+                    if (!built.contains(key(x, 7, z))) put(x, 7, z, k.rnd.nextInt(4) == 0 ? "mossy_stone_brick_slab[type=bottom]" : stone());
+                    if (k.rnd.nextInt(5) == 0 && empty(x, 6, z) && !built.contains(key(x, 6, z))) {
+                        int len = 1 + k.rnd.nextInt(3);
+                        for (int n = 0; n < len; n++) k.set(x, 6 - n, z, n == len - 1 ? "cave_vines[berries=true]" : "cave_vines_plant[berries=true]");
+                    }
+                }
+            }
+        }
+
+        /** Each emerald generator stands in a ruined shrine: low walls on two sides, pillars with candles at the corners. */
+        void shrines() {
+            for (int[] p : pedestals) {
+                int ax = Math.abs(p[0]) >= Math.abs(p[1]) ? 1 : 0;   // the open sides face the plaza and away from it
+                for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != 2) continue;
+                    int x = p[0] + dx, z = p[1] + dz;
+                    if (corridor(x, z) || stairs(x, z)) continue;
+                    boolean corner = Math.abs(dx) == 2 && Math.abs(dz) == 2;
+                    int along = ax == 1 ? dx : dz, side = ax == 1 ? dz : dx;
+                    if (!corner && Math.abs(along) == 2 && Math.abs(side) <= 1) continue;   // open front and back
+                    if (corner) {
+                        for (int y = 1; y <= 3; y++) put(x, y, z, y == 1 ? "chiseled_stone_bricks" : stone());
+                        k.set(x, 4, z, k.rnd.nextBoolean() ? "candle[lit=true,candles=4]" : "amethyst_cluster[facing=up]");
+                    } else {
+                        put(x, 1, z, stone());
+                        if (k.rnd.nextInt(3) > 0) put(x, 2, z, k.rnd.nextBoolean() ? slab() : stone());
+                    }
+                }
+            }
+        }
+
+        /** Outer bailey: broken lamp posts, the great cherry tree and the fairy ring. */
+        void bailey() {
+            double treeA = Math.PI * 3 / 4 + 0.4, ringA = Math.PI * 7 / 4 - 0.4;
+            int tx = (int) Math.round(Math.cos(treeA) * 24), tz = (int) Math.round(Math.sin(treeA) * 24);
+            int rx = (int) Math.round(Math.cos(ringA) * 23.5), rz = (int) Math.round(Math.sin(ringA) * 23.5);
+            for (int i = 0; i < 8; i++) {
+                double a = Math.PI * 2 * i / 8 + Math.PI / 8;
+                int x = (int) Math.round(Math.cos(a) * 24), z = (int) Math.round(Math.sin(a) * 24);
+                if (clear(x, z) || Math.hypot(x - tx, z - tz) < 7 || Math.hypot(x - rx, z - rz) < 6) continue;
+                boolean broken = i % 3 == 2;
+                int h = broken ? 1 + k.rnd.nextInt(2) : 3;
+                for (int y = 1; y <= h; y++) put(x, y, z, y == 1 ? "chiseled_stone_bricks" : "mossy_stone_brick_wall");
+                if (!broken) k.set(x, h + 1, z, "lantern[hanging=false]");
+            }
+            cherry(tx, tz);
+            fairyRing(rx, rz);
+        }
+
+        void cherry(int cx, int cz) {
+            for (int dx = 0; dx <= 1; dx++) for (int dz = 0; dz <= 1; dz++) for (int y = 1; y <= 8; y++) k.set(cx + dx, y, cz + dz, "cherry_log[axis=y]");
+            int[][] br = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+            for (int b = 0; b < 4; b++) for (int s = 1; s <= 3; s++) {
+                int x = cx + (br[b][0] > 0 ? 1 : 0) + br[b][0] * s, z = cz + (br[b][1] > 0 ? 1 : 0) + br[b][1] * s;
+                k.set(x, 6 + s / 2 + b % 2, z, "cherry_log[axis=" + (br[b][0] != 0 ? "x" : "z") + "]");
+            }
+            for (int dx = -7; dx <= 8; dx++) for (int dz = -7; dz <= 8; dz++) for (int y = 6; y <= 13; y++) {
+                double ex = dx - 0.5, ez = dz - 0.5, ey = (y - 9.5) / 3.0;
+                double e = (ex * ex + ez * ez) / 42.0 + ey * ey;
+                if (e > 1 + (MapKit.noise((cx + dx) / 2.5, (cz + dz) / 2.5 + y, seed + 41) - 0.5) * 0.5) continue;
+                if (empty(cx + dx, y, cz + dz)) k.set(cx + dx, y, cz + dz, "cherry_leaves[persistent=true]");
+            }
+            // petals fallen round it
+            for (int dx = -6; dx <= 7; dx++) for (int dz = -6; dz <= 7; dz++) {
+                int x = cx + dx, z = cz + dz;
+                if (Math.hypot(dx - 0.5, dz - 0.5) > 6.5 || !empty(x, 1, z) || empty(x, 0, z) || stairs(x, z) || k.rnd.nextInt(3) == 0) continue;
+                k.set(x, 0, z, "moss_block");
+                k.set(x, 1, z, "pink_petals[facing=" + face(k.rnd.nextInt(3) - 1, 1) + ",flower_amount=" + (1 + k.rnd.nextInt(4)) + "]");
+            }
+        }
+
+        void fairyRing(int cx, int cz) {
+            // a giant red mushroom in the middle
+            for (int y = 1; y <= 5; y++) k.set(cx, y, cz, "mushroom_stem");
+            for (int dx = -3; dx <= 3; dx++) for (int dz = -3; dz <= 3; dz++) {
+                double d = Math.hypot(dx, dz);
+                if (d <= 2.6) k.set(cx + dx, 6, cz + dz, "red_mushroom_block");
+                else if (d <= 3.4) k.set(cx + dx, 5, cz + dz, "red_mushroom_block");
+            }
+            // the ring of small mushrooms on podzol, with amethyst glinting between them
+            for (int dx = -5; dx <= 5; dx++) for (int dz = -5; dz <= 5; dz++) {
+                double d = Math.hypot(dx, dz);
+                int x = cx + dx, z = cz + dz;
+                if (d < 4.2 || d > 5.2 || empty(x, 0, z) || !empty(x, 1, z) || clear(x, z)) continue;
+                k.set(x, 0, z, "podzol");
+                int r = k.rnd.nextInt(10);
+                if (r < 4) k.set(x, 1, z, "red_mushroom");
+                else if (r < 7) k.set(x, 1, z, "brown_mushroom");
+                else if (r < 8) k.set(x, 1, z, "amethyst_cluster[facing=up]");
+            }
+        }
+
+        /** Moss patches, grass, petals and flowers across the ground; bushes only off the approach lines. */
+        void groundcover() {
+            String[] flowers = {"allium", "azure_bluet", "blue_orchid", "lily_of_the_valley", "cornflower"};
+            for (int x = -28; x <= 28; x++) for (int z = -28; z <= 28; z++) {
+                double d = Math.hypot(x, z);
+                if (d < PLAZA_R + 1 || d > 27 || stairs(x, z) || nearPedestal(x, z, 1)) continue;
+                if (empty(x, 0, z) || !empty(x, 1, z)) continue;
+                boolean moss = k.rnd.nextInt(10) < 3;
+                if (moss) k.set(x, 0, z, "moss_block");
+                int r = k.rnd.nextInt(100);
+                if (r < 22) k.set(x, 1, z, "moss_carpet");
+                else if (!moss) continue;
+                else if (r < 40) k.set(x, 1, z, "short_grass");
+                else if (r < 46) k.set(x, 1, z, "pink_petals[facing=north,flower_amount=" + (1 + k.rnd.nextInt(4)) + "]");
+                else if (r < 50) k.set(x, 1, z, flowers[k.rnd.nextInt(flowers.length)]);
+                else if (r < 53) k.set(x, 1, z, "fern");
+                else if (r < 55 && !corridor(x, z) && d > 8) k.set(x, 1, z, k.rnd.nextBoolean() ? "azalea" : "flowering_azalea");
+            }
+        }
+
+        /** Vines creeping down the walls, moss and candles on the wall-tops, leaves on the merlons. */
+        void ivy() {
+            int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+            for (long kk : new java.util.ArrayList<>(built)) {
+                int x = (int) ((kk >> 40) - 512), y = (int) (((kk >> 20) & 0xFFFFF) - 512), z = (int) ((kk & 0xFFFFF) - 512);
+                if (empty(x, y, z) || y < 2) continue;
+                for (int[] dv : dirs) {
+                    int vx = x + dv[0], vz = z + dv[1];
+                    if (k.rnd.nextInt(10) != 0 || !empty(vx, y, vz) || built.contains(key(vx, y, vz))) continue;
+                    String f = face(-dv[0], -dv[1]);   // the vine hangs on the wall it's next to
+                    for (int yy = y; yy >= 1 && empty(vx, yy, vz) && !empty(x, yy, z); yy--) {
+                        k.set(vx, yy, vz, "vine[" + f + "=true]");
+                        if (k.rnd.nextInt(3) == 0) break;
+                    }
+                }
+                // tops: a walkable top gets moss carpet or a candle now and then; a merlon gets leaves
+                if (empty(x, y + 1, z) && !built.contains(key(x, y + 1, z))) {
+                    int r = k.rnd.nextInt(20);
+                    if (r < 5) k.set(x, y + 1, z, "moss_carpet");
+                    else if (r == 5) k.set(x, y + 1, z, "candle[lit=true,candles=" + (1 + k.rnd.nextInt(4)) + "]");
+                    else if (r < 8 && y >= 4 && Math.hypot(x, z) >= WALL_MID) k.set(x, y + 1, z, "flowering_azalea_leaves[persistent=true]");
+                }
             }
         }
     }

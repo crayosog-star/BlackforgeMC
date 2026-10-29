@@ -10,8 +10,9 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * The Undercroft (the cave under the Forge Wars Core): you can walk in and out without jumping, the launch shaft is
- * clear, the floor can't drop you into the void, the Black Market villager stands free, and every restock has premium deals.
+ * The Forge Wars Core: every team can get through the ruined keep to the plaza and the emerald generators; the
+ * Undercroft below can be walked in and out of without jumping, its launch shaft is clear, its floor can't drop you
+ * into the void, the Black Market villager stands free, and every restock has premium deals.
  */
 class ForgeWarsCaveTest {
     private static final int FLOOR = ForgeWarsMaps.CAVE_FLOOR, STAND = FLOOR + 1, OUT = ForgeWarsMaps.TUNNEL_TOP + 2;
@@ -32,6 +33,26 @@ class ForgeWarsCaveTest {
             Pt m = b.def().point("black_market");
             int mx = (int) Math.floor(m.x()), mz = (int) Math.floor(m.z());
             assertTrue(w.has(w.reach(OUT, 1, 0, 1.0), mx, STAND, mz + 2), b.def().id + ": no way down to the Black Market counter");
+        }
+    }
+
+    @Test void everyTeamCanWalkThroughTheRuinsToThePlazaAndTheEmeraldGenerators() {
+        for (BuiltMap b : new ForgeWars().builtInMaps()) {
+            Walk w = new Walk(b.canvas());
+            int teams = b.def().teams;
+            for (int i = 0; i < teams; i++) {
+                double a = Math.PI * 2 * i / teams - Math.PI / 2;
+                int[] start = null;   // where a bridge from this team lands: the first standable spot in from the edge
+                for (double r = 27.5; r > 20 && start == null; r -= 0.5) {
+                    int x = (int) Math.round(Math.cos(a) * r), z = (int) Math.round(Math.sin(a) * r);
+                    if (w.stands(x, z).contains(2)) start = new int[]{x, z};
+                }
+                assertNotNull(start, b.def().id + " team " + i + ": nowhere to land on the Core");
+                Set<Long> noJump = w.reach(start[0], 1, start[1], 0.5), jump = w.reach(start[0], 1, start[1], 1.0);
+                assertTrue(w.has(noJump, 3, 1, 3) || w.has(noJump, -3, 1, -3), b.def().id + " team " + i + ": can't walk through the gate to the plaza without jumping");
+                for (Pt g : b.def().list("emerald_generators")) if (g.y() > 0)
+                    assertTrue(w.has(jump, (int) Math.floor(g.x()), (int) Math.floor(g.y()), (int) Math.floor(g.z())), b.def().id + " team " + i + ": can't reach emerald generator " + g);
+            }
         }
     }
 
