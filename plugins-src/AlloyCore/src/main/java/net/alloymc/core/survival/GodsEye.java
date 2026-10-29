@@ -30,7 +30,8 @@ import java.util.function.Predicate;
  * and marks them for 10 seconds: a golden halo drops out of the sky onto their head, a beam of light shoots from it
  * into the sky (its glowing core shows through walls), and a banner floats over them with their face (their own skin)
  * and their name. Everyone can see the mark; the marked player is told who's watching. The caster gets a live
- * distance and direction arrow on their action bar.
+ * distance and direction arrow on their action bar. Casting sets off a golden blast at the caster's feet with glowing
+ * yellow cracks running across the ground that seal up again ({@link EyeBurst}, cosmetic only).
  *
  * Spectators and players the caster can't see (vanished) are never picked. Only where {@code allowedAt} says (the
  * hub Arena for now). Never used up; one mark per caster at a time.
@@ -50,6 +51,7 @@ public final class GodsEye implements Listener {
     private final Predicate<Location> allowedAt;
     private final NamespacedKey tagKey;
     private final Map<UUID, Mark> marks = new HashMap<>();   // by caster
+    private final EyeBurst burst;
     private final Random rnd = new Random();
     private final BlockData haloBlock = Material.YELLOW_CONCRETE.createBlockData();
     private final BlockData beamGlass = Material.YELLOW_STAINED_GLASS.createBlockData();
@@ -60,6 +62,7 @@ public final class GodsEye implements Listener {
         this.allowedAt = allowedAt;
         this.enabled = plugin.getConfig().getBoolean("gods-eye.enabled", true);
         this.tagKey = new NamespacedKey(plugin, "gods_eye");
+        this.burst = new EyeBurst(plugin);
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -113,6 +116,7 @@ public final class GodsEye implements Listener {
         }
         Mark m = new Mark(p, target);
         marks.put(p.getUniqueId(), m);
+        burst.play(p.getLocation());
         m.start();
     }
 
@@ -132,6 +136,7 @@ public final class GodsEye implements Listener {
     public void shutdown() {
         for (Mark m : new ArrayList<>(marks.values())) m.remove();
         marks.clear();
+        burst.shutdown();
     }
 
     private static String secs(int ticks) { return String.format(Locale.ROOT, "%.1f", Math.max(0, ticks) / 20.0); }
