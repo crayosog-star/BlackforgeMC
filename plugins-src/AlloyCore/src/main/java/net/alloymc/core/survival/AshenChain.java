@@ -98,6 +98,9 @@ public final class AshenChain implements Listener {
             if (len < 0.05) return;
             int n = (int) Math.ceil(len / LINK);
             while (links.size() > n) links.remove(links.size() - 1).remove();
+            a = a.clone();
+            a.setYaw(0);       // a display turns its model by its own yaw/pitch: copied from the player, every link
+            a.setPitch(0);     // swung round with the camera. All the turning is in the transformation instead.
             Vector u = d.clone().multiply(1 / len);
             Quaternionf rot = new Quaternionf().rotationTo(0, 1, 0, (float) u.getX(), (float) u.getY(), (float) u.getZ());
             Vector3f centre = rot.transform(new Vector3f(-LINK_WIDTH / 2, 0, -LINK_WIDTH / 2));   // the chain runs up the middle of its block
@@ -128,6 +131,9 @@ public final class AshenChain implements Listener {
 
         private void placeTip(Location at, boolean on) {
             if (!on) { if (tip != null) { tip.remove(); tip = null; } return; }
+            at = at.clone();
+            at.setYaw(0);
+            at.setPitch(0);
             if (tip != null && tip.isValid()) { tip.teleport(at); return; }
             float sz = 0.6f;
             tip = at.getWorld().spawn(at, BlockDisplay.class, e -> {
@@ -530,6 +536,7 @@ public final class AshenChain implements Listener {
         int[] n = {0};
         double[] lastDist = {Double.MAX_VALUE};
         int[] stuck = {0};
+        Vector[] heading = {null};   // the pull's direction, turned gently each tick (no jitter from server lag)
         BukkitTask task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             if (!p.isOnline() || p.isDead() || p.getWorld() != w) { release(p, false); return; }
             noFallUntil.put(id, System.currentTimeMillis() + NO_FALL_MS);
@@ -540,18 +547,21 @@ public final class AshenChain implements Listener {
             if (ChainPull.arrived(dist)) { release(p, true); return; }
             if (p.isSneaking() && k > 2) { release(p, false); return; }
             if (k >= ChainPull.REEL_MAX_TICKS) { release(p, false); return; }
-            stuck[0] = lastDist[0] - dist < 0.15 ? stuck[0] + 1 : 0;   // snagged on something
+            // snagged on something: only judged once it's up to speed (the slow start isn't a snag)
+            stuck[0] = k > ChainPull.REEL_RAMP_TICKS / 2 && lastDist[0] - dist < 0.05 ? stuck[0] + 1 : 0;
             if (stuck[0] >= 6) { release(p, false); return; }
             lastDist[0] = dist;
-            double[] v = ChainPull.reel(off.getX(), off.getY(), off.getZ());
-            p.setVelocity(new Vector(v[0], v[1], v[2]));
+            // ease in: slow first, then faster and faster (ChainPull.reelSpeed)
+            Vector want = off.clone().normalize();
+            heading[0] = heading[0] == null ? want : heading[0].multiply(0.7).add(want.multiply(0.3)).normalize();
+            double speed = Math.min(ChainPull.reelSpeed(k), dist);
+            p.setVelocity(heading[0].clone().multiply(speed).add(new Vector(0, ChainPull.REEL_ANTI_GRAVITY, 0)));
             p.setFallDistance(0);
             drawChain(p, chainStart(p, at), at, false);
-            // you trail embers and ash as you're dragged through the air
-            Location trail = p.getLocation().add(0, 0.9, 0);
-            w.spawnParticle(Particle.WHITE_ASH, trail, 6, 0.3, 0.5, 0.3, 0.01);
-            w.spawnParticle(Particle.SMALL_FLAME, trail, 2, 0.2, 0.4, 0.2, 0.01);
-            w.spawnParticle(Particle.DUST, trail, 2, 0.25, 0.45, 0.25, 0, new Particle.DustOptions(ASH, 1.6f));
+            // a few embers and ash shed behind you, not in your face
+            Location trail = p.getLocation().add(0, 0.9, 0).subtract(heading[0].clone().multiply(0.8));
+            if (k % 2 == 0) w.spawnParticle(Particle.WHITE_ASH, trail, 2, 0.2, 0.3, 0.2, 0.005);
+            if (k % 3 == 0) w.spawnParticle(Particle.SMALL_FLAME, trail, 1, 0.15, 0.3, 0.15, 0.005);
             if (k % 4 == 0) w.playSound(trail, Sound.ITEM_ARMOR_EQUIP_IRON, SoundCategory.PLAYERS, 0.4f, 0.5f + k * 0.03f);
         }, 1L, 1L);
         active.put(id, task);
