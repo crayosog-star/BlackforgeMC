@@ -12,7 +12,9 @@ OWNER = {"uuid": "f2aef66f-fb87-4635-8c61-4b116baaa5b5", "name": "GavVFX", "leve
 # permanent ops: re-added on every deploy, so a rebuilt or wiped server never loses them
 PERMANENT_OPS = [OWNER, {"uuid": "8c67e820-3611-42b8-9f5f-d355d31f9ca9", "name": "Causee", "level": 4, "bypassesPlayerLimit": True}]
 ADDRESS = "blackforgemc.com"
-PACK_URL = "https://blackforgemc.com/pack/blackforge-pack-37034eb8.zip"
+# served straight from GitHub (public repo, main branch): a merged pack is downloadable at once, no website re-upload.
+# The file name carries the SHA-1, so a new pack is a new file and clients never get a stale cached copy.
+PACK_URL = "https://raw.githubusercontent.com/crayosog-star/BlackforgeMC/main/website/pack/blackforge-pack-37034eb8.zip"
 PACK_SHA1 = "37034eb872e3e4592693474bada123ef5aa0265f"
 
 SERVERS = {
