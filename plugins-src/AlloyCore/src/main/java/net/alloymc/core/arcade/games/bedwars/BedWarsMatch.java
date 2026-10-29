@@ -23,18 +23,21 @@ import org.bukkit.potion.PotionEffectType;
 
 import java.util.*;
 
-/** One BedWars game. */
+/** One BedWars game. Forge Wars runs on it too, with {@code arsenal} on: a third villager selling ability items. */
 final class BedWarsMatch extends Match {
-    private final Set<UUID> shopNpcs = new HashSet<>(), upgradeNpcs = new HashSet<>();
+    private final Set<UUID> shopNpcs = new HashSet<>(), upgradeNpcs = new HashSet<>(), arsenalNpcs = new HashSet<>();
+    private final boolean arsenal;
     private final Map<UUID, Integer> armour = new HashMap<>(), pick = new HashMap<>(), axe = new HashMap<>(), respawnAt = new HashMap<>();
     private final Set<UUID> shears = new HashSet<>();
     private final List<TextDisplay> genLabels = new ArrayList<>();
     private int ticks, diamondLevel = 1, emeraldLevel = 1, diamondTimer, emeraldTimer;
     private boolean bedsGone;
 
-    BedWarsMatch(MatchContext c) { super(c); }
+    BedWarsMatch(MatchContext c) { this(c, false); }
 
-    @Override protected String objective() { return "Protect your bed and destroy the others!"; }
+    BedWarsMatch(MatchContext c, boolean arsenal) { super(c); this.arsenal = arsenal; }
+
+    @Override protected String objective() { return arsenal ? "Protect your bed, arm up at the Arsenal, destroy the others!" : "Protect your bed and destroy the others!"; }
     @Override protected boolean freezeWhileStarting() { return true; }
     @Override protected int startingSeconds() { return 5; }
     @Override protected boolean allowDrop(Player p, ItemStack it) { return true; }
@@ -51,6 +54,8 @@ final class BedWarsMatch extends Match {
 
     boolean bedAlive(Team t) { return t.get("bed", false); }
 
+    int setting(String key, int def) { return settings.i(key, def); }
+
     void teamMessage(Team t, String mm) { for (Player p : online(t.members)) p.sendMessage(Ui.mm(mm)); }
 
     // ------------------------------------------------------------------ setup
@@ -62,6 +67,8 @@ final class BedWarsMatch extends Match {
             Location shop = teamPoint(t, "shop"), up = teamPoint(t, "upgrades");
             shopNpcs.add(npc(shop, "<green><bold>ITEM SHOP", Villager.Profession.WEAPONSMITH).getUniqueId());
             upgradeNpcs.add(npc(up, "<aqua><bold>TEAM UPGRADES", Villager.Profession.LIBRARIAN).getUniqueId());
+            Location ars = arsenal ? teamPoint(t, "arsenal") : null;
+            if (ars != null) arsenalNpcs.add(npc(ars, "<#ff6a00><bold>ARSENAL", Villager.Profession.ARMORER).getUniqueId());
         }
         // bases nobody plays on lose their bed, so they can't be "defended" by nobody
         for (int i = teams.size(); i < map.teams; i++) {
@@ -272,6 +279,8 @@ final class BedWarsMatch extends Match {
             Block g = teamPoint(t, "generator").getBlock();
             if (b.getX() == g.getX() && b.getZ() == g.getZ() && (b.getY() == g.getY() || b.getY() == g.getY() + 1)) return false;
             if (teamPoint(t, "shop").getBlock().getLocation().distanceSquared(b.getLocation()) < 2 || teamPoint(t, "upgrades").getBlock().getLocation().distanceSquared(b.getLocation()) < 2) return false;
+            Location ars = arsenal ? teamPoint(t, "arsenal") : null;
+            if (ars != null && ars.getBlock().getLocation().distanceSquared(b.getLocation()) < 2) return false;
         }
         return true;
     }
@@ -312,6 +321,12 @@ final class BedWarsMatch extends Match {
         if (e.getHand() != EquipmentSlot.HAND) return;
         if (shopNpcs.contains(id)) { e.setCancelled(true); BedWarsShop.openShop(this, p); }
         else if (upgradeNpcs.contains(id)) { e.setCancelled(true); BedWarsShop.openUpgrades(this, p); }
+        else if (arsenalNpcs.contains(id)) {
+            e.setCancelled(true);
+            ForgeArsenal a = ForgeArsenal.get();
+            if (a != null) a.open(this, p);
+            else p.sendMessage(Ui.mm("<red>The Arsenal isn't open on this server."));
+        }
     }
 
     @Override protected void onInventoryClick(Player p, InventoryClickEvent e) {
