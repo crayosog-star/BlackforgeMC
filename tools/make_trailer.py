@@ -120,7 +120,7 @@ def main():
     write_wav(score())
     OUT.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(FPS), "-i", str(FRAMES / "f%05d.png"), "-i", str(WAV),
-                    "-c:v", "libx264", "-preset", "slow", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+                    "-c:v", "libx264", "-preset", "slow", "-crf", "24", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
                     "-shortest", "-movflags", "+faststart", str(OUT)], check=True)
     print("wrote", OUT, f"{OUT.stat().st_size / 1e6:.1f} MB")
 
