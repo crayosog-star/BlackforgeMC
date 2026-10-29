@@ -35,3 +35,7 @@ tools/__pycache__/
 tools/autoupdate.lock
 tools/restart-requests/
 tools/automerge_state.json
+
+# renders of the live worlds and the trailer's frames: big, and rebuilt any time with gradle shots / gradle trailer
+plugins-src/AlloyCore/previews/live/
+plugins-src/AlloyCore/previews/trailer/
