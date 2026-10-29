@@ -82,6 +82,7 @@ public final class Journey implements Listener {
         cmd("playtime", List.of("pt"), (s, a) -> { if (s instanceof Player p) playtime(p); });
         cmd("guide", List.of("menu", "info", "howto"), (s, a) -> { if (s instanceof Player p) openGuide(p); });
         cmd("referral", List.of("refer", "referrals"), this::referral);
+        cmd("calendar", List.of("login", "rewards", "dailycalendar"), (s, a) -> { if (s instanceof Player p) openCalendar(p); });
     }
 
     // ------------------------------------------------------------------ data
@@ -128,6 +129,7 @@ public final class Journey implements Listener {
             if (idle >= AFK_MINUTES) { save(id, y); continue; }   // AFK: seen, but no playtime
             long minutes = y.getLong("minutes") + 1;
             y.set("minutes", minutes);
+            Hooks.statMax(p, "playtime", minutes);
             List<Integer> claimed = new ArrayList<>(y.getIntegerList("claimed"));
             List<Milestone> reached = new ArrayList<>();
             for (int i = 0; i < MILESTONES.size(); i++) {
@@ -251,8 +253,18 @@ public final class Journey implements Listener {
         p.sendMessage(Ui.mm("  <gold>» <gray>Played <white>" + time(min) + (n == null ? " <gray>- every milestone done!"
                 : " <gray>- " + n.color + n.name + " <gray>in <white>" + time(n.minutes - min))
                 + " <u><click:run_command:'/milestones'><hover:show_text:'<gray>Open milestones'><#ffb347>[Milestones]</hover></click></u>"));
+        String ev = Events.sidebarLine();
+        if (!ev.equals("<gray>/events")) p.sendMessage(Ui.mm("  <gold>» " + ev
+                + " <u><click:run_command:'/events'><hover:show_text:'<gray>The event calendar'><#ffb347>[Events]</hover></click></u>"));
+        int unseen = News.unseen(p.getUniqueId(), dir.getParentFile());
+        News.Item latest = News.all().isEmpty() ? null : News.all().getFirst();
+        if (unseen > 0 && latest != null) p.sendMessage(Ui.mm("  <gold>» <gray>New: <white>" + (latest.text().length() > 70 ? latest.text().substring(0, 67) + "..." : latest.text())
+                + " <u><click:run_command:'/news'><hover:show_text:'<gray>" + unseen + " update" + (unseen == 1 ? "" : "s") + " you haven\'t seen'><#ffb347>[News]</hover></click></u>"));
+        if (calendarReady(load(p.getUniqueId()))) p.sendMessage(Ui.mm("  <gold>» <gray>Your daily calendar reward is ready"
+                + " <u><click:run_command:'/calendar'><hover:show_text:'<gray>Claim it'><#7bd88f>[Claim]</hover></click></u>"));
         String extra = switch (server) {
-            case "survival", "skyblock" -> " <u><click:run_command:'/daily'><hover:show_text:'<gray>Claim your daily reward'><#7bd88f>[Daily]</hover></click></u>"
+            case "survival", "skyblock" -> " <u><click:run_command:'/vote'><hover:show_text:'<gray>Vote for a Spark Key'><#7bd88f>[Vote]</hover></click></u>"
+                    + " <u><click:run_command:'/daily'><hover:show_text:'<gray>Claim your daily reward'><#7bd88f>[Daily]</hover></click></u>"
                     + " <u><click:run_command:'/challenges'><hover:show_text:'<gray>This week\\'s challenges'><#7bd88f>[Challenges]</hover></click></u>";
             case "factions", "arcade" -> " <u><click:run_command:'/challenges'><hover:show_text:'<gray>This week\\'s challenges'><#7bd88f>[Challenges]</hover></click></u>";
             default -> "";
@@ -270,6 +282,62 @@ public final class Journey implements Listener {
         YamlConfiguration y = load(id);
         y.set("last-seen", System.currentTimeMillis());
         save(id, y);
+    }
+
+    // ------------------------------------------------------------------ daily calendar
+
+    static final double[] CAL_MONEY = {250, 500, 750, 1000, 1500, 2000, 4000};
+    static final long[] CAL_SCRAP = {15, 25, 40, 50, 75, 100, 250};
+
+    private static String today() { return java.time.LocalDate.now().toString(); }
+    private static String yesterday() { return java.time.LocalDate.now().minusDays(1).toString(); }
+
+    static boolean calendarReady(YamlConfiguration y) { return !today().equals(y.getString("calendar-last")); }
+
+    /** The calendar day (1-7) that's up today: the streak continues from yesterday, otherwise it starts over. */
+    static int calendarDay(YamlConfiguration y) {
+        String last = y.getString("calendar-last");
+        if (today().equals(last)) return Math.floorMod(y.getInt("calendar-next", 1) - 2, 7) + 1;   // already claimed today's
+        return yesterday().equals(last) ? y.getInt("calendar-next", 1) : 1;
+    }
+
+    public void openCalendar(Player p) {
+        YamlConfiguration y = load(p.getUniqueId());
+        boolean ready = calendarReady(y);
+        int day = calendarDay(y);
+        Menu m = new Menu("calendar");
+        m.inv = Bukkit.createInventory(m, 9, Ui.mm("<dark_gray>Daily Calendar <gray>- day " + day + "/7"));
+        for (int d = 1; d <= 7; d++) {
+            boolean past = d < day || (d == day && !ready), now = d == day && ready;
+            ItemStack it = Ui.item(past ? Material.LIME_STAINED_GLASS_PANE : now ? (d == 7 ? Material.ENDER_CHEST : Material.CHEST) : (d == 7 ? Material.ENDER_CHEST : Material.GRAY_STAINED_GLASS_PANE),
+                    (now ? "<green><bold>Day " + d + " - claim!" : past ? "<green>✔ Day " + d : "<gray>Day " + d) + (d == 7 ? " <gold>(big one)" : ""),
+                    "<gray>Reward: <green>" + NetEconomy.money(CAL_MONEY[d - 1]) + " <gray>+ <#c6a15b>" + CAL_SCRAP[d - 1] + " Scrap",
+                    now ? "<yellow>Click to claim" : past ? "<green>Claimed" : "<gray>Come back on day " + d);
+            if (now) it.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
+            m.inv.setItem(d - 1, it);
+        }
+        m.inv.setItem(8, Ui.item(Material.ARROW, "<gray>Back to the guide", "", "<gray>Claim once a day on any server.", "<gray>Miss a day and it starts over.",
+                "<gray>Streak: <white>" + y.getInt("calendar-streak") + " day" + (y.getInt("calendar-streak") == 1 ? "" : "s")));
+        p.openInventory(m.inv);
+    }
+
+    private void claimCalendar(Player p) {
+        UUID id = p.getUniqueId();
+        YamlConfiguration y = load(id);
+        if (!calendarReady(y)) { p.sendMessage(Ui.mm("<gray>You've already claimed today's reward - come back tomorrow!")); return; }
+        int day = calendarDay(y);
+        int streak = yesterday().equals(y.getString("calendar-last")) ? y.getInt("calendar-streak") + 1 : 1;
+        y.set("calendar-last", today());
+        y.set("calendar-next", day % 7 + 1);
+        y.set("calendar-streak", streak);
+        save(id, y);
+        plugin.economy().deposit(p, CAL_MONEY[day - 1]);
+        plugin.economy().addScrap(p, CAL_SCRAP[day - 1]);
+        Hooks.statMax(p, "calendar_streak", streak);
+        p.playSound(p.getLocation(), day == 7 ? Sound.UI_TOAST_CHALLENGE_COMPLETE : Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 1.2f);
+        p.sendMessage(Ui.mm("<#7bd88f>✔ <gray>Day " + day + " reward: <green>+" + NetEconomy.money(CAL_MONEY[day - 1]) + " <gray>and <#c6a15b>+"
+                + CAL_SCRAP[day - 1] + " Scrap <dark_gray>(streak " + streak + ")"));
+        openCalendar(p);
     }
 
     // ------------------------------------------------------------------ referrals
@@ -327,6 +395,7 @@ public final class Journey implements Listener {
         YamlConfiguration ry = load(referrer);
         ry.set("referrals", ry.getInt("referrals") + 1);
         save(referrer, ry);
+        if (r.getPlayer() != null) Hooks.statMax(r.getPlayer(), "referrals", ry.getInt("referrals"));
         newbie.sendMessage(Ui.mm("<gold>✦ <gray>Referral reward: <green>+" + NetEconomy.money(NEWBIE_MONEY) + " <gray>and <#c6a15b>+"
                 + NEWBIE_SCRAP + " Scrap<gray>. Welcome to the forge!"));
         note(referrer, "<gold>✦ <gray>Referral reward for bringing <white>" + Nicks.of(newbie) + "<gray>: <green>+"
@@ -352,15 +421,16 @@ public final class Journey implements Listener {
     static final List<Guided> ITEMS = List.of(
             new Guided("gale_bellows", Material.BREEZE_ROD, "<gradient:#EAF6FF:#4FC3D9><bold>Gale Bellows", "A wave of wind that throws enemies back;|aim at your feet to launch yourself up. 3 uses.", "Crates, and rarely from Scrapyard supply crates"),
             new Guided(null, Material.SLIME_BALL, "<#7ddc4a><bold>Jelly Legs", "No fall damage while it's switched on.|/jl toggles it. Unlocked for good.", "Scrap Shop (/scrap), or a rare crate prize"),
-            new Guided("surge", Material.WITHER_ROSE, "<#e5484d><bold>Surge", "6 seconds of ghost speed and big jumps,|paid for with a health drain. One use.", "Test it in the hub Arena"),
-            new Guided("darkness_potion", Material.SPLASH_POTION, "<#a77fe0><bold>Potion of Darkness", "Blinds players it hits and plays fake|footsteps on the wrong side. Confuses mobs.", "Test it in the hub Arena"),
-            new Guided("gaia_potion", Material.SPLASH_POTION, "<#ff9ad5><bold>Potion of Gaia", "Grows a blooming mist that lifts everyone|on it 8 blocks into the air.", "Test it in the hub Arena"),
-            new Guided("rimelock", Material.HEART_OF_THE_SEA, "<#6cc8ef><bold>Rimelock", "Leap and slam: a glass cage traps everyone|where you land for 10 seconds.", "Test it in the hub Arena"),
-            new Guided("ashen_chain", Material.IRON_CHAIN, "<#ff7a1a><bold>Ashen Chain", "Right-click to grapple to a block,|left-click to strike and set enemies alight.", "Test it in the hub Arena"),
-            new Guided("ashen_bonfire", Material.CAMPFIRE, "<#9a9aa6><bold>Ashen Bonfire", "A sword falls from the sky and lights a|fire that heals everyone standing near it.", "Test it in the hub Arena"),
-            new Guided("gods_eye", Material.ENDER_EYE, "<#ffd23f><bold>God's Eye", "Marks the nearest player for 10 seconds|with a halo and a beam everyone can see.", "Test it in the hub Arena"),
-            new Guided("last_rite", Material.PAPER, "<#e03a3a><bold>Last Rite", "Charge it with 3 kills, then catch an enemy|in a wave and duel them in a sealed chamber.", "Test it in the hub Arena"),
-            new Guided(null, Material.EMERALD, "<#c6ff3d><bold>EMP", "Shuts down every ability around you|and strips your enemies' potion effects.", "Test it in the hub Arena"),
+            new Guided("surge", Material.WITHER_ROSE, "<#e5484d><bold>Surge", "6 seconds of ghost speed and big jumps,|paid for with a health drain. One use.", "Survival crates · try it in the hub Arena"),
+            new Guided("darkness_potion", Material.SPLASH_POTION, "<#a77fe0><bold>Potion of Darkness", "Blinds players it hits and plays fake|footsteps on the wrong side. Confuses mobs.", "Survival crates · try it in the hub Arena"),
+            new Guided("gaia_potion", Material.SPLASH_POTION, "<#ff9ad5><bold>Potion of Gaia", "Grows a blooming mist that lifts everyone|on it 8 blocks into the air.", "Survival crates · try it in the hub Arena"),
+            new Guided("rimelock", Material.HEART_OF_THE_SEA, "<#6cc8ef><bold>Rimelock", "Leap and slam: a glass cage traps everyone|where you land for 10 seconds.", "Rare Survival crate prize (PvP zones)"),
+            new Guided("ashen_chain", Material.IRON_CHAIN, "<#ff7a1a><bold>Ashen Chain", "Right-click to grapple to a block,|left-click to strike and set enemies alight.", "Rare Survival crate prize (PvP zones)"),
+            new Guided("ashen_bonfire", Material.CAMPFIRE, "<#9a9aa6><bold>Ashen Bonfire", "A sword falls from the sky and lights a|fire that heals everyone standing near it.", "Rare Survival crate prize (PvP zones)"),
+            new Guided("gods_eye", Material.ENDER_EYE, "<#ffd23f><bold>God's Eye", "Marks the nearest player for 10 seconds|with a halo and a beam everyone can see.", "Rare Survival crate prize (PvP zones)"),
+            new Guided("last_rite", Material.PAPER, "<#e03a3a><bold>Last Rite", "Charge it with 3 kills, then catch an enemy|in a wave and duel them in a sealed chamber.", "Rare Survival crate prize · charge it with kills"),
+            new Guided(null, Material.EMERALD, "<#c6ff3d><bold>EMP", "Shuts down every ability around you|and strips your enemies' potion effects.", "Rare Survival crate prize (PvP zones)"),
+            new Guided("frost_shard", Material.PRISMARINE_SHARD, "<#9fe6ff><bold>Frost Shard", "Frostforge event currency: trade it at|/frost for Scrap, keys and a crown.", "Dropped by mobs during Frostforge (Dec 1 - Jan 6)"),
             new Guided("soul_candy", Material.POPPED_CHORUS_FRUIT, "<#ff9a1f><bold>Soul Candy", "Hallowforge event currency: trade it at|/hallow for Scrap, keys and a hat.", "Dropped by mobs during the Hallowforge event"));
 
     static final String[][] SERVERS = {
@@ -397,8 +467,15 @@ public final class Journey implements Listener {
                 "<gray>Ranks are earned in game: <white>/ranks", "<gray>Supporter perks are cosmetic only.", "<gray>Store: <white>/store"));
         m.inv.setItem(24, Ui.item(Material.WRITABLE_BOOK, "<red><bold>Rules",
                 "<gray>Be respectful, no cheats or exploits,", "<gray>no spam or advertising.", "<gray>See something? <white>/report <name> <why>", "", "<yellow>Click for the full rules"));
-        m.inv.setItem(25, Ui.item(Material.AMETHYST_SHARD, "<#8c9eff><bold>Discord", "<gray>Events, updates and support.", "", "<yellow>Click for the invite"));
+        m.inv.setItem(25, Ui.item(Material.AMETHYST_SHARD, "<#8c9eff><bold>Discord", "<gray>Events, updates and support.", "<gray>Link your account with <white>/link", "<gray>for your rank roles and a reward.", "", "<yellow>Click for the invite"));
         if (server.equals("hub")) m.inv.setItem(31, Ui.item(Material.MAP, "<#4fd1c5><bold>Tutorial", "<gray>A quick tour of the hub.", "", "<yellow>Click to start"));
+        m.inv.setItem(28, Ui.item(Material.BELL, "<#ffb347><bold>Events", "<gray>World bosses, KOTH, Double Scrap,", "<gray>the Weekend Cup and more.", "", Events.sidebarLine(), "", "<yellow>Click for the calendar"));
+        m.inv.setItem(29, Ui.item(Material.EXPERIENCE_BOTTLE, "<gold><bold>Achievements", "<gray>" + Achievements.ALL.size() + " goals, each pays once.", "", "<yellow>Click to open"));
+        m.inv.setItem(30, Ui.item(Material.CAKE, "<#7bd88f><bold>Daily Calendar", "<gray>Log in every day for bigger", "<gray>rewards, up to day 7.",
+                "", calendarReady(load(p.getUniqueId())) ? "<green>Today's reward is ready!" : "<gray>Come back tomorrow", "<yellow>Click to open"));
+        m.inv.setItem(32, Ui.item(Material.PLAYER_HEAD, "<#7bd88f><bold>Friends", "<gray>See who's online and where.", "<white>/friend add <name>", "", "<yellow>Click for your list"));
+        m.inv.setItem(33, Ui.item(Material.FIREWORK_ROCKET, "<#ffb347><bold>Party", "<gray>Play together: follow the leader", "<gray>between servers, queue together.", "<white>/party invite <name>", "", "<yellow>Click for details"));
+        m.inv.setItem(34, Ui.item(Material.PAPER, "<white><bold>What's New", "<gray>The latest updates.", "", "<yellow>Click to read"));
         p.openInventory(m.inv);
     }
 
@@ -426,6 +503,11 @@ public final class Journey implements Listener {
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getView().getTopInventory()) return;
         int slot = e.getRawSlot();
+        if (m.page.equals("calendar")) {
+            if (slot == 8) openGuide(p);
+            else if (slot == calendarDay(load(p.getUniqueId())) - 1) claimCalendar(p);
+            return;
+        }
         if (m.page.equals("milestones") || m.page.equals("items")) {
             if (e.getCurrentItem() != null && e.getCurrentItem().getType() == Material.ARROW) openGuide(p);
             return;
@@ -444,6 +526,12 @@ public final class Journey implements Listener {
             case 24 -> { p.closeInventory(); p.sendMessage(Ui.mm("<gold>✦ <gray>Full rules: <u><click:open_url:'https://blackforgemc.com/rules.html'><#4fd1c5>blackforgemc.com/rules</click></u>")); }
             case 25 -> { p.closeInventory(); p.performCommand("discord"); }
             case 31 -> { if (server.equals("hub")) { p.closeInventory(); p.performCommand("tutorial"); } }
+            case 28 -> p.performCommand("events");
+            case 29 -> p.performCommand("achievements");
+            case 30 -> openCalendar(p);
+            case 32 -> { p.closeInventory(); p.performCommand("friend list"); }
+            case 33 -> { p.closeInventory(); p.performCommand("party list"); }
+            case 34 -> { p.closeInventory(); p.performCommand("news"); }
             default -> { }
         }
         p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 1.2f);

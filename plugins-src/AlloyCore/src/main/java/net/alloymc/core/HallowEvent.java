@@ -173,6 +173,7 @@ public final class HallowEvent implements Listener {
         Offer o = shop.get(e.getSlot());
         if (o.give == null || !take(p, o.cost)) { p.sendMessage(Ui.mm("<red>Not enough Soul Candy.")); return; }
         o.give.accept(p);
+        Hooks.stat(p, "event_trade", 1);
         p.sendMessage(Ui.mm("<gold>🎃 <gray>Traded <gradient:#ff9a1f:#9b4dff>" + o.cost + " Soul Candy</gradient> <gray>for " + o.name));
         p.playSound(p.getLocation(), Sound.ENTITY_WITCH_CELEBRATE, 0.8f, 1.2f);
         open(p);

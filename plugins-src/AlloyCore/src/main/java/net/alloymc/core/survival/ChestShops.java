@@ -135,6 +135,7 @@ public final class ChestShops implements Listener {
             if (!fits(p.getInventory(), item, amount)) { p.sendMessage(Ui.mm("<red>Make room in your inventory first.")); return; }
             if (!plugin.economy().withdraw(p, price)) { p.sendMessage(Ui.mm("<red>You need " + NetEconomy.money(price) + ".")); return; }
             plugin.economy().deposit(own, price);
+            if (own.getPlayer() != null) net.alloymc.core.Hooks.stat(own.getPlayer(), "shop_sold", 1);
             remove(stock, item, amount);
             give(p.getInventory(), item, amount);
             p.sendMessage(Ui.mm("<green>Bought " + amount + "x " + itemName(item) + " for " + NetEconomy.money(price) + "."));

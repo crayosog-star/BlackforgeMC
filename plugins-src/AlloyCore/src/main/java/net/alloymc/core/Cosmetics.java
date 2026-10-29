@@ -35,10 +35,13 @@ public final class Cosmetics implements Listener {
             new Cosmetic("lightning", Kind.KILL, "<yellow>Thunderclap", Material.LIGHTNING_ROD, 900, "A harmless bolt of lightning"),
             new Cosmetic("anvil", Kind.KILL, "<gray>Forge Strike", Material.ANVIL, 1200, "An anvil clang and a shower of sparks"),
             new Cosmetic("pumpkin", Kind.KILL, "<gold>Pumpkin Burst", Material.JACK_O_LANTERN, -1, "Hallowforge event exclusive"),
+            new Cosmetic("frost", Kind.KILL, "<#9fe6ff>Frost Nova", Material.BLUE_ICE, -1, "Frostforge event exclusive"),
+            new Cosmetic("forgemaster", Kind.KILL, "<gradient:#ffd27a:#ff4d00>Forge Master", Material.ANVIL, -1, "Unlock " + Achievements.FORGE_MASTER_AT + " achievements"),
             new Cosmetic("fireworks", Kind.VICTORY, "<aqua>Firework Show", Material.FIREWORK_ROCKET, 500, "A volley of fireworks when you win"),
             new Cosmetic("roar", Kind.VICTORY, "<dark_purple>Dragon's Roar", Material.DRAGON_HEAD, 1000, "A dragon roars for your victory"),
             new Cosmetic("goldrain", Kind.VICTORY, "<gold>Gold Rain", Material.GOLD_INGOT, 1500, "It rains gold around you"),
-            new Cosmetic("totem", Kind.VICTORY, "<green>Totem of Glory", Material.TOTEM_OF_UNDYING, 2000, "The totem animation, but for winning"));
+            new Cosmetic("totem", Kind.VICTORY, "<green>Totem of Glory", Material.TOTEM_OF_UNDYING, 2000, "The totem animation, but for winning"),
+            new Cosmetic("completionist", Kind.VICTORY, "<gradient:#ffd27a:#ff4d00>Completionist", Material.NETHER_STAR, -1, "Unlock every achievement"));
 
     private final AlloyCore plugin;
     private final File dir;
@@ -171,6 +174,19 @@ public final class Cosmetics implements Listener {
                 w.spawnParticle(Particle.DUST, c, 30, 0.5, 0.6, 0.5, new Particle.DustOptions(Color.ORANGE, 1.6f));
                 w.playSound(c, Sound.ENTITY_WITCH_CELEBRATE, 1f, 1f);
             }
+            case "frost" -> {
+                w.spawnParticle(Particle.SNOWFLAKE, c, 70, 0.2, 0.3, 0.2, 0.25);
+                w.spawnParticle(Particle.BLOCK, c, 40, 0.4, 0.5, 0.4, Material.BLUE_ICE.createBlockData());
+                w.playSound(c, Sound.BLOCK_GLASS_BREAK, 1f, 0.7f);
+                w.playSound(c, Sound.BLOCK_POWDER_SNOW_BREAK, 1f, 0.6f);
+            }
+            case "forgemaster" -> {
+                w.spawnParticle(Particle.LAVA, c, 20, 0.3, 0.3, 0.3, 0);
+                w.spawnParticle(Particle.DUST, c, 50, 0.5, 0.8, 0.5, new Particle.DustOptions(Color.fromRGB(255, 160, 40), 1.8f));
+                w.spawnParticle(Particle.FLAME, c, 40, 0.1, 0.6, 0.1, 0.12);
+                w.playSound(c, Sound.BLOCK_ANVIL_USE, 0.9f, 0.6f);
+                w.playSound(c, Sound.ENTITY_BLAZE_SHOOT, 0.8f, 0.7f);
+            }
             default -> {}
         }
     }
@@ -205,6 +221,23 @@ public final class Cosmetics implements Listener {
                 w.playSound(l, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 0.8f);
             }
             case "totem" -> { w.spawnParticle(Particle.TOTEM_OF_UNDYING, l.clone().add(0, 1, 0), 120, 0.5, 1, 0.5, 0.5); w.playSound(l, Sound.ITEM_TOTEM_USE, 0.8f, 1.1f); }
+            case "completionist" -> {
+                // a ring of forge-fire that climbs around you, then a burst of stars
+                for (int i = 0; i < 24; i++) {
+                    int k = i;
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                        if (!p.isOnline()) return;
+                        Location at = p.getLocation().add(Math.cos(k * 0.52) * 1.4, k * 0.12, Math.sin(k * 0.52) * 1.4);
+                        w.spawnParticle(Particle.FLAME, at, 4, 0.05, 0.05, 0.05, 0.01);
+                        w.spawnParticle(Particle.DUST, at, 3, 0.05, 0.05, 0.05, new Particle.DustOptions(Color.fromRGB(255, 210, 120), 1.4f));
+                    }, k);
+                }
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    if (!p.isOnline()) return;
+                    w.spawnParticle(Particle.END_ROD, p.getLocation().add(0, 3, 0), 80, 0.3, 0.3, 0.3, 0.25);
+                    w.playSound(p.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1f, 1f);
+                }, 26L);
+            }
             default -> {}
         }
     }

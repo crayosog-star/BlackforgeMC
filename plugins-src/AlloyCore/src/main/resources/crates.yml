@@ -43,6 +43,9 @@ gold:
     - {name: "<#c6a15b>Excavator Book", item: ENCHANTED_BOOK, weight: 3, give-item: false, commands: ["alloy ce give {player} excavator 1"], announce: true}
     - {name: "<gradient:#EAF6FF:#4FC3D9><bold>Gale Bellows</bold></gradient>", item: BREEZE_ROD, weight: 5, give-item: false, commands: ["alloy bellows give {player}"], announce: true}
     - {name: "<#7ddc4a><bold>Jelly Legs</bold> <gray>(no fall damage)", item: SLIME_BALL, weight: 2.5, give-item: false, commands: ["alloy jellylegs give {player}"], announce: true}
+    - {name: "<#e5484d><bold>Surge</bold>", item: WITHER_ROSE, weight: 2, give-item: false, commands: ["alloy surge give {player}"], announce: true}
+    - {name: "<#a77fe0><bold>Potion of Darkness</bold>", item: SPLASH_POTION, weight: 3, give-item: false, commands: ["alloy darkness give {player}"], announce: true}
+    - {name: "<#ff9ad5><bold>Potion of Gaia</bold>", item: SPLASH_POTION, weight: 3, give-item: false, commands: ["alloy gaia give {player}"], announce: true}
 
 netherite:
   title: Forgeheart
@@ -64,6 +67,13 @@ netherite:
     - {name: "<#ff9f43>Overload II Book", item: ENCHANTED_BOOK, weight: 8, give-item: false, commands: ["alloy ce give {player} overload 2"]}
     - {name: "<gradient:#EAF6FF:#4FC3D9><bold>Gale Bellows</bold></gradient>", item: BREEZE_ROD, weight: 8, give-item: false, commands: ["alloy bellows give {player}"], announce: true}
     - {name: "<#7ddc4a><bold>Jelly Legs</bold> <gray>(no fall damage)", item: SLIME_BALL, weight: 3, give-item: false, commands: ["alloy jellylegs give {player}"], announce: true}
+    - {name: "<#e5484d><bold>Surge</bold>", item: WITHER_ROSE, weight: 4, give-item: false, commands: ["alloy surge give {player}"], announce: true}
+    - {name: "<#6cc8ef><bold>Rimelock</bold>", item: HEART_OF_THE_SEA, weight: 2, give-item: false, commands: ["alloy rimelock give {player}"], announce: true}
+    - {name: "<#ff7a1a><bold>Ashen Chain</bold>", item: IRON_CHAIN, weight: 2, give-item: false, commands: ["alloy ashenchain give {player}"], announce: true}
+    - {name: "<#ffd23f><bold>God's Eye</bold>", item: ENDER_EYE, weight: 2, give-item: false, commands: ["alloy godseye give {player}"], announce: true}
+    - {name: "<#9a9aa6><bold>Ashen Bonfire</bold>", item: CAMPFIRE, weight: 2, give-item: false, commands: ["alloy ashenbonfire give {player}"], announce: true}
+    - {name: "<#e03a3a><bold>Last Rite</bold>", item: PAPER, weight: 1.5, give-item: false, commands: ["alloy rite give {player}"], announce: true}
+    - {name: "<#c6ff3d><bold>EMP</bold>", item: EMERALD, weight: 1.5, give-item: false, commands: ["alloy emp give {player}"], announce: true}
 
 koth:
   title: Conqueror
@@ -84,6 +94,12 @@ koth:
     - {name: "<#7ddc4a>Springs II Book", item: ENCHANTED_BOOK, weight: 6, give-item: false, commands: ["alloy ce give {player} springs 2"]}
     - {name: "<gradient:#EAF6FF:#4FC3D9><bold>Gale Bellows</bold></gradient>", item: BREEZE_ROD, weight: 8, give-item: false, commands: ["alloy bellows give {player}"], announce: true}
     - {name: "<#7ddc4a><bold>Jelly Legs</bold> <gray>(no fall damage)", item: SLIME_BALL, weight: 3, give-item: false, commands: ["alloy jellylegs give {player}"], announce: true}
+    - {name: "<#6cc8ef><bold>Rimelock</bold>", item: HEART_OF_THE_SEA, weight: 4, give-item: false, commands: ["alloy rimelock give {player}"], announce: true}
+    - {name: "<#ff7a1a><bold>Ashen Chain</bold>", item: IRON_CHAIN, weight: 4, give-item: false, commands: ["alloy ashenchain give {player}"], announce: true}
+    - {name: "<#ffd23f><bold>God's Eye</bold>", item: ENDER_EYE, weight: 4, give-item: false, commands: ["alloy godseye give {player}"], announce: true}
+    - {name: "<#9a9aa6><bold>Ashen Bonfire</bold>", item: CAMPFIRE, weight: 4, give-item: false, commands: ["alloy ashenbonfire give {player}"], announce: true}
+    - {name: "<#e03a3a><bold>Last Rite</bold>", item: PAPER, weight: 3, give-item: false, commands: ["alloy rite give {player}"], announce: true}
+    - {name: "<#c6ff3d><bold>EMP</bold>", item: EMERALD, weight: 3, give-item: false, commands: ["alloy emp give {player}"], announce: true}
     - {name: "<#e07a45><bold>Copper Rank Voucher", item: PAPER, weight: 1.2727, give-item: false, commands: ["alloy voucher give {player} copper"], announce: true}
 
 vote:

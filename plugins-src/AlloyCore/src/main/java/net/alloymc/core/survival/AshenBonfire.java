@@ -113,7 +113,7 @@ public final class AshenBonfire implements Listener, Hackable {
         e.setCancelled(true);   // never place a real campfire
         if (p.getGameMode() == GameMode.SPECTATOR) return;
         if (!enabled) { p.sendActionBar(Ui.mm("<gray>The Ashen Bonfire isn't switched on yet.")); return; }
-        if (!allowedAt.test(p.getLocation())) { p.sendActionBar(Ui.mm("<gray>The " + NAME + " <gray>only works in the <white>Arena <gray>for now.")); return; }
+        if (!allowedAt.test(p.getLocation())) { p.sendActionBar(Ui.mm("<gray>The " + NAME + " <gray>only works in PvP zones (KOTH, Scrapyard) and the hub <white>Arena<gray>.")); return; }
         long now = System.currentTimeMillis(), ready = readyAt.getOrDefault(p.getUniqueId(), 0L);
         if (ready > now) {
             p.sendActionBar(Ui.mm("<#FFB347>🔥 <gray>The ashes are still cold... <white>" + String.format(Locale.ROOT, "%.1f", (ready - now) / 1000.0) + "s"));

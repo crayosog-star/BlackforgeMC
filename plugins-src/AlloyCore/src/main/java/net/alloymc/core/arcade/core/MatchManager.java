@@ -84,6 +84,7 @@ public final class MatchManager {
                     playerMatch.put(p.getUniqueId(), m);
                     p.sendMessage(Ui.mm(TAG + "<green>Joining a game in progress on <white>" + m.map.display + "<green>."));
                     m.lateJoin(p);
+                    net.alloymc.core.Hooks.queued(p, other -> join(other, g, v));   // the party comes too
                     return true;
                 }
         }
@@ -95,6 +96,7 @@ public final class MatchManager {
         p.sendMessage(Ui.mm(TAG + "<gray>Finding a match... " + g.color + g.name + " <gray>(" + v.label() + ") <dark_gray>[" + q.size() + "/" + v.maxPlayers() + "]"));
         p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.7f, 1.6f);
         arcade.giveQueueItems(p);
+        net.alloymc.core.Hooks.queued(p, other -> join(other, g, v));   // the party comes too
         return true;
     }
 

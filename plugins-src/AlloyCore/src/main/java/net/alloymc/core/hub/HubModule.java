@@ -1,5 +1,7 @@
 package net.alloymc.core.hub;
 
+import net.alloymc.core.Events;
+
 import net.alloymc.core.AlloyCore;
 import net.alloymc.core.LobbyRules;
 import net.alloymc.core.Ui;
@@ -259,6 +261,9 @@ public final class HubModule implements Listener {
         p.getInventory().clear();
         p.getInventory().setItem(0, Ui.item(Material.KNOWLEDGE_BOOK, "<#4fd1c5><bold>Guide</bold> <gray>(right-click)", "<gray>Servers, custom items, money, rules"));
         p.getInventory().setItem(1, Ui.item(Material.CLOCK, "<#ffb347><bold>Milestones</bold> <gray>(right-click)", "<gray>Rewards for playing on any server"));
+        p.getInventory().setItem(2, Ui.item(Material.BELL, "<#ffb347><bold>Events</bold> <gray>(right-click)", "<gray>What's on and what's next"));
+        p.getInventory().setItem(6, Ui.item(Material.CAKE, "<#7bd88f><bold>Daily Calendar</bold> <gray>(right-click)", "<gray>A reward every day you log in"));
+        p.getInventory().setItem(7, Ui.item(Material.PLAYER_HEAD, "<#7bd88f><bold>Friends & Party</bold> <gray>(right-click)", "<gray>/friend add <name>, /party invite <name>"));
         p.getInventory().setItem(4, Ui.item(Material.COMPASS, "<gold><bold>Server Selector</bold> <gray>(right-click)", "<gray>Pick a game mode to play"));
         p.getInventory().setItem(8, visibilityItem(hidingPlayers.contains(p.getUniqueId())));
         p.getInventory().setHeldItemSlot(4);
@@ -351,6 +356,9 @@ public final class HubModule implements Listener {
         if (it.getType() == Material.COMPASS) { e.setCancelled(true); openMenu(p); }
         else if (it.getType() == Material.KNOWLEDGE_BOOK) { e.setCancelled(true); p.performCommand("guide"); }
         else if (it.getType() == Material.CLOCK) { e.setCancelled(true); p.performCommand("milestones"); }
+        else if (it.getType() == Material.BELL) { e.setCancelled(true); p.performCommand("events"); }
+        else if (it.getType() == Material.CAKE) { e.setCancelled(true); p.performCommand("calendar"); }
+        else if (it.getType() == Material.PLAYER_HEAD) { e.setCancelled(true); p.performCommand("friend list"); p.performCommand("party list"); }
         else if (it.getType() == Material.LIME_DYE || it.getType() == Material.GRAY_DYE) {
             e.setCancelled(true);
             boolean hide = !hidingPlayers.remove(p.getUniqueId());
@@ -382,6 +390,10 @@ public final class HubModule implements Listener {
             List<String> lore = new ArrayList<>(Arrays.asList(m[4].split("<newline>")));
             lore.add("");
             lore.add("<gray>Playing: <white>" + n);
+            String ev = net.alloymc.core.Events.statusFor(m[0]);
+            if (ev != null) lore.add(ev);
+            var news = net.alloymc.core.News.latestFor(m[0]);
+            if (news != null && !news.server().equals("all")) lore.add("<gold>New: <gray>" + (news.text().length() > 42 ? news.text().substring(0, 40) + "..." : news.text()));
             lore.add("<yellow>» Click to join");
             inv.setItem(Integer.parseInt(m[1]), Ui.item(Material.valueOf(m[2]), m[3], lore.toArray(String[]::new)));
         }
@@ -490,6 +502,8 @@ public final class HubModule implements Listener {
                 "<#e5484d>■ <white>Factions <gray>" + net.count("factions"),
                 "<#ffc53d>■ <white>Arcade <gray>" + net.count("arcade"),
                 "  ",
+                Events.sidebarLine(),
+                "   ",
                 "<#7289da>/discord <dark_gray>- <gray>join us",
                 "<gold>" + plugin.getConfig().getString("address", "BlackForgeMC"),
                 "<dark_gray>" + "-".repeat(18) + " "));

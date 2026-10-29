@@ -33,6 +33,7 @@ public final class RewardsService {
         if (money <= 0 && scrap <= 0) return;
         if (!ledger.claim(m.id, p.getUniqueId(), reason)) return;
         NetEconomy eco = plugin.economy();
+        scrap = Math.round(scrap * net.alloymc.core.Events.scrapMultiplier("arcade"));   // Double Scrap / Arcade Rush
         if (money > 0) eco.deposit(p, money);
         if (scrap > 0) eco.addScrap(p, scrap);
         plugin.getLogger().info("[Arcade] reward " + m.id + " " + p.getName() + " " + reason + " " + NetEconomy.money(money) + " + " + scrap + " Scrap");

@@ -44,6 +44,9 @@ public final class Koth {
 
     public boolean active() { return active; }
 
+    /** When the next KOTH starts (epoch ms), for the network event calendar. */
+    public long nextStart() { return nextStart; }
+
     public String status() {
         if (active) return "<#e5484d>KOTH is LIVE! <gray>(" + (capper == null ? "nobody holding" : name(capper) + " " + fmt(captureSec - held) + " left") + ")";
         long mins = Math.max(0, (nextStart - System.currentTimeMillis()) / 60_000);
@@ -124,6 +127,7 @@ public final class Koth {
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "eco give " + p.getName() + " " + (long) money);
         crates.give(p, "koth", 1);
         crates.give(p, "netherite", 1);
+        net.alloymc.core.Hooks.stat(p, "koth", 1);
         if (scrap != null) scrap.add(p, 200, "won KOTH");
         for (Player o : Bukkit.getOnlinePlayers())
             o.showTitle(Title.title(Ui.mm("<gold><bold>" + p.getName()), Ui.mm("<gray>is the <#e5484d>King of the Hill<gray>!")));

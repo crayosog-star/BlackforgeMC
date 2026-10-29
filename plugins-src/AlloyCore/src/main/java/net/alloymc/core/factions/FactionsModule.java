@@ -174,8 +174,12 @@ public final class FactionsModule implements Listener {
 
     private boolean staff(Player p) { return p.hasPermission("alloy.admin") && p.getGameMode() == GameMode.CREATIVE; }
 
-    @EventHandler(ignoreCancelled = true) public void onBreak(BlockBreakEvent e) { if (inSpawn(e.getBlock().getLocation()) && !staff(e.getPlayer())) e.setCancelled(true); }
-    @EventHandler(ignoreCancelled = true) public void onPlace(BlockPlaceEvent e) { if (inSpawn(e.getBlock().getLocation()) && !staff(e.getPlayer())) e.setCancelled(true); }
+    @EventHandler(ignoreCancelled = true) public void onBreak(BlockBreakEvent e) { if (inSpawn(e.getBlock().getLocation()) && !staff(e.getPlayer())) { e.setCancelled(true); spawnWhy(e.getPlayer()); } }
+    @EventHandler(ignoreCancelled = true) public void onPlace(BlockPlaceEvent e) { if (inSpawn(e.getBlock().getLocation()) && !staff(e.getPlayer())) { e.setCancelled(true); spawnWhy(e.getPlayer()); } }
+
+    private static void spawnWhy(Player p) {
+        net.alloymc.core.Shared.why(p, "<gray>Spawn is protected. <white>/rtp <gray>to the wild, then <white>/f claim <gray>your land.");
+    }
     @EventHandler(ignoreCancelled = true) public void onBucket(PlayerBucketEmptyEvent e) { if (inSpawn(e.getBlockClicked().getLocation()) && !staff(e.getPlayer())) e.setCancelled(true); }
     @EventHandler(ignoreCancelled = true) public void onExplode(EntityExplodeEvent e) { e.blockList().removeIf(b -> inSpawn(b.getLocation())); }
     @EventHandler(ignoreCancelled = true) public void onBlockExplode(BlockExplodeEvent e) { e.blockList().removeIf(b -> inSpawn(b.getLocation())); }

@@ -311,6 +311,7 @@ public final class AuctionHouse implements Listener {
         listings.remove(id);
         OfflinePlayer seller = Bukkit.getOfflinePlayer(l.seller);
         eco.depositPlayer(seller, l.price);
+        if (seller.getPlayer() != null) net.alloymc.core.Hooks.stat(seller.getPlayer(), "ah_sold", 1);
         give(p, l.item);
         Player sp = seller.getPlayer();
         if (sp != null) {

@@ -40,6 +40,27 @@ public final class Net implements PluginMessageListener {
         via.sendPluginMessage(plugin, CHANNEL, out.toByteArray());
     }
 
+    /** Chat to one player wherever they are on the network (the proxy delivers it; {@code via} is any player here). */
+    public void messageRaw(Player via, String target, net.kyori.adventure.text.Component msg) {
+        ByteArrayDataOutput out = ByteStreams.newDataOutput();
+        out.writeUTF("MessageRaw");
+        out.writeUTF(target);
+        out.writeUTF(net.kyori.adventure.text.serializer.gson.GsonComponentSerializer.gson().serialize(msg));
+        via.sendPluginMessage(plugin, CHANNEL, out.toByteArray());
+    }
+
+    /** Move another player (on any server) to {@code server}; {@code via} is any player here. */
+    public void connectOther(Player via, String target, String server) {
+        ByteArrayDataOutput out = ByteStreams.newDataOutput();
+        out.writeUTF("ConnectOther");
+        out.writeUTF(target);
+        out.writeUTF(server);
+        via.sendPluginMessage(plugin, CHANNEL, out.toByteArray());
+    }
+
+    /** Some player on this server to carry a proxy message, or null when the server is empty. */
+    public static Player carrier() { return Bukkit.getOnlinePlayers().stream().findFirst().orElse(null); }
+
     private void requestCounts() {
         Player any = Bukkit.getOnlinePlayers().stream().findFirst().orElse(null);
         if (any == null) return;

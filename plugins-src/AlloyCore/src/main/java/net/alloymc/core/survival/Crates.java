@@ -1,5 +1,7 @@
 package net.alloymc.core.survival;
 
+import net.alloymc.core.Hooks;
+
 import net.alloymc.core.AlloyCore;
 import net.alloymc.core.Ui;
 import org.bukkit.*;
@@ -249,6 +251,7 @@ public final class Crates implements Listener {
         inv.setItem(4, pointer);
         inv.setItem(22, Ui.item(Material.LIGHTNING_ROD, "<gold>▲"));
         Reward win = roll(c);
+        Hooks.stat(p, "crate", 1);
         // the reel: random fillers, with the winner landing in the middle slot on the last step
         int steps = 34;
         List<Reward> reel = new ArrayList<>();

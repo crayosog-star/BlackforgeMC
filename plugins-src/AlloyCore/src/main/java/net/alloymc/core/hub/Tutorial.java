@@ -89,6 +89,7 @@ public final class Tutorial implements Listener {
         step.remove(p.getUniqueId());
         BossBar bar = bars.remove(p.getUniqueId());
         if (bar != null) p.hideBossBar(bar);
+        net.alloymc.core.Hooks.stat(p, "tutorial", 1);
         String id = p.getUniqueId().toString();
         if (!data.getBoolean(id + ".done")) {
             plugin.economy().deposit(p, REWARD_MONEY);

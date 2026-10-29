@@ -80,6 +80,8 @@ public final class Votes implements Listener {
         data.set("total." + key, data.getInt("total." + key) + 1);
         int count = data.getInt("party") + 1;
         Player p = Bukkit.getPlayerExact(user);
+        var who = p != null ? p : Bukkit.getOfflinePlayerIfCached(user);
+        if (who != null) streak(who.getUniqueId());
         if (p != null) reward(p, 1);
         else data.set("pending." + key, data.getInt("pending." + key) + 1);
         Bukkit.broadcast(Ui.mm("<#5fd35f>✔ <white>" + user + " <gray>voted on <white>" + (service == null ? "a server list" : service)
@@ -89,7 +91,48 @@ public final class Votes implements Listener {
         save();
     }
 
+    static final int[] STREAK_DAYS = {3, 7, 14, 30};
+    static final int[] STREAK_MONEY = {500, 1500, 3000, 7500}, STREAK_SCRAP = {50, 150, 300, 750};
+
+    private java.io.File streakFile(java.util.UUID id) { return new java.io.File(plugin.shared(), "votes/" + id + ".yml"); }
+
+    /** One more vote: counts towards today's streak (once a day); a missed day starts it over. */
+    private void streak(java.util.UUID id) {
+        String today = java.time.LocalDate.now().toString(), yesterday = java.time.LocalDate.now().minusDays(1).toString();
+        net.alloymc.core.Shared.update(streakFile(id), y -> {
+            y.set("total", y.getInt("total") + 1);
+            String last = y.getString("last");
+            if (today.equals(last)) return;
+            int s = yesterday.equals(last) ? y.getInt("streak") + 1 : 1;
+            y.set("streak", s);
+            y.set("best-streak", Math.max(s, y.getInt("best-streak")));
+            y.set("last", today);
+        });
+    }
+
+    /** Streak bonuses (day 3, 7, 14, 30), paid once each time the streak reaches them. */
+    private void streakBonus(Player p) {
+        var f = streakFile(p.getUniqueId());
+        var y = net.alloymc.core.Shared.read(f);
+        int s = y.getInt("streak");
+        net.alloymc.core.Hooks.statMax(p, "vote", y.getInt("total"));
+        net.alloymc.core.Hooks.statMax(p, "vote_streak", s);
+        for (int i = 0; i < STREAK_DAYS.length; i++) {
+            if (s != STREAK_DAYS[i] || (y.getString("last") + "@" + s).equals(y.getString("paid"))) continue;
+            int k = i;
+            net.alloymc.core.Shared.update(f, z -> z.set("paid", z.getString("last") + "@" + s));
+            plugin.economy().deposit(p, STREAK_MONEY[k]);
+            plugin.economy().addScrap(p, STREAK_SCRAP[k]);
+            p.sendMessage(Ui.mm("<#5fd35f>🔥 <white>" + s + "-day vote streak! <green>+$" + String.format("%,d", STREAK_MONEY[k]) + " <#c6a15b>+" + STREAK_SCRAP[k] + " Scrap"));
+        }
+        if (s > 0 && s < 30) {
+            int next = java.util.Arrays.stream(STREAK_DAYS).filter(d -> d > s).findFirst().orElse(30);
+            p.sendMessage(Ui.mm("<gray>Vote streak: <white>" + s + " day" + (s == 1 ? "" : "s") + " <dark_gray>- <gray>bonus at " + next + " days. Vote every day to keep it!"));
+        }
+    }
+
     private void reward(Player p, int votes) {
+        streakBonus(p);
         crates.give(p, "vote", votes);
         if (eco != null) eco.depositPlayer(p, (double) money * votes);
         if (scrap != null) scrap.add(p, 20L * votes, "voted");
@@ -133,6 +176,11 @@ public final class Votes implements Listener {
             p.sendMessage(Ui.mm("<yellow>" + i++ + ". <white><u>" + url + "</u>").clickEvent(ClickEvent.openUrl(url)));
         }
         int total = data.getInt("total." + p.getName().toLowerCase(Locale.ROOT));
+        int streak = net.alloymc.core.Shared.read(streakFile(p.getUniqueId())).getInt("streak");
+        String last = net.alloymc.core.Shared.read(streakFile(p.getUniqueId())).getString("last");
+        boolean alive = java.time.LocalDate.now().toString().equals(last) || java.time.LocalDate.now().minusDays(1).toString().equals(last);
+        p.sendMessage(Ui.mm("<gray>Vote streak: <white>" + (alive ? streak : 0) + " day" + ((alive ? streak : 0) == 1 ? "" : "s")
+                + " <dark_gray>| <gray>bonuses at 3, 7, 14 and 30 days in a row"));
         int party = data.getInt("party");
         p.sendMessage(Ui.mm("<gray>Your votes: <white>" + total + " <dark_gray>| <gray>Vote party: <white>" + party + "/" + partyEvery));
     }

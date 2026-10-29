@@ -102,7 +102,7 @@ public final class GodsEye implements Listener, Hackable {
         e.setCancelled(true);   // never throw it like a real eye of ender
         if (p.getGameMode() == GameMode.SPECTATOR) return;
         if (!enabled) { p.sendActionBar(Ui.mm("<gray>Gods-eye isn't switched on yet.")); return; }
-        if (!allowedAt.test(p.getLocation())) { p.sendActionBar(Ui.mm("<gray>" + NAME + " <gray>only works in the <white>Arena <gray>for now.")); return; }
+        if (!allowedAt.test(p.getLocation())) { p.sendActionBar(Ui.mm("<gray>" + NAME + " <gray>only works in PvP zones (KOTH, Scrapyard) and the hub <white>Arena<gray>.")); return; }
         Mark old = marks.get(p.getUniqueId());
         if (old != null) {
             p.sendActionBar(Ui.mm("<#FFD34D>👁 <gray>Still watching <white>" + old.target.getName() + " <gray>- " + secs(old.left()) + "s"));

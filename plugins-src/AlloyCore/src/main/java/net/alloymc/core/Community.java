@@ -177,6 +177,12 @@ public final class Community implements Listener {
         outbox.offer(new String[]{hook, json});
     }
 
+    /** A /news entry, to the chat feed as an announcement. */
+    public void postNews(String text) {
+        if (chatHook.isBlank()) return;
+        post(chatHook, "BlackForgeMC News", null, "📰 **What's new:** " + escape(text));
+    }
+
     private void staffPost(String title, String text, int color) {
         if (staffHook.isBlank()) return;
         String json = "{\"username\":\"BlackForgeMC Staff\",\"allowed_mentions\":{\"parse\":[]},\"embeds\":[{\"title\":" + q(title)

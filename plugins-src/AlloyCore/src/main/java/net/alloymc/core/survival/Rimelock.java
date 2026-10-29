@@ -147,7 +147,7 @@ public final class Rimelock implements Listener, Hackable {
         e.setCancelled(true);
         if (p.getGameMode() == GameMode.SPECTATOR) return;
         if (!enabled) { p.sendActionBar(Ui.mm("<gray>Rimelock isn't switched on yet.")); return; }
-        if (!allowedAt.test(p.getLocation())) { p.sendActionBar(Ui.mm("<gray>" + NAME + " <gray>only works in the <white>Arena <gray>for now.")); return; }
+        if (!allowedAt.test(p.getLocation())) { p.sendActionBar(Ui.mm("<gray>" + NAME + " <gray>only works in PvP zones (KOTH, Scrapyard) and the hub <white>Arena<gray>.")); return; }
         if (leaping.contains(p.getUniqueId())) return;
         for (Cage c : cages) if (c.owner.equals(p.getUniqueId())) {
             p.sendActionBar(Ui.mm("<#7FD8FF>⛓ <gray>Your cage is still up: <white>" + secs(c.left()) + "s"));

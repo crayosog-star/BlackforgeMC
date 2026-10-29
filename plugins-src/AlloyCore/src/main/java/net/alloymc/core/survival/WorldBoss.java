@@ -304,6 +304,7 @@ public final class WorldBoss implements Listener {
             Player p = Bukkit.getPlayer(rank.get(i).getKey());
             double share = total <= 0 ? 0 : rank.get(i).getValue() / total;
             if (p == null) continue;
+            net.alloymc.core.Hooks.stat(p, "boss", 1);
             if (i < 3) {
                 crates.give(p, keys[i], 1);
                 plugin.economy().deposit(p, money[i]);

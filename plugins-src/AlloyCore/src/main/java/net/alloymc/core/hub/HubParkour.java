@@ -134,7 +134,8 @@ public final class HubParkour implements Listener {
         String id = p.getUniqueId().toString();
         long best = data.getLong(id + ".best");
         boolean pb = best == 0 || ms < best;
-        if (pb) { data.set(id + ".best", ms); data.set(id + ".name", Nicks.of(p)); try { data.save(file); } catch (Exception ignored) { } }
+        net.alloymc.core.Hooks.stat(p, "parkour", 1);
+            if (pb) { data.set(id + ".best", ms); data.set(id + ".name", Nicks.of(p)); try { data.save(file); } catch (Exception ignored) { } }
         p.showTitle(net.kyori.adventure.title.Title.title(Ui.mm("<gold><bold>" + time(ms)), Ui.mm(pb ? "<green>New personal best!" : "<gray>Best: " + time(best))));
         p.playSound(p.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1f, 1f);
         if (pb) Bukkit.broadcast(Ui.mm("<gold>⏱ <white>" + Nicks.of(p) + " <gray>ran the hub parkour in <gold>" + time(ms) + " <dark_gray>(/parkour)"));

@@ -46,6 +46,11 @@ public final class SurvivalModule implements Listener {
     private final DarknessPotion darkness;
     private final Surge surge;
     private final LastRite rite;
+    private final Rimelock cage;
+    private final GodsEye eye;
+    private final AshenChain chain;
+    private final AshenBonfire bonfire;
+    private final Emp emp;
     private final Ranks ranks;
     private final HallOfFame hall;
     private final DailyRewards daily;
@@ -93,8 +98,19 @@ public final class SurvivalModule implements Listener {
         darkness = new DarknessPotion(plugin, l -> l.getWorld() == world && (inArena(l.getX(), l.getY(), l.getZ()) || inPvp(l.getX(), l.getY(), l.getZ())));
         // Last Rite: read anywhere but spawn; who it can catch follows the PvP rules (KOTH + Scrapyard). A draw leaves both on 2 hearts here.
         rite = new LastRite(plugin, l -> l.getWorld() != world || !inSpawn(l.getX(), l.getY(), l.getZ()), false, null, RiteChambers.Timeout.BOTH_WEAKENED);
+        // PvP-zone abilities (KOTH arena + Scrapyard): rare crate prizes, never used up, each on its own cooldown
+        java.util.function.Predicate<Location> pvpZone = l -> l.getWorld() == world && (inArena(l.getX(), l.getY(), l.getZ()) || inPvp(l.getX(), l.getY(), l.getZ()));
+        cage = new Rimelock(plugin, pvpZone);
+        eye = new GodsEye(plugin, pvpZone);
+        chain = new AshenChain(plugin, pvpZone, en -> false, en -> false);
+        bonfire = new AshenBonfire(plugin, pvpZone);
+        emp = new Emp(plugin, pvpZone, false);
+        surge.onActivate(pl -> chain.breakFree(pl, "Surge"));   // Surge tears you loose from a burning chain
+        emp.hackable(surge, cage, eye, chain, bonfire, gaia, rite, darkness);   // everything the EMP shuts down
         new SilkSpawners(plugin);
         boss = new WorldBoss(plugin, world, crates, koth);   // five random world bosses in the KOTH arena, Saturdays
+        // KOTH and boss state for every server's /events calendar
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> net.alloymc.core.Events.publishLive(koth.nextStart(), koth.active(), boss.active()), 100L, 600L);
         bounties = new Bounties(plugin);
         jobs = new Jobs(plugin);
         new ChestShops(plugin);
@@ -102,6 +118,7 @@ public final class SurvivalModule implements Listener {
         new ResourceWorld(plugin);
         votes.setScrap(scrap);
         ranks = new Ranks(plugin, crates);
+        plugin.discord().setRank(pl -> ranks.of(pl).name());   // Discord role sync
         ranks.setClaims(claims);
         claims.setRanks(ranks);
         scrap.setRanks(ranks);
@@ -177,6 +194,7 @@ public final class SurvivalModule implements Listener {
         gaia.shutdown();   // first: removes every cloud's barrier blocks
         surge.shutdown();
         rite.shutdown();   // undoes any running rite: both duellists go home as they were
+        cage.shutdown(); eye.shutdown(); chain.shutdown(); bonfire.shutdown(); emp.shutdown();
         holos.forEach(TextDisplay::remove);
         if (koth.active()) koth.stop(null);
         pvp.shutdown();
@@ -348,6 +366,21 @@ public final class SurvivalModule implements Listener {
             if (t == null) { s.sendMessage(Component.text("Player must be online")); return true; }
             gaia.give(t);
             s.sendMessage(Component.text("Gave a Potion of Gaia to " + a[2]));
+            return true;
+        }
+        if (a.length >= 3 && a[1].equalsIgnoreCase("give")
+                && List.of("rimelock", "godseye", "ashenchain", "ashenbonfire", "emp").contains(a[0].toLowerCase())) {   // /alloy <item> give <player> (crates)
+            Player t = Bukkit.getPlayerExact(a[2]);
+            if (t == null) { s.sendMessage(Component.text("Player must be online")); return true; }
+            org.bukkit.inventory.ItemStack it = switch (a[0].toLowerCase()) {
+                case "rimelock" -> cage.item();
+                case "godseye" -> eye.item();
+                case "ashenchain" -> chain.item();
+                case "ashenbonfire" -> bonfire.item();
+                default -> emp.item();
+            };
+            t.getInventory().addItem(it).values().forEach(l -> t.getWorld().dropItemNaturally(t.getLocation(), l));
+            s.sendMessage(Component.text("Gave " + a[0] + " to " + a[2]));
             return true;
         }
         if (a.length >= 2 && a[0].equalsIgnoreCase("boss")) {   // /alloy boss start [id] | stop
@@ -615,10 +648,14 @@ public final class SurvivalModule implements Listener {
     private boolean staff(Player p) { return p.hasPermission("alloy.admin") && p.getGameMode() == GameMode.CREATIVE; }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onBreak(BlockBreakEvent e) { if (protectedArea(e.getBlock().getLocation()) && !staff(e.getPlayer())) e.setCancelled(true); }
+    public void onBreak(BlockBreakEvent e) { if (protectedArea(e.getBlock().getLocation()) && !staff(e.getPlayer())) { e.setCancelled(true); protectedWhy(e.getPlayer()); } }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onPlace(BlockPlaceEvent e) { if (protectedArea(e.getBlock().getLocation()) && !staff(e.getPlayer())) e.setCancelled(true); }
+    public void onPlace(BlockPlaceEvent e) { if (protectedArea(e.getBlock().getLocation()) && !staff(e.getPlayer())) { e.setCancelled(true); protectedWhy(e.getPlayer()); } }
+
+    private static void protectedWhy(Player p) {
+        net.alloymc.core.Shared.why(p, "<gray>This area is protected. <white>/rtp <gray>takes you to the wild to build, <white>/claim <gray>protects your own.");
+    }
 
     @EventHandler(priority = EventPriority.LOW)
     public void onInteract(PlayerInteractEvent e) {

@@ -382,6 +382,7 @@ public final class TestArena implements Listener {
     /** Send a hub player into the Arena. */
     public void enter(Player p) {
         if (!ready) { p.sendActionBar(Ui.mm("<gray>The Arena is still being built - try again in a moment.")); return; }
+        net.alloymc.core.Hooks.stat(p, "arena", 1);
         p.teleport(spawn());
         p.setFallDistance(0);
     }

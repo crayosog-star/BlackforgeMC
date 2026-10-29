@@ -75,6 +75,7 @@ public final class Bounties {
         data.set(id, null);
         save();
         plugin.economy().deposit(killer, amount);
+        net.alloymc.core.Hooks.stat(killer, "bounty", 1);
         Bukkit.broadcast(Ui.mm("<red>☠ <white>" + Nicks.of(killer) + " <gray>collected the <green>" + NetEconomy.money(amount) + " <gray>bounty on <white>" + Nicks.of(victim) + "<gray>!"));
         killer.playSound(killer.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 0.8f);
     }

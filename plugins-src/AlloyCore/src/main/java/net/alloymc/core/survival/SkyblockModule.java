@@ -389,10 +389,14 @@ public final class SkyblockModule implements Listener {
     private boolean staff(Player p) { return p.hasPermission("alloy.admin") && p.getGameMode() == GameMode.CREATIVE; }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onBreak(BlockBreakEvent e) { if (protectedHere(e.getBlock().getLocation()) && !staff(e.getPlayer())) e.setCancelled(true); }
+    public void onBreak(BlockBreakEvent e) { if (protectedHere(e.getBlock().getLocation()) && !staff(e.getPlayer())) { e.setCancelled(true); protectedWhy(e.getPlayer()); } }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onPlace(BlockPlaceEvent e) { if (protectedHere(e.getBlock().getLocation()) && !staff(e.getPlayer())) e.setCancelled(true); }
+    public void onPlace(BlockPlaceEvent e) { if (protectedHere(e.getBlock().getLocation()) && !staff(e.getPlayer())) { e.setCancelled(true); protectedWhy(e.getPlayer()); } }
+
+    private static void protectedWhy(Player p) {
+        net.alloymc.core.Shared.why(p, "<gray>This area is protected. Build on your own island: <white>/is");
+    }
 
     @EventHandler(priority = EventPriority.LOW)
     public void onInteract(PlayerInteractEvent e) {

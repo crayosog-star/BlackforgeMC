@@ -33,6 +33,9 @@ public final class AlloyCore extends JavaPlugin implements Listener {
     private SharedStats sharedStats;
     private Cosmetics cosmetics;
     private Challenges challenges;
+    private Achievements achievements;
+    private DiscordLink discord;
+    private Social social;
 
     @Override
     public void onEnable() {
@@ -56,6 +59,11 @@ public final class AlloyCore extends JavaPlugin implements Listener {
         new net.alloymc.core.moderation.Punish(this, automod.store(), shared);
         // store supporter ranks: badge, trails, /store - on every server
         supporters = new Supporters(this, mode);
+        // network-wide progression and social features: before the game modes, which feed them
+        new Events(this, mode, shared);
+        achievements = new Achievements(this, mode, shared);
+        social = new Social(this, mode, shared);
+        discord = new DiscordLink(this, mode, shared);
         switch (mode) {
             case "hub" -> hub = new HubModule(this);
             case "arcade" -> arcade = new ArcadeModule(this);
@@ -67,9 +75,11 @@ public final class AlloyCore extends JavaPlugin implements Listener {
         if (survival != null || skyblock != null || factions != null) Bukkit.getPluginManager().registerEvents(new KillFeed(mode), this);
         if (arcade != null) supporters.setTrailBlocked(arcade::inGame);
         // /discord, chat tips, /report and the Discord feed - on every server
-        new Community(this, mode, shared);
+        Community community = new Community(this, mode, shared);
+        new News(this, shared, community);
         if (survival != null || skyblock != null || factions != null || arcade != null) challenges = new Challenges(this, mode);
         new HallowEvent(this, mode, cosmetics);
+        new FrostEvent(this, mode, cosmetics);
         new ItemSkins(this);
         new Journey(this, mode, shared);
         getLogger().info("AlloyCore enabled in " + mode + " mode");
@@ -83,12 +93,16 @@ public final class AlloyCore extends JavaPlugin implements Listener {
         if (skyblock != null) skyblock.shutdown();
         if (factions != null) factions.shutdown();
         if (challenges != null) challenges.save();
+        if (achievements != null) achievements.save();
     }
 
     public Net net() { return net; }
     public NetEconomy economy() { return economy; }
     public SharedStats sharedStats() { return sharedStats; }
     public Cosmetics cosmetics() { return cosmetics; }
+    public DiscordLink discord() { return discord; }
+    public Social social() { return social; }
+    public File shared() { return shared; }
 
     @EventHandler
     public void onBackendJoin(PlayerJoinEvent e) {

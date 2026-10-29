@@ -81,6 +81,7 @@ public final class Scrap implements Listener {
 
     public void add(Player p, long n, String why) {
         if (ranks != null && why != null && !why.equals("gift")) n = Math.round(n * ranks.scrapMultiplier(p));
+        if (why != null && !why.equals("gift")) n = Math.round(n * net.alloymc.core.Events.scrapMultiplier("survival"));   // Double Scrap events
         plugin.economy().addScrap(p, n);
         if (why != null) p.sendActionBar(Ui.mm("<#c6a15b>⚙ +" + n + " Scrap <gray>(" + why + ")"));
     }
