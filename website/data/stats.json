@@ -1,5 +1,5 @@
 {
- "updated": 1793235094,
+ "updated": 1793235410,
  "boards": {
   "kills": [],
   "arcade_wins": [
@@ -23,7 +23,7 @@
    },
    {
     "name": "raphbaby",
-    "value": 3
+    "value": 4
    },
    {
     "name": "Kiianah",
@@ -60,7 +60,7 @@
   {
    "name": "raphbaby",
    "arcade_wins": 2,
-   "arcade_games": 3,
+   "arcade_games": 4,
    "arcade_kills": 1
   }
  ]

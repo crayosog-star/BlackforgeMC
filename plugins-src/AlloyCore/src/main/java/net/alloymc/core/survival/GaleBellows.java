@@ -179,10 +179,12 @@ public final class GaleBellows implements Listener {
 
     /** Bellows handed out before the resource pack was live point at a model nobody has: swap them back to the breeze rod look. */
     private void repair(Player p) {
-        if (customModel) return;
-        for (ItemStack it : p.getInventory().getContents())
-            if (isBellows(it) && it.getItemMeta().hasItemModel())
-                it.editMeta(m -> { m.setItemModel(null); m.setEnchantmentGlintOverride(true); });
+        for (ItemStack it : p.getInventory().getContents()) {
+            if (!isBellows(it)) continue;
+            // pack live: older bellows get the texture; pack off: drop the model so they aren't purple/black
+            if (customModel && !it.getItemMeta().hasItemModel()) it.editMeta(m -> { m.setItemModel(modelKey); m.setEnchantmentGlintOverride(null); });
+            else if (!customModel && it.getItemMeta().hasItemModel()) it.editMeta(m -> { m.setItemModel(null); m.setEnchantmentGlintOverride(true); });
+        }
     }
 
     // ------------------------------------------------------------------ casting
