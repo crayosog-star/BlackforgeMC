@@ -257,6 +257,8 @@ public final class HubModule implements Listener {
 
     private void kit(Player p) {
         p.getInventory().clear();
+        p.getInventory().setItem(0, Ui.item(Material.KNOWLEDGE_BOOK, "<#4fd1c5><bold>Guide</bold> <gray>(right-click)", "<gray>Servers, custom items, money, rules"));
+        p.getInventory().setItem(1, Ui.item(Material.CLOCK, "<#ffb347><bold>Milestones</bold> <gray>(right-click)", "<gray>Rewards for playing on any server"));
         p.getInventory().setItem(4, Ui.item(Material.COMPASS, "<gold><bold>Server Selector</bold> <gray>(right-click)", "<gray>Pick a game mode to play"));
         p.getInventory().setItem(8, visibilityItem(hidingPlayers.contains(p.getUniqueId())));
         p.getInventory().setHeldItemSlot(4);
@@ -315,6 +317,8 @@ public final class HubModule implements Listener {
             p.sendMessage(Ui.mm("  <#d9dde3>» <u><click:run_command:'/alloyjoin survival'>Survival</click></u> <gray>- claims, crates, KOTH, the Scrapyard"));
             p.sendMessage(Ui.mm("  <#e5484d>» <u><click:run_command:'/alloyjoin factions'>Factions</click></u> <gray>- build a faction, raid rivals"));
             p.sendMessage(Ui.mm("  <#ffc53d>» <u><click:run_command:'/alloyjoin arcade'>Arcade</click></u> <gray>- BedWars, SkyWars, Duels + 14 more minigames"));
+            p.sendMessage(Ui.mm("  <gray>Lost? The <#4fd1c5>Guide</#4fd1c5> book (or <white>/guide</white>) explains everything."));
+            p.sendMessage(Ui.mm("  <gray>Brought by a friend? <white>/referral <name></white> pays you both."));
             p.sendMessage(Ui.mm("  <gray>Be respectful and have fun - type <white>/hub</white> any time to come back here."));
             p.sendMessage(Ui.mm(" "));
         }, 60L);
@@ -345,6 +349,8 @@ public final class HubModule implements Listener {
         Player p = e.getPlayer();
         if (it == null) return;
         if (it.getType() == Material.COMPASS) { e.setCancelled(true); openMenu(p); }
+        else if (it.getType() == Material.KNOWLEDGE_BOOK) { e.setCancelled(true); p.performCommand("guide"); }
+        else if (it.getType() == Material.CLOCK) { e.setCancelled(true); p.performCommand("milestones"); }
         else if (it.getType() == Material.LIME_DYE || it.getType() == Material.GRAY_DYE) {
             e.setCancelled(true);
             boolean hide = !hidingPlayers.remove(p.getUniqueId());
