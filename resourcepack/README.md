@@ -13,7 +13,9 @@ This writes `build/blackforge-pack.zip` and prints its SHA-1.
 
 ## Use
 
-1. Host the zip somewhere stable over HTTPS (for example under blackforgemc.com).
+1. Copy the zip to `website/pack/blackforge-pack-<first 8 of sha1>.zip` (keep older zips). Servers download it from
+   GitHub (`raw.githubusercontent.com/.../main/website/pack/...`), so it is live as soon as it is merged to main.
+   blackforgemc.com is a manual Cloudflare upload and is NOT used for the pack.
 2. `tools/deploy.py` sets these on every server (update `PACK_URL` and `PACK_SHA1` there):
    - `resource-pack=<zip URL>`
    - `resource-pack-sha1=<SHA-1 from the build>`
