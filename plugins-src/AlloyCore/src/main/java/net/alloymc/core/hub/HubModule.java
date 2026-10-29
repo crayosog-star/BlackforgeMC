@@ -78,6 +78,7 @@ public final class HubModule implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, this::refresh, 60L, 40L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::ambient, 20L, 10L);
         dragons = new DragonAnimator(plugin, world);
+        tutorial = new Tutorial(plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::leaderboards, 60L, 1200L);
         arena = new TestArena(plugin);
         gaia = new net.alloymc.core.survival.GaiaPotion(plugin, (pl, l) -> l.getWorld() == arena.world(),   // never on the hub itself
@@ -391,7 +392,10 @@ public final class HubModule implements Listener {
             }
     }
 
+    private Tutorial tutorial;
+
     private void connect(Player p, String server) {
+        if (tutorial != null) tutorial.pickedGame(p);
         p.sendActionBar(Ui.mm("<gold>Sending you to <white>" + server + "<gold>..."));
         p.playSound(p.getLocation(), Sound.BLOCK_PORTAL_TRAVEL, 0.25f, 1.6f);
         plugin.net().send(p, server);
