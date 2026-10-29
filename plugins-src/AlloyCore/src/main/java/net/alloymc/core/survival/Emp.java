@@ -614,6 +614,9 @@ public final class Emp implements Listener {
     }
 
     @EventHandler public void onQuit(PlayerQuitEvent e) { clear(e.getPlayer()); noFallUntil.remove(e.getPlayer().getUniqueId()); }
+    /** Stop {@code p}'s EMP rise and take its tag down, as a death would. For game modes with fake deaths (the Arcade). */
+    public void endFor(Player p) { clear(p); }
+
     @EventHandler public void onDeath(PlayerDeathEvent e) { clear(e.getPlayer()); }
     @EventHandler public void onWorld(PlayerChangedWorldEvent e) { clear(e.getPlayer()); }
 
