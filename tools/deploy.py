@@ -14,8 +14,8 @@ PERMANENT_OPS = [OWNER, {"uuid": "8c67e820-3611-42b8-9f5f-d355d31f9ca9", "name":
 ADDRESS = "blackforgemc.com"
 # served straight from GitHub (public repo, main branch): a merged pack is downloadable at once, no website re-upload.
 # The file name carries the SHA-1, so a new pack is a new file and clients never get a stale cached copy.
-PACK_URL = "https://raw.githubusercontent.com/crayosog-star/BlackforgeMC/main/website/pack/blackforge-pack-37034eb8.zip"
-PACK_SHA1 = "37034eb872e3e4592693474bada123ef5aa0265f"
+PACK_URL = "https://raw.githubusercontent.com/crayosog-star/BlackforgeMC/main/website/pack/blackforge-pack-b025a218.zip"
+PACK_SHA1 = "b025a21818c469662c7fb34668421bb7535f2aa8"
 
 SERVERS = {
     "hub":      {"port": 30001, "mode": "hub", "display": "Hub", "join": ""},
