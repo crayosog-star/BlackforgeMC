@@ -29,8 +29,19 @@ public final class ChainPull {
     public static final double REEL_ANTI_GRAVITY = 0.08;
     /** Reeling stops this close to the anchor. */
     public static final double ARRIVE_DIST = 1.6;
-    /** Reeling gives up after this many ticks (2 s). */
-    public static final int REEL_MAX_TICKS = 40;
+    /** Reeling gives up after this many ticks (2.5 s). */
+    public static final int REEL_MAX_TICKS = 50;
+    /** A grapple starts at this share of {@link #REEL_SPEED}... */
+    public static final double REEL_START = 0.15;
+    /** ...and eases up to full speed over this many ticks (a smoothstep: slow start, then it really pulls). */
+    public static final int REEL_RAMP_TICKS = 14;
+
+    /** Reel speed (blocks a tick) {@code tick} ticks into a grapple: eases from slow up to {@link #REEL_SPEED}. */
+    public static double reelSpeed(int tick) {
+        double t = Math.max(0, Math.min(1, tick / (double) REEL_RAMP_TICKS));
+        double ease = t * t * (3 - 2 * t);
+        return REEL_SPEED * (REEL_START + (1 - REEL_START) * ease);
+    }
 
     /** A hooked player is pulled exactly this far towards the caster: a step, not a drag. */
     public static final double PLAYER_PULL = 1.0;
@@ -69,10 +80,13 @@ public final class ChainPull {
     }
 
     /** The reel velocity {x, y, z} for a caster at offset (dx, dy, dz) from the anchor (anchor minus caster). */
-    public static double[] reel(double dx, double dy, double dz) {
+    public static double[] reel(double dx, double dy, double dz) { return reel(dx, dy, dz, REEL_SPEED); }
+
+    /** As {@link #reel(double, double, double)} at a given speed (blocks a tick). */
+    public static double[] reel(double dx, double dy, double dz, double speed) {
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (d < 1e-6) return new double[] {0, REEL_ANTI_GRAVITY, 0};
-        double s = Math.min(REEL_SPEED, d) / d;   // never overshoot in one tick
+        double s = Math.min(speed, d) / d;   // never overshoot in one tick
         return new double[] {dx * s, dy * s + REEL_ANTI_GRAVITY, dz * s};
     }
 

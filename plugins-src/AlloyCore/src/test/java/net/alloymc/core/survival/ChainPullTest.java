@@ -94,4 +94,21 @@ class ChainPullTest {
         assertTrue(ChainPull.tetherHolds(ChainPull.TETHER_SNAP));
         assertFalse(ChainPull.tetherHolds(ChainPull.TETHER_SNAP + 0.01));
     }
+
+    // ---- grapple ease-in
+
+    @Test void grappleStartsSlowAndEasesUpToFullSpeed() {
+        assertEquals(ChainPull.REEL_SPEED * ChainPull.REEL_START, ChainPull.reelSpeed(0), EPS);
+        assertEquals(ChainPull.REEL_SPEED, ChainPull.reelSpeed(ChainPull.REEL_RAMP_TICKS), EPS);
+        assertEquals(ChainPull.REEL_SPEED, ChainPull.reelSpeed(ChainPull.REEL_RAMP_TICKS + 10), EPS);
+        for (int t = 1; t <= ChainPull.REEL_RAMP_TICKS; t++)
+            assertTrue(ChainPull.reelSpeed(t) > ChainPull.reelSpeed(t - 1), "keeps speeding up at tick " + t);
+    }
+
+    @Test void longestGrappleStillArrivesBeforeGivingUp() {
+        double travelled = 0;
+        int t = 0;
+        while (travelled < ChainPull.GRAPPLE_RANGE && t < ChainPull.REEL_MAX_TICKS) travelled += ChainPull.reelSpeed(t++);
+        assertTrue(travelled >= ChainPull.GRAPPLE_RANGE - ChainPull.ARRIVE_DIST, "24 blocks covered in " + t + " ticks");
+    }
 }
