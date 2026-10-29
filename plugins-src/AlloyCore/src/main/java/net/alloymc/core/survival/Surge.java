@@ -90,7 +90,7 @@ public final class Surge implements Listener, Hackable {
         this.allowedAt = allowedAt;
         this.staffSkipCooldown = staffSkipCooldown;
         this.enabled = plugin.getConfig().getBoolean("surge.enabled", true);
-        this.customModel = plugin.getConfig().getBoolean("surge.custom-model", false);   // only once the resource pack is live
+        this.customModel = plugin.getConfig().getBoolean("surge.custom-model", plugin.getConfig().getBoolean("resource-pack-live", false));   // only once the resource pack is live
         this.screenDarkness = plugin.getConfig().getBoolean("surge.screen-darkness", true);
         this.tagKey = new NamespacedKey(plugin, "surge_item");
         this.modelKey = new NamespacedKey("blackforge", "surge");

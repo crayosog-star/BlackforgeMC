@@ -1,6 +1,7 @@
 # BlackForgeMC resource pack
 
-One network-wide pack with every BlackForgeMC custom item texture: Gale Bellows, Surge, Potion of Gaia.
+One network-wide pack with every BlackForgeMC custom item texture: Gale Bellows, Surge, Potion of Gaia, Potion of
+Darkness, God's Eye, Ashen Chain, Ashen Bonfire, Last Rite, Rimelock, Soul Candy.
 Players get it when they join the hub; every server sends the same URL + SHA-1, so it downloads once.
 
 ## Build
@@ -30,6 +31,9 @@ This writes `build/blackforge-pack.zip` and prints its SHA-1.
 - `assets/blackforge/textures/item/gale_bellows.png` - 16x16 texture
 - `assets/blackforge/items/gaia_potion.json`, `models/item/gaia_potion.json`, `textures/item/gaia_potion.png` - Potion of Gaia
 
-Servers turn textures on with `resource-pack-live: true` in AlloyCore's config (deploy.py writes it).
+The pixel art for the generated items lives in `tools/pack_art.py` (16x16 character grids): edit it, run it, then rebuild.
+
+Servers turn textures on with `resource-pack-live: true` in AlloyCore's config (deploy.py writes it). `ItemSkins` then
+puts each item's `blackforge:<id>` model on it by its plugin tag, old copies included; add new items to its list.
 
 Without the pack the Gale Bellows still works; it just looks like a named breeze rod.

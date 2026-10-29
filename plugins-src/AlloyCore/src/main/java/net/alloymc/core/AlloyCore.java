@@ -70,6 +70,7 @@ public final class AlloyCore extends JavaPlugin implements Listener {
         new Community(this, mode, shared);
         if (survival != null || skyblock != null || factions != null || arcade != null) challenges = new Challenges(this, mode);
         new HallowEvent(this, mode, cosmetics);
+        new ItemSkins(this);
         getLogger().info("AlloyCore enabled in " + mode + " mode");
     }
 
