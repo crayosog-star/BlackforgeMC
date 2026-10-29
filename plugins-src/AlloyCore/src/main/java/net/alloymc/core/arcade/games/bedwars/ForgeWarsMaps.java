@@ -42,7 +42,7 @@ final class ForgeWarsMaps {
         d.display = name; d.description = desc; d.teams = teams;
         d.minPlayers = 2; d.maxPlayers = teams * 4;
         d.variants.addAll(java.util.List.of(variants));
-        d.builderVersion = 3;   // v3: the Undercroft (tall cave arena, ramps, launch pad); a bump makes servers rebuild the template
+        d.builderVersion = 4;   // v4: Black Market grotto off the north wall (v3: the Undercroft); a bump makes servers rebuild the template
         int ext = ringR + 26;
         d.bounds = Box.of(-ext, -56, -ext, ext, 40, ext);
         d.voidY = -50;           // below the bottom of the Core's rock: the cave floor (-27) must be well above the void
