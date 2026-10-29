@@ -28,6 +28,10 @@ public final class PreviewMain {
         pov(hub, new File(out, "hub_view_side.png"), 44.5, 112, 30.5, 125, -14, 1280, 720);
         topDown(hub, new File(out, "hub_top.png"), 6);
         pov(hub, new File(out, "hub_castle_aerial.png"), 0.5, 240, 300.5, 180, 32, 1600, 900);
+        // the island on its own (no castle ring), for the website's hero image
+        Canvas island = new Canvas();
+        hub.blocks().forEach((k, b) -> { if (Math.hypot(Canvas.kx(k), Canvas.kz(k)) < 120) island.set(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k), b); });
+        render(island, new File(out, "hub_island.png"), 0, 7);
         dragons(hub, out);
         night = false;
         Canvas ta = net.alloymc.core.hub.TestArenaBuilder.build();
