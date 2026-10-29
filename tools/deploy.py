@@ -12,8 +12,8 @@ OWNER = {"uuid": "f2aef66f-fb87-4635-8c61-4b116baaa5b5", "name": "GavVFX", "leve
 # permanent ops: re-added on every deploy, so a rebuilt or wiped server never loses them
 PERMANENT_OPS = [OWNER, {"uuid": "8c67e820-3611-42b8-9f5f-d355d31f9ca9", "name": "Causee", "level": 4, "bypassesPlayerLimit": True}]
 ADDRESS = "blackforgemc.com"
-PACK_URL = "https://blackforgemc.com/pack/blackforge-pack-e5c04c12.zip"
-PACK_SHA1 = "e5c04c1255ace878033d284cdd22fb899a98aef0"
+PACK_URL = "https://blackforgemc.com/pack/blackforge-pack-37034eb8.zip"
+PACK_SHA1 = "37034eb872e3e4592693474bada123ef5aa0265f"
 
 SERVERS = {
     "hub":      {"port": 30001, "mode": "hub", "display": "Hub", "join": ""},
@@ -69,16 +69,18 @@ for name, s in SERVERS.items():
     ] if s["mode"] == "skyblock" else []
     (cfg / "config.yml").write_text("\n".join([
         "# hub | arcade | survival | skyblock | factions | backend", f"mode: {s['mode']}", f"display-name: {s['display']}",
-        f"join-command: '{s['join']}'", f"address: '{ADDRESS}'", *koth, ""]), encoding="utf-8")
+        f"join-command: '{s['join']}'", f"address: '{ADDRESS}'", "resource-pack-live: true", *koth, ""]), encoding="utf-8")
     set_props(d / "server.properties", {
         "enable-rcon": "true", "rcon.port": str(s["port"] + 1000), "rcon.password": RCON_PASS,
         "broadcast-rcon-to-ops": "false", "motd": f"BlackForgeMC {s['display']}",
     })
-    if s["mode"] == "survival":   # custom item textures (Gale Bellows); rebuild with tools/build_pack.py and update both lines
-        set_props(d / "server.properties", {
-            "resource-pack": PACK_URL, "resource-pack-sha1": PACK_SHA1, "require-resource-pack": "true",
-            "resource-pack-prompt": '{"text":"BlackForgeMC needs a tiny texture pack (1 KB) for its custom items.","color":"gold"}',
-        })
+    # one network-wide pack for every custom item texture. The hub asks for it on join; the other servers send the same
+    # URL + SHA-1, so the client reuses its cached copy instead of downloading again. Rebuild with tools/build_pack.py
+    # and update PACK_URL/PACK_SHA1 whenever the pack changes.
+    set_props(d / "server.properties", {
+        "resource-pack": PACK_URL, "resource-pack-sha1": PACK_SHA1, "require-resource-pack": "true",
+        "resource-pack-prompt": '{"text":"BlackForgeMC needs a small texture pack for its custom items.","color":"gold"}',
+    })
     ops = d / "ops.json"
     cur = json.loads(ops.read_text()) if ops.exists() and ops.read_text().strip() else []
     for op in PERMANENT_OPS:

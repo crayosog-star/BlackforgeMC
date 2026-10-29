@@ -75,7 +75,7 @@ public final class GaleBellows implements Listener {
         this.enabled = plugin.getConfig().getBoolean("gale-bellows.enabled", true);
         this.cooldownTicks = Math.max(0, (int) Math.round(plugin.getConfig().getDouble("gale-bellows.cooldown-seconds", 7) * 20));
         // only once the BlackForgeMC resource pack is live: without it the model id renders as the purple/black missing model
-        this.customModel = plugin.getConfig().getBoolean("gale-bellows.custom-model", false);
+        this.customModel = plugin.getConfig().getBoolean("gale-bellows.custom-model", plugin.getConfig().getBoolean("resource-pack-live", false));
         this.tagKey = new NamespacedKey(plugin, "gale_bellows");
         this.uidKey = new NamespacedKey(plugin, "gb_uid");
         this.modelKey = new NamespacedKey("blackforge", "gale_bellows");   // the resource pack's item model

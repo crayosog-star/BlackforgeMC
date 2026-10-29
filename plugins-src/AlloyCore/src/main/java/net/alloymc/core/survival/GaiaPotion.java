@@ -41,8 +41,8 @@ public final class GaiaPotion implements Listener {
     private static final int MIN_CELLS = 15;          // need a reasonably flat spot
 
     private final AlloyCore plugin;
-    private final boolean enabled;
-    private final NamespacedKey tagKey, cooldownGroup;
+    private final boolean enabled, customModel;
+    private final NamespacedKey tagKey, cooldownGroup, modelKey;
     private final BiPredicate<Player, Location> mayUse;   // spawn + claims rules, supplied by the server module
     private final java.util.function.Predicate<Location> testArea;   // the hub Arena: refilled potions, new cloud replaces your old one
     private final List<GaiaPlatform> active = new ArrayList<>();
@@ -62,6 +62,9 @@ public final class GaiaPotion implements Listener {
         this.enabled = plugin.getConfig().getBoolean("gaia-potion.enabled", true);
         this.tagKey = new NamespacedKey(plugin, "gaia_potion");
         this.cooldownGroup = new NamespacedKey("blackforge", "gaia_potion");
+        this.modelKey = new NamespacedKey("blackforge", "gaia_potion");   // the resource pack's item model
+        // only with the resource pack: without it the model id renders as the purple/black missing model
+        this.customModel = plugin.getConfig().getBoolean("gaia-potion.custom-model", plugin.getConfig().getBoolean("resource-pack-live", false));
         this.barrierLog = new File(plugin.getDataFolder(), "gaia-barriers.txt");
         cleanLeftovers();
         Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -74,6 +77,7 @@ public final class GaiaPotion implements Listener {
         ItemStack it = new ItemStack(Material.SPLASH_POTION);
         it.editMeta(PotionMeta.class, m -> {
             m.setColor(GaiaPlatform.PETAL_PINK);   // pink bottle with no resource pack
+            if (customModel) m.setItemModel(modelKey);   // pack texture, also used for the potion in flight
             m.displayName(Ui.mm(NAME));
             m.lore(List.of(
                     Ui.mm("<gray>Throw it to grow a cloud of mist"),

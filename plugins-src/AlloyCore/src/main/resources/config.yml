@@ -1,6 +1,10 @@
 # hub | arcade | backend
 mode: backend
 
+# true once the BlackForgeMC resource pack is served on this server: custom items then use their textures by default
+# (an item's own custom-model setting still wins). False = items show as their vanilla base item.
+resource-pack-live: false
+
 # Gale Bellows PvP item (survival only). Every player gets one on first join; /jbello gives another if they
 # don't carry one. Set false to stop it firing. Its custom texture needs the resource pack: leave custom-model
 # false until the pack is live (otherwise it shows as the purple/black missing model); until then it is a
@@ -11,7 +15,7 @@ gale-bellows:
   cooldown-seconds: 7   # seconds between blasts (and Gale jumps), Arena included; 0 = no cooldown
 
 # Potion of Gaia (survival only): a pink splash potion that grows a mist, blooms, and rises as an 8-block
-# platform. No resource pack needed. Staff: /gaia. Crates: alloy gaia give {player}. Set false to stop it.
+# platform. Works without the resource pack; with it (resource-pack-live) it gets its own texture. Staff: /gaia. Crates: alloy gaia give {player}. Set false to stop it.
 gaia-potion:
   enabled: true
 
