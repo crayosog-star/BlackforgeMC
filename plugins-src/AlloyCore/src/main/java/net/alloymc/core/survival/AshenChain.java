@@ -38,11 +38,13 @@ import java.util.function.Predicate;
  *
  * Left-click (strike): a skillshot along your aim, up to 12 blocks, stopped by blocks. Point-blank works too: hitting
  * a player or mob with the chain in hand fires it at them instead of punching. A miss costs the normal cooldown.
- * Hitting a player chains them: they're pulled exactly 1 block towards you and set on fire
- * for a few seconds (real fire: no other damage, Fire Resistance ignores it), and the chain stays drawn between you.
- * Landing it puts the chain on a longer cooldown. They break free with Surge ({@link #breakFree}), by grappling away
- * with their own Ashen Chain, by getting into water, by putting a block between you, or by getting
- * {@link ChainPull#TETHER_SNAP} away. Hostile mobs are still hooked for 1 heart and dragged to you.
+ * Hitting a player sets them on fire (real fire: no other damage, Fire Resistance ignores it) and the chain holds
+ * them for a short window (pull-delay-seconds, 0.5 s). Break free inside it - Surge ({@link #breakFree}), grappling
+ * away with their own Ashen Chain, water, a block between you, or {@link ChainPull#TETHER_SNAP} away - and there's no
+ * pull. Otherwise they're yanked exactly 1 block towards you and the chain reels back in and is gone. Landing it puts
+ * the chain on a longer cooldown. Hostile mobs are still hooked for 1 heart and dragged to you.
+ *
+ * The chain itself is real chain-block models with a small fire riding the hook head ({@link ChainLine}).
  *
  * Hooking a target goes through a normal damage event first, so spawn protection and PvP rules decide who can be
  * dragged. Only where {@code allowedAt} says (the hub Arena for now). Never used up.
@@ -50,11 +52,13 @@ import java.util.function.Predicate;
 public final class AshenChain implements Listener {
     public static final String NAME = "<gradient:#8C8580:#C2541B:#6E0F0F><bold>Ashen Chain</bold></gradient>";
     public static final double DAMAGE = 2.0;                 // 1 heart (hostile mobs)
-    private static final int THROW_SPEED = 4;                // blocks per tick the hook flies
     private static final int YANK_DRAW_TICKS = 8;            // chain stays drawn to a dragged target this long
     private static final long NO_FALL_MS = 2000;             // after a reel ends
     private static final int PULL_TICKS = 5;                 // a hooked target is dragged its 1 block over this long
+    private static final int RETRACT_TICKS = 5;              // then the chain reels back into your hand over this long
     private static final double LINK = 1.0;                  // length of one chain model (one chain block)
+    private static final float LINK_WIDTH = 0.7f;            // chain models are drawn a bit thinner than a chain block
+    private static final double START_OUT = 1.3;             // the chain starts this far in front of you, so it never fills your screen
 
     static final Color ASH = Color.fromRGB(0x4A4542), RUST = Color.fromRGB(0x7A3B1E), EMBER = Color.fromRGB(0xE0702A),
             BONE = Color.fromRGB(0xB8B0A2), BLOOD = Color.fromRGB(0x6E0F0F);
@@ -69,7 +73,8 @@ public final class AshenChain implements Listener {
     private final Map<UUID, BukkitTask> active = new HashMap<>();   // caster -> their chain in flight or reeling
     private final Map<UUID, Long> readyAt = new HashMap<>();
     private final Map<UUID, Long> noFallUntil = new HashMap<>();
-    private final int playerCooldownTicks, burnTicks;
+    private final int playerCooldownTicks, burnTicks, holdTicks;
+    private final double throwSpeed;   // blocks per tick the hook flies
     private final Map<UUID, Tether> tethers = new HashMap<>();      // chained target -> its burning tether
     private boolean dealing;   // true while the chain itself is hurting / probing someone, so onMelee lets it through
     private final Map<UUID, ChainLine> lines = new HashMap<>();     // caster -> the chain model currently out
@@ -82,10 +87,12 @@ public final class AshenChain implements Listener {
      */
     private final class ChainLine {
         final List<BlockDisplay> links = new ArrayList<>();
+        BlockDisplay tip;   // a small fire riding the hook head
         int drawnAt;
 
-        void draw(Location a, Location b, int tick) {
+        void draw(Location a, Location b, int tick, boolean fireTip) {
             drawnAt = tick;
+            placeTip(b, fireTip);
             Vector d = b.toVector().subtract(a.toVector());
             double len = d.length();
             if (len < 0.05) return;
@@ -93,12 +100,12 @@ public final class AshenChain implements Listener {
             while (links.size() > n) links.remove(links.size() - 1).remove();
             Vector u = d.clone().multiply(1 / len);
             Quaternionf rot = new Quaternionf().rotationTo(0, 1, 0, (float) u.getX(), (float) u.getY(), (float) u.getZ());
-            Vector3f centre = rot.transform(new Vector3f(-0.5f, 0, -0.5f));   // the chain runs up the middle of its block
+            Vector3f centre = rot.transform(new Vector3f(-LINK_WIDTH / 2, 0, -LINK_WIDTH / 2));   // the chain runs up the middle of its block
             for (int i = 0; i < n; i++) {
                 double from = i * LINK;
                 float seg = (float) Math.min(LINK, len - from);
                 Location at = a.clone().add(u.clone().multiply(from));
-                Transformation tf = new Transformation(centre, rot, new Vector3f(1f, seg, 1f), new Quaternionf());
+                Transformation tf = new Transformation(centre, rot, new Vector3f(LINK_WIDTH, seg, LINK_WIDTH), new Quaternionf());
                 if (i < links.size()) {
                     BlockDisplay l = links.get(i);
                     if (!l.isValid()) continue;
@@ -119,13 +126,32 @@ public final class AshenChain implements Listener {
             }
         }
 
-        void remove() { links.forEach(Entity::remove); links.clear(); }
+        private void placeTip(Location at, boolean on) {
+            if (!on) { if (tip != null) { tip.remove(); tip = null; } return; }
+            if (tip != null && tip.isValid()) { tip.teleport(at); return; }
+            float sz = 0.6f;
+            tip = at.getWorld().spawn(at, BlockDisplay.class, e -> {
+                e.setBlock(Material.FIRE.createBlockData());
+                e.setPersistent(false);
+                e.setTeleportDuration(1);
+                e.setBrightness(new Display.Brightness(15, 15));
+                e.setShadowRadius(0);
+                e.setTransformation(new Transformation(new Vector3f(-sz / 2, -sz / 2, -sz / 2), new Quaternionf(), new Vector3f(sz), new Quaternionf()));
+            });
+        }
+
+        void remove() {
+            links.forEach(Entity::remove);
+            links.clear();
+            if (tip != null) { tip.remove(); tip = null; }
+        }
     }
 
     /** A burning chain between a caster and the player (or Test Dummy) they hooked. */
     private static final class Tether {
         final UUID caster;
         BukkitTask task;
+        boolean pulling;   // past the break-free window: the pull can't be stopped any more
         Tether(UUID caster) { this.caster = caster; }
     }
     private final Random rnd = new Random();
@@ -139,6 +165,8 @@ public final class AshenChain implements Listener {
         this.cooldownTicks = Math.max(0, (int) Math.round(plugin.getConfig().getDouble("ashen-chain.cooldown-seconds", 3) * 20));
         this.playerCooldownTicks = Math.max(0, (int) Math.round(plugin.getConfig().getDouble("ashen-chain.player-hit-cooldown-seconds", 5) * 20));
         this.burnTicks = Math.max(0, (int) Math.round(plugin.getConfig().getDouble("ashen-chain.burn-seconds", 3) * 20));
+        this.holdTicks = Math.max(1, (int) Math.round(plugin.getConfig().getDouble("ashen-chain.pull-delay-seconds", 0.5) * 20));
+        this.throwSpeed = Math.max(0.2, plugin.getConfig().getDouble("ashen-chain.throw-speed", 30) / 20.0);
         this.tagKey = new NamespacedKey(plugin, "ashen_chain");
         Bukkit.getPluginManager().registerEvents(this, plugin);
         this.sweeper = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
@@ -158,10 +186,10 @@ public final class AshenChain implements Listener {
                     Ui.mm("<dark_gray><italic>It drags the living into the dark."),
                     Ui.mm(""),
                     Ui.mm("<white>Right-click<gray>: grapple to the block you aim at"),
-                    Ui.mm("<white>Left-click<gray>: strike - a player hit is chained, <white>1 block <gray>closer,"),
-                    Ui.mm("<gray>and set on fire for <white>" + secs(burnTicks) + " <dark_gray>(fire damage only)"),
-                    Ui.mm("<gray>They break free with <white>Surge<gray>, their own chain,"),
-                    Ui.mm("<gray>water, cover, or by out-running it"),
+                    Ui.mm("<white>Left-click<gray>: strike - a hit sets them on fire <dark_gray>(" + secs(burnTicks) + ")"),
+                    Ui.mm("<gray>and yanks them <white>1 block <gray>closer after <white>" + secs(holdTicks)),
+                    Ui.mm("<gray>Break free in time - <white>Surge<gray>, your own chain,"),
+                    Ui.mm("<gray>water or cover - and you aren't pulled"),
                     Ui.mm("<gray>Reach: <white>" + (int) ChainPull.GRAPPLE_RANGE + " <gray>blocks, <white>" + (int) ChainPull.YANK_RANGE + " <gray>at players"),
                     Ui.mm("<gray>Sneak to let go · no fall damage while chained"),
                     Ui.mm(cooldownTicks > 0 ? "<gray>Cooldown: <white>" + secs(cooldownTicks) + "<gray>, <white>" + secs(playerCooldownTicks) + " <gray>after chaining a player" : "<gray>Cooldown: <white>none"),
@@ -239,12 +267,13 @@ public final class AshenChain implements Listener {
         throwSounds(p);
         RayTraceResult blockHit = w.rayTraceBlocks(eye, dir, ChainPull.GRAPPLE_RANGE, FluidCollisionMode.NEVER, true);
         if (blockHit == null) {   // into the open air: it falls slack
-            fly(p, eye.clone().add(dir.multiply(ChainPull.GRAPPLE_RANGE)), () -> slack(p));
+            Location far = eye.clone().add(dir.multiply(ChainPull.GRAPPLE_RANGE));
+            fly(p, () -> far, () -> slack(p));
             return;
         }
         Location anchor = blockHit.getHitPosition().toLocation(w);
         Block b = blockHit.getHitBlock();
-        fly(p, anchor, () -> anchor(p, anchor, b));
+        fly(p, () -> anchor, () -> anchor(p, anchor, b));
     }
 
     /**
@@ -268,32 +297,38 @@ public final class AshenChain implements Listener {
         }
         if (target == null) {   // missed: the chain clatters off the wall, or falls slack in the air
             Location end = blockHit != null ? blockHit.getHitPosition().toLocation(w) : eye.clone().add(dir.multiply(ChainPull.YANK_RANGE));
-            fly(p, end, () -> slack(p));
+            fly(p, () -> end, () -> slack(p));
             return;
         }
         if (!alsoTarget.test(target) && !allowed(p, target)) {   // the dummy counts every damage event: no probe for it
             p.sendActionBar(Ui.mm("<#C2541B>⛓ <gray>The chain won't bite here."));
-            fly(p, chest(target), () -> slack(p));
+            LivingEntity miss = target;
+            fly(p, () -> chest(miss), () -> slack(p));
             return;
         }
         LivingEntity t = target;
-        fly(p, chest(t), () -> hook(p, t));
+        fly(p, () -> chest(t), () -> hook(p, t));   // the hook homes on them: the hit was decided when you threw
     }
 
-    /** The hook flies out from the hand to {@code to} at {@link #THROW_SPEED}, drawing the chain behind it, then {@code then}. */
-    private void fly(Player p, Location to, Runnable then) {
+    /**
+     * The hook flies out to wherever {@code to} says (asked every tick, so it follows a moving target) at
+     * {@link #throwSpeed} (ashen-chain.throw-speed, blocks a second), drawing the chain behind it, then {@code then}.
+     */
+    private void fly(Player p, java.util.function.Supplier<Location> to, Runnable then) {
         UUID id = p.getUniqueId();
-        int ticks = Math.max(1, (int) Math.ceil(hand(p).distance(to) / THROW_SPEED));
-        int[] n = {0};
+        double[] out = {0};   // how far the hook has travelled
         BukkitTask task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            if (!p.isOnline() || p.isDead() || p.getWorld() != to.getWorld()) { stop(id); return; }
-            int k = ++n[0];
-            Location from = hand(p);
-            Vector d = to.toVector().subtract(from.toVector());
-            Location head = from.clone().add(d.multiply(Math.min(1.0, k / (double) ticks)));
-            drawChain(p, from, head);
+            Location target = to.get();
+            if (!p.isOnline() || p.isDead() || p.getWorld() != target.getWorld()) { stop(id); return; }
+            out[0] += throwSpeed;
+            Location from = chainStart(p, target);
+            Vector d = target.toVector().subtract(from.toVector());
+            double dist = d.length();
+            boolean arrived = out[0] >= dist;
+            Location head = arrived || dist < 1e-6 ? target.clone() : from.clone().add(d.multiply(out[0] / dist));
+            drawChain(p, from, head, true);
             hookHead(head);
-            if (k >= ticks) { stop(id); then.run(); }
+            if (arrived) { stop(id); then.run(); }
         }, 0L, 1L);
         active.put(id, task);
     }
@@ -338,7 +373,7 @@ public final class AshenChain implements Listener {
         BukkitTask task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             if (n[0]++ >= YANK_DRAW_TICKS || !p.isOnline() || !t.isValid() || t.getWorld() != p.getWorld()) { stop(id); return; }
             Location c = t.getLocation().add(0, t.getHeight() * 0.6, 0);
-            drawChain(p, hand(p), c);
+            drawChain(p, chainStart(p, c), c, true);
             w.spawnParticle(Particle.WHITE_ASH, c, 4, 0.2, 0.3, 0.2, 0.01);
             w.spawnParticle(Particle.SMALL_FLAME, c, 1, 0.15, 0.2, 0.15, 0.01);
         }, 1L, 1L);
@@ -350,16 +385,16 @@ public final class AshenChain implements Listener {
     private static Location chest(LivingEntity t) { return t.getLocation().add(0, t.getHeight() * 0.6, 0); }
 
     /**
-     * A player (or the Test Dummy) is hooked: pulled exactly 1 block towards the caster, set on fire (real fire: the
-     * only damage is vanilla fire damage, water puts it out, Fire Resistance ignores it) and chained for
-     * {@code burnTicks}. Each tick the chain is drawn and the tether is checked.
+     * A player (or an Arena practice target) is hooked. Straight away they're set on fire (real fire: the only damage
+     * is vanilla fire damage). Then the chain holds them for {@link #holdTicks} (0.5 s): if they break free in that
+     * window (Surge, their own chain, water, cover, distance) they aren't pulled. If not, they're dragged 1 block to
+     * the caster and the chain reels back in and is gone. The Test Dummy is pinned: it burns but is never moved.
      */
     private void chainPlayer(Player p, LivingEntity t) {
         stop(p.getUniqueId());
         if (!ChainPull.tetherHolds(t.getLocation().distance(p.getLocation()))) { slack(p); return; }   // got away while the hook flew
         World w = t.getWorld();
         UUID cid = p.getUniqueId(), tid = t.getUniqueId();
-        boolean practice = alsoTarget.test(t);   // Arena targets: no PvP probe
         endTether(tid);   // a fresh hook replaces anyone else's chain on them
 
         // landing it on a player costs a longer cooldown than grappling a block
@@ -371,25 +406,23 @@ public final class AshenChain implements Listener {
             }
         }
 
-        if (!pinned.test(t)) pullOneBlock(p, t);   // the Test Dummy is pinned to its post: no pull
         t.setFireTicks(Math.max(t.getFireTicks(), burnTicks));
-
         Location c0 = chest(t);
         w.spawnParticle(Particle.FLAME, c0, 10, 0.25, 0.4, 0.25, 0.01);
-        w.spawnParticle(Particle.WHITE_ASH, c0, 30, 0.5, 0.6, 0.5, 0.02);
-        w.spawnParticle(Particle.SCULK_SOUL, c0, 6, 0.3, 0.4, 0.3, 0.04);
+        w.spawnParticle(Particle.WHITE_ASH, c0, 20, 0.4, 0.5, 0.4, 0.02);
         w.playSound(c0, Sound.ITEM_FIRECHARGE_USE, SoundCategory.PLAYERS, 1.0f, 0.6f);
         w.playSound(c0, Sound.ITEM_ARMOR_EQUIP_IRON, SoundCategory.PLAYERS, 1.2f, 0.6f);
-        w.playSound(c0, Sound.PARTICLE_SOUL_ESCAPE, SoundCategory.PLAYERS, 1.6f, 0.8f);
         String targetName = t instanceof Player tp ? tp.getName() : pinned.test(t) ? "the dummy" : "the zombie";
         if (t instanceof Player tp) {
-            tp.sendActionBar(Ui.mm("<#C2541B>⛓ <gray>Chained by <white>" + p.getName() + "<gray> - burning! Break free: <white>Surge<gray>, your chain, water or cover"));
-            tp.playSound(tp, Sound.AMBIENT_SOUL_SAND_VALLEY_MOOD, SoundCategory.PLAYERS, 0.8f, 1.2f);
+            tp.sendActionBar(Ui.mm("<#C2541B>⛓ <white>" + p.getName() + " <gray>hooked you - <white>break free now<gray>: Surge, your chain, water or cover"));
+            tp.playSound(tp, Sound.BLOCK_CHAIN_HIT, SoundCategory.PLAYERS, 1.0f, 0.6f);
         }
-        p.sendActionBar(Ui.mm("<#C2541B>⛓ <gray>Chained <white>" + targetName + " <gray>· burning <white>" + secs(burnTicks)));
+        p.sendActionBar(Ui.mm("<#C2541B>⛓ <gray>Hooked <white>" + targetName));
 
         Tether tether = new Tether(cid);
         tethers.put(tid, tether);
+        boolean moves = !pinned.test(t);
+        int pullAt = holdTicks + 1, retractAt = pullAt + PULL_TICKS, endAt = retractAt + RETRACT_TICKS;
         int[] n = {0};
         tether.task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             int k = ++n[0];
@@ -397,15 +430,31 @@ public final class AshenChain implements Listener {
             boolean casterOk = caster != null && caster.isOnline() && !caster.isDead() && caster.getWorld() == w;
             boolean targetOk = t.isValid() && !t.isDead() && t.getWorld() == w && !(t instanceof Player tp && !tp.isOnline());
             if (!casterOk || !targetOk) { endTether(tid); return; }
-            if (k > burnTicks) { burnOut(t); return; }
-            if (t.isInWater() || t.getFireTicks() <= 0) { snap(caster, t, "the fire went out"); return; }
-            if (!ChainPull.tetherHolds(t.getLocation().distance(caster.getLocation()))) { snap(caster, t, "distance"); return; }
-            if (k % 4 == 0 && !caster.hasLineOfSight(t)) { snap(caster, t, "cover"); return; }
             Location c = chest(t);
-            drawChain(caster, hand(caster), c);
-            if (k % 4 == 0) w.spawnParticle(Particle.WHITE_ASH, c, 2, 0.25, 0.35, 0.25, 0.005);
-            if (k % 15 == 0) w.playSound(c, Sound.BLOCK_FIRE_AMBIENT, SoundCategory.PLAYERS, 1.0f, 0.7f);
-            if (k % 20 == 0 && !practice && !allowed(caster, t)) { snap(caster, t, "safe ground"); return; }   // walked into spawn / a safe zone
+            if (k < pullAt) {   // the break-free window: the chain holds, taut and burning
+                if (t.isInWater()) { snap(caster, t, "the water"); return; }
+                if (!ChainPull.tetherHolds(c.distance(caster.getLocation()))) { snap(caster, t, "distance"); return; }
+                if (k % 2 == 0 && !caster.hasLineOfSight(t)) { snap(caster, t, "cover"); return; }
+                drawChain(caster, chainStart(caster, c), c, true);
+                if (k % 4 == 1) w.playSound(c, Sound.BLOCK_CHAIN_STEP, SoundCategory.PLAYERS, 0.9f, 0.6f + 0.1f * k / 4f);
+                return;
+            }
+            if (k == pullAt) {   // too late to escape: yank
+                tether.pulling = true;
+                if (moves) pullOneBlock(caster, t);
+                w.playSound(c, Sound.ITEM_TRIDENT_RIPTIDE_1, SoundCategory.PLAYERS, 0.9f, 0.7f);
+                w.playSound(c, Sound.BLOCK_CHAIN_BREAK, SoundCategory.PLAYERS, 0.8f, 0.6f);
+                w.spawnParticle(Particle.WHITE_ASH, c, 12, 0.3, 0.4, 0.3, 0.03);
+            }
+            if (k < retractAt) { drawChain(caster, chainStart(caster, c), c, true); return; }
+            if (k < endAt) {   // the chain reels back into your hand
+                Location from = chainStart(caster, c);
+                double r = (k - retractAt + 1) / (double) RETRACT_TICKS;
+                Location head = c.clone().add(from.toVector().subtract(c.toVector()).multiply(r));
+                if (head.distanceSquared(from) > 0.04) drawChain(caster, from, head, true);
+                return;
+            }
+            endTether(tid);   // nothing draws the chain any more: it's gone next tick
         }, 1L, 1L);
     }
 
@@ -437,15 +486,14 @@ public final class AshenChain implements Listener {
      */
     public void breakFree(Player target, String how) {
         Tether tether = tethers.get(target.getUniqueId());
-        if (tether == null) return;
+        if (tether == null || tether.pulling) return;   // only inside the break-free window
         snap(Bukkit.getPlayer(tether.caster), target, how);
     }
 
-    /** Broken free: the chain shatters in a burst of ash and the fire goes out. Both players are told how. */
+    /** Broken free inside the window: the chain shatters and there's no pull (the fire keeps burning). */
     private void snap(Player caster, LivingEntity t, String how) {
         endTether(t.getUniqueId());
         if (!t.isValid()) return;
-        t.setFireTicks(0);
         World w = t.getWorld();
         Location c = chest(t);
         w.spawnParticle(Particle.WHITE_ASH, c, 40, 0.5, 0.6, 0.5, 0.04);
@@ -454,19 +502,9 @@ public final class AshenChain implements Listener {
         w.spawnParticle(Particle.CRIT, c, 10, 0.3, 0.3, 0.3, 0.3);
         w.playSound(c, Sound.ENTITY_ITEM_BREAK, SoundCategory.PLAYERS, 1.0f, 0.6f);
         w.playSound(c, Sound.BLOCK_FIRE_EXTINGUISH, SoundCategory.PLAYERS, 0.8f, 0.9f);
-        if (t instanceof Player tp) tp.sendActionBar(Ui.mm("<#C2541B>⛓ <gray>You broke free <dark_gray>(" + how + ")"));
+        if (t instanceof Player tp) tp.sendActionBar(Ui.mm("<#C2541B>⛓ <gray>You broke free - no pull <dark_gray>(" + how + ")"));
         if (caster != null && caster.isOnline())
             caster.sendActionBar(Ui.mm("<#C2541B>⛓ <white>" + (t instanceof Player tp ? tp.getName() : "Your target") + " <gray>broke free <dark_gray>(" + how + ")"));
-    }
-
-    /** Ran its full time: the fire dies down quietly. */
-    private void burnOut(LivingEntity t) {
-        endTether(t.getUniqueId());
-        if (!t.isValid()) return;
-        t.setFireTicks(0);
-        Location c = chest(t);
-        t.getWorld().spawnParticle(Particle.SMOKE, c, 10, 0.3, 0.4, 0.3, 0.02);
-        t.getWorld().playSound(c, Sound.BLOCK_FIRE_EXTINGUISH, SoundCategory.PLAYERS, 0.5f, 1.3f);
     }
 
     private void endTether(UUID target) {
@@ -508,7 +546,7 @@ public final class AshenChain implements Listener {
             double[] v = ChainPull.reel(off.getX(), off.getY(), off.getZ());
             p.setVelocity(new Vector(v[0], v[1], v[2]));
             p.setFallDistance(0);
-            drawChain(p, hand(p), at);
+            drawChain(p, chainStart(p, at), at, false);
             // you trail embers and ash as you're dragged through the air
             Location trail = p.getLocation().add(0, 0.9, 0);
             w.spawnParticle(Particle.WHITE_ASH, trail, 6, 0.3, 0.5, 0.3, 0.01);
@@ -553,6 +591,18 @@ public final class AshenChain implements Listener {
 
     // ------------------------------------------------------------------ effects
 
+    /**
+     * Where the visible chain leaves you when it's heading for {@code toward}: chest height, {@link #START_OUT} blocks
+     * out along the chain. Starting at the eyes put the first links right in front of the camera, filling the screen.
+     */
+    private static Location chainStart(Player p, Location toward) {
+        Location base = p.getLocation().add(0, 1.15, 0);
+        Vector d = toward.toVector().subtract(base.toVector());
+        double len = d.length();
+        if (len < START_OUT + 0.5) return base;
+        return base.add(d.multiply(START_OUT / len));
+    }
+
     private static Location hand(Player p) {
         Location eye = p.getEyeLocation();
         Vector f = eye.getDirection().normalize();
@@ -569,9 +619,10 @@ public final class AshenChain implements Listener {
         w.playSound(l, Sound.BLOCK_SOUL_SAND_BREAK, SoundCategory.PLAYERS, 0.8f, 0.6f);
     }
 
-    /** Draws {@code owner}'s chain from {@code a} to {@code b} this tick (real chain models), with the odd ember. */
-    private void drawChain(Player owner, Location a, Location b) {
-        lines.computeIfAbsent(owner.getUniqueId(), k -> new ChainLine()).draw(a, b, Bukkit.getCurrentTick());
+    /** Draws {@code owner}'s chain from {@code a} to {@code b} this tick (real chain models), fire on the tip if asked. */
+    private void drawChain(Player owner, Location a, Location b, boolean fireTip) {
+        lines.computeIfAbsent(owner.getUniqueId(), k -> new ChainLine()).draw(a, b, Bukkit.getCurrentTick(), fireTip);
+        if (fireTip && rnd.nextInt(2) == 0) b.getWorld().spawnParticle(Particle.SMALL_FLAME, b, 1, 0.08, 0.08, 0.08, 0.005);
         if (rnd.nextInt(3) == 0) {
             Vector d = b.toVector().subtract(a.toVector());
             a.getWorld().spawnParticle(Particle.DUST, a.clone().add(d.multiply(rnd.nextDouble())), 1, 0.03, 0.03, 0.03, 0,

@@ -41,15 +41,17 @@ gods-eye:
   enabled: true
 
 # Ashen Chain (hub Arena only for now): right-click to grapple - drag yourself to the block you aim at (24 away).
-# Left-click to strike - a skillshot (12 away, or point-blank) that chains a player: they're pulled exactly 1 block
-# closer and set on fire for burn-seconds (real fire, no other damage). They break free with
-# Surge, their own chain, water, cover, or by getting 16 away.
-# Hostile mobs are still hooked for 1 heart and dragged to you. Sneak to let go. Staff: /ashenchain (/chain, /tether).
+# Left-click to strike - a skillshot (12 away, or point-blank). A hit sets a player on fire for burn-seconds (real
+# fire, no other damage), then after pull-delay-seconds yanks them 1 block closer - unless they break free first with
+# Surge, their own chain, water, cover, or by getting 16 away. Hostile mobs are still hooked for 1 heart and dragged
+# to you. Sneak to let go of a grapple. Staff: /ashenchain (/chain, /tether).
 ashen-chain:
   enabled: true
   cooldown-seconds: 3              # 0 = no cooldown
   player-hit-cooldown-seconds: 5   # cooldown after chaining a player
   burn-seconds: 3                  # how long they're on fire (vanilla fire: about half a heart a second)
+  pull-delay-seconds: 0.5          # the break-free window between the hit and the yank
+  throw-speed: 30                  # how fast the hook flies, blocks a second (was 80): 12 blocks in 0.4 s
 
 # Ashen Bonfire (hub Arena only for now): right-click the ground to kindle a bonfire that heals EVERYONE in its ring
 # (enemies too) for a while. Anyone can snuff it out with a few hits. Staff: /bonfire (/totem).
