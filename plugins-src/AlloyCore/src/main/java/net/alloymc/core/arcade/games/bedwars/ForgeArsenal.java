@@ -99,6 +99,12 @@ public final class ForgeArsenal {
         return m != null && m == arcade.matches().matchOf(caster) && m.team(p) != null && m.team(p) == m.team(caster);
     }
 
+    /** A random ability item (the Black Market's Mystery Ability). */
+    ItemStack random() {
+        List<Ability> l = new ArrayList<>(abilities.values());
+        return l.get(java.util.concurrent.ThreadLocalRandom.current().nextInt(l.size())).item().get();
+    }
+
     /** How many ability items the player is holding (any slot). */
     int carried(Player p) {
         int n = 0;

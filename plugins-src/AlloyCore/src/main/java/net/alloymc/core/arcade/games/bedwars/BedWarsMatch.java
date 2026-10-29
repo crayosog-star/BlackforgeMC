@@ -27,6 +27,11 @@ import java.util.*;
 final class BedWarsMatch extends Match {
     private final Set<UUID> shopNpcs = new HashSet<>(), upgradeNpcs = new HashSet<>(), arsenalNpcs = new HashSet<>();
     private final boolean arsenal;
+    // Black Market (Forge Wars only): the villager under the Core, its current deals and seconds to the next restock
+    private UUID marketNpc;
+    private List<BlackMarket.Deal> market = List.of();
+    private int marketTimer;
+    private final Random marketRnd = new Random();
     private final Map<UUID, Integer> armour = new HashMap<>(), pick = new HashMap<>(), axe = new HashMap<>(), respawnAt = new HashMap<>();
     private final Set<UUID> shears = new HashSet<>();
     private final List<TextDisplay> genLabels = new ArrayList<>();
@@ -70,6 +75,11 @@ final class BedWarsMatch extends Match {
             Location ars = arsenal ? teamPoint(t, "arsenal") : null;
             if (ars != null) arsenalNpcs.add(npc(ars, "<#ff6a00><bold>ARSENAL", Villager.Profession.ARMORER).getUniqueId());
         }
+        Location bm = arsenal ? point("black_market") : null;
+        if (bm != null) { marketNpc = npc(bm, "<dark_purple><bold>BLACK MARKET", Villager.Profession.CLERIC).getUniqueId(); restockMarket(false); }
+        // starting emeralds (a Forge Wars testing setting; 0 = none). Only at the start, not on respawn.
+        int em = settings.i("starting-emeralds", 0);
+        if (em > 0) for (Team t : teams) for (Player p : online(t.members)) BedWarsShop.give(p, new ItemStack(Material.EMERALD, em));
         // bases nobody plays on lose their bed, so they can't be "defended" by nobody
         for (int i = teams.size(); i < map.teams; i++) {
             Location bed = point("team." + i + ".bed");
@@ -127,11 +137,21 @@ final class BedWarsMatch extends Match {
 
     // ------------------------------------------------------------------ shop hooks
 
-    void giveSword(Player p, Material m) {
+    void giveSword(Player p, Material m) { giveSword(p, m, 0); }
+
+    /** A sword with at least {@code sharpness} (the team upgrade still gives Sharpness I to plain swords). */
+    void giveSword(Player p, Material m, int sharpness) {
         p.getInventory().remove(Material.WOODEN_SWORD);
         ItemStack s = unbreakable(m);
-        if (team(p).getInt("sharpness") > 0) s.addEnchantment(Enchantment.SHARPNESS, 1);
+        int lv = Math.max(sharpness, team(p).getInt("sharpness") > 0 ? 1 : 0);
+        if (lv > 0) s.addUnsafeEnchantment(Enchantment.SHARPNESS, lv);
         BedWarsShop.give(p, s);
+    }
+
+    private void restockMarket(boolean announce) {
+        market = BlackMarket.roll(marketRnd, settings.i("black-market-slots", 5));
+        marketTimer = Math.max(30, settings.i("black-market-restock-seconds", 180));
+        if (announce) broadcast(prefix() + "<dark_purple>The Black Market under the Core has new stock!");
     }
 
     void setArmour(Player p, int tier) {
@@ -163,7 +183,7 @@ final class BedWarsMatch extends Match {
             if (p.getGameMode() == GameMode.SPECTATOR) continue;
             for (ItemStack a : p.getInventory().getArmorContents()) if (a != null && prot > 0) a.addUnsafeEnchantment(Enchantment.PROTECTION, prot);
             p.getInventory().setArmorContents(p.getInventory().getArmorContents());
-            if (sharp > 0) for (ItemStack it : p.getInventory().getContents()) if (it != null && it.getType().name().endsWith("_SWORD")) it.addUnsafeEnchantment(Enchantment.SHARPNESS, 1);
+            if (sharp > 0) for (ItemStack it : p.getInventory().getContents()) if (it != null && it.getType().name().endsWith("_SWORD") && it.getEnchantmentLevel(Enchantment.SHARPNESS) < 1) it.addUnsafeEnchantment(Enchantment.SHARPNESS, 1);   // never lowers a Black Market Sharpness II
             if (haste > 0) p.addPotionEffect(new PotionEffect(PotionEffectType.HASTE, 20 * 3600, haste - 1, false, false));
         }
     }
@@ -200,6 +220,7 @@ final class BedWarsMatch extends Match {
     }
 
     @Override protected void secondTick() {
+        if (marketNpc != null && --marketTimer <= 0) restockMarket(true);
         if (--diamondTimer <= 0) { diamondTimer = Math.max(10, settings.i("diamond-interval-seconds", 30) - 7 * (diamondLevel - 1)); for (Location l : points("diamond_generators")) drop(l, Material.DIAMOND, 4); }
         if (--emeraldTimer <= 0) { emeraldTimer = Math.max(15, settings.i("emerald-interval-seconds", 60) - 15 * (emeraldLevel - 1)); for (Location l : points("emerald_generators")) drop(l, Material.EMERALD, 2); }
         int di = 0;
@@ -282,6 +303,8 @@ final class BedWarsMatch extends Match {
             Location ars = arsenal ? teamPoint(t, "arsenal") : null;
             if (ars != null && ars.getBlock().getLocation().distanceSquared(b.getLocation()) < 2) return false;
         }
+        Location bm = marketNpc != null ? point("black_market") : null;
+        if (bm != null && bm.getBlock().getLocation().distanceSquared(b.getLocation()) < 2) return false;
         return true;
     }
 
@@ -321,6 +344,7 @@ final class BedWarsMatch extends Match {
         if (e.getHand() != EquipmentSlot.HAND) return;
         if (shopNpcs.contains(id)) { e.setCancelled(true); BedWarsShop.openShop(this, p); }
         else if (upgradeNpcs.contains(id)) { e.setCancelled(true); BedWarsShop.openUpgrades(this, p); }
+        else if (id.equals(marketNpc)) { e.setCancelled(true); BlackMarket.open(this, p, market, marketTimer); }
         else if (arsenalNpcs.contains(id)) {
             e.setCancelled(true);
             ForgeArsenal a = ForgeArsenal.get();

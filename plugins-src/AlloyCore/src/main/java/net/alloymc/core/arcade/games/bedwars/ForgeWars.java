@@ -23,7 +23,7 @@ public final class ForgeWars extends ArcadeGame {
 
     @Override public MapRequirements requirements() {
         return new MapRequirements().teamPoint("spawn", "bed", "generator", "shop", "upgrades", "arsenal")
-                .point("core").list("diamond_generators", 1).list("emerald_generators", 1);
+                .point("core", "black_market").list("diamond_generators", 1).list("emerald_generators", 1);
     }
 
     @Override public Map<String, Object> defaultSettings() {
@@ -31,12 +31,18 @@ public final class ForgeWars extends ArcadeGame {
         // Arsenal: what each ability costs and how many a player may carry at once
         m.put("arsenal-carry-limit", 2);
         for (ForgeArsenal.Price p : ForgeArsenal.PRICES) m.put("arsenal-price-" + p.id(), p.amount());
+        // Black Market (the villager in the cave under the Core): how many deals it shows and how often it restocks
+        m.put("black-market-slots", 5);
+        m.put("black-market-restock-seconds", 180);
+        // emeralds every player starts a match with. FOR TESTING: set to 0 before real players play.
+        m.put("starting-emeralds", 64);
         return m;
     }
 
     @Override public List<String> howToPlay() {
         return List.of("BedWars rules: iron and gold from your forge, diamonds on the outer islands, emeralds in the Core.",
-                "Buy BlackForgeMC abilities from the Arsenal on your island. You can carry two at a time and lose them when you die.");
+                "Buy BlackForgeMC abilities from the Arsenal on your island. You can carry two at a time and lose them when you die.",
+                "Take the stairs under the Core to the Black Market: rare deals for emeralds, new stock every few minutes.");
     }
 
     @Override public Match newMatch(MatchContext c) { return new BedWarsMatch(c, true); }
