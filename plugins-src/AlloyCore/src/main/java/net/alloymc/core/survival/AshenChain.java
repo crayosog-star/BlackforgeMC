@@ -52,7 +52,6 @@ import java.util.function.Predicate;
 public final class AshenChain implements Listener {
     public static final String NAME = "<gradient:#8C8580:#C2541B:#6E0F0F><bold>Ashen Chain</bold></gradient>";
     public static final double DAMAGE = 2.0;                 // 1 heart (hostile mobs)
-    private static final int THROW_SPEED = 4;                // blocks per tick the hook flies
     private static final int YANK_DRAW_TICKS = 8;            // chain stays drawn to a dragged target this long
     private static final long NO_FALL_MS = 2000;             // after a reel ends
     private static final int PULL_TICKS = 5;                 // a hooked target is dragged its 1 block over this long
@@ -75,6 +74,7 @@ public final class AshenChain implements Listener {
     private final Map<UUID, Long> readyAt = new HashMap<>();
     private final Map<UUID, Long> noFallUntil = new HashMap<>();
     private final int playerCooldownTicks, burnTicks, holdTicks;
+    private final double throwSpeed;   // blocks per tick the hook flies
     private final Map<UUID, Tether> tethers = new HashMap<>();      // chained target -> its burning tether
     private boolean dealing;   // true while the chain itself is hurting / probing someone, so onMelee lets it through
     private final Map<UUID, ChainLine> lines = new HashMap<>();     // caster -> the chain model currently out
@@ -166,6 +166,7 @@ public final class AshenChain implements Listener {
         this.playerCooldownTicks = Math.max(0, (int) Math.round(plugin.getConfig().getDouble("ashen-chain.player-hit-cooldown-seconds", 5) * 20));
         this.burnTicks = Math.max(0, (int) Math.round(plugin.getConfig().getDouble("ashen-chain.burn-seconds", 3) * 20));
         this.holdTicks = Math.max(1, (int) Math.round(plugin.getConfig().getDouble("ashen-chain.pull-delay-seconds", 0.5) * 20));
+        this.throwSpeed = Math.max(0.2, plugin.getConfig().getDouble("ashen-chain.throw-speed", 30) / 20.0);
         this.tagKey = new NamespacedKey(plugin, "ashen_chain");
         Bukkit.getPluginManager().registerEvents(this, plugin);
         this.sweeper = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
@@ -266,12 +267,13 @@ public final class AshenChain implements Listener {
         throwSounds(p);
         RayTraceResult blockHit = w.rayTraceBlocks(eye, dir, ChainPull.GRAPPLE_RANGE, FluidCollisionMode.NEVER, true);
         if (blockHit == null) {   // into the open air: it falls slack
-            fly(p, eye.clone().add(dir.multiply(ChainPull.GRAPPLE_RANGE)), () -> slack(p));
+            Location far = eye.clone().add(dir.multiply(ChainPull.GRAPPLE_RANGE));
+            fly(p, () -> far, () -> slack(p));
             return;
         }
         Location anchor = blockHit.getHitPosition().toLocation(w);
         Block b = blockHit.getHitBlock();
-        fly(p, anchor, () -> anchor(p, anchor, b));
+        fly(p, () -> anchor, () -> anchor(p, anchor, b));
     }
 
     /**
@@ -295,32 +297,38 @@ public final class AshenChain implements Listener {
         }
         if (target == null) {   // missed: the chain clatters off the wall, or falls slack in the air
             Location end = blockHit != null ? blockHit.getHitPosition().toLocation(w) : eye.clone().add(dir.multiply(ChainPull.YANK_RANGE));
-            fly(p, end, () -> slack(p));
+            fly(p, () -> end, () -> slack(p));
             return;
         }
         if (!alsoTarget.test(target) && !allowed(p, target)) {   // the dummy counts every damage event: no probe for it
             p.sendActionBar(Ui.mm("<#C2541B>⛓ <gray>The chain won't bite here."));
-            fly(p, chest(target), () -> slack(p));
+            LivingEntity miss = target;
+            fly(p, () -> chest(miss), () -> slack(p));
             return;
         }
         LivingEntity t = target;
-        fly(p, chest(t), () -> hook(p, t));
+        fly(p, () -> chest(t), () -> hook(p, t));   // the hook homes on them: the hit was decided when you threw
     }
 
-    /** The hook flies out from the hand to {@code to} at {@link #THROW_SPEED}, drawing the chain behind it, then {@code then}. */
-    private void fly(Player p, Location to, Runnable then) {
+    /**
+     * The hook flies out to wherever {@code to} says (asked every tick, so it follows a moving target) at
+     * {@link #throwSpeed} (ashen-chain.throw-speed, blocks a second), drawing the chain behind it, then {@code then}.
+     */
+    private void fly(Player p, java.util.function.Supplier<Location> to, Runnable then) {
         UUID id = p.getUniqueId();
-        int ticks = Math.max(1, (int) Math.ceil(chainStart(p, to).distance(to) / THROW_SPEED));
-        int[] n = {0};
+        double[] out = {0};   // how far the hook has travelled
         BukkitTask task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            if (!p.isOnline() || p.isDead() || p.getWorld() != to.getWorld()) { stop(id); return; }
-            int k = ++n[0];
-            Location from = chainStart(p, to);
-            Vector d = to.toVector().subtract(from.toVector());
-            Location head = from.clone().add(d.multiply(Math.min(1.0, k / (double) ticks)));
+            Location target = to.get();
+            if (!p.isOnline() || p.isDead() || p.getWorld() != target.getWorld()) { stop(id); return; }
+            out[0] += throwSpeed;
+            Location from = chainStart(p, target);
+            Vector d = target.toVector().subtract(from.toVector());
+            double dist = d.length();
+            boolean arrived = out[0] >= dist;
+            Location head = arrived || dist < 1e-6 ? target.clone() : from.clone().add(d.multiply(out[0] / dist));
             drawChain(p, from, head, true);
             hookHead(head);
-            if (k >= ticks) { stop(id); then.run(); }
+            if (arrived) { stop(id); then.run(); }
         }, 0L, 1L);
         active.put(id, task);
     }
