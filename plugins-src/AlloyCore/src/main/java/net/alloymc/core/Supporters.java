@@ -89,6 +89,7 @@ public final class Supporters implements Listener {
 
     /** Badge to put before a player's name ("" for non-supporters). */
     public static String badge(Player p) {
+        if (Titles.of(p) != null) return Titles.badge(p);   // OWNER and other staff titles replace the supporter badge
         Tier t = tierOf(p);
         return (Media.has(p) ? Media.BADGE : "") + (t == null ? "" : t.badge());
     }
@@ -147,7 +148,12 @@ public final class Supporters implements Listener {
                 p.playerListName(name);
             }, 10L);
         Tier t = tierOf(p);
-        if (mode.equals("hub") && t != null && TIERS.indexOf(t) >= 1)
+        if (mode.equals("hub") && Titles.of(p) != null) {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (!p.isOnline()) return;
+                Bukkit.broadcast(Ui.mm(Titles.badge(p) + "<gradient:#ffd27a:#ff9500><bold>" + Nicks.of(p) + "</bold></gradient> <gray>joined the hub!"));
+            }, 15L);
+        } else if (mode.equals("hub") && t != null && TIERS.indexOf(t) >= 1)
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (!p.isOnline()) return;
                 Bukkit.broadcast(Ui.mm(t.badge() + t.color() + "<bold>" + t.name() + "</bold> <gray>supporter <white>" + p.getName() + " <gray>joined the hub!"));
