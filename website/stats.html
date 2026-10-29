@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stats · BlackForgeMC</title>
+  <meta name="description" content="BlackForgeMC leaderboards: top killers, Arcade champions, hub parkour times, ranked ratings and player stats.">
+  <meta name="theme-color" content="#0b0b0e">
+  <link rel="icon" href="assets/img/logo.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/img/logo-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/img/logo-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <style>
+    .lb-tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin: 8px 0 24px; }
+    .lb-tools form { display: flex; gap: 8px; flex: 1 1 260px; max-width: 420px; }
+    .lb-tools input { flex: 1; min-width: 0; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--bg-2); color: var(--text); font: inherit; }
+    .lb-updated { color: var(--text-3); font-size: 13px; }
+    .lb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 48px; }
+    .lb-card { background: var(--bg-2); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px 20px; }
+    .lb-card h3 { margin: 0 0 12px; font-family: "Chakra Petch", sans-serif; text-transform: capitalize; }
+    .lb-card ol { list-style: none; margin: 0; padding: 0; }
+    .lb-card li { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line-soft); }
+    .lb-card li:first-child { border-top: 0; }
+    .lb-rank { width: 22px; color: var(--text-3); font-family: "JetBrains Mono", monospace; }
+    .lb-card li:nth-child(1) .lb-rank { color: #ffc53d; }
+    .lb-card a { color: var(--text); text-decoration: none; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .lb-card a:hover { text-decoration: underline; }
+    .lb-val { color: var(--text-2); font-family: "JetBrains Mono", monospace; font-size: 14px; }
+    .lb-empty { color: var(--text-3); }
+    .lb-player { max-width: 420px; margin-bottom: 24px; }
+    .lb-player dl { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; margin: 0; }
+    .lb-player dt { color: var(--text-2); text-transform: capitalize; }
+    .lb-player dd { margin: 0; font-family: "JetBrains Mono", monospace; }
+  </style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="BlackForgeMC home">
+      <img class="brand-mark" src="assets/img/logo.svg" alt="">
+      <span class="brand-name">BLACK<span>FORGE</span></span>
+    </a>
+    <button class="nav-toggle" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="index.html#modes">Game Modes</a>
+      <a href="index.html#features">Features</a>
+      <a href="index.html#ranks">Ranks</a>
+      <a href="index.html#vote">Vote</a>
+      <a href="store.html">Store</a>
+      <a class="active" href="stats.html">Stats</a>
+      <a href="rules.html">Rules</a>
+      <a class="btn btn-primary" href="index.html#join">Play Now</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="page-hero">
+    <div class="wrap">
+      <span class="eyebrow">Leaderboards</span>
+      <h1>The <span class="grad-text">forge</span> remembers.</h1>
+      <p>Top killers, Arcade champions, the fastest hub parkour runs and ranked ratings from across the network. Look yourself up below.</p>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <div class="lb-tools">
+      <form id="lb-search"><input name="q" placeholder="Look up a player" autocomplete="off" aria-label="Player name"><button class="btn btn-primary" type="submit">Search</button></form>
+      <span class="lb-updated" id="lb-updated"></span>
+    </div>
+    <div id="lb-player"></div>
+    <div class="lb-grid" id="lb-boards"><p class="lb-empty">Loading…</p></div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="legal" style="margin-top: 0; border-top: 0; padding-top: 0;">
+      <span>© <span data-year>2026</span> BlackForgeMC. All rights reserved.</span>
+      <span>Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/js/main.js"></script>
+<script src="assets/js/stats.js"></script>
+</body>
+</html>

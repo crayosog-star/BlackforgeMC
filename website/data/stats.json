@@ -1,0 +1,67 @@
+{
+ "updated": 1793235094,
+ "boards": {
+  "kills": [],
+  "arcade_wins": [
+   {
+    "name": "raphbaby",
+    "value": 2
+   },
+   {
+    "name": "Kiianah",
+    "value": 2
+   },
+   {
+    "name": "GavVFX",
+    "value": 2
+   }
+  ],
+  "arcade_games": [
+   {
+    "name": "GavVFX",
+    "value": 5
+   },
+   {
+    "name": "raphbaby",
+    "value": 3
+   },
+   {
+    "name": "Kiianah",
+    "value": 3
+   },
+   {
+    "name": "Causee",
+    "value": 1
+   }
+  ],
+  "parkour": [],
+  "bounties": []
+ },
+ "ranked": {},
+ "players": [
+  {
+   "name": "Causee",
+   "arcade_wins": 0,
+   "arcade_games": 1,
+   "arcade_kills": 0
+  },
+  {
+   "name": "GavVFX",
+   "arcade_wins": 2,
+   "arcade_games": 5,
+   "arcade_kills": 1
+  },
+  {
+   "name": "Kiianah",
+   "arcade_wins": 2,
+   "arcade_games": 3,
+   "arcade_kills": 0
+  },
+  {
+   "name": "raphbaby",
+   "arcade_wins": 2,
+   "arcade_games": 3,
+   "arcade_kills": 1
+  }
+ ]
+}

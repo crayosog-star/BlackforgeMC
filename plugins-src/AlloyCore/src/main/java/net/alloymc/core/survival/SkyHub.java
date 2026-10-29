@@ -92,6 +92,7 @@ public final class SkyHub implements Listener {
     public Location hubSpawn() { return new Location(hub, 0.5, Y + 1, 7.5, 180, 0); }
     public Location oneblockSpawn() { return new Location(obSpawn, 0.5, Y + 1, 14.5, 180, 0); }
     public World oneblockSpawnWorld() { return obSpawn; }
+    public World hubWorld() { return hub; }
 
     /** Which game a place belongs to. */
     public String groupOf(Location l) {

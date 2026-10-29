@@ -65,6 +65,8 @@ public final class SkyblockModule implements Listener {
         groups = new InventoryGroups(plugin, skyHub::groupOf);
         skyHub.setGroups(groups);
         obCrates = new Crates(plugin, skyHub.oneblockSpawnWorld(), SkyHub.OB_CRATES, SkyHub.Y + 1);
+        // AFK zone off the side of the Skyblock Hub: Scrap only (keys would land in the hub's empty inventory)
+        new AfkZone(plugin, skyHub.hubWorld(), new Location(skyHub.hubWorld(), 0.5, SkyHub.Y + 6, 40.5), 6, null, "skyblock-afkzone-built");
         skyHub.onFirstVisit((p, game) -> {
             crates.give(p, "iron", 1);
             p.sendMessage(Ui.mm("<gray>A welcome <white>Cinder Key <gray>for your first trip to " + (game.equals(SkyHub.ONEBLOCK) ? "<#b06bff>OneBlock" : "<#4fd1c5>Skyblock") + "<gray>!"));

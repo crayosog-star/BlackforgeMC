@@ -39,6 +39,9 @@ public final class SurvivalModule implements Listener {
     private final Scrap scrap;
     private final GaleBellows bellows;
     private final JellyLegs jelly;
+    private final WorldBoss boss;
+    private final Bounties bounties;
+    private final Jobs jobs;
     private final GaiaPotion gaia;
     private final DarknessPotion darkness;
     private final Surge surge;
@@ -91,6 +94,12 @@ public final class SurvivalModule implements Listener {
         // Last Rite: read anywhere but spawn; who it can catch follows the PvP rules (KOTH + Scrapyard). A draw leaves both on 2 hearts here.
         rite = new LastRite(plugin, l -> l.getWorld() != world || !inSpawn(l.getX(), l.getY(), l.getZ()), false, null, RiteChambers.Timeout.BOTH_WEAKENED);
         new SilkSpawners(plugin);
+        boss = new WorldBoss(plugin, world, crates, koth);   // five random world bosses in the KOTH arena, Saturdays
+        bounties = new Bounties(plugin);
+        jobs = new Jobs(plugin);
+        new ChestShops(plugin);
+        new AfkZone(plugin, world, new Location(world, 1500.5, 200, 1500.5), 6, crates, "afkzone-built");
+        new ResourceWorld(plugin);
         votes.setScrap(scrap);
         ranks = new Ranks(plugin, crates);
         ranks.setClaims(claims);
@@ -163,6 +172,8 @@ public final class SurvivalModule implements Listener {
     }
 
     public void shutdown() {
+        boss.stop(null);
+        jobs.save();
         gaia.shutdown();   // first: removes every cloud's barrier blocks
         surge.shutdown();
         rite.shutdown();   // undoes any running rite: both duellists go home as they were
@@ -262,6 +273,8 @@ public final class SurvivalModule implements Listener {
         reg("fly", List.of(), (p, a) -> ranks.fly(p));
         reg("scrap", List.of("scrapshop", "shards"), (p, a) -> scrap.command(p, a));
         reg("jl", List.of("jellylegs"), (p, a) -> jelly.toggle(p));
+        reg("bounty", List.of("bounties", "wanted"), (p, a) -> bounties.command(p, a));
+        reg("jobs", List.of("job"), (p, a) -> jobs.open(p));
         reg("jbello", List.of("bellows", "galebellows"), (p, a) -> {   // staff only: players get bellows from crates
             if (p.hasPermission("alloy.admin")) bellows.give(p);
             else p.sendMessage(Ui.mm("<#9EE6FF>🌬 <gray>The " + GaleBellows.NAME + " <gray>only comes from <white>crates <gray>and <white>Scrapyard supply drops<gray>."));
@@ -335,6 +348,11 @@ public final class SurvivalModule implements Listener {
             if (t == null) { s.sendMessage(Component.text("Player must be online")); return true; }
             gaia.give(t);
             s.sendMessage(Component.text("Gave a Potion of Gaia to " + a[2]));
+            return true;
+        }
+        if (a.length >= 2 && a[0].equalsIgnoreCase("boss")) {   // /alloy boss start [id] | stop
+            if (a[1].equalsIgnoreCase("stop")) { boss.stop("Staff sent the world boss away."); s.sendMessage(Component.text("Stopped.")); }
+            else s.sendMessage(Component.text(boss.start(a.length > 2 ? a[2] : null)));
             return true;
         }
         if (a.length >= 3 && a[0].equalsIgnoreCase("jellylegs") && a[1].equalsIgnoreCase("give")) {   // /alloy jellylegs give <player> (crates)

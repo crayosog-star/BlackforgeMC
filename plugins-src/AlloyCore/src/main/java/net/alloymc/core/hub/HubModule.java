@@ -79,6 +79,7 @@ public final class HubModule implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, this::ambient, 20L, 10L);
         dragons = new DragonAnimator(plugin, world);
         tutorial = new Tutorial(plugin);
+        parkour = new HubParkour(plugin, this, world);
         Bukkit.getScheduler().runTaskTimer(plugin, this::leaderboards, 60L, 1200L);
         arena = new TestArena(plugin);
         gaia = new net.alloymc.core.survival.GaiaPotion(plugin, (pl, l) -> l.getWorld() == arena.world(),   // never on the hub itself
@@ -157,7 +158,7 @@ public final class HubModule implements Listener {
 
     private DragonAnimator dragons;
 
-    public void shutdown() { gaia.shutdown(); surge.shutdown(); rite.shutdown(); cage.shutdown(); eye.shutdown(); chain.shutdown(); bonfire.shutdown(); holograms.forEach(TextDisplay::remove); boards.forEach(TextDisplay::remove); if (dragons != null) dragons.remove(); arena.shutdown(); }
+    public void shutdown() { gaia.shutdown(); surge.shutdown(); rite.shutdown(); cage.shutdown(); eye.shutdown(); chain.shutdown(); bonfire.shutdown(); holograms.forEach(TextDisplay::remove); boards.forEach(TextDisplay::remove); if (parkour != null) parkour.shutdown(); if (dragons != null) dragons.remove(); arena.shutdown(); }
     // ------------------------------------------------------------------ leaderboards
 
     private final List<TextDisplay> boards = new ArrayList<>();
@@ -393,6 +394,7 @@ public final class HubModule implements Listener {
     }
 
     private Tutorial tutorial;
+    private HubParkour parkour;
 
     private void connect(Player p, String server) {
         if (tutorial != null) tutorial.pickedGame(p);
