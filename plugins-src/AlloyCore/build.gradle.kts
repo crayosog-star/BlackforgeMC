@@ -49,3 +49,21 @@ tasks.register<JavaExec>("walkcheck") {
     classpath = sourceSets["main"].runtimeClasspath + sourceSets["main"].compileClasspath
     mainClass.set("net.alloymc.core.build.WalkCheck")
 }
+
+// Screenshots of the live worlds (real textures from the client jar): gradle shots -Pjar=<26.3.jar> [-Pshot=name -Pw=1920 -Ph=1080 -Pss=2]
+tasks.register<JavaExec>("shots") {
+    classpath = sourceSets["main"].runtimeClasspath + sourceSets["main"].compileClasspath
+    mainClass.set("net.alloymc.core.build.Shots")
+    maxHeapSize = "6g"
+    args((project.findProperty("jar") ?: "").toString(), (project.findProperty("shot") ?: "").toString(), (project.findProperty("w") ?: "1920").toString(),
+        (project.findProperty("h") ?: "1080").toString(), (project.findProperty("ss") ?: "2").toString(), layout.projectDirectory.dir("previews/live").asFile.absolutePath)
+}
+
+// Trailer frames (then tools/make_trailer.py): gradle trailer -Pjar=<26.3.jar> [-Pfrom=0 -Pto=99999]
+tasks.register<JavaExec>("trailer") {
+    classpath = sourceSets["main"].runtimeClasspath + sourceSets["main"].compileClasspath
+    mainClass.set("net.alloymc.core.build.Trailer")
+    maxHeapSize = "6g"
+    args((project.findProperty("jar") ?: "").toString(), (project.findProperty("from") ?: "0").toString(), (project.findProperty("to") ?: "999999").toString(),
+        layout.projectDirectory.dir("previews/trailer").asFile.absolutePath)
+}

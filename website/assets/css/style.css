@@ -520,3 +520,9 @@ circle.hm-spark:nth-of-type(n) { --dx: 14px; --dy: -4px; }
   .rule { grid-template-columns: 40px 1fr; }
   .punish th, .punish td { padding: 11px 8px; }
 }
+
+/* trailer */
+.trailer { padding-bottom: 40px; }
+.trailer-media { max-width: 1040px; margin: 0 auto; background: #000; }
+.trailer-media video { display: block; width: 100%; aspect-ratio: 16/9; background: #000; }
+
