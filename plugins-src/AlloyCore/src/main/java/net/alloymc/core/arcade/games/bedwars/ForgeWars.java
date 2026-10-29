@@ -23,7 +23,7 @@ public final class ForgeWars extends ArcadeGame {
 
     @Override public MapRequirements requirements() {
         return new MapRequirements().teamPoint("spawn", "bed", "generator", "shop", "upgrades", "arsenal")
-                .point("core", "black_market").list("diamond_generators", 1).list("emerald_generators", 1);
+                .point("core", "black_market", "launch_pad").list("diamond_generators", 1).list("emerald_generators", 1);
     }
 
     @Override public Map<String, Object> defaultSettings() {
@@ -42,7 +42,8 @@ public final class ForgeWars extends ArcadeGame {
     @Override public List<String> howToPlay() {
         return List.of("BedWars rules: iron and gold from your forge, diamonds on the outer islands, emeralds in the Core.",
                 "Buy BlackForgeMC abilities from the Arsenal on your island. You can carry two at a time and lose them when you die.",
-                "Take the stairs under the Core to the Black Market: rare deals for emeralds, new stock every few minutes.");
+                "Under the Core is the Undercroft: the Black Market sells the best weapons and gear for emeralds.",
+                "Take the stairs down, and the slime pad in the middle launches you back up to the Core (sneak to stand on it).");
     }
 
     @Override public Match newMatch(MatchContext c) { return new BedWarsMatch(c, true); }
