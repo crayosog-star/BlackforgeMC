@@ -19,6 +19,7 @@ public final class Games {
         a.accept(new net.alloymc.core.arcade.games.tntrun.TntRun());
         a.accept(new net.alloymc.core.arcade.games.infected.Infected());
         a.accept(new net.alloymc.core.arcade.games.bedwars.BedWars());
+        a.accept(new net.alloymc.core.arcade.games.bedwars.ForgeWars());   // BlackForgeMC's own BedWars, with the Arsenal
         a.accept(new net.alloymc.core.arcade.games.skywars.SkyWars());
         a.accept(new net.alloymc.core.arcade.games.duels.Duels());
         a.accept(new net.alloymc.core.arcade.games.parkour.Parkour());

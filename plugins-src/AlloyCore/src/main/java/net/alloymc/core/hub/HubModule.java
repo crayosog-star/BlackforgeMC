@@ -56,7 +56,7 @@ public final class HubModule implements Listener {
         {"skyblock", "10", "GRASS_BLOCK", "<#4fd1c5><bold>Skyblock", "<gray>Start on a tiny island in the sky.<newline><gray>Grow it, level it, beat the challenges."},
         {"survival", "12", "IRON_PICKAXE", "<#d9dde3><bold>Survival", "<gray>Classic survival with land claims.<newline><gray>Build safely with friends."},
         {"factions", "14", "NETHERITE_SWORD", "<#e5484d><bold>Factions", "<gray>Form a faction, claim land, raid rivals.<newline><gray>PvP is ON. New map every 3 months."},
-        {"arcade", "16", "TNT", "<#ffc53d><bold>Arcade", "<gray>17 minigames: BedWars, SkyWars,<newline><gray>Duels, Murder Mystery and more."},
+        {"arcade", "16", "TNT", "<#ffc53d><bold>Arcade", "<gray>18 minigames: BedWars, SkyWars,<newline><gray>Duels, Murder Mystery and more."},
     };
 
     public HubModule(AlloyCore plugin) {
@@ -145,6 +145,7 @@ public final class HubModule implements Listener {
         Bukkit.getCommandMap().register("alloy", new org.bukkit.command.Command("alloyjoin", "Join a game mode", "/alloyjoin <server>", List.of()) {
             @Override public boolean execute(org.bukkit.command.CommandSender s, String label, String[] a) {
                 if (s instanceof Player p && a.length == 1 && a[0].equals("arena")) arena.enter(p);
+                else if (s instanceof Player p && a.length == 1 && a[0].equals("forgewars")) joinForgeWars(p);
                 else if (s instanceof Player p && a.length == 1 && List.of("skyblock", "survival", "factions", "arcade").contains(a[0])) connect(p, a[0]);
                 return true;
             }
@@ -321,7 +322,8 @@ public final class HubModule implements Listener {
             p.sendMessage(Ui.mm("  <#4fd1c5>» <u><click:run_command:'/alloyjoin skyblock'>Skyblock</click></u> <gray>- grow your own sky island"));
             p.sendMessage(Ui.mm("  <#d9dde3>» <u><click:run_command:'/alloyjoin survival'>Survival</click></u> <gray>- claims, crates, KOTH, the Scrapyard"));
             p.sendMessage(Ui.mm("  <#e5484d>» <u><click:run_command:'/alloyjoin factions'>Factions</click></u> <gray>- build a faction, raid rivals"));
-            p.sendMessage(Ui.mm("  <#ffc53d>» <u><click:run_command:'/alloyjoin arcade'>Arcade</click></u> <gray>- BedWars, SkyWars, Duels + 14 more minigames"));
+            p.sendMessage(Ui.mm("  <#ffc53d>» <u><click:run_command:'/alloyjoin arcade'>Arcade</click></u> <gray>- BedWars, SkyWars, Duels + 15 more minigames"));
+            p.sendMessage(Ui.mm("  <#ff6a00>» <u><click:run_command:'/alloyjoin forgewars'>Forge Wars</click></u> <gray>- BedWars with BlackForgeMC abilities"));
             p.sendMessage(Ui.mm("  <gray>Lost? The <#4fd1c5>Guide</#4fd1c5> book (or <white>/guide</white>) explains everything."));
             p.sendMessage(Ui.mm("  <gray>Brought by a friend? <white>/referral <name></white> pays you both."));
             p.sendMessage(Ui.mm("  <gray>Be respectful and have fun - type <white>/hub</white> any time to come back here."));
@@ -377,6 +379,7 @@ public final class HubModule implements Listener {
     }
 
     private static final int ARENA_SLOT = 22;
+    private static final int FORGE_WARS_SLOT = 4;   // Forge Wars: its own button, but it runs on the Arcade server
 
     private void openMenu(Player p) {
         MenuHolder h = new MenuHolder();
@@ -397,6 +400,8 @@ public final class HubModule implements Listener {
             lore.add("<yellow>» Click to join");
             inv.setItem(Integer.parseInt(m[1]), Ui.item(Material.valueOf(m[2]), m[3], lore.toArray(String[]::new)));
         }
+        inv.setItem(FORGE_WARS_SLOT, Ui.item(Material.RESPAWN_ANCHOR, "<#ff6a00><bold>Forge Wars", "<gray>BlackForgeMC's own BedWars:", "<gray>defend your bed, buy abilities", "<gray>like Surge and Rimelock at the Arsenal.", "",
+                "<gray>On the Arcade: <white>" + plugin.net().count("arcade"), "<yellow>» Click to play"));
         inv.setItem(ARENA_SLOT, Ui.item(Material.TARGET, "<#7bd88f><bold>Arena", "<gray>Testing ground: try every item", "<gray>on the dummy, grab the newest ones", "<gray>from the showcase wall.", "",
                 "<gray>In the Arena: <white>" + arena.world().getPlayers().size(), "<yellow>» Click to enter"));
         p.openInventory(inv);
@@ -409,6 +414,7 @@ public final class HubModule implements Listener {
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p)) return;
         if (e.getRawSlot() == ARENA_SLOT) { p.closeInventory(); arena.enter(p); return; }
+        if (e.getRawSlot() == FORGE_WARS_SLOT) { p.closeInventory(); joinForgeWars(p); return; }
         for (String[] m : MENU)
             if (e.getRawSlot() == Integer.parseInt(m[1])) {
                 p.closeInventory();
@@ -418,6 +424,13 @@ public final class HubModule implements Listener {
 
     private Tutorial tutorial;
     private HubParkour parkour;
+
+    /** Forge Wars lives on the Arcade server: leave a note so the Arcade opens its mode picker when they land. */
+    private void joinForgeWars(Player p) {
+        try { net.alloymc.core.ArcadeIntents.request(plugin.shared(), p.getUniqueId(), "forgewars"); }
+        catch (IllegalStateException ex) { plugin.getLogger().warning("Couldn't save the Forge Wars pick: " + ex.getMessage()); }   // still send them; they can pick it there
+        connect(p, "arcade");
+    }
 
     private void connect(Player p, String server) {
         if (tutorial != null) tutorial.pickedGame(p);

@@ -44,6 +44,7 @@ public final class ArcadeModule implements Listener, Arcade.Lobby {
         arcade = new Arcade(plugin, this);
         new Seasons(plugin, arcade);   // monthly ranked seasons and the Weekend Cup
         Games.registerAll(arcade);
+        net.alloymc.core.arcade.games.bedwars.ForgeArsenal.install(plugin, arcade);   // Forge Wars ability items (only work in its matches)
         Bukkit.getPluginManager().registerEvents(new LobbyRules(p -> p.getWorld() != world), plugin);
         new net.alloymc.core.SpawnSafety(plugin, l -> l.getWorld() == world, p -> lobbySpawn()).withStuckCommand();
         Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -121,9 +122,15 @@ public final class ArcadeModule implements Listener, Arcade.Lobby {
         e.joinMessage(null);
         Player p = e.getPlayer();
         arcade.stats().name(p.getUniqueId(), p.getName());
+        String wanted = net.alloymc.core.ArcadeIntents.take(plugin.shared(), p.getUniqueId());   // picked a game on the hub
         if (arcade.matches().tryRejoin(p)) return;
         toLobby(p);
-        p.showTitle(net.kyori.adventure.title.Title.title(Ui.mm("<aqua><bold>BLACKFORGE ARCADE"), Ui.mm("<gray>Right-click the star to pick a game")));
+        ArcadeGame picked = arcade.game(wanted);
+        if (picked == null) p.showTitle(net.kyori.adventure.title.Title.title(Ui.mm("<aqua><bold>BLACKFORGE ARCADE"), Ui.mm("<gray>Right-click the star to pick a game")));
+        else {
+            p.showTitle(net.kyori.adventure.title.Title.title(Ui.mm(picked.color + "<bold>" + picked.name.toUpperCase()), Ui.mm("<gray>Pick a mode to queue")));
+            Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline() && arcade.matches().matchOf(p) == null) arcade.menu().openGame(p, picked); }, 20L);
+        }
     }
 
     @EventHandler public void onQuit(PlayerQuitEvent e) { e.quitMessage(null); }
