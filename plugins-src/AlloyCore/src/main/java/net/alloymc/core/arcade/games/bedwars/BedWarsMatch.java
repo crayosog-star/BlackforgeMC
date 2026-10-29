@@ -32,6 +32,9 @@ final class BedWarsMatch extends Match {
     private List<BlackMarket.Deal> market = List.of();
     private int marketTimer;
     private final Random marketRnd = new Random();
+    // Launch pad (Forge Wars only): the slime pad on the cave floor throws you up the shaft onto the plaza
+    private Location pad, padTop;
+    private final Map<UUID, Integer> riding = new HashMap<>(), padCooldown = new HashMap<>(), noFallUntil = new HashMap<>();
     private final Map<UUID, Integer> armour = new HashMap<>(), pick = new HashMap<>(), axe = new HashMap<>(), respawnAt = new HashMap<>();
     private final Set<UUID> shears = new HashSet<>();
     private final List<TextDisplay> genLabels = new ArrayList<>();
@@ -75,6 +78,9 @@ final class BedWarsMatch extends Match {
             Location ars = arsenal ? teamPoint(t, "arsenal") : null;
             if (ars != null) arsenalNpcs.add(npc(ars, "<#ff6a00><bold>ARSENAL", Villager.Profession.ARMORER).getUniqueId());
         }
+        pad = arsenal ? point("launch_pad") : null;
+        padTop = pad != null ? point("core") : null;
+        if (padTop == null) pad = null;
         Location bm = arsenal ? point("black_market") : null;
         if (bm != null) { marketNpc = npc(bm, "<dark_purple><bold>BLACK MARKET", Villager.Profession.CLERIC).getUniqueId(); restockMarket(false); }
         // starting emeralds (a Forge Wars testing setting; 0 = none). Only at the start, not on respawn.
@@ -200,6 +206,7 @@ final class BedWarsMatch extends Match {
 
     @Override protected void fastTick() {
         ticks++;
+        if (pad != null) launchPad();
         int cap = settings.i("generator-cap", 48);
         for (Team t : teams) {
             if (t.members.stream().noneMatch(alive::contains)) continue;
@@ -366,7 +373,63 @@ final class BedWarsMatch extends Match {
 
     // ------------------------------------------------------------------ death
 
+    // ------------------------------------------------------------------ launch pad
+
+    /**
+     * Step onto the slime pad on the cave floor (not sneaking) and a gust carries you straight up the shaft and out onto
+     * the plaza, with no fall damage for a few seconds after. Dropping in from the plaza is safe too: the slime catches
+     * you, and the pad waits a moment before throwing you back up.
+     */
+    private void launchPad() {
+        if (ticks % 10 == 0) world.spawnParticle(Particle.END_ROD, pad.clone().add(0, 0.3, 0), 2, 0.9, 0.05, 0.9, 0.01);
+        for (Team t : teams) for (Player p : online(t.members)) {
+            if (!isAlive(p) || p.getGameMode() == GameMode.SPECTATOR) { riding.remove(p.getUniqueId()); continue; }
+            UUID id = p.getUniqueId();
+            Location l = p.getLocation();
+            double dx = l.getX() - pad.getX(), dz = l.getZ() - pad.getZ();
+            boolean inShaft = Math.abs(dx) <= 1.7 && Math.abs(dz) <= 1.7;
+            Integer ride = riding.get(id);
+            if (ride != null) {
+                if (l.getY() >= padTop.getY() + 0.5 || ride > 100) {   // out of the top: a little push onto the plaza
+                    riding.remove(id);
+                    org.bukkit.util.Vector out = l.getDirection().setY(0);
+                    if (out.lengthSquared() < 1e-4) out = new org.bukkit.util.Vector(1, 0, 0);
+                    p.setVelocity(out.normalize().multiply(0.65).setY(0.45));
+                    p.setFallDistance(0);
+                    noFallUntil.put(id, ticks + 80);
+                    padCooldown.put(id, ticks + 40);
+                    world.spawnParticle(Particle.GUST, l, 2, 0.5, 0.2, 0.5, 0);
+                    world.playSound(l, Sound.ENTITY_WIND_CHARGE_WIND_BURST, SoundCategory.PLAYERS, 1f, 1.2f);
+                    continue;
+                }
+                if (!inShaft) { riding.remove(id); noFallUntil.put(id, ticks + 60); continue; }   // knocked out of the column
+                riding.put(id, ride + 1);
+                p.setVelocity(new org.bukkit.util.Vector(-dx * 0.2, 1.0, -dz * 0.2));   // up, and drift back to the middle
+                p.setFallDistance(0);
+                if (ride % 2 == 0) world.spawnParticle(Particle.CLOUD, l, 3, 0.25, 0.1, 0.25, 0.02);
+                continue;
+            }
+            if (Math.abs(dx) > 1.4 || Math.abs(dz) > 1.4) continue;
+            double up = l.getY() - pad.getY();
+            if (up < -0.3 || up > 1.0 || p.isSneaking()) continue;
+            if (p.getFallDistance() > 3) { padCooldown.put(id, ticks + 30); continue; }   // just dropped in: land first
+            if (padCooldown.getOrDefault(id, 0) > ticks) continue;
+            riding.put(id, 0);
+            noFallUntil.put(id, ticks + 200);
+            world.playSound(l, Sound.ENTITY_BREEZE_JUMP, SoundCategory.PLAYERS, 1f, 0.8f);
+            world.spawnParticle(Particle.GUST, l, 3, 0.6, 0.1, 0.6, 0);
+        }
+    }
+
+    @Override protected boolean onDamage(Player victim, Entity attacker, org.bukkit.event.entity.EntityDamageEvent e) {
+        if (e.getCause() == EntityDamageEvent.DamageCause.FALL && noFallUntil.getOrDefault(victim.getUniqueId(), 0) > ticks) return false;
+        return true;
+    }
+
+    int armourTier(Player p) { return armour.getOrDefault(p.getUniqueId(), 0); }
+
     @Override protected void onDeath(Player p, Player killer, String how) {
+        riding.remove(p.getUniqueId());
         Team t = team(p);
         boolean finalKill = !bedAlive(t);
         // the killer gets the victim's resources
