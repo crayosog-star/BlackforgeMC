@@ -49,7 +49,7 @@ import java.util.function.Predicate;
  * Hooking a target goes through a normal damage event first, so spawn protection and PvP rules decide who can be
  * dragged. Only where {@code allowedAt} says (the hub Arena for now). Never used up.
  */
-public final class AshenChain implements Listener {
+public final class AshenChain implements Listener, Hackable {
     public static final String NAME = "<gradient:#8C8580:#C2541B:#6E0F0F><bold>Ashen Chain</bold></gradient>";
     public static final double DAMAGE = 2.0;                 // 1 heart (hostile mobs)
     private static final int YANK_DRAW_TICKS = 8;            // chain stays drawn to a dragged target this long
@@ -689,6 +689,35 @@ public final class AshenChain implements Listener {
         endTether(id);
         readyAt.remove(id);
         noFallUntil.remove(id);
+    }
+
+    /**
+     * EMP: every burning chain on someone inside the wave (or thrown by someone inside it) snaps with no pull, even
+     * past the break-free window, and anyone inside it mid-grapple drops their chain. The EMP caster's own chains stay.
+     */
+    @Override
+    public int hack(Location center, double radius, Player caster) {
+        int n = 0;
+        UUID me = caster.getUniqueId();
+        for (Map.Entry<UUID, Tether> e : new ArrayList<>(tethers.entrySet())) {
+            if (e.getValue().caster.equals(me)) continue;
+            Entity target = Bukkit.getEntity(e.getKey());
+            Player owner = Bukkit.getPlayer(e.getValue().caster);
+            boolean hit = (target != null && EmpWave.reaches(center, target.getLocation(), radius))
+                    || (owner != null && EmpWave.reaches(center, owner.getLocation(), radius));
+            if (!hit) continue;
+            if (target instanceof LivingEntity t) snap(owner, t, "EMP");
+            else endTether(e.getKey());
+            n++;
+        }
+        for (UUID id : new ArrayList<>(active.keySet())) {
+            Player p = Bukkit.getPlayer(id);
+            if (p == null || id.equals(me) || !EmpWave.reaches(center, p.getLocation(), radius)) continue;
+            slack(p);
+            p.sendActionBar(Ui.mm("<#B6FF3B>⚡ <gray>Your " + NAME + " <gray>was <white>shut down <gray>by an EMP"));
+            n++;
+        }
+        return n;
     }
 
     /** Plugin disable: drop every chain. */

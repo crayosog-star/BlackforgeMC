@@ -37,7 +37,7 @@ import java.util.function.Predicate;
  *
  * Only where {@code allowedAt} says (the hub Arena for now). Never used up; one bonfire per player at a time.
  */
-public final class AshenBonfire implements Listener {
+public final class AshenBonfire implements Listener, Hackable {
     public static final String NAME = "<gradient:#FFB347:#C2541B:#6E0F0F><bold>Ashen Bonfire</bold></gradient>";
     private static final int DROP_TICKS = 7;                 // the sword falls out of the sky
     private static final float SWORD_REST_Y = 0.95f, SWORD_START_Y = 7f;
@@ -146,6 +146,20 @@ public final class AshenBonfire implements Listener {
     /** Backup: a bonfire item is never placed as a block, whatever cancelled the click first. */
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onPlace(BlockPlaceEvent e) { if (isBonfire(e.getItemInHand())) e.setCancelled(true); }
+
+    /** EMP: any bonfire whose ring the wave touches is snuffed out (not the EMP caster's own). */
+    @Override
+    public int hack(Location center, double r, Player caster) {
+        int n = 0;
+        for (Fire f : new ArrayList<>(fires.values())) {
+            if (f.owner.equals(caster.getUniqueId()) || !EmpWave.reaches(center, f.base, r, radius)) continue;
+            f.end(false);
+            Player owner = Bukkit.getPlayer(f.owner);
+            if (owner != null) owner.sendActionBar(Ui.mm("<#B6FF3B>⚡ <gray>Your " + NAME + " <gray>was <white>shut down <gray>by an EMP"));
+            n++;
+        }
+        return n;
+    }
 
     /** Plugin disable: put every fire out. */
     public void shutdown() {

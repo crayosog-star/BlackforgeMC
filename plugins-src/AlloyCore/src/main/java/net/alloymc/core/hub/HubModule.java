@@ -39,6 +39,7 @@ public final class HubModule implements Listener {
     private final net.alloymc.core.survival.Rimelock cage;   // Rimelock, Arena only: a 10 s cage only the caster's side can leave
     private final net.alloymc.core.survival.AshenChain chain;   // Ashen Chain, Arena only: drag yourself to a block or a player to you
     private final net.alloymc.core.survival.AshenBonfire bonfire;   // Ashen Bonfire, Arena only: a breakable healing ring
+    private final net.alloymc.core.survival.Emp emp;   // EMP, Arena only: launch up, shut down every ability in 10 blocks
     private final Map<UUID, Long> portalCooldown = new HashMap<>();
     private final Set<UUID> hidingPlayers = new HashSet<>();
     private final List<TextDisplay> holograms = new ArrayList<>();
@@ -105,6 +106,9 @@ public final class HubModule implements Listener {
         arena.addTestItem(chain::item, chain::isChain);
         bonfire = new net.alloymc.core.survival.AshenBonfire(plugin, l -> l.getWorld() == arena.world());   // Arena only; never used up
         arena.addTestItem(bonfire::item, bonfire::isBonfire);
+        emp = new net.alloymc.core.survival.Emp(plugin, l -> l.getWorld() == arena.world(), true);   // Arena only; staff: no cooldown in the Arena
+        emp.hackable(surge, cage, eye, chain, bonfire, gaia, rite, darkness);   // everything the EMP shuts down
+        arena.addTestItem(emp::item, emp::isEmp);
         // staff test commands, Arena only: one item each
         testCommand("jbello", List.of("bellows", "galebellows"), () -> bellows.item());
         testCommand("gaia", List.of("gaiapotion"), () -> gaia.item());
@@ -115,6 +119,7 @@ public final class HubModule implements Listener {
         testCommand("godseye", List.of("eye"), () -> eye.item());
         testCommand("ashenchain", List.of("chain", "tether"), () -> chain.item());
         testCommand("bonfire", List.of("ashenbonfire", "totem"), () -> bonfire.item());
+        testCommand("emp", List.of(), () -> emp.item());
     }
 
     public TestArena arena() { return arena; }
@@ -158,7 +163,7 @@ public final class HubModule implements Listener {
 
     private DragonAnimator dragons;
 
-    public void shutdown() { gaia.shutdown(); surge.shutdown(); rite.shutdown(); cage.shutdown(); eye.shutdown(); chain.shutdown(); bonfire.shutdown(); holograms.forEach(TextDisplay::remove); boards.forEach(TextDisplay::remove); if (parkour != null) parkour.shutdown(); if (dragons != null) dragons.remove(); arena.shutdown(); }
+    public void shutdown() { gaia.shutdown(); surge.shutdown(); rite.shutdown(); cage.shutdown(); eye.shutdown(); chain.shutdown(); bonfire.shutdown(); emp.shutdown(); holograms.forEach(TextDisplay::remove); boards.forEach(TextDisplay::remove); if (parkour != null) parkour.shutdown(); if (dragons != null) dragons.remove(); arena.shutdown(); }
     // ------------------------------------------------------------------ leaderboards
 
     private final List<TextDisplay> boards = new ArrayList<>();

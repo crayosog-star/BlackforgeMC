@@ -52,7 +52,7 @@ import java.util.function.Predicate;
  * inside, and a burst of shards when it breaks. Only where {@code allowedAt} says (the hub Arena for now). Never used
  * up; one cage per caster at a time. The geometry lives in {@link CageShape}.
  */
-public final class Rimelock implements Listener {
+public final class Rimelock implements Listener, Hackable {
     public static final String NAME = "<gradient:#BFF4FF:#3FA9FF><bold>Rimelock</bold></gradient>";
     public static final int DURATION_TICKS = 10 * 20;
 
@@ -81,6 +81,7 @@ public final class Rimelock implements Listener {
     private final NamespacedKey tagKey;
     private final List<Cage> cages = new ArrayList<>();
     private final Set<UUID> leaping = new HashSet<>();
+    private final Set<UUID> jammed = new HashSet<>();   // mid-leap when an EMP hit: no cage when they land
     private final Map<UUID, Long> fxReadyAt = new HashMap<>();     // per player: bounce / blocked-hit effects at most every 200 ms
     private final Random rnd = new Random();
 
@@ -174,7 +175,12 @@ public final class Rimelock implements Listener {
         int[] n = {0};
         plugin.getServer().getScheduler().runTaskTimer(plugin, task -> {
             int k = n[0]++;
-            if (!p.isOnline() || p.isDead()) { leaping.remove(id); task.cancel(); return; }
+            if (!p.isOnline() || p.isDead()) { leaping.remove(id); jammed.remove(id); task.cancel(); return; }
+            if (jammed.remove(id)) {   // an EMP caught the leap: no cage
+                task.cancel();
+                plugin.getServer().getScheduler().runTaskLater(plugin, () -> leaping.remove(id), 10L);
+                return;
+            }
             Location at = p.getLocation().add(0, 0.9, 0);
             fx(id, at, (v, pal) -> {   // a spiral of frost round the caster on the way up
                 for (int s = 0; s < 2; s++) {
@@ -353,6 +359,30 @@ public final class Rimelock implements Listener {
     public void onQuit(PlayerQuitEvent e) {
         leaping.remove(e.getPlayer().getUniqueId());
         fxReadyAt.remove(e.getPlayer().getUniqueId());
+    }
+
+    /**
+     * EMP: every cage the wave touches (its wall, not just its middle) shatters at once, and a Rimelock leap still in
+     * the air fizzles with no cage. The caster's own cage is left alone.
+     */
+    @Override
+    public int hack(Location center, double radius, Player caster) {
+        int n = 0;
+        for (Cage c : new ArrayList<>(cages)) {
+            if (c.owner.equals(caster.getUniqueId()) || !EmpWave.reaches(center, c.center(), radius, CageShape.RADIUS)) continue;
+            c.shatter();
+            Player owner = Bukkit.getPlayer(c.owner);
+            if (owner != null) owner.sendActionBar(Ui.mm("<#B6FF3B>⚡ <gray>Your " + NAME + " <gray>was <white>shut down <gray>by an EMP"));
+            n++;
+        }
+        for (UUID id : new ArrayList<>(leaping)) {
+            Player p = Bukkit.getPlayer(id);
+            if (p == null || id.equals(caster.getUniqueId()) || jammed.contains(id) || !EmpWave.reaches(center, p.getLocation(), radius)) continue;
+            jammed.add(id);
+            p.sendActionBar(Ui.mm("<#B6FF3B>⚡ <gray>Your " + NAME + " <gray>was <white>shut down <gray>by an EMP"));
+            n++;
+        }
+        return n;
     }
 
     /** Plugin disable: take every cage down at once (displays aren't saved, but don't leave them for the rest of this run). */

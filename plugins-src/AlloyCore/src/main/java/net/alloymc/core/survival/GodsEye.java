@@ -36,7 +36,7 @@ import java.util.function.Predicate;
  * Spectators and players the caster can't see (vanished) are never picked. Only where {@code allowedAt} says (the
  * hub Arena for now). Never used up; one mark per caster at a time.
  */
-public final class GodsEye implements Listener {
+public final class GodsEye implements Listener, Hackable {
     public static final String NAME = "<gradient:#FFF6C8:#FFD34D:#FFB000><bold>Gods-eye</bold></gradient>";
     public static final int DURATION_TICKS = 10 * 20;
 
@@ -130,6 +130,23 @@ public final class GodsEye implements Listener {
             if (d < bestD) { bestD = d; best = q; }
         }
         return best;
+    }
+
+    /** EMP: a mark goes out if the wave reaches the marked player or the player who cast it (not the EMP caster's own). */
+    @Override
+    public int hack(Location center, double radius, Player caster) {
+        int n = 0;
+        for (Mark m : new ArrayList<>(marks.values())) {
+            if (m.caster.equals(caster.getUniqueId())) continue;
+            Player owner = Bukkit.getPlayer(m.caster);
+            boolean hit = EmpWave.reaches(center, m.target.getLocation(), radius)
+                    || (owner != null && EmpWave.reaches(center, owner.getLocation(), radius));
+            if (!hit) continue;
+            m.end(true);
+            if (owner != null) owner.sendActionBar(Ui.mm("<#B6FF3B>⚡ <gray>Your " + NAME + " <gray>was <white>shut down <gray>by an EMP"));
+            n++;
+        }
+        return n;
     }
 
     /** Plugin disable: take every mark down. */
