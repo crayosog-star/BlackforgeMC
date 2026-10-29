@@ -93,10 +93,22 @@ public final class Guardian implements Listener {
 
     // ------------------------------------------------------------------ auto-clicker
 
-    @EventHandler
-    public void onSwing(PlayerAnimationEvent e) {
-        if (e.getAnimationType() != PlayerAnimationType.ARM_SWING) return;
-        clicks.computeIfAbsent(e.getPlayer().getUniqueId(), k -> new ArrayDeque<>()).addLast(System.currentTimeMillis());
+    /*
+     * Only real clicks count: a swing at the air or a hit on an entity. Holding the button down on a block (mining)
+     * makes the client swing every tick - a steady 20 swings a second that looked exactly like an auto-clicker.
+     */
+    private void click(Player p) {
+        clicks.computeIfAbsent(p.getUniqueId(), k -> new ArrayDeque<>()).addLast(System.currentTimeMillis());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onAirClick(org.bukkit.event.player.PlayerInteractEvent e) {
+        if (e.getAction() == org.bukkit.event.block.Action.LEFT_CLICK_AIR && e.getHand() == org.bukkit.inventory.EquipmentSlot.HAND) click(e.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onHit(org.bukkit.event.entity.EntityDamageByEntityEvent e) {
+        if (e.getDamager() instanceof Player p && e.getCause() == org.bukkit.event.entity.EntityDamageEvent.DamageCause.ENTITY_ATTACK) click(p);
     }
 
     private void cpsTick() {
