@@ -573,6 +573,9 @@ public final class Surge implements Listener, Hackable {
                 && (active.containsKey(id) || noFallUntil.getOrDefault(id, 0L) > System.currentTimeMillis())) e.setCancelled(true);
     }
 
+    /** End {@code p}'s Surge now, as a death would. For game modes whose deaths aren't real deaths (the Arcade). */
+    public void endFor(Player p) { end(p, null); }
+
     @EventHandler public void onDeath(PlayerDeathEvent e) { end(e.getPlayer(), null); }
     @EventHandler public void onQuit(PlayerQuitEvent e) { end(e.getPlayer(), null); }
     @EventHandler public void onWorld(PlayerChangedWorldEvent e) { end(e.getPlayer(), null); }

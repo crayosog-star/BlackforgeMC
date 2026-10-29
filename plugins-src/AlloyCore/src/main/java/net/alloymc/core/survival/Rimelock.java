@@ -355,6 +355,9 @@ public final class Rimelock implements Listener, Hackable {
 
     // ------------------------------------------------------------------ housekeeping
 
+    /** Cancel a Rimelock leap {@code p} is still in the air for (a cage already standing stays). For fake deaths (the Arcade). */
+    public void endFor(Player p) { leaping.remove(p.getUniqueId()); }
+
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
         leaping.remove(e.getPlayer().getUniqueId());
