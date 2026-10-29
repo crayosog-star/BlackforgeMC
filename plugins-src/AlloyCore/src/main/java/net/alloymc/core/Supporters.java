@@ -83,7 +83,7 @@ public final class Supporters implements Listener {
     public void setTrailBlocked(Predicate<Player> rule) { this.trailBlocked = rule; }
 
     public static Tier tierOf(Player p) {
-        for (int i = TIERS.size() - 1; i >= 0; i--) if (p.hasPermission("alloy.supporter." + TIERS.get(i).id())) return TIERS.get(i);
+        for (int i = TIERS.size() - 1; i >= 0; i--) { String perm = "alloy.supporter." + TIERS.get(i).id(); if (p.isPermissionSet(perm) && p.hasPermission(perm)) return TIERS.get(i); }   // given, not op-implied
         return null;
     }
 

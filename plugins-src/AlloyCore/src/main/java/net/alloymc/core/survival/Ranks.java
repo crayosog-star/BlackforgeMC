@@ -74,7 +74,8 @@ public final class Ranks implements Listener {
 
     /** Highest rank the player holds, or null. */
     public Rank of(Player p) {
-        for (int i = RANKS.size() - 1; i >= 0; i--) if (p.hasPermission("alloy.rank." + RANKS.get(i).id())) return RANKS.get(i);
+        // only a rank that is really given (LuckPerms group) counts - ops have every permission and would all show Netherite
+        for (int i = RANKS.size() - 1; i >= 0; i--) { String perm = "alloy.rank." + RANKS.get(i).id(); if (p.isPermissionSet(perm) && p.hasPermission(perm)) return RANKS.get(i); }
         return null;
     }
 

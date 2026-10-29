@@ -34,14 +34,14 @@ public final class Media implements Listener {
         });
     }
 
-    public static boolean has(Player p) { return p.hasPermission(PERM); }
+    public static boolean has(Player p) { return p.isPermissionSet(PERM) && p.hasPermission(PERM); }
 
     /** Media players get the Essentials home group one step up from their rank: media_&lt;rank&gt; = rank homes + 3. */
     @EventHandler(priority = EventPriority.LOWEST)
     public void onJoin(PlayerJoinEvent e) {
         Player p = e.getPlayer();
         if (!has(p)) return;
-        String rank = RANKS.stream().filter(r -> p.hasPermission("alloy.rank." + r)).findFirst().orElse("default");
+        String rank = RANKS.stream().filter(r -> p.isPermissionSet("alloy.rank." + r) && p.hasPermission("alloy.rank." + r)).findFirst().orElse("default");
         PermissionAttachment att = p.addAttachment(plugin);
         att.setPermission("essentials.sethome.multiple.media_" + rank, true);
         homes.put(p.getUniqueId(), att);
