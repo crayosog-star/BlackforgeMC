@@ -34,6 +34,7 @@ final class ForgeWarsMaps {
     static final double LEDGE_W = 3.2;   // width of the ledges and ramps that run along the wall
     static final double RAMP_ARC = 2.55; // radians each spiral ramp winds round the wall (landing + ramp < pi: the two never overlap)
     static final double LANDING_ARC = 0.5;
+    static final int GROTTO_Z = -19;     // the Black Market grotto: off the north wall, away from the middle of the hall
 
     static BuiltMap build(String id, String name, String desc, int teams, int ringR, Theme t, String... variants) {
         MapKit k = new MapKit(id.hashCode());
@@ -83,7 +84,7 @@ final class ForgeWarsMaps {
     /** Solid rock under the Core, tapering to a point, so the cave and tunnels never open into the void. */
     private static void heart(MapKit k, Theme t) {
         for (int y = -1; y >= -48; y--) {
-            double r = y >= -30 ? 19.5 : 19.5 - (-30 - y) * 1.2;
+            double r = y >= -30 ? 25.5 : 25.5 - (-30 - y) * 1.3;   // wide enough to hold the Black Market grotto off the north wall
             if (r <= 0) break;
             int ri = (int) Math.ceil(r + 1.5);
             for (int x = -ri; x <= ri; x++) for (int z = -ri; z <= ri; z++) {
@@ -415,6 +416,7 @@ final class ForgeWarsMaps {
         final long seed;
         final java.util.Map<Long, Integer> top = new java.util.HashMap<>();   // carved column -> highest air y
         final java.util.Map<Long, Double> stand = new java.util.HashMap<>();  // ledge column -> standing height (x.0 or x.5)
+        final java.util.Set<Long> grotto = new java.util.HashSet<>();          // Black Market grotto and its passage: no bushes
 
         Cave(MapKit k, long seed) { this.k = k; this.seed = seed; }
 
@@ -539,8 +541,8 @@ final class ForgeWarsMaps {
                     int x = p[0] + dx, z = p[1] + dz, ceil = top.get(col(x, z));
                     for (int y = sy; y <= ceil; y++) k.set(x, y, z, k.rnd.nextInt(4) == 0 ? "moss_block" : k.rnd.nextInt(3) == 0 ? "mossy_cobblestone" : t.bottom());
                 }
-            // boulders: waist-high cover
-            for (int[] b : new int[][]{{-3, 6}, {3, 4}, {-4, -3}, {8, -4}, {-9, 3}}) {
+            // boulders: waist-high cover, round the edge of the open middle
+            for (int[] b : new int[][]{{-3, 6}, {3, 4}, {-6, -3}, {8, -4}, {-9, 3}}) {   // all outside r=4: the middle is the boss arena
                 for (int dx = 0; dx <= 1; dx++) for (int dz = 0; dz <= 1; dz++) {
                     k.set(b[0] + dx, sy, b[1] + dz, k.rnd.nextBoolean() ? "mossy_cobblestone" : "moss_block");
                     if (k.rnd.nextInt(3) > 0) k.set(b[0] + dx, sy + 1, b[1] + dz, k.rnd.nextBoolean() ? "moss_block" : "mossy_cobblestone");
@@ -555,9 +557,37 @@ final class ForgeWarsMaps {
             for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) if (Math.abs(x) == 2 || Math.abs(z) == 2) k.set(x, 0, z, "pearlescent_froglight[axis=y]");
         }
 
-        /** The Black Market: a spruce stall against the north side of the floor; the villager stands boxed in behind the counter. */
+        /**
+         * The Black Market hides in its own grotto off the north wall, out of the main hall (which is kept clear for fights):
+         * a low passage under the spiral ramp leads into a small domed chamber with the stall at the back. The villager
+         * stands boxed in behind a counter that faces the way in.
+         */
         void market(MapDef d) {
-            int fy = CAVE_FLOOR, sy = CAVE_FLOOR + 1, cz = -8;
+            int fy = CAVE_FLOOR, sy = CAVE_FLOOR + 1;
+            // the chamber: an ellipse centred on (0, GROTTO_Z), domed ceiling
+            for (int x = -6; x <= 6; x++) for (int z = GROTTO_Z - 5; z <= GROTTO_Z + 5; z++) {
+                double e = (x * x) / 25.0 + ((z - GROTTO_Z) * (z - GROTTO_Z)) / 16.0;
+                if (e > 1 + (MapKit.noise(x / 2.0, z / 2.0, seed + 51) - 0.5) * 0.3) continue;
+                int ceil = sy + 3 + (int) Math.round((1 - e) * 4);
+                k.set(x, fy - 1, z, "rooted_dirt");
+                k.set(x, fy, z, k.rnd.nextInt(3) == 0 ? "rooted_dirt" : "moss_block");
+                for (int y = sy; y <= ceil; y++) k.set(x, y, z, "air");
+                top.put(col(x, z), ceil);
+                grotto.add(col(x, z));
+            }
+            // the passage: 5 wide, 3 high, from the main hall through the wall into the chamber, brick-lined where it's in rock
+            for (int z = -9; z >= GROTTO_Z + 3; z--) {
+                for (int x = -2; x <= 2; x++) {
+                    boolean rock = !inCave(x, z);
+                    k.set(x, fy, z, "mossy_cobblestone");
+                    for (int y = sy; y <= sy + 2; y++) k.set(x, y, z, "air");
+                    if (rock) { k.set(x, sy + 3, z, "mossy_stone_bricks"); top.put(col(x, z), sy + 2); grotto.add(col(x, z)); }
+                }
+                for (int x : new int[]{-3, 3}) if (!inCave(x, z) || top.get(col(x, z)) < sy + 3)
+                    for (int y = sy; y <= sy + 3; y++) k.set(x, y, z, y == sy + 1 && Math.floorMod(z, 3) == 0 ? "shroomlight" : k.rnd.nextInt(4) == 0 ? "cracked_stone_bricks" : "mossy_stone_bricks");
+            }
+            // the stall at the back of the chamber, counter facing the passage
+            int cz = GROTTO_Z - 1;
             for (int x = -2; x <= 2; x++) for (int z = cz - 2; z <= cz + 2; z++) { k.set(x, fy, z, "spruce_planks"); for (int y = sy; y <= sy + 2; y++) k.set(x, y, z, "air"); }
             for (int[] c : new int[][]{{-2, cz - 2}, {2, cz - 2}, {-2, cz + 2}, {2, cz + 2}})
                 for (int y = sy; y <= sy + 2; y++) k.set(c[0], y, c[1], "stripped_spruce_log[axis=y]");
@@ -565,19 +595,25 @@ final class ForgeWarsMaps {
             for (int x = -3; x <= 3; x++) for (int z = cz - 3; z <= cz + 3; z++) {
                 boolean edge = Math.abs(x) == 3 || Math.abs(z - cz) == 3;
                 if (edge && (Math.abs(x) == 3 && Math.abs(z - cz) == 3 || k.rnd.nextInt(4) == 0)) continue;
+                if (!air(k, x, ry, z)) continue;   // tucked under the dome: never into the rock
                 int r = k.rnd.nextInt(10);
                 k.set(x, ry, z, r < 4 ? "moss_block" : r < 8 ? "azalea_leaves[persistent=true]" : "flowering_azalea_leaves[persistent=true]");
                 if (edge && k.rnd.nextInt(3) == 0 && Math.abs(z - cz) != 3) k.set(x, ry - 1, z, "hanging_roots");
             }
-            // villager at (0, cz): counter in front (towards the pad), shelves on the other three sides
             for (int x = -1; x <= 1; x++) k.set(x, sy, cz + 1, "spruce_slab[type=top]");
             for (int x = -1; x <= 1; x++) k.set(x, sy, cz - 1, "bookshelf");
             for (int x : new int[]{-1, 1}) k.set(x, sy, cz, "bookshelf");
-            k.late(-1, sy + 1, cz - 1, "potted_azalea_bush");
+            k.late(-1, sy + 1, cz - 1, "potted_brown_mushroom");
             k.late(1, sy + 1, cz - 1, "potted_red_mushroom");
             k.late(-1, sy + 1, cz + 1, "candle[lit=true,candles=3]");
             k.late(1, sy + 1, cz + 1, "candle[lit=true,candles=2]");
             for (int x : new int[]{-2, 2}) k.late(x, ry - 1, cz + 1, "lantern[hanging=true]");
+            // amethyst glinting on the chamber floor round the edge
+            for (int x = -5; x <= 5; x++) for (int z = GROTTO_Z - 4; z <= GROTTO_Z + 4; z++) {
+                if (!grotto.contains(col(x, z)) || Math.abs(x) <= 2 && z >= cz - 3 || !air(k, x, sy, z) || k.rnd.nextInt(7) != 0) continue;
+                boolean edge = !grotto.contains(col(x + 1, z)) || !grotto.contains(col(x - 1, z)) || !grotto.contains(col(x, z + 1)) || !grotto.contains(col(x, z - 1));
+                if (edge && Math.abs(x) >= 3) k.set(x, sy, z, "amethyst_cluster[facing=up]");
+            }
             d.point("black_market", Pt.of(0.5, sy, cz + 0.5).facing(0.5, 0.5));
         }
 
@@ -624,7 +660,7 @@ final class ForgeWarsMaps {
                 if (r < 30) k.set(x, sy, z, "moss_carpet");
                 else if (r < 38) k.set(x, sy, z, "short_grass");
                 else if (r < 44) k.set(x, sy, z, "fern");
-                else if (d > 9 && r < 49) k.set(x, sy, z, k.rnd.nextBoolean() ? "azalea" : "flowering_azalea");
+                else if (d > 9 && r < 49 && !grotto.contains(e.getKey())) k.set(x, sy, z, k.rnd.nextBoolean() ? "azalea" : "flowering_azalea");
                 else if (r < 53) k.set(x, sy, z, "pink_petals[facing=north,flower_amount=" + (2 + k.rnd.nextInt(3)) + "]");
             }
         }

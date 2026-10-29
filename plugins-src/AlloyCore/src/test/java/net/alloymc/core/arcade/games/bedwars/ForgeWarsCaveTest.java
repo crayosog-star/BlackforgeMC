@@ -62,6 +62,10 @@ class ForgeWarsCaveTest {
             Pt m = b.def().point("black_market");
             int x = (int) Math.floor(m.x()), y = (int) Math.floor(m.y()), z = (int) Math.floor(m.z());
             assertEquals(STAND, y, b.def().id + ": villager isn't at cave floor level");
+            assertTrue(Math.hypot(m.x(), m.z()) >= 15, b.def().id + ": the Black Market must stay out of the middle of the hall (boss arena)");
+            for (int dx = -8; dx <= 8; dx++) for (int dz = -8; dz <= 8; dz++)   // and the middle of the hall stays open floor
+                if (Math.hypot(dx, dz) <= 4 && Math.max(Math.abs(dx), Math.abs(dz)) > 2)
+                    assertTrue(Walk.passable(c.get(dx, STAND, dz)), b.def().id + ": something is built in the middle of the hall at " + dx + "," + dz + ": " + c.get(dx, STAND, dz));
             assertEquals("minecraft:spruce_planks", c.get(x, y - 1, z), b.def().id + ": villager isn't on the stall floor");
             assertTrue(Walk.passable(c.get(x, y, z)) && Walk.passable(c.get(x, y + 1, z)), b.def().id + ": villager is stuck in a block");
         }
