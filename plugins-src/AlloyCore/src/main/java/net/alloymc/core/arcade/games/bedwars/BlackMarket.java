@@ -110,12 +110,18 @@ final class BlackMarket {
         int[] slots = {10, 11, 12, 13, 14, 15, 16};
         for (int i = 0; i < stock.size() && i < slots.length; i++) {
             Deal d = stock.get(i);
-            boolean afford = have >= d.emeralds();
+            boolean free = d.premium() && m.hasGolemVoucher(p);   // the Golem's top damage dealer gets one premium deal free
+            boolean afford = free || have >= d.emeralds();
             ItemStack icon = Ui.item(d.icon(), (afford ? d.premium() ? "<gold>★ " : "<light_purple>" : "<red>") + d.name(), "<gray>" + d.note(), "",
-                    "<gray>Cost: <green>Emeralds x" + d.emeralds(), afford ? "<yellow>Click to buy" : "<red>You can't afford this");
+                    free ? "<#ff3fa4>FREE <gray>(Golem's reward)" : "<gray>Cost: <green>Emeralds x" + d.emeralds(), afford ? "<yellow>Click to buy" : "<red>You can't afford this");
             icon.setAmount(Math.max(1, Math.min(64, d.amount())));
             h.inv.setItem(slots[i], icon);
             h.actions.put(slots[i], () -> {
+                if (d.premium() && m.hasGolemVoucher(p)) {
+                    if (d.give().give(p, m)) { m.spendGolemVoucher(p); p.sendMessage(Ui.mm("<#ff3fa4>Claimed your Golem's reward!")); }
+                    open(m, p, stock, restockIn);
+                    return;
+                }
                 if (!BedWarsShop.pay(p, Material.EMERALD, d.emeralds())) return;
                 if (!d.give().give(p, m)) { BedWarsShop.give(p, new ItemStack(Material.EMERALD, d.emeralds())); return; }   // refund
                 open(m, p, stock, restockIn);
