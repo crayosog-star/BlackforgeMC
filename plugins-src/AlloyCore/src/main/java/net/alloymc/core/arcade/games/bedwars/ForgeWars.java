@@ -43,6 +43,8 @@ public final class ForgeWars extends ArcadeGame {
         m.put("golem-damage-percent", 100);
         m.put("golem-respawn-seconds", 240);
         m.put("golem-heart-seconds", 180);
+        // easter eggs: the Smith's hammers and song, the pink ore veins, the secret rooms (no gameplay effect)
+        m.put("easter-eggs", 1);
         return m;
     }
 

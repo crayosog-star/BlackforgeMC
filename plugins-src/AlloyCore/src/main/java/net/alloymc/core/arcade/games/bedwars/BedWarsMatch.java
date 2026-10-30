@@ -42,6 +42,8 @@ final class BedWarsMatch extends Match {
     private int golemWakeAt = -1;
     private final Map<Team, Integer> heartUntil = new HashMap<>();
     private final Map<UUID, Integer> voucherUntil = new HashMap<>();
+    // easter eggs (Forge Wars only): the Smith's hammers, the pink ore veins, the cracked walls, the jukebox
+    private ForgeEggs eggs;
     private final Map<UUID, Integer> armour = new HashMap<>(), pick = new HashMap<>(), axe = new HashMap<>(), respawnAt = new HashMap<>();
     private final Set<UUID> shears = new HashSet<>();
     private final List<TextDisplay> genLabels = new ArrayList<>();
@@ -91,6 +93,8 @@ final class BedWarsMatch extends Match {
         if (pad != null && settings.i("golem-enabled", 1) != 0) golemWakeAt = DIAMOND_II;   // first wakes with diamond generators II
         Location bm = arsenal ? point("black_market") : null;
         if (bm != null) { marketNpc = npc(bm, "<dark_purple><bold>BLACK MARKET", Villager.Profession.CLERIC).getUniqueId(); restockMarket(false); }
+        if (arsenal && settings.i("easter-eggs", 1) != 0 && !map.list("easter.hammer").isEmpty())
+            eggs = new ForgeEggs(this, world, arcade.plugin(), points("easter.hammer"), points("easter.vein"), points("easter.crack"), point("easter.jukebox"));
         // starting emeralds (a Forge Wars testing setting; 0 = none). Only at the start, not on respawn.
         int em = settings.i("starting-emeralds", 0);
         if (em > 0) for (Team t : teams) for (Player p : online(t.members)) BedWarsShop.give(p, new ItemStack(Material.EMERALD, em));
@@ -217,6 +221,7 @@ final class BedWarsMatch extends Match {
         ticks++;
         if (pad != null) launchPad();
         if (golem != null) { golem.tick(); if (golem.removed()) golem = null; }
+        if (eggs != null) eggs.tick();
         int cap = settings.i("generator-cap", 48);
         for (Team t : teams) {
             if (t.members.stream().noneMatch(alive::contains)) continue;
@@ -294,11 +299,13 @@ final class BedWarsMatch extends Match {
             if (owner == team(p)) { p.sendMessage(Ui.mm("<red>You can't break your own bed!")); return false; }
             return true;
         }
+        if (eggs != null && eggs.isCrack(b)) return true;   // a secret room's cracked wall
         return placed.contains(key(b));
     }
 
     @Override protected void onBreak(Player p, BlockBreakEvent e) {
         Block b = e.getBlock();
+        if (eggs != null && eggs.isCrack(b)) { eggs.onBreak(p, e); return; }
         if (!(b.getBlockData() instanceof Bed)) return;
         e.setDropItems(false);
         Team owner = bedOwner(b);
@@ -341,6 +348,7 @@ final class BedWarsMatch extends Match {
     }
 
     @Override protected void onInteract(Player p, PlayerInteractEvent e) {
+        if (eggs != null && eggs.onInteract(p, e)) { e.setCancelled(true); return; }
         ItemStack it = e.getItem();
         // right-clicking a bed with a block places the block (no "you can only sleep at night"), no sneaking needed
         if (e.getAction() == Action.RIGHT_CLICK_BLOCK && e.getClickedBlock() != null && e.getClickedBlock().getBlockData() instanceof Bed) {
@@ -361,6 +369,7 @@ final class BedWarsMatch extends Match {
         UUID id = e.getRightClicked().getUniqueId();
         if (golem != null && golem.owns(e.getRightClicked())) { e.setCancelled(true); return; }   // no iron-ingot "repairs"
         if (e.getHand() != EquipmentSlot.HAND) return;
+        if (eggs != null && eggs.onInteractEntity(p, e.getRightClicked())) { e.setCancelled(true); return; }
         if (shopNpcs.contains(id)) { e.setCancelled(true); BedWarsShop.openShop(this, p); }
         else if (upgradeNpcs.contains(id)) { e.setCancelled(true); BedWarsShop.openUpgrades(this, p); }
         else if (id.equals(marketNpc)) { e.setCancelled(true); BlackMarket.open(this, p, market, marketTimer); }
@@ -506,7 +515,18 @@ final class BedWarsMatch extends Match {
 
     @Override protected void onCleanup() {
         if (golem != null) { golem.remove(); golem = null; }
+        if (eggs != null) { eggs.remove(); eggs = null; }
     }
+
+    // ------------------------------------------------------------------ easter egg hooks (ForgeEggs)
+
+    List<Player> eggListeners() { return everyone(); }
+    String eggPrefix() { return prefix(); }
+    String eggName(Player p) { return nameOf(p); }
+    void eggStat(UUID u, String stat) { arcade.stats().add(u, game.id, stat, 1); }
+    boolean golemAwake() { return golem != null; }
+    /** Seconds until the Golem next wakes, or -1 when it isn't scheduled. */
+    int golemWakesIn() { return golemWakeAt > 0 ? Math.max(0, golemWakeAt - elapsed) : -1; }
 
     @Override protected void onDeath(Player p, Player killer, String how) {
         riding.remove(p.getUniqueId());
