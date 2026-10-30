@@ -15,7 +15,7 @@ final class GolemModel {
     private GolemModel() {}
 
     /** Which parts move together in an animation. */
-    enum Group { BODY, HEAD, HEART, PLATE, ARM_L, ARM_R, ORE }
+    enum Group { LEGS, BODY, HEAD, HEART, PLATE, ARM_L, ARM_R, ORE }
 
     /**
      * One box: centre (cx, cy, cz), size (sx, sy, sz), turned rx degrees about x (positive tips its top towards +z,
@@ -43,7 +43,7 @@ final class GolemModel {
         String stone = "minecraft:stone_bricks", mossy = "minecraft:mossy_stone_bricks", cobble = "minecraft:cobblestone",
                 cracked = "minecraft:cracked_stone_bricks", moss = "minecraft:moss_block";
         // stubby legs
-        for (int s : new int[]{-1, 1}) l.add(box(Group.BODY, cobble, s * 0.75 - 0.4, 0, -0.5, s * 0.75 + 0.4, 1.3, 0.5));
+        for (int s : new int[]{-1, 1}) l.add(box(Group.LEGS, cobble, s * 0.75 - 0.4, 0, -0.5, s * 0.75 + 0.4, 1.3, 0.5));
         // the hunched body: lower torso, a wider upper torso pushed forward, the hump on top
         l.add(box(Group.BODY, stone, -1.7, 1.2, -1.0, 1.7, 2.5, 1.0));
         l.add(box(Group.BODY, mossy, -1.9, 2.4, -0.9, 1.9, 3.6, 1.3));
