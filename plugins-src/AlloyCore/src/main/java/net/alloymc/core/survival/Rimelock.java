@@ -55,6 +55,8 @@ import java.util.function.Predicate;
 public final class Rimelock implements Listener, Hackable {
     public static final String NAME = "<gradient:#BFF4FF:#3FA9FF><bold>Rimelock</bold></gradient>";
     public static final int DURATION_TICKS = 10 * 20;
+    /** Entities with this scoreboard tag are never held at a cage's glass (the Forge Wars Golem: the cold slows it instead). */
+    public static final String NO_HOLD_TAG = "alloy.cage_no_hold";
 
     private static final int RISE_TICKS = 8, SETTLE_TICKS = 6, BREAK_TICKS = 10;
     private static final float OVERSHOOT = 1.1f;
@@ -383,6 +385,14 @@ public final class Rimelock implements Listener, Hackable {
             n++;
         }
         return n;
+    }
+
+    /** True when a cage's wall reaches something {@code reach} blocks round {@code l} (its middle within the cage radius + reach). */
+    public boolean touches(Location l, double reach) {
+        for (Cage c : cages)
+            if (c.world == l.getWorld() && CageShape.insideXZ(c.cx, c.cz, l.getX(), l.getZ(), CageShape.RADIUS + reach)
+                    && l.getY() >= c.y - CageShape.BELOW && l.getY() <= c.y + CageShape.ABOVE) return true;
+        return false;
     }
 
     /** Plugin disable: take every cage down at once (displays aren't saved, but don't leave them for the rest of this run). */
@@ -838,7 +848,7 @@ public final class Rimelock implements Listener, Hackable {
             Set<UUID> seen = new HashSet<>();
             boolean fxOn = t % 4 == 0;
             for (Entity en : world.getNearbyEntities(center(), CageShape.RADIUS + 3, CageShape.ABOVE, CageShape.RADIUS + 3)) {
-                if (!(en instanceof LivingEntity m) || en instanceof Player || m.isDead() || m.isInsideVehicle()) continue;
+                if (!(en instanceof LivingEntity m) || en instanceof Player || m.isDead() || m.isInsideVehicle() || en.getScoreboardTags().contains(NO_HOLD_TAG)) continue;
                 Location at = m.getLocation();
                 if (inside(at)) { mobsIn.put(m.getUniqueId(), at.clone()); seen.add(m.getUniqueId()); continue; }
                 Location last = mobsIn.get(m.getUniqueId());

@@ -55,6 +55,8 @@ public final class ForgeArsenal {
     /** The installed Arsenal, or null (unit tests, or the Arcade module never installed it). */
     static ForgeArsenal get() { return installed; }
 
+    private Rimelock rimelock;
+
     private ForgeArsenal(AlloyCore plugin, Arcade arcade) {
         Predicate<Location> inMatch = l -> inForgeWars(arcade, l);
         GaiaPotion gaia = new GaiaPotion(plugin, (p, l) -> inMatch.test(l));
@@ -65,6 +67,7 @@ public final class ForgeArsenal {
         AshenChain chain = new AshenChain(plugin, inMatch, e -> false, e -> false);
         AshenBonfire bonfire = new AshenBonfire(plugin, inMatch);
         Rimelock cage = new Rimelock(plugin, inMatch, (caster, p) -> sameTeam(arcade, caster, p));
+        rimelock = cage;
         Emp emp = new Emp(plugin, inMatch, false);
         surge.onActivate(p -> chain.breakFree(p, "Surge"));   // same counter as everywhere else
         emp.hackable(surge, cage, eye, chain, bonfire, gaia, darkness);
@@ -84,6 +87,9 @@ public final class ForgeArsenal {
         Price price = PRICES.stream().filter(p -> p.id().equals(id)).findFirst().orElseThrow();
         abilities.put(id, new Ability(price, item, is));
     }
+
+    /** A Rimelock cage reaches something {@code reach} blocks round {@code l} (the Golem: it's slowed while in the cold). */
+    boolean rimelockTouches(Location l, double reach) { return rimelock != null && rimelock.touches(l, reach); }
 
     /** True inside a Forge Wars match that is being played (all matches share one world, so check its bounds). */
     static boolean inForgeWars(Arcade arcade, Location l) {
