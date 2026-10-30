@@ -36,6 +36,13 @@ public final class ForgeWars extends ArcadeGame {
         m.put("black-market-restock-seconds", 180);
         // emeralds every player starts a match with. FOR TESTING: set to 0 before real players play.
         m.put("starting-emeralds", 64);
+        // the Golem: the Undercroft's mini boss (wakes with diamond generators II, then this long after each kill)
+        m.put("golem-enabled", 1);
+        m.put("golem-health-base", 300);
+        m.put("golem-health-per-player", 60);
+        m.put("golem-damage-percent", 100);
+        m.put("golem-respawn-seconds", 240);
+        m.put("golem-heart-seconds", 180);
         return m;
     }
 
@@ -43,7 +50,8 @@ public final class ForgeWars extends ArcadeGame {
         return List.of("BedWars rules: iron and gold from your forge, diamonds on the outer islands, emeralds in the Core.",
                 "Buy BlackForgeMC abilities from the Arsenal on your island. You can carry two at a time and lose them when you die.",
                 "Under the Core is the Undercroft: the Black Market sells the best weapons and gear for emeralds.",
-                "Take the stairs down, and the slime pad in the middle launches you back up to the Core (sneak to stand on it).");
+                "Take the stairs down, and the slime pad in the middle launches you back up to the Core (sneak to stand on it).",
+                "When diamond generators reach level II, the Golem wakes in the Undercroft: the team that hurts it most wins the Golem's Heart.");
     }
 
     @Override public Match newMatch(MatchContext c) { return new BedWarsMatch(c, true); }
