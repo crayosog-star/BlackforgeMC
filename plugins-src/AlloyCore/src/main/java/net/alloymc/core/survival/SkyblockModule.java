@@ -76,7 +76,13 @@ public final class SkyblockModule implements Listener {
         skyHub.setGroups(groups);
         obCrates = new Crates(plugin, skyHub.oneblockSpawnWorld(), SkyHub.OB_CRATES, SkyHub.Y + 1);
         // AFK zone off the side of the Skyblock Hub: Scrap only (keys would land in the hub's empty inventory)
-        new AfkZone(plugin, skyHub.hubWorld(), new Location(skyHub.hubWorld(), 0.5, SkyHub.Y + 6, 40.5), 6, null, "skyblock-afkzone-built");
+        // (moved off the new hub's spawn isle: clear the old pad once)
+        if (!new File(plugin.getDataFolder(), "skyblock-afkzone-v2-built").exists())
+            for (int x = -8; x <= 9; x++) for (int z = 33; z <= 48; z++) for (int y = SkyHub.Y + 6; y <= SkyHub.Y + 7; y++) {
+                var b = skyHub.hubWorld().getBlockAt(x, y, z);
+                if (b.getType().name().contains("CONCRETE") || b.getType() == Material.SEA_LANTERN || b.getType() == Material.GLASS_PANE) b.setType(Material.AIR, false);
+            }
+        new AfkZone(plugin, skyHub.hubWorld(), new Location(skyHub.hubWorld(), 0.5, SkyHub.Y + 14, 82.5), 6, null, "skyblock-afkzone-v2-built");
         skyHub.onFirstVisit((p, game) -> {
             crates.give(p, "iron", 1);
             p.sendMessage(Ui.mm("<gray>A welcome <white>Cinder Key <gray>for your first trip to " + (game.equals(SkyHub.ONEBLOCK) ? "<#b06bff>OneBlock" : "<#4fd1c5>Skyblock") + "<gray>!"));

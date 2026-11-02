@@ -504,8 +504,8 @@ public final class WorldCam {
                 // 26.x writes a plain string for blocks without properties, a compound otherwise
                 Object pe = pal.get(k);
                 Map<String, Object> e = obj(pe);
-                String name = pe instanceof String str ? str : e.get("Name") instanceof String nm ? nm : String.valueOf(e.get(""));   // mixed lists wrap plain values as {"": value}
-                Map<String, Object> props = e == null ? null : obj(e.get("Properties"));
+                String name = pe instanceof String str ? str : e.get("Name") instanceof String nm ? nm : e.get("id") instanceof String id ? id : String.valueOf(e.get(""));   // 26.x: {id, properties}; mixed lists wrap plain values as {"": value}
+                Map<String, Object> props = e == null ? null : obj(e.containsKey("Properties") ? e.get("Properties") : e.get("properties"));
                 if (props != null && !props.isEmpty()) {
                     StringBuilder sb = new StringBuilder(name).append('[');
                     new TreeMap<>(props).forEach((a, b) -> sb.append(a).append('=').append(b).append(','));

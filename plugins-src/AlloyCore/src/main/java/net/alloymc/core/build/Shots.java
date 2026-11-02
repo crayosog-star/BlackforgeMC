@@ -31,6 +31,9 @@ public final class Shots {
                 new Shot("scrapyard_ground", "survival", "overworld", 0, 600, 160, day, new WorldCam.Cam(32, 170, 556, 0, 166, 612, 75)),
                 new Shot("skyblock", "skyblock", "overworld", 0, 0, 180, day, WorldCam.Cam.yawPitch(0.5, 200, 75.5, 180, 30, 72)),
                 new Shot("skyblock_spawn", "skyblock", "overworld", 0, 0, 180, sunset, WorldCam.Cam.yawPitch(0.5, 152.62, 24.5, 180, -4, 75)),
+                new Shot("skyhub_spawn", "skyblock", "skyhub", 0, 0, 200, day, new WorldCam.Cam(0.5, 102.62, 27.5, 0.5, 108, -32, 75)),
+                new Shot("skyhub_top", "skyblock", "skyhub", 0, 0, 200, WorldCam.Look.day(), new WorldCam.Cam(0.5, 160, 34, 0.5, 100, 33, 60)),
+                new Shot("skyhub_aerial", "skyblock", "skyhub", 0, 0, 200, day, new WorldCam.Cam(0.5, 170, 110, 0.5, 100, -5, 70)),
                 new Shot("factions", "factions", "overworld", 0, 0, 160, frozen, new WorldCam.Cam(62, 218, 84, 0.5, 192, 0, 70)),
                 new Shot("arcade", "arcade", "overworld", 0, 0, 120, sunset, new WorldCam.Cam(-32, 116, 42, 0.5, 102, 0, 72)));
     }
