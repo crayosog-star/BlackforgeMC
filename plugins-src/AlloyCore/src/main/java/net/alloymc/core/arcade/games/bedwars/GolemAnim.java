@@ -144,6 +144,19 @@ final class GolemAnim {
         return pose().bob(-0.35).lean(22).side(4 * s).twist(5 * s).arms(10, 0, -6).head(28, 6 * s, 0).build();
     }
 
+    /**
+     * The death throes ({@link GolemFinale#DIE} ticks): thrown back by the last blow, then it sinks to its knees and shudders,
+     * the shaking dying down as the light goes out. Every step is eased, so it reads as one slow fall.
+     */
+    static Pose dying(int s) {
+        Pose hit = pose().lean(-16).bob(0.05).arms(-75, 0, -35).head(-28, 0, 0).ore(-12).build();
+        Pose kneel = pose().lean(26).bob(-0.85).arms(12, 0, -8).head(42, 0, 0).build();
+        Pose p = s < 12 ? lerp(idle(0), hit, easeOutBack(s / 12.0, 1.3)) : lerp(hit, kneel, smooth((s - 12) / 34.0));
+        double fade = s <= GolemFinale.SHUDDER ? 1 : Math.max(0, 1 - (s - GolemFinale.SHUDDER) / (double) (GolemFinale.DIE - GolemFinale.SHUDDER));
+        double shake = s >= 12 ? Math.sin(s * 2.1) * 2.2 * fade : 0;
+        return new Pose(p.lift(), p.bob(), p.leanX(), p.leanZ() + shake, p.twist() + shake * 0.6, p.armL(), p.armR(), p.head(), p.ore(), p.heart());
+    }
+
     /** Where the wind-up of a move ends (the Golem eases into it over the whole wind-up). */
     static Pose windup(GolemMath.Move m) {
         return switch (m) {

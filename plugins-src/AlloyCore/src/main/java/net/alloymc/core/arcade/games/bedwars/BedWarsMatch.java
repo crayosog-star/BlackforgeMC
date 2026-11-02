@@ -470,6 +470,7 @@ final class BedWarsMatch extends Match {
                 broadcast(prefix() + "<#ff3fa4>The walls of the Undercroft shake... <white>the Golem wakes in 30 seconds.");
                 world.playSound(pad, Sound.ENTITY_WARDEN_HEARTBEAT, SoundCategory.HOSTILE, 4f, 0.5f);
             }
+            if (golemWakeAt - elapsed > 0 && golemWakeAt - elapsed < GolemFinale.STIR_SECONDS) stir(golemWakeAt - elapsed);
             if (elapsed >= golemWakeAt) {
                 golemWakeAt = -1;
                 golem = new Golem(this, world, pad.clone(), point("golem_breach"), undercroftPlayers(pad).size());
@@ -481,6 +482,23 @@ final class BedWarsMatch extends Match {
             for (Player p : online(e.getKey().members))
                 if (isAlive(p) && p.getGameMode() == GameMode.SURVIVAL) p.addPotionEffect(new PotionEffect(PotionEffectType.HASTE, 40, 0, false, false));
         }
+    }
+
+    /** The last 30 seconds before the Golem wakes: the hall rumbles more and more, grit falls from the ceiling, pink light seeps from the wall. */
+    private void stir(int left) {
+        double s = GolemFinale.stir(left);
+        for (int i = 0, n = GolemFinale.dustPerSecond(left); i < n; i++) {
+            double a = marketRnd.nextDouble() * Math.PI * 2, r = Math.sqrt(marketRnd.nextDouble()) * 12;
+            world.spawnParticle(Particle.FALLING_DUST, pad.getX() + Math.cos(a) * r, pad.getY() + 18, pad.getZ() + Math.sin(a) * r, 1, 0, 0, 0, Bukkit.createBlockData(Material.TUFF));
+        }
+        Location b = point("golem_breach");
+        if (b == null) return;
+        if (left % GolemFinale.rumbleEvery(left) == 0) {
+            world.playSound(b, Sound.BLOCK_DEEPSLATE_BREAK, SoundCategory.HOSTILE, 1.5f + (float) s * 2f, 0.5f);
+            world.playSound(pad, Sound.AMBIENT_CAVE, SoundCategory.HOSTILE, 1f + (float) s * 2f, 0.6f);
+        }
+        if (left <= 12)
+            world.spawnParticle(Particle.DUST, b.getX(), b.getY() + 1 + marketRnd.nextDouble() * 5, b.getZ(), 3, 1.2, 0.4, 1.2, new Particle.DustOptions(Color.fromRGB(0xFF3FA4), 1.2f));
     }
 
     /** The Golem fell: reward the team that hurt it most, scatter its loot, and wake the next one later. */
