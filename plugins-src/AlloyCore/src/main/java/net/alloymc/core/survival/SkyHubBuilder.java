@@ -45,7 +45,7 @@ public final class SkyHubBuilder {
     }
 
     /** Smooth value noise in 0..1. */
-    static double noise(double x, double y, long seed) {
+    public static double noise(double x, double y, long seed) {
         int xi = (int) Math.floor(x), yi = (int) Math.floor(y);
         double fx = x - xi, fy = y - yi;
         fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
@@ -53,7 +53,7 @@ public final class SkyHubBuilder {
         return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
     }
 
-    static double fbm(double x, double y, long seed) {
+    public static double fbm(double x, double y, long seed) {
         return 0.6 * noise(x, y, seed) + 0.3 * noise(x * 2.1, y * 2.1, seed + 7) + 0.1 * noise(x * 4.3, y * 4.3, seed + 13);
     }
 
@@ -65,7 +65,7 @@ public final class SkyHubBuilder {
      * An organic floating island: wobbly outline, a grassy top that rises in gentle hills, and a deep rocky underside
      * that tapers into hanging spurs. Returns the surface height for each column (or Integer.MIN_VALUE off-island).
      */
-    static int[][] island(Canvas c, int cx, int cz, int r, int hills, int depth, long seed, String top, String[] rock) {
+    public static int[][] island(Canvas c, int cx, int cz, int r, int hills, int depth, long seed, String top, String[] rock) {
         int size = r * 2 + 12;
         int[][] surface = new int[size][size];
         Random rnd = new Random(seed);
@@ -95,7 +95,7 @@ public final class SkyHubBuilder {
         return surface;
     }
 
-    static int surf(int[][] s, int r, int cx, int cz, int x, int z) {
+    public static int surf(int[][] s, int r, int cx, int cz, int x, int z) {
         int i = x - cx + r + 6, j = z - cz + r + 6;
         if (i < 0 || j < 0 || i >= s.length || j >= s.length) return Integer.MIN_VALUE;
         return s[i][j];
@@ -120,7 +120,7 @@ public final class SkyHubBuilder {
     // ================================================================== trees
 
     /** A big, characterful tree: thick trunk, a few climbing branches, lumpy leaf clusters, vines underneath. */
-    static void tree(Canvas c, int x, int y, int z, int height, String log, String leaves, long seed) {
+    public static void tree(Canvas c, int x, int y, int z, int height, String log, String leaves, long seed) {
         Random rnd = new Random(seed);
         boolean thick = height >= 10;
         for (int k = 0; k < height; k++) {
@@ -276,6 +276,9 @@ public final class SkyHubBuilder {
                 } else if (rim) {
                     c.set(x, Y, z, "minecraft:mossy_stone_bricks");
                     c.set(x, Y - 1, z, "minecraft:stone_bricks");
+                } else if (d > 9.3) {   // a step ledge just under the surface, so nobody is stuck in the pool
+                    c.set(x, Y - 1, z, "minecraft:mossy_stone_bricks");
+                    c.set(x, Y - 2, z, "minecraft:stone_bricks");
                 } else {
                     c.set(x, Y - 3, z, "minecraft:gravel");
                     for (int y = Y - 2; y <= Y - 1; y++) c.set(x, y, z, "minecraft:water");

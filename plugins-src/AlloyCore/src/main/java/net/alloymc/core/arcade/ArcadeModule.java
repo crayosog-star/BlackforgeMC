@@ -30,7 +30,8 @@ public final class ArcadeModule implements Listener, Arcade.Lobby {
     private final AlloyCore plugin;
     private final World world;
     private final Arcade arcade;
-    private final Map<String, int[]> booths = new LinkedHashMap<>();   // game id (or hub) -> plate x, z
+    private final Map<String, int[]> booths = new LinkedHashMap<>();   // game id (or hub) -> plate x, y, z
+    private ArcadeHubLife life;
     private final Map<String, TextDisplay> boothHolos = new HashMap<>();
     private final Map<UUID, Long> plateCooldown = new HashMap<>();
     private TextDisplay lobbyTitle, board;
@@ -38,17 +39,20 @@ public final class ArcadeModule implements Listener, Arcade.Lobby {
     public ArcadeModule(AlloyCore plugin) {
         this.plugin = plugin;
         this.world = Bukkit.getWorlds().getFirst();
-        LobbyRules.setupWorld(plugin, world, 6000);
+        LobbyRules.setupWorld(plugin, world, 18000);   // a permanent neon night
         world.setSpawnLocation(lobbySpawn());
-        booths.putAll(LobbyBuilder.plates());
         arcade = new Arcade(plugin, this);
         new Seasons(plugin, arcade);   // monthly ranked seasons and the Weekend Cup
         Games.registerAll(arcade);
+        // every game on the next free pod of its district; the plate by spawn goes back to the hub
+        booths.putAll(ArcadeHubLife.assign(arcade.games()));
+        booths.put("hub", new int[]{0, ArcadeHubBuilder.Y + 1, 39});
+        life = new ArcadeHubLife(plugin, world, arcade);
         net.alloymc.core.arcade.games.bedwars.ForgeArsenal.install(plugin, arcade);   // Forge Wars ability items (only work in its matches)
         Bukkit.getPluginManager().registerEvents(new LobbyRules(p -> p.getWorld() != world), plugin);
         new net.alloymc.core.SpawnSafety(plugin, l -> l.getWorld() == world, p -> lobbySpawn()).withStuckCommand();
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        for (int cx = -3; cx <= 2; cx++) for (int cz = -3; cz <= 2; cz++) world.addPluginChunkTicket(cx, cz, plugin);
+        for (int cx = -8; cx <= 7; cx++) for (int cz = -8; cz <= 7; cz++) world.addPluginChunkTicket(cx, cz, plugin);   // plaza and districts
         if (!new File(plugin.getDataFolder(), LOBBY_MARKER).exists()) buildAll(Bukkit.getConsoleSender());
         Bukkit.getScheduler().runTaskLater(plugin, () -> arcade.loadMaps(msg -> plugin.getLogger().info("[Arcade] " + msg)), 20L);
         Bukkit.getScheduler().runTaskLater(plugin, this::spawnHolograms, 40L);
@@ -58,9 +62,9 @@ public final class ArcadeModule implements Listener, Arcade.Lobby {
     public World world() { return world; }
     public Arcade arcade() { return arcade; }
 
-    public void shutdown() { arcade.shutdown(); }
+    public void shutdown() { arcade.shutdown(); if (life != null) life.remove(); }
 
-    private static final String LOBBY_MARKER = "arcade-lobby-v2";
+    private static final String LOBBY_MARKER = "arcade-lobby-v3";
 
     /** Clear the lobby area (old lobby included) a few columns per tick, then paste the forge lobby. */
     public void buildAll(CommandSender who) {
@@ -80,7 +84,7 @@ public final class ArcadeModule implements Listener, Arcade.Lobby {
     }
 
     private void pasteLobby(CommandSender who) {
-        Paster.paste(plugin, world, LobbyBuilder.build(), 6000, () -> {
+        Paster.paste(plugin, world, ArcadeHubBuilder.build(), 6000, () -> {
             try { new File(plugin.getDataFolder(), LOBBY_MARKER).createNewFile(); } catch (Exception ignored) { }
             spawnHolograms();
             who.sendMessage(Component.text("Arcade lobby built. Map templates are managed by /arcade."));
@@ -97,7 +101,7 @@ public final class ArcadeModule implements Listener, Arcade.Lobby {
 
     // ------------------------------------------------------------------ lobby
 
-    Location lobbySpawn() { double[] s = LobbyBuilder.spawn(); return new Location(world, s[0], s[1], s[2], 180, 0); }
+    Location lobbySpawn() { return new Location(world, ArcadeHubBuilder.SPAWN_X, ArcadeHubBuilder.Y + 1, ArcadeHubBuilder.SPAWN_Z, 180, 0); }
 
     @Override
     public void toLobby(Player p) {
@@ -142,7 +146,7 @@ public final class ArcadeModule implements Listener, Arcade.Lobby {
         if (e.getAction() == Action.PHYSICAL && e.getClickedBlock() != null && e.getClickedBlock().getType() == Material.LIGHT_WEIGHTED_PRESSURE_PLATE) {
             Block b = e.getClickedBlock();
             for (var en : booths.entrySet())
-                if (b.getX() == en.getValue()[0] && b.getZ() == en.getValue()[1] && Math.abs(b.getY() - LOBBY_Y - 1) <= 1) {
+                if (b.getX() == en.getValue()[0] && b.getZ() == en.getValue()[2] && Math.abs(b.getY() - en.getValue()[1]) <= 1) {
                     long now = System.currentTimeMillis();
                     if (plateCooldown.getOrDefault(p.getUniqueId(), 0L) > now) return;
                     plateCooldown.put(p.getUniqueId(), now + 2000);
@@ -180,15 +184,18 @@ public final class ArcadeModule implements Listener, Arcade.Lobby {
     // ------------------------------------------------------------------ holograms + sidebar
 
     private void spawnHolograms() {
-        world.getEntitiesByClass(TextDisplay.class).forEach(TextDisplay::remove);
+        boothHolos.values().forEach(TextDisplay::remove);
+        if (lobbyTitle != null) lobbyTitle.remove();
+        if (board != null) board.remove();
         boothHolos.clear();
         for (var en : booths.entrySet()) {
             int[] b = en.getValue();
-            boothHolos.put(en.getKey(), Ui.hologram(new Location(world, b[0] + 0.5, LOBBY_Y + 4.0, b[1] + 0.5), boothText(en.getKey()), 1.1f));
+            boothHolos.put(en.getKey(), Ui.hologram(new Location(world, b[0] + 0.5, b[1] + 2.6, b[2] + 0.5), boothText(en.getKey()), 1.0f));
         }
-        lobbyTitle = Ui.hologram(new Location(world, 0.5, LOBBY_Y + 11.6, 0.5),
+        if (life != null) life.spawn(booths);
+        lobbyTitle = Ui.hologram(new Location(world, 0.5, LOBBY_Y + 28, 2.5),
                 "<aqua><bold>BLACKFORGE ARCADE</bold><newline><gray>" + arcade.games().size() + " games • random maps every match<newline><gray>Right-click the <aqua>Game Selector<gray> or step on a plate", 1.3f);
-        double[] bp = LobbyBuilder.board();
+        double[] bp = ArcadeHubBuilder.board();
         board = Ui.hologram(new Location(world, bp[0], bp[1], bp[2]), "<gray>Loading...", 1.0f);
     }
 

@@ -37,6 +37,20 @@ public final class DesignPreview {
                         new View("oneblock", new WorldCam.Cam(60, Y + 14, 22, 105, Y + 8, -2, 72)),
                         new View("oneblock_portal", new WorldCam.Cam(100, Y + 4, 6, 120, Y + 4, 0, 72)));
             }
+            case "arcade" -> {
+                c = net.alloymc.core.arcade.ArcadeHubBuilder.build();
+                int Y = net.alloymc.core.arcade.ArcadeHubBuilder.Y;
+                look = WorldCam.Look.neonNight();
+                views = List.of(
+                        new View("spawn", new WorldCam.Cam(0.5, Y + 2.62, 33.5, 0.5, Y + 12, -10, 78)),
+                        new View("aerial", new WorldCam.Cam(0.5, Y + 95, 165, 0.5, Y, -10, 72)),
+                        new View("overview", new WorldCam.Cam(0.5, Y + 170, 60, 0.5, Y, -5, 80)),
+                        new View("pvp", new WorldCam.Cam(52, Y + 16, -20, 78, Y + 6, -52, 72)),
+                        new View("competitive", new WorldCam.Cam(0.5, Y + 18, -66, 0.5, Y + 12, -110, 72)),
+                        new View("parkour", new WorldCam.Cam(66, Y + 22, 18, 96, Y + 26, 30, 72)),
+                        new View("casual", new WorldCam.Cam(-66, Y + 14, 18, -96, Y + 4, 30, 72)),
+                        new View("party", new WorldCam.Cam(-52, Y + 16, -20, -78, Y + 12, -40, 72)));
+            }
             default -> throw new IllegalArgumentException("unknown design " + design);
         }
         WorldCam.World world = cam.fromCanvas(c);

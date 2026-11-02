@@ -570,6 +570,14 @@ public final class WorldCam {
             return l;
         }
 
+        /** The Arcade: a deep violet night so the neon glows. */
+        public static Look neonNight() {
+            Look l = new Look();
+            l.sunX = -0.3; l.sunY = 0.7; l.sunZ = 0.4; l.daylight = 0.32;
+            l.skyTop = 0x0B0620; l.skyHorizon = 0x3A1654; l.fogColor = 0x24103A; l.stars = true; l.sunColor = 0xC8B4FF;
+            return l;
+        }
+
         public static Look frozenNight() {
             Look l = new Look();
             l.sunX = 0.2; l.sunY = 0.7; l.sunZ = 0.5; l.daylight = 0.5;
