@@ -183,8 +183,8 @@ public final class HubModule implements Listener {
             boards.add(Ui.hologram(new Location(world, -9.5, HubLayout.Y + 5.5, -7.5), kills, 1.15f));
             boards.add(Ui.hologram(new Location(world, 10.5, HubLayout.Y + 5.5, -7.5), wins, 1.15f));
         } else {
-            boards.get(0).text(Ui.mm(kills));
-            boards.get(1).text(Ui.mm(wins));
+            Ui.setText(boards.get(0), kills);
+            Ui.setText(boards.get(1), wins);
         }
     }
 
@@ -478,7 +478,7 @@ public final class HubModule implements Listener {
     // ------------------------------------------------------------------ holograms + sidebar
 
     private void spawnHolograms() {
-        world.getEntitiesByClass(TextDisplay.class).forEach(TextDisplay::remove);
+        holograms.forEach(TextDisplay::remove);   // only our own labels: the boards and parkour signs are left alone
         for (HubLayout.Gate g : HubLayout.GATES) {
             // in front of the gate, on the side facing spawn
             double fx = g.alongX() ? g.cx() + 0.5 : g.cx() + 0.5 - Math.signum(g.cx()) * 3.5;
@@ -499,7 +499,7 @@ public final class HubModule implements Listener {
         if (holograms.stream().anyMatch(td -> !td.isValid())) { holograms.clear(); gateHolos.clear(); spawnHolograms(); }
         for (HubLayout.Gate g : HubLayout.GATES) {
             TextDisplay td = gateHolos.get(g.server());
-            if (td != null && td.isValid()) td.text(Ui.mm(gateText(g)));
+            if (td != null && td.isValid()) Ui.setText(td, gateText(g));
         }
         for (Player p : Bukkit.getOnlinePlayers()) refreshPlayer(p);
     }

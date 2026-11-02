@@ -206,13 +206,13 @@ public final class ArcadeModule implements Listener, Arcade.Lobby {
 
     private void refresh() {
         if (lobbyTitle == null || !lobbyTitle.isValid() || boothHolos.values().stream().anyMatch(td -> !td.isValid())) spawnHolograms();
-        for (var en : boothHolos.entrySet()) if (en.getValue().isValid()) en.getValue().text(Ui.mm(boothText(en.getKey())));
+        for (var en : boothHolos.entrySet()) if (en.getValue().isValid()) Ui.setText(en.getValue(), boothText(en.getKey()));
         if (board != null && board.isValid() && boardTick++ % 30 == 0) {
             StringBuilder sb = new StringBuilder("<aqua><bold>TOP ARCADE WINNERS</bold>");
             List<StatsService.Row> rows = arcade.stats().top(null, "wins", 10, false);
             if (rows.isEmpty()) sb.append("<newline><gray>No winners yet - be the first!");
             for (int i = 0; i < rows.size(); i++) sb.append("<newline><gray>").append(i + 1).append(". <white>").append(rows.get(i).name()).append(" <aqua>").append(rows.get(i).value());
-            board.text(Ui.mm(sb.toString()));
+            Ui.setText(board, sb.toString());
         }
         for (Player p : world.getPlayers()) {
             MatchManager.Queue q = arcade.matches().queueOf(p);

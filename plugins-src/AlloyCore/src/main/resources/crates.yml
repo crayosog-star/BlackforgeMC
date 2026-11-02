@@ -1,4 +1,4 @@
-# BlackForgeMC crates (ids stay iron/gold/netherite/koth/vote; players see Cinder/Molten/Forgeheart/Conqueror/Spark). Edit and restart the survival server to apply.
+# BlackForgeMC crates (ids stay iron/gold/netherite/koth/vote; players see Cinder/Molten/Forgeheart/KOTH/Spark). Edit and restart the survival server to apply.
 # Reward fields: name (shown), item, amount, weight (higher = more common), enchants {id: level},
 #   custom-name, commands (run by console, {player} = winner), give-item (false for command-only), announce (broadcast win)
 
@@ -76,10 +76,17 @@ netherite:
     - {name: "<#c6ff3d><bold>EMP</bold>", item: EMERALD, weight: 1.5, give-item: false, commands: ["alloy emp give {player}"], announce: true}
 
 koth:
-  title: Conqueror
-  color: "<#c084fc>"
+  title: KOTH
+  color: "<#e5484d>"
   key: TRIPWIRE_HOOK
+  # only from winning KOTH; every opening also rolls 1-3 bonus rewards
+  bonus-min: 1
+  bonus-max: 3
   rewards:
+    - {name: "<#e5484d><bold>KOTH HELMET", item: DIAMOND_HELMET, weight: 6, enchants: {protection: 5}, custom-name: "<#e5484d><bold>KOTH HELMET", announce: true}
+    - {name: "<#e5484d><bold>KOTH CHESTPLATE", item: DIAMOND_CHESTPLATE, weight: 6, enchants: {protection: 5}, custom-name: "<#e5484d><bold>KOTH CHESTPLATE", announce: true}
+    - {name: "<#e5484d><bold>KOTH LEGGINGS", item: DIAMOND_LEGGINGS, weight: 6, enchants: {protection: 5}, custom-name: "<#e5484d><bold>KOTH LEGGINGS", announce: true}
+    - {name: "<#e5484d><bold>KOTH BOOTS", item: DIAMOND_BOOTS, weight: 6, enchants: {protection: 5}, custom-name: "<#e5484d><bold>KOTH BOOTS", announce: true}
     - {name: "<green>$7,500", item: SUNFLOWER, weight: 20, give-item: false, commands: ["eco give {player} 7500"]}
     - {name: "<white>4 Netherite Ingots", item: NETHERITE_INGOT, amount: 4, weight: 16}
     - {name: "<gold>King's Crown", item: GOLDEN_HELMET, weight: 10, enchants: {protection: 5, unbreaking: 5, mending: 1}, custom-name: "<gold><bold>King's Crown", announce: true}

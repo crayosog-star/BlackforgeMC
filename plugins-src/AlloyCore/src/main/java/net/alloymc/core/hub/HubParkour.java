@@ -160,7 +160,7 @@ public final class HubParkour implements Listener {
         World hw = hub.spawn().getWorld();
         Location at = new Location(hw, 0.5, HubLayout.Y + 5.5, -12.5);
         if (board == null || !board.isValid()) board = Ui.hologram(at, sb.toString(), 1.0f);
-        else board.text(Ui.mm(sb.toString()));
+        else Ui.setText(board, sb.toString());
         if (sign == null || !sign.isValid()) sign = Ui.hologram(start.clone().add(0, 3, 0), "<gold><bold>HUB PARKOUR</bold>\n<gray>Leave the pad to start the clock", 1.2f);
     }
 

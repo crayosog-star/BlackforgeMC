@@ -133,7 +133,7 @@ public final class SurvivalModule implements Listener {
         robots.setAccess((p, l) -> p.getUniqueId().equals(claims.ownerAt(l)));   // only in your own claim, where it can work
         robots.setWorkArea((owner, l) -> owner.equals(claims.ownerAt(l)));
         robots.setRanks(ranks);
-        robots.setCrateOnly("<#ffb52e>Molten<gray>, <#ff4422>Forgeheart<gray> and <#c084fc>Conqueror");
+        robots.setCrateOnly("<#ffb52e>Molten<gray>, <#ff4422>Forgeheart<gray> and <#e5484d>KOTH");
         koth.setScrap(scrap);
         pvp.setScrap(scrap);
         borderSize = plugin.getConfig().getInt("rtp.border-size", 10000);
@@ -828,7 +828,7 @@ public final class SurvivalModule implements Listener {
             else sb.append("<dark_gray>#").append(i + 1).append(" ---");
         }
         topText = sb.toString();
-        if (leaderboard != null && leaderboard.isValid()) leaderboard.text(Ui.mm(topText));
+        if (leaderboard != null && leaderboard.isValid()) Ui.setText(leaderboard, topText);
     }
 
     private void everySecond() {
@@ -836,8 +836,8 @@ public final class SurvivalModule implements Listener {
             if (new File(plugin.getDataFolder(), "survival-built").exists()) spawnHolograms();
         }
         if (hall.hologramsMissing() && Bukkit.getCurrentTick() % 5 == 0) hall.refresh();
-        if (holos.size() > 5) holos.get(5).text(Ui.mm(koth.status() + "<newline>" + pvp.status() + " <gray>• <white>/pvp"));
-        if (kothHolo != null && kothHolo.isValid()) kothHolo.text(Ui.mm("<#e5484d><bold>KING OF THE HILL</bold><newline>" + (koth.active() ? "<green>LIVE - hold the gold pad!" : koth.status())));
+        if (holos.size() > 5) Ui.setText(holos.get(5), koth.status() + "<newline>" + pvp.status() + " <gray>• <white>/pvp");
+        if (kothHolo != null && kothHolo.isValid()) Ui.setText(kothHolo, "<#e5484d><bold>KING OF THE HILL</bold><newline>" + (koth.active() ? "<green>LIVE - hold the gold pad!" : koth.status()));
         for (Player p : Bukkit.getOnlinePlayers()) {
             Ui.sidebar(p, List.of(
                     "<dark_gray>" + "-".repeat(18),

@@ -151,7 +151,7 @@ public final class SpawnBuilder {
                 case "gold" -> "minecraft:magma_block";            // Molten
                 case "netherite" -> "minecraft:netherite_block";   // Forgeheart
                 case "vote" -> "minecraft:shroomlight";            // Spark
-                default -> "minecraft:gold_block";                 // Conqueror (KOTH)
+                default -> "minecraft:gold_block";                 // KOTH
             };
             for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++)
                 c.set(s.x() + dx, Y + 1, s.z() + dz, dx == 0 && dz == 0 ? plinth : "minecraft:polished_blackstone_bricks");

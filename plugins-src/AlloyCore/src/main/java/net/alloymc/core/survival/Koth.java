@@ -131,7 +131,7 @@ public final class Koth {
         if (scrap != null) scrap.add(p, 200, "won KOTH");
         for (Player o : Bukkit.getOnlinePlayers())
             o.showTitle(Title.title(Ui.mm("<gold><bold>" + p.getName()), Ui.mm("<gray>is the <#e5484d>King of the Hill<gray>!")));
-        Bukkit.broadcast(Ui.mm("<#e5484d><bold>⚔ " + p.getName() + " won KOTH!</bold> <gray>Reward: <green>$" + (long) money + "<gray>, a <#c084fc>Conqueror Key<gray> and a <#ff4422>Forgeheart Key<gray>."));
+        Bukkit.broadcast(Ui.mm("<#e5484d><bold>⚔ " + p.getName() + " won KOTH!</bold> <gray>Reward: <green>$" + (long) money + "<gray>, a <#e5484d>KOTH Key<gray> and a <#ff4422>Forgeheart Key<gray>."));
         for (int i = 0; i < 4; i++)
             Bukkit.getScheduler().runTaskLater(plugin, () -> world.spawn(p.getLocation().add(0, 1, 0), Firework.class, fw -> {
                 FireworkMeta m = fw.getFireworkMeta();

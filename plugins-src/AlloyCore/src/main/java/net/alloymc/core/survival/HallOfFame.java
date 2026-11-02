@@ -192,7 +192,7 @@ public final class HallOfFame implements Listener {
                 if (!world.isChunkLoaded(s.x() >> 4, s.z() >> 4)) continue;
                 td = Ui.hologram(new Location(world, s.x() + 0.5, baseY + 4.2, s.z() + 0.5), text, 0.95f);
                 holos.put(b.id(), td);
-            } else td.text(Ui.mm(text));
+            } else Ui.setText(td, text);
         }
     }
 

@@ -31,7 +31,8 @@ import java.util.*;
 /** Crates at /warp crates: vault blocks opened with key items, with a roulette animation. */
 public final class Crates implements Listener {
     record Reward(String name, ItemStack display, List<ItemStack> items, List<String> commands, double weight, boolean announce) {}
-    record Crate(String id, String title, String color, Material keyMat, List<Reward> rewards) {
+    /** bonusMin..bonusMax extra rewards are rolled on top of the main prize every time the crate is opened. */
+    record Crate(String id, String title, String color, Material keyMat, List<Reward> rewards, int bonusMin, int bonusMax) {
         double total() { return rewards.stream().mapToDouble(Reward::weight).sum(); }
     }
 
@@ -84,8 +85,9 @@ public final class Crates implements Listener {
                 rewards.add(new Reward(name, display, giveItem ? List.of(it) : List.of(), cmds,
                         ((Number) m.get("weight")).doubleValue(), Boolean.TRUE.equals(m.get("announce"))));
             }
+            int bMin = Math.max(0, s.getInt("bonus-min", 0)), bMax = Math.max(bMin, s.getInt("bonus-max", bMin));
             crates.put(id, new Crate(id, s.getString("title", id), s.getString("color", "<white>"),
-                    Material.matchMaterial(s.getString("key", "TRIPWIRE_HOOK")), rewards));
+                    Material.matchMaterial(s.getString("key", "TRIPWIRE_HOOK")), rewards, bMin, bMax));
         }
         plugin.getLogger().info("Loaded " + crates.size() + " crates");
     }
@@ -276,13 +278,21 @@ public final class Crates implements Listener {
 
     private void finish(Player p, Crate c, Reward r, Location fx) {
         opening.remove(p.getUniqueId());
-        if (!p.isOnline()) { pending(p.getUniqueId(), c, r); return; }
+        // bonus rolls (the KOTH crate: 1-3 extra items on top of the main prize)
+        List<Reward> bonus = new ArrayList<>();
+        int n = c.bonusMin() + (c.bonusMax() > c.bonusMin() ? rnd.nextInt(c.bonusMax() - c.bonusMin() + 1) : 0);
+        for (int i = 0; i < n; i++) bonus.add(roll(c));
+        if (!p.isOnline()) { pending(p.getUniqueId(), c, r); for (Reward b : bonus) pending(p.getUniqueId(), c, b); return; }
         grant(p, r);
+        for (Reward b : bonus) grant(p, b);
         if (p.getOpenInventory().getTopInventory().getHolder() instanceof SpinHolder) p.closeInventory();
         p.sendMessage(Ui.mm("<gold>✦ <gray>You won " + r.name() + " <gray>from the " + c.color() + c.title() + " Crate<gray>!"));
+        if (!bonus.isEmpty()) p.sendMessage(Ui.mm("<gold>  + <gray>Bonus: " + String.join("<gray>, ", bonus.stream().map(Reward::name).toList())));
         p.playSound(p.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1.2f);
         world.spawnParticle(Particle.TOTEM_OF_UNDYING, fx, 40, 0.4, 0.5, 0.4, 0.3);
         world.playSound(fx, Sound.BLOCK_VAULT_EJECT_ITEM, 1f, 1f);
+        for (Reward b : bonus) if (b.announce())
+            Bukkit.broadcast(Ui.mm("<gold>✦ <white>" + p.getName() + " <gray>won " + b.name() + " <gray>from a " + c.color() + c.title() + " Crate<gray>!"));
         if (r.announce())
             Bukkit.broadcast(Ui.mm("<gold>✦ <white>" + p.getName() + " <gray>won " + r.name() + " <gray>from a " + c.color() + c.title() + " Crate<gray>!"));
     }

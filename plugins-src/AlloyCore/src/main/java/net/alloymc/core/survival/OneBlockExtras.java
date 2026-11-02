@@ -106,7 +106,7 @@ public final class OneBlockExtras implements Listener {
             Location at = i.center().getBlock().getLocation().add(0.5, 3.3, 0.5);
             if (td == null || !td.isValid()) { td = Ui.hologram(at, "", 1.0f); tags.put(i.id(), td); }
             else if (td.getLocation().distanceSquared(at) > 0.01) td.teleport(at);
-            td.text(Ui.mm(text(i)));
+            Ui.setText(td, text(i));
         }
         // tags nobody is near any more
         for (Iterator<Map.Entry<String, TextDisplay>> it = tags.entrySet().iterator(); it.hasNext(); ) {

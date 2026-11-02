@@ -322,13 +322,13 @@ public final class TestArena implements Listener {
 
     private void updateArmorText() {
         if (armorHolo != null && armorHolo.isValid())
-            armorHolo.text(Ui.mm("<gray>Dummy armour: " + ARMOR_COLORS[armorTier] + "<bold>" + ARMOR_NAMES[armorTier] + "</bold><newline><dark_gray>right-click the lever"));
+            Ui.setText(armorHolo, "<gray>Dummy armour: " + ARMOR_COLORS[armorTier] + "<bold>" + ARMOR_NAMES[armorTier] + "</bold><newline><dark_gray>right-click the lever");
     }
 
     private void updateArcheryText() {
         if (archeryHolo != null && archeryHolo.isValid())
-            archeryHolo.text(Ui.mm("<gold><bold>◎ ARCHERY ◎</bold><newline><gray>Longest bullseye: "
-                    + (bestShooter == null ? "<dark_gray>nobody yet" : "<white>" + bestShooter + " <yellow>" + fmt(bestShot) + "m")));
+            Ui.setText(archeryHolo, "<gold><bold>◎ ARCHERY ◎</bold><newline><gray>Longest bullseye: "
+                    + (bestShooter == null ? "<dark_gray>nobody yet" : "<white>" + bestShooter + " <yellow>" + fmt(bestShot) + "m"));
     }
 
     private static void setBase(LivingEntity e, Attribute a, double v) {
@@ -621,7 +621,7 @@ public final class TestArena implements Listener {
                 ? "<gray>Last hit <gold>" + fmt(lastHit) + " <gray>(" + fmt(lastHit / 2) + "❤)<newline><gray>DPS <yellow>" + fmt(dps(now))
                     + "  <dark_gray>|  <gray>Combo <white>" + fmt(comboTotal)
                 : "<dark_gray>Hit me to see your damage";
-        dummyHolo.text(Ui.mm("<italic><gray>\"" + quip + "\"</italic><newline>" + stats));
+        Ui.setText(dummyHolo, "<italic><gray>\"" + quip + "\"</italic><newline>" + stats);
     }
 
     // ------------------------------------------------------------------ armour lever + archery

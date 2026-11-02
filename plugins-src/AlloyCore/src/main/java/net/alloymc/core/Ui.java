@@ -49,9 +49,20 @@ public final class Ui {
                 .serialize(it.getItemMeta().displayName()).contains(plainNamePart);
     }
 
+    /** What each text display last showed: re-sending the same text makes clients redraw it (a visible flicker). */
+    private static final java.util.Map<TextDisplay, String> SHOWN = new java.util.WeakHashMap<>();
+
+    /** Change a text display's text, but only when it's different from what it already shows. */
+    public static void setText(TextDisplay td, String text) {
+        if (td == null || !td.isValid() || text.equals(SHOWN.get(td))) return;
+        SHOWN.put(td, text);
+        td.text(mm(text));
+    }
+
     public static TextDisplay hologram(Location at, String text, float scale) {
         return at.getWorld().spawn(at, TextDisplay.class, td -> {
             td.text(mm(text));
+            SHOWN.put(td, text);
             td.setBillboard(Display.Billboard.CENTER);
             td.setShadowed(true);
             td.setPersistent(false);

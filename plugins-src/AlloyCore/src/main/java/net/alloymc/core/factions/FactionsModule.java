@@ -356,7 +356,7 @@ public final class FactionsModule implements Listener {
 
     private void refreshBoard() {
         if (seasonBoard == null || !seasonBoard.isValid()) { if (new File(world.getWorldFolder(), SPAWN_MARKER).exists()) spawnHolograms(); return; }
-        seasonBoard.text(Ui.mm(seasonText()));
+        Ui.setText(seasonBoard, seasonText());
     }
 
     // ------------------------------------------------------------------ seasons
