@@ -46,6 +46,8 @@ public final class ForgeArsenal {
 
     private static ForgeArsenal installed;
     private final Map<String, Ability> abilities = new LinkedHashMap<>();
+    /** Per-player cleanup for each ability that keeps something running on its user (Arcade deaths aren't real deaths). */
+    private final List<java.util.function.Consumer<Player>> enders = new ArrayList<>();
 
     /** Create the ability items on this server, once. Called by the Arcade module on start-up. */
     public static void install(AlloyCore plugin, Arcade arcade) {
@@ -67,6 +69,10 @@ public final class ForgeArsenal {
         Rimelock cage = new Rimelock(plugin, inMatch, (caster, p) -> sameTeam(arcade, caster, p));
         Emp emp = new Emp(plugin, inMatch, false);
         surge.onActivate(p -> chain.breakFree(p, "Surge"));   // same counter as everywhere else
+        enders.add(surge::endFor);
+        enders.add(chain::endFor);
+        enders.add(cage::endFor);
+        enders.add(emp::endFor);
         emp.hackable(surge, cage, eye, chain, bonfire, gaia, darkness);
 
         add("gaia", gaia::item, gaia::isGaia);
@@ -97,6 +103,18 @@ public final class ForgeArsenal {
         if (caster == null) return false;
         Match m = arcade.matches().matchOf(p);
         return m != null && m == arcade.matches().matchOf(caster) && m.team(p) != null && m.team(p) == m.team(caster);
+    }
+
+    /**
+     * Stop everything {@code p}'s abilities still have running: their Surge boost, a chain they threw or are caught
+     * in, a Rimelock leap, an EMP rise. Called when they die in a match, since Arcade deaths never fire a real death.
+     * Things already out in the world (a standing cage, a bonfire, a potion cloud) keep going.
+     */
+    void endFor(Player p) {
+        for (var e : enders) {
+            try { e.accept(p); }
+            catch (RuntimeException ex) { Bukkit.getLogger().warning("[Forge Wars] ability cleanup failed for " + p.getName() + ": " + ex); }
+        }
     }
 
     /** A random ability item (the Black Market's Mystery Ability). */

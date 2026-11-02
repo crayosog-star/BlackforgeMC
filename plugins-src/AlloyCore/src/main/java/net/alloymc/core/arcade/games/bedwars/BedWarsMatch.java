@@ -430,6 +430,7 @@ final class BedWarsMatch extends Match {
 
     @Override protected void onDeath(Player p, Player killer, String how) {
         riding.remove(p.getUniqueId());
+        endAbilities(p);
         Team t = team(p);
         boolean finalKill = !bedAlive(t);
         // the killer gets the victim's resources
@@ -459,7 +460,14 @@ final class BedWarsMatch extends Match {
 
     @Override protected void onRejoin(Player p) { respawnAt.put(p.getUniqueId(), ticks + 40); resetPlayer(p, GameMode.SPECTATOR); p.teleport(at(map.spectator)); }
 
+    /** Arcade deaths aren't real deaths, so stop whatever this player's Forge Wars abilities still have running. */
+    private void endAbilities(Player p) {
+        ForgeArsenal a = arsenal ? ForgeArsenal.get() : null;
+        if (a != null) a.endFor(p);
+    }
+
     @Override protected void onLeave(Player p) {
+        endAbilities(p);
         Team t = team(p);
         if (t != null && !bedAlive(t) && t.members.stream().noneMatch(u -> alive.contains(u) && !u.equals(p.getUniqueId()))) t.eliminated = true;
     }

@@ -682,6 +682,9 @@ public final class AshenChain implements Listener, Hackable {
         if (until != null && until >= System.currentTimeMillis()) e.setCancelled(true);
     }
 
+    /** Drop {@code p}'s chain and free them from anyone else's, as leaving would. For game modes with fake deaths (the Arcade). */
+    public void endFor(Player p) { stop(p.getUniqueId()); endTether(p.getUniqueId()); }
+
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
         UUID id = e.getPlayer().getUniqueId();
