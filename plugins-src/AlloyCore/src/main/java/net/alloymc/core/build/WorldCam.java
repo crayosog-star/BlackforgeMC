@@ -422,6 +422,28 @@ public final class WorldCam {
         }
     }
 
+    /** A generated build (not yet in any world) as a renderable world: sky light from open sky, lanterns glow themselves. */
+    public World fromCanvas(Canvas c) {
+        World w = new World();
+        w.id("minecraft:air");
+        w.minY = -64;
+        java.util.function.BiConsumer<Long, String> put = (k, s) -> {
+            int x = Canvas.kx(k), y = Canvas.ky(k), z = Canvas.kz(k);
+            short[][] ch = w.blocks.computeIfAbsent(World.ck(x >> 4, z >> 4), kk -> new short[24][]);
+            int sec = (y + 64) >> 4;
+            if (sec < 0 || sec >= 24) return;
+            if (ch[sec] == null) ch[sec] = new short[4096];
+            ch[sec][((y & 15) << 8) | ((z & 15) << 4) | (x & 15)] = s.equals("minecraft:air") ? 0 : w.id(s);
+        };
+        c.blocks().forEach(put);
+        c.lateBlocks().forEach(put);
+        for (long k : w.blocks.keySet()) { w.sky.put(k, new byte[24][]); w.block.put(k, new byte[24][]); }
+        w.grid();
+        w.models = new Model[w.states.size()];
+        for (int i = 0; i < w.models.length; i++) w.models[i] = model(w.states.get(i));
+        return w;
+    }
+
     /** Load every chunk with blocks between (x0,z0) and (x1,z1) from {@code regionDir}. */
     public World load(File regionDir, int x0, int z0, int x1, int z1) throws IOException {
         World w = new World();

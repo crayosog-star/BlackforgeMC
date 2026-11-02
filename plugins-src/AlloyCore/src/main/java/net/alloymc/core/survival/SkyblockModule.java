@@ -37,6 +37,7 @@ import static net.alloymc.core.survival.SkyblockBuilder.*;
 public final class SkyblockModule implements Listener {
     private final AlloyCore plugin;
     private final World world;
+    private final net.alloymc.core.VoidOut voidOut;
     private final Crates crates;
     private final NameTags tags;
     private final CustomEnchants enchants;
@@ -60,6 +61,10 @@ public final class SkyblockModule implements Listener {
         this.plugin = plugin;
         this.world = Bukkit.getWorlds().getFirst();
         crates = new Crates(plugin, world, CRATES, Y + 2);
+        // no land in sight around Sky Harbor
+        List<net.alloymc.core.build.Canvas> harbor = List.of(SkyblockBuilder.build());
+        voidOut = new net.alloymc.core.VoidOut(plugin, world, "skyblock", List.of(net.alloymc.core.VoidOut.around(harbor, 175)), harbor, 60, pl -> spawn());
+        if (new File(plugin.getDataFolder(), "skyblock-built").exists()) voidOut.autoStart();
         // the Skyblock Hub picks the game; Skyblock and OneBlock keep separate inventories, crates and auction houses
         skyHub = new SkyHub(plugin, world, spawn());
         groups = new InventoryGroups(plugin, skyHub::groupOf);
@@ -331,6 +336,7 @@ public final class SkyblockModule implements Listener {
     /** Console/admin: /alloy crate give, voucher give, ce give, tag give, scrap give, buildskyblock. */
     public boolean admin(CommandSender s, String[] a) {
         if (a.length >= 1 && a[0].equalsIgnoreCase("buildskyblock")) { build(s); return true; }
+        if (a.length >= 1 && a[0].equalsIgnoreCase("voidout")) { voidOut.start(s); return true; }
         if (a.length >= 2 && a[0].equalsIgnoreCase("keyall")) {
             int n = crates.giveAll(a[1], a.length > 2 ? Integer.parseInt(a[2]) : 1, a.length > 3 ? String.join(" ", java.util.Arrays.copyOfRange(a, 3, a.length)) : "");
             s.sendMessage(Component.text(n < 0 ? "Unknown crate" : "Key all: " + n + " players"));

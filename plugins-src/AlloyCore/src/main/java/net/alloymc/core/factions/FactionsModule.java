@@ -36,6 +36,7 @@ import java.util.*;
 public final class FactionsModule implements Listener {
     private final AlloyCore plugin;
     private final World world;
+    private final net.alloymc.core.VoidOut voidOut;
     private final File seasonFile, seasonsDir;
     private YamlConfiguration season;
     private final List<TextDisplay> holos = new ArrayList<>();
@@ -56,6 +57,10 @@ public final class FactionsModule implements Listener {
         world.getWorldBorder().setCenter(0, 0);
         world.getWorldBorder().setSize(border);
         world.setSpawnLocation(spawn());
+        // no land in sight around the spawn fortress
+        List<net.alloymc.core.build.Canvas> fort = List.of(FactionsBuilder.build());
+        voidOut = new net.alloymc.core.VoidOut(plugin, world, "factions", List.of(net.alloymc.core.VoidOut.around(fort, 175)), fort, 60, pl -> spawn());
+        if (new File(world.getWorldFolder(), SPAWN_MARKER).exists()) voidOut.autoStart();
         for (int cx = -4; cx <= 3; cx++) for (int cz = -4; cz <= 3; cz++) world.addPluginChunkTicket(cx, cz, plugin);
         Bukkit.getPluginManager().registerEvents(this, plugin);
         new net.alloymc.core.SpawnSafety(plugin, this::inSpawn, p -> spawn());
@@ -448,6 +453,7 @@ public final class FactionsModule implements Listener {
     public boolean admin(CommandSender s, String[] a) {
         if (a.length == 0) return false;
         if (rite.admin(s, a)) return true;   // /alloy rite give <player>
+        if (a[0].equalsIgnoreCase("voidout")) { voidOut.start(s); return true; }
         switch (a[0].toLowerCase()) {
             case "buildfactions" -> { build(s); return true; }
             case "season" -> {

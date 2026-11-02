@@ -1,5 +1,7 @@
 package net.alloymc.core.survival;
 
+import net.alloymc.core.VoidOut;
+
 import net.alloymc.core.AlloyCore;
 import net.alloymc.core.Ui;
 import net.alloymc.core.build.Paster;
@@ -46,6 +48,7 @@ public final class SurvivalModule implements Listener {
     private final DarknessPotion darkness;
     private final Surge surge;
     private final LastRite rite;
+    private final net.alloymc.core.VoidOut voidOut;
     private final Rimelock cage;
     private final GodsEye eye;
     private final AshenChain chain;
@@ -109,6 +112,10 @@ public final class SurvivalModule implements Listener {
         emp.hackable(surge, cage, eye, chain, bonfire, gaia, rite, darkness);   // everything the EMP shuts down
         new SilkSpawners(plugin);
         boss = new WorldBoss(plugin, world, crates, koth);   // five random world bosses in the KOTH arena, Saturdays
+        // no land in sight around spawn, KOTH and the Scrapyard: they float in empty sky
+        voidOut = new VoidOut(plugin, world, "survival", List.of(new VoidOut.Area(-270, -620, 270, 790)),
+                List.of(SpawnBuilder.spawn(), SpawnBuilder.arena(), PvpBuilder.build()), 60, pl -> spawn());
+        if (new File(plugin.getDataFolder(), "survival-built").exists()) voidOut.autoStart();
         // KOTH and boss state for every server's /events calendar
         Bukkit.getScheduler().runTaskTimer(plugin, () -> net.alloymc.core.Events.publishLive(koth.nextStart(), koth.active(), boss.active()), 100L, 600L);
         bounties = new Bounties(plugin);
@@ -347,6 +354,7 @@ public final class SurvivalModule implements Listener {
     /** Console/admin: /alloy crate give <player> <crate> [amount], /alloy koth start|stop, /alloy buildsurvival */
     public boolean admin(CommandSender s, String[] a) {
         if (rite.admin(s, a)) return true;   // /alloy rite give <player> (for crates)
+        if (a.length >= 1 && a[0].equalsIgnoreCase("voidout")) { voidOut.start(s); return true; }   // clear the land around spawn
         if (a.length >= 3 && a[0].equalsIgnoreCase("surge") && a[1].equalsIgnoreCase("give")) {   // /alloy surge give <player> (for crates)
             Player t = Bukkit.getPlayerExact(a[2]);
             if (t == null) { s.sendMessage(Component.text("Player must be online")); return true; }
@@ -607,7 +615,7 @@ public final class SurvivalModule implements Listener {
             Block top = world.getHighestBlockAt(fx, fz);
             Material t = top.getType();
             boolean bad = top.isLiquid() || t == Material.MAGMA_BLOCK || t == Material.CACTUS || t.name().contains("LEAVES") || t == Material.POWDER_SNOW
-                    || t == Material.BAMBOO || t.name().contains("ICE") || claims.ownerAt(top.getLocation()) != null || top.getY() < 55 || top.getY() > 200
+                    || t == Material.BAMBOO || t.name().contains("ICE") || claims.ownerAt(top.getLocation()) != null || top.getY() < 55 || top.getY() > 200 || voidOut.inside(fx, fz)
                     || (Math.abs(fx - PVP_X) < PVP_HALF + 40 && Math.abs(fz - PVP_Z) < PVP_HALF + 40) || Math.hypot(fx - KOTH_X, fz - KOTH_Z) < 90;
             if (bad) { tryRtp(p, attempt + 1); return; }
             Location dest = top.getLocation().add(0.5, 1, 0.5);

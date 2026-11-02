@@ -30,7 +30,7 @@ import java.util.*;
  */
 public final class SkyHub implements Listener {
     public static final String LOBBY = "lobby", SKYBLOCK = "skyblock", ONEBLOCK = "oneblock";
-    static final int Y = 100;
+    public static final int Y = 100;
     /** Gate openings: x from gx-1 to gx+1, y from Y+1 to Y+4, z = gz. */
     private static final int HUB_GATE_Z = -9, OB_GATE_Z = -18, LEFT_X = -7, RIGHT_X = 7;
     /** The OneBlock spawn's own crates, on the west side of its island. */
