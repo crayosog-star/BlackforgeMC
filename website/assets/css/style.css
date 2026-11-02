@@ -225,6 +225,11 @@ section { position: relative; }
 .rank.gold { --c: #f2c14e; }
 .rank.diamond { --c: #5ee0e6; }
 .rank.netherite { --c: #b18cff; }
+.rank.ember { --c: #ffb347; }
+.rank.blaze { --c: #ff7a1f; }
+.rank.inferno { --c: #ff4a3a; }
+.rank.forgemaster { --c: #ffc66b; }
+.rank.media { --c: #ff5c8a; }
 .rank.featured { box-shadow: 0 30px 60px -30px color-mix(in srgb, var(--c) 50%, transparent); }
 .note { margin-top: 26px; display: flex; gap: 14px; align-items: flex-start; padding: 18px 20px; border: 1px dashed var(--line); border-radius: var(--radius-sm); color: var(--text-2); font-size: 14.5px; }
 .note svg { width: 20px; height: 20px; color: var(--ember-2); flex: none; margin-top: 2px; }
@@ -526,3 +531,17 @@ circle.hm-spark:nth-of-type(n) { --dx: 14px; --dy: -4px; }
 .trailer-media { max-width: 1040px; margin: 0 auto; background: #000; }
 .trailer-media video { display: block; width: 100%; aspect-ratio: 16/9; background: #000; }
 
+
+/* your Minecraft name (player.js) */
+.bf-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,0.04); color: var(--text-1, #fff); font: inherit; font-size: 14px; cursor: pointer; }
+.bf-chip:hover { border-color: rgba(255,140,60,0.6); }
+.bf-chip img { width: 22px; height: 22px; border-radius: 4px; image-rendering: pixelated; }
+.bf-chip-add { padding-left: 6px; color: var(--text-2); }
+#bf-player-dialog { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: rgba(5,4,6,0.72); backdrop-filter: blur(4px); }
+.bf-player-card { width: min(420px, 100%); padding: 28px; border-radius: var(--radius, 14px); border: 1px solid var(--line); background: #17141a; box-shadow: 0 40px 80px -30px rgba(0,0,0,.9); }
+.bf-player-card h3 { margin: 0 0 8px; font-size: 22px; text-transform: uppercase; }
+.bf-player-card p { margin: 0 0 16px; color: var(--text-2); font-size: 15px; }
+.bf-player-card input { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: #0f0d11; color: #fff; font: inherit; font-size: 16px; }
+.bf-player-card input:focus { outline: 2px solid #ff7a1a; outline-offset: 1px; }
+.bf-player-err { margin-top: 8px !important; color: #ff8a7a !important; font-size: 13px !important; }
+.bf-player-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }

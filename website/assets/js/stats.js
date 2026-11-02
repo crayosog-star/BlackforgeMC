@@ -38,7 +38,7 @@
       $("#lb-updated").textContent = "Updated " + new Date(data.updated * 1000).toLocaleString();
       $("#lb-boards").innerHTML = BOARDS.map(([k, t, f]) => board(t, data.boards[k] || [], f)).join("") +
         Object.entries(data.ranked || {}).map(([q, rows]) => board("Ranked " + q.replace("ranked_", "").replace(/_/g, " "), rows, (v) => v + " Elo")).join("");
-      const want = new URLSearchParams(location.search).get("player");
+      const want = new URLSearchParams(location.search).get("player") || (window.BF && BF.player && BF.player());   // your saved name by default
       const form = $("#lb-search");
       const show = (name) => {
         const p = data.players.find((x) => x.name.toLowerCase() === String(name).toLowerCase());
