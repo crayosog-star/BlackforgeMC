@@ -303,4 +303,117 @@ class GolemTest {
         }
         assertTrue(GolemFinale.stir(1) > 0.9, "nearly at its peak a second before");
     }
+
+    @Test void shardsRollAndStretchSmoothlyWithSpeed() {
+        double lastRoll = 0, lastStretch = 0;
+        for (int i = 0; i < 40; i++) {
+            double v = GolemMath.shardSpeed(i), r = GolemProjectile.rollRate(v), st = GolemProjectile.stretch(v);
+            assertTrue(r >= lastRoll && st >= lastStretch, "faster flight never rolls or stretches less: " + i);
+            assertTrue(r <= GolemProjectile.MAX_ROLL && r < Math.PI / 2, "no aliasing roll: " + r);
+            assertTrue(st >= 1 && st <= 2, "stretch stays sensible: " + st);
+            lastRoll = r; lastStretch = st;
+        }
+        assertEquals(1, GolemProjectile.stretch(0), 1e-9);
+    }
+
+    @Test void shardTurnsOntoItsTargetWithoutASnap() {
+        double[] a = {0, 1, 0}, b = {0.6, 0, 0.8};
+        double[] prev = a;
+        double maxStep = 0, first = 0, last = 0;
+        for (int k = 1; k <= GolemProjectile.TURN; k++) {
+            double[] v = GolemProjectile.slerp(a, b, GolemProjectile.turn(k));
+            assertEquals(1, Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]), 1e-9, "stays a unit vector");
+            double step = Math.acos(Math.max(-1, Math.min(1, prev[0] * v[0] + prev[1] * v[1] + prev[2] * v[2])));
+            if (k == 1) first = step;
+            if (k == GolemProjectile.TURN) last = step;
+            maxStep = Math.max(maxStep, step);
+            prev = v;
+        }
+        assertArrayEquals(b, GolemProjectile.slerp(a, b, 1), 1e-9);
+        assertTrue(first < maxStep && last < maxStep, "it eases in and out of the turn");
+        double[] flip = GolemProjectile.slerp(new double[]{0, 0, 1}, new double[]{0, 0, -1}, 0.5);
+        assertEquals(1, Math.sqrt(flip[0] * flip[0] + flip[1] * flip[1] + flip[2] * flip[2]), 1e-9, "turning right round still works");
+        assertEquals(GolemProjectile.FIRE_DELAY, GolemProjectile.PEEL + GolemProjectile.CHARGE + GolemProjectile.TURN + GolemProjectile.LOCK);
+    }
+
+    @Test void boulderTumbleFollowsItsFlightAndNeverAliases() {
+        for (int ticks : new int[]{14, 20, 26}) {
+            double prev = 0;
+            for (int k = 1; k <= ticks; k++) {
+                double f = GolemIntro.hang(k / (double) ticks, 0.6), a = GolemProjectile.boulderSpin(f);
+                assertTrue(a >= prev, "it never un-spins");
+                assertTrue(a - prev < 1.5, "tumbles less than 1.5 rad a tick (" + ticks + " ticks): " + (a - prev));
+                prev = a;
+            }
+        }
+        assertEquals(0, GolemProjectile.boulderSpin(0), 1e-9);
+    }
+
+    @Test void warningRingsCloseInOnTheSpot() {
+        assertEquals(2.5, GolemProjectile.ringRadius(0, 2.5, 0.8), 1e-9);
+        assertEquals(0.8, GolemProjectile.ringRadius(1, 2.5, 0.8), 1e-9);
+        double prev = 99, lastDrop = 0;
+        for (int k = 0; k <= 20; k++) {
+            double r = GolemProjectile.ringRadius(k / 20.0, 2.5, 0.8);
+            assertTrue(r <= prev, "only closes");
+            if (k > 0) lastDrop = prev - r;
+            prev = r;
+        }
+        assertTrue(lastDrop > GolemProjectile.ringRadius(0, 2.5, 0.8) - GolemProjectile.ringRadius(0.05, 2.5, 0.8), "it speeds up as it lands");
+    }
+
+    @Test void shardsCrawlThenSpeedUpQuickly() {
+        assertTrue(GolemMath.shardSpeed(0) < 0.15 && GolemMath.shardSpeed(3) < 0.2, "they crawl off");
+        assertTrue(GolemMath.shardSpeed(10) > 1.5, "then they're quick: " + GolemMath.shardSpeed(10));
+        assertEquals(2.4, GolemMath.shardSpeed(GolemMath.SHARD_RAMP + 3), 1e-9);
+        for (int i = 1; i < 40; i++) {
+            double d = GolemMath.shardSpeed(i) - GolemMath.shardSpeed(i - 1);
+            assertTrue(d >= 0 && d < 0.6, "smooth acceleration, no lurch at tick " + i + ": " + d);
+        }
+    }
+
+    @Test void aimingLeadsByTheRealFlightTime() {
+        double prev = 0;
+        for (double dist = 2; dist <= 30; dist += 2) {
+            double eff = GolemMath.shardEffectiveSpeed(dist);
+            assertTrue(eff > prev && eff > 0.1 && eff <= 2.4, "longer shots average faster: " + dist + " -> " + eff);
+            prev = eff;
+            double covered = 0;
+            for (int i = 0; i < (int) Math.floor(GolemMath.shardTravelTicks(dist)); i++) covered += GolemMath.shardSpeed(i);
+            assertTrue(covered <= dist + 1e-6 && dist - covered < 2.5, "travel time matches the ramp at " + dist);
+        }
+    }
+
+    @Test void shardsHoverAboveAndBehindInACrescent() {
+        for (int n : new int[]{6, 9, 12}) {
+            double[] prev = null;
+            for (int i = 0; i < n; i++) {
+                double[] h = GolemProjectile.hoverSlot(i, n);
+                assertTrue(h[1] > 7 && h[1] < 10, "above its head: " + h[1]);
+                assertTrue(h[2] < -1.5, "behind it: " + h[2]);
+                assertTrue(Math.abs(h[0]) <= 3.9, "within a crescent over the shoulders: " + h[0]);
+                if (prev != null) assertTrue(Math.hypot(h[0] - prev[0], h[1] - prev[1]) > 0.25, "neighbours don't overlap (n=" + n + ")");
+                prev = h;
+            }
+            assertEquals(-GolemProjectile.hoverSlot(n - 1, n)[0], GolemProjectile.hoverSlot(0, n)[0], 1e-9, "symmetric");
+        }
+    }
+
+    @Test void swoopChargeAndDrawBackAreEased() {
+        assertEquals(0, GolemProjectile.peel(0), 1e-9);
+        assertEquals(1, GolemProjectile.peel(1), 1e-9);
+        double peak = 0;
+        for (int k = 0; k <= 20; k++) peak = Math.max(peak, GolemProjectile.peel(k / 20.0));
+        assertTrue(peak > 1.0 && peak < 1.12, "a little overshoot, then it settles: " + peak);
+        assertTrue(GolemProjectile.charge(0.3) < 0.05 && GolemProjectile.charge(1) == 1, "the charge builds slowly, then quickly");
+        assertTrue(GolemProjectile.pullBack(0.5) < 0.3 && GolemProjectile.pullBack(1) == 1, "the draw-back eases in");
+    }
+
+    @Test void rocksHangThenDropSavagely() {
+        assertEquals(0, GolemProjectile.rockDrop(0), 1e-9);
+        assertEquals(1, GolemProjectile.rockDrop(1), 1e-9);
+        assertTrue(GolemProjectile.rockDrop(0.2) < 0.03, "a slow start");
+        double prev = 0;
+        for (int k = 1; k <= 10; k++) { double d = GolemProjectile.rockDrop(k / 10.0); assertTrue(d > prev, "keeps falling"); prev = d; }
+    }
 }

@@ -101,8 +101,31 @@ final class GolemMath {
     /** Shard Volley: damage per shard, the most one player can take from one volley, and how fast a shard flies (blocks a tick). */
     static final double SHARD_DAMAGE = 2, SHARD_CAP = 6;
 
-    /** Time-remapped flight: a shard creeps off for a moment, then whips forward (capped at 2.4 blocks a tick). */
-    static double shardSpeed(int ticksFlying) { return Math.min(2.4, 0.12 + 0.2 * ticksFlying); }
+    /** Ticks a shard takes to go from a crawl to full speed. */
+    static final int SHARD_RAMP = 11;
+
+    /**
+     * Time-remapped flight: a shard crawls off, then speeds up quickly (speed grows with the cube of time) to its top speed
+     * of 2.4 blocks a tick. Slow enough at the start to see it go, savage by the end.
+     */
+    static double shardSpeed(int ticksFlying) {
+        double u = Math.min(1, Math.max(0, ticksFlying) / (double) SHARD_RAMP);
+        return Math.min(2.4, 0.08 + 2.4 * u * u * u);
+    }
+
+    /** Ticks a shard needs to cover {@code dist} blocks under {@link #shardSpeed}. */
+    static double shardTravelTicks(double dist) {
+        double left = dist;
+        for (int i = 0; i < 200; i++) {
+            double v = shardSpeed(i);
+            if (left <= v) return i + left / v;
+            left -= v;
+        }
+        return 200 + left / 2.4;
+    }
+
+    /** The speed that covers {@code dist} in the same time as the real ramp: what to lead a moving target by. */
+    static double shardEffectiveSpeed(double dist) { return dist <= 0 ? shardSpeed(0) : dist / shardTravelTicks(dist); }
 
     /** Blood: 0 above 30% health, fading to 1 (full blood red) at 20%. */
     static double blood(double health, double max) {
