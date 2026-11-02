@@ -137,6 +137,7 @@ public final class Cosmetics implements Listener {
             p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 0.6f, 1.4f);
         } else {
             if (c.price < 0) { p.sendMessage(Ui.mm("<red>That one is an event exclusive.")); return; }
+            if (plugin.economy().walletOf(p.getUniqueId()) == null) { p.sendMessage(Ui.mm("<red>Buy cosmetics in a game mode: Scrap belongs to the mode you earned it in.")); return; }
             if (!plugin.economy().takeScrap(p, c.price)) { p.sendMessage(Ui.mm("<red>You need <#c6a15b>" + c.price + " Scrap<red> for that.")); return; }
             owned.add(c.id);
             y.set("owned", owned);

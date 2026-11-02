@@ -263,7 +263,6 @@ public final class HubModule implements Listener {
         p.getInventory().setItem(0, Ui.item(Material.KNOWLEDGE_BOOK, "<#4fd1c5><bold>Guide</bold> <gray>(right-click)", "<gray>Servers, custom items, money, rules"));
         p.getInventory().setItem(1, Ui.item(Material.CLOCK, "<#ffb347><bold>Milestones</bold> <gray>(right-click)", "<gray>Rewards for playing on any server"));
         p.getInventory().setItem(2, Ui.item(Material.BELL, "<#ffb347><bold>Events</bold> <gray>(right-click)", "<gray>What's on and what's next"));
-        p.getInventory().setItem(6, Ui.item(Material.CAKE, "<#7bd88f><bold>Daily Calendar</bold> <gray>(right-click)", "<gray>A reward every day you log in"));
         p.getInventory().setItem(7, Ui.item(Material.PLAYER_HEAD, "<#7bd88f><bold>Friends & Party</bold> <gray>(right-click)", "<gray>/friend add <name>, /party invite <name>"));
         p.getInventory().setItem(4, Ui.item(Material.COMPASS, "<gold><bold>Server Selector</bold> <gray>(right-click)", "<gray>Pick a game mode to play"));
         p.getInventory().setItem(8, visibilityItem(hidingPlayers.contains(p.getUniqueId())));
@@ -359,7 +358,6 @@ public final class HubModule implements Listener {
         else if (it.getType() == Material.KNOWLEDGE_BOOK) { e.setCancelled(true); p.performCommand("guide"); }
         else if (it.getType() == Material.CLOCK) { e.setCancelled(true); p.performCommand("milestones"); }
         else if (it.getType() == Material.BELL) { e.setCancelled(true); p.performCommand("events"); }
-        else if (it.getType() == Material.CAKE) { e.setCancelled(true); p.performCommand("calendar"); }
         else if (it.getType() == Material.PLAYER_HEAD) { e.setCancelled(true); p.performCommand("friend list"); p.performCommand("party list"); }
         else if (it.getType() == Material.LIME_DYE || it.getType() == Material.GRAY_DYE) {
             e.setCancelled(true);

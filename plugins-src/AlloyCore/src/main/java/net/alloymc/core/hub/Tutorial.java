@@ -95,7 +95,7 @@ public final class Tutorial implements Listener {
             plugin.economy().deposit(p, REWARD_MONEY);
             plugin.economy().addScrap(p, REWARD_SCRAP);
             p.sendMessage(Ui.mm("<gold>✦ <bold>Tutorial complete!</bold> <green>+" + NetEconomy.money(REWARD_MONEY) + " <#c6a15b>+" + REWARD_SCRAP
-                    + " Scrap <gray>- your money and Scrap work on every server. Have fun!"));
+                    + " Scrap <gray>- paid into the first game mode you join. Have fun!"));
             data.set(id + ".done", true);
             save();
         }

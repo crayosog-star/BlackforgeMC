@@ -54,6 +54,9 @@ public final class InventoryGroups implements Listener {
         return c;
     }
 
+    /** The group a player (online or not) was last in, or null if they've never been here. */
+    public String currentOf(UUID id) { return YamlConfiguration.loadConfiguration(file(id)).getString("current"); }
+
     /** Put away what the player carries for their current group and give them what they left in {@code to}. */
     public void switchTo(Player p, String to) {
         String from = current(p);
@@ -63,6 +66,7 @@ public final class InventoryGroups implements Listener {
         load(p, y, to);
         y.set("current", to);
         try { y.save(file(p.getUniqueId())); } catch (Exception e) { plugin.getLogger().warning("Could not save inventories for " + p.getName() + ": " + e.getMessage()); }
+        plugin.economy().flushPending(p);   // into a game from the lobby: rewards earned in a hub are paid here
     }
 
     private static String enc(ItemStack[] items) {

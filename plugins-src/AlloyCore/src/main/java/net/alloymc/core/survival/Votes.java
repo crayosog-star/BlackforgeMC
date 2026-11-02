@@ -83,7 +83,7 @@ public final class Votes implements Listener {
         var who = p != null ? p : Bukkit.getOfflinePlayerIfCached(user);
         if (who != null) streak(who.getUniqueId());
         if (p != null) reward(p, 1);
-        else data.set("pending." + key, data.getInt("pending." + key) + 1);
+        else net.alloymc.core.Shared.update(new java.io.File(plugin.shared(), "votes-pending.yml"), y -> y.set(key, y.getInt(key) + 1));   // paid where they play (Journey)
         Bukkit.broadcast(Ui.mm("<#5fd35f>✔ <white>" + user + " <gray>voted on <white>" + (service == null ? "a server list" : service)
                 + " <gray>and got a <#ffe45c>Spark Key<gray>! <yellow><u>/vote</u> <dark_gray>(" + count + "/" + partyEvery + " to a vote party)")
                 .clickEvent(ClickEvent.runCommand("/vote")));

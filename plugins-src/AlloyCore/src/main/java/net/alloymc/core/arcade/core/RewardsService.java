@@ -10,7 +10,7 @@ import org.bukkit.entity.Player;
 import java.util.UUID;
 
 /**
- * Match rewards in the network's existing money + Scrap (NetEconomy, shared across servers). Amounts are
+ * Match rewards in the network's existing money + Scrap (NetEconomy, the Arcade's own balance). Amounts are
  * configurable per game in arcade/config.yml. Every payout goes through a ledger so it can only happen once,
  * and only players who are still in the match at the end (and played long enough) are paid.
  */

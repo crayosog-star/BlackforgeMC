@@ -82,7 +82,13 @@ public final class Journey implements Listener {
         cmd("playtime", List.of("pt"), (s, a) -> { if (s instanceof Player p) playtime(p); });
         cmd("guide", List.of("menu", "info", "howto"), (s, a) -> { if (s instanceof Player p) openGuide(p); });
         cmd("referral", List.of("refer", "referrals"), this::referral);
-        cmd("calendar", List.of("login", "rewards", "dailycalendar"), (s, a) -> { if (s instanceof Player p) openCalendar(p); });
+        cmd("calendar", List.of("login", "rewards", "dailycalendar"), (s, a) -> {
+            if (!(s instanceof Player p)) return;
+            if (plugin.economy().walletOf(p.getUniqueId()) == null) p.sendMessage(Ui.mm("<gray>The daily calendar is in each game mode (each has its own streak) - join one to claim it."));
+            else openCalendar(p);
+        });
+        // votes from players who weren't on Survival: paid into the mode they're playing (checked every 30 s and on join)
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> { for (Player p : Bukkit.getOnlinePlayers()) claimVotes(p); }, 600L, 600L);
     }
 
     // ------------------------------------------------------------------ data
@@ -235,6 +241,7 @@ public final class Journey implements Listener {
         boolean digest = now - last >= DIGEST_GAP_MS;
         if (!digest && notes.isEmpty()) return;
         long days = (now - last) / 86_400_000L;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) claimVotes(p); }, 70L);
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!p.isOnline()) return;
             if (digest) digest(p, days, gift);
@@ -260,7 +267,7 @@ public final class Journey implements Listener {
         News.Item latest = News.all().isEmpty() ? null : News.all().getFirst();
         if (unseen > 0 && latest != null) p.sendMessage(Ui.mm("  <gold>» <gray>New: <white>" + (latest.text().length() > 70 ? latest.text().substring(0, 67) + "..." : latest.text())
                 + " <u><click:run_command:'/news'><hover:show_text:'<gray>" + unseen + " update" + (unseen == 1 ? "" : "s") + " you haven\'t seen'><#ffb347>[News]</hover></click></u>"));
-        if (calendarReady(load(p.getUniqueId()))) p.sendMessage(Ui.mm("  <gold>» <gray>Your daily calendar reward is ready"
+        if (plugin.economy().walletOf(p.getUniqueId()) != null && calendarReady(cal(p.getUniqueId()))) p.sendMessage(Ui.mm("  <gold>» <gray>Your daily calendar reward is ready"
                 + " <u><click:run_command:'/calendar'><hover:show_text:'<gray>Claim it'><#7bd88f>[Claim]</hover></click></u>"));
         String extra = switch (server) {
             case "survival", "skyblock" -> " <u><click:run_command:'/vote'><hover:show_text:'<gray>Vote for a Spark Key'><#7bd88f>[Vote]</hover></click></u>"
@@ -301,12 +308,21 @@ public final class Journey implements Listener {
         return yesterday().equals(last) ? y.getInt("calendar-next", 1) : 1;
     }
 
+    /** The calendar of one game mode: a view of calendar.<wallet>.* with the keys calendarReady/calendarDay read. */
+    private YamlConfiguration cal(UUID id) {
+        YamlConfiguration all = load(id), y = new YamlConfiguration();
+        String w = plugin.economy().walletOf(id);
+        if (w == null) return y;
+        for (String k : new String[]{"calendar-last", "calendar-next", "calendar-streak"}) if (all.contains("calendar." + w + "." + k)) y.set(k, all.get("calendar." + w + "." + k));
+        return y;
+    }
+
     public void openCalendar(Player p) {
-        YamlConfiguration y = load(p.getUniqueId());
+        YamlConfiguration y = cal(p.getUniqueId());
         boolean ready = calendarReady(y);
         int day = calendarDay(y);
         Menu m = new Menu("calendar");
-        m.inv = Bukkit.createInventory(m, 9, Ui.mm("<dark_gray>Daily Calendar <gray>- day " + day + "/7"));
+        m.inv = Bukkit.createInventory(m, 9, Ui.mm("<dark_gray>" + NetEconomy.walletName(plugin.economy().walletOf(p.getUniqueId())) + " Calendar <gray>- day " + day + "/7"));
         for (int d = 1; d <= 7; d++) {
             boolean past = d < day || (d == day && !ready), now = d == day && ready;
             ItemStack it = Ui.item(past ? Material.LIME_STAINED_GLASS_PANE : now ? (d == 7 ? Material.ENDER_CHEST : Material.CHEST) : (d == 7 ? Material.ENDER_CHEST : Material.GRAY_STAINED_GLASS_PANE),
@@ -316,20 +332,24 @@ public final class Journey implements Listener {
             if (now) it.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
             m.inv.setItem(d - 1, it);
         }
-        m.inv.setItem(8, Ui.item(Material.ARROW, "<gray>Back to the guide", "", "<gray>Claim once a day on any server.", "<gray>Miss a day and it starts over.",
+        m.inv.setItem(8, Ui.item(Material.ARROW, "<gray>Back to the guide", "", "<gray>Claim once a day in each game mode:", "<gray>every mode has its own streak.", "<gray>Miss a day and it starts over.",
                 "<gray>Streak: <white>" + y.getInt("calendar-streak") + " day" + (y.getInt("calendar-streak") == 1 ? "" : "s")));
         p.openInventory(m.inv);
     }
 
     private void claimCalendar(Player p) {
         UUID id = p.getUniqueId();
+        String w = plugin.economy().walletOf(id);
+        if (w == null) return;
+        YamlConfiguration c = cal(id);
+        if (!calendarReady(c)) { p.sendMessage(Ui.mm("<gray>You've already claimed today's " + NetEconomy.walletName(w) + " reward - come back tomorrow!")); return; }
+        int day = calendarDay(c);
+        int streak = yesterday().equals(c.getString("calendar-last")) ? c.getInt("calendar-streak") + 1 : 1;
         YamlConfiguration y = load(id);
-        if (!calendarReady(y)) { p.sendMessage(Ui.mm("<gray>You've already claimed today's reward - come back tomorrow!")); return; }
-        int day = calendarDay(y);
-        int streak = yesterday().equals(y.getString("calendar-last")) ? y.getInt("calendar-streak") + 1 : 1;
-        y.set("calendar-last", today());
-        y.set("calendar-next", day % 7 + 1);
-        y.set("calendar-streak", streak);
+        y.set("calendar." + w + ".calendar-last", today());
+        y.set("calendar." + w + ".calendar-next", day % 7 + 1);
+        y.set("calendar." + w + ".calendar-streak", streak);
+        y.set("calendar-streak", Math.max(streak, y.getInt("calendar-streak")));   // best streak anywhere (achievements)
         save(id, y);
         plugin.economy().deposit(p, CAL_MONEY[day - 1]);
         plugin.economy().addScrap(p, CAL_SCRAP[day - 1]);
@@ -338,6 +358,29 @@ public final class Journey implements Listener {
         p.sendMessage(Ui.mm("<#7bd88f>✔ <gray>Day " + day + " reward: <green>+" + NetEconomy.money(CAL_MONEY[day - 1]) + " <gray>and <#c6a15b>+"
                 + CAL_SCRAP[day - 1] + " Scrap <dark_gray>(streak " + streak + ")"));
         openCalendar(p);
+    }
+
+    // ------------------------------------------------------------------ votes from players who weren't on Survival
+
+    static final int VOTE_MONEY = 250, VOTE_SCRAP = 20;
+
+    /** Votifier lives on Survival: a vote from someone playing elsewhere waits in shared/votes-pending.yml for this. */
+    private void claimVotes(Player p) {
+        if (plugin.economy().walletOf(p.getUniqueId()) == null) return;   // the hub: paid in the next game mode
+        File f = new File(dir.getParentFile(), "votes-pending.yml");
+        if (!f.exists()) return;
+        String key = p.getName().toLowerCase(Locale.ROOT);
+        int[] n = {0};
+        Shared.update(f, y -> { n[0] = y.getInt(key); if (n[0] > 0) y.set(key, null); });
+        if (n[0] <= 0) return;
+        plugin.economy().deposit(p, (double) VOTE_MONEY * n[0]);
+        plugin.economy().addScrap(p, (long) VOTE_SCRAP * n[0]);
+        boolean crates = server.equals("survival") || server.equals("skyblock");
+        if (crates) Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "alloy crate give " + p.getName() + " vote " + n[0]);
+        p.sendMessage(Ui.mm("<#5fd35f>Thanks for voting! <gray>" + n[0] + " vote" + (n[0] == 1 ? "" : "s") + ": <green>+" + NetEconomy.money((double) VOTE_MONEY * n[0])
+                + " <gray>and <#c6a15b>+" + VOTE_SCRAP * n[0] + " Scrap" + (crates ? " <gray>+ <#ffe45c>Spark Key" + (n[0] == 1 ? "" : "s") : "")
+                + " <gray>in " + NetEconomy.walletName(plugin.economy().walletOf(p.getUniqueId()))));
+        p.playSound(p.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.4f);
     }
 
     // ------------------------------------------------------------------ referrals
@@ -455,11 +498,11 @@ public final class Journey implements Listener {
             m.inv.setItem(serverSlots[i], Ui.item(Material.valueOf(s[1]), s[2], lore.toArray(String[]::new)));
         }
         m.inv.setItem(4, Ui.item(Material.KNOWLEDGE_BOOK, "<gold><bold>Welcome to " + Ui.TITLE,
-                "<gray>Pick a server below to jump in.", "<gray>Money and Scrap are shared by every server."));
+                "<gray>Pick a server below to jump in.", "<gray>Each game mode has its own money and Scrap."));
         m.inv.setItem(19, Ui.item(Material.NETHER_STAR, "<#ffb347><bold>Custom Items", "<gray>Every BlackForgeMC item,", "<gray>what it does and where to get it.", "", "<yellow>Click to open"));
         m.inv.setItem(20, Ui.item(Material.CLOCK, "<#ffb347><bold>Milestones", "<gray>Rewards for playing, on any server.", "<gray>You've played <white>" + time(minutes(p.getUniqueId())), "", "<yellow>Click to open"));
         m.inv.setItem(21, Ui.item(Material.SUNFLOWER, "<green><bold>Money & Scrap",
-                "<gray>One balance across every server.", "<gray>Money: <white>/bal /pay /baltop",
+                "<gray>Every game mode has its own balance:", "<gray>Survival, Skyblock, OneBlock, Factions and", "<gray>Arcade money never mix. <white>/bal /pay /baltop",
                 "<gray>Scrap: earned from kills, playtime,", "<gray>challenges and voting. Spend in <white>/scrap", "<gray>on Survival and Skyblock."));
         m.inv.setItem(22, Ui.item(Material.EMERALD, "<green><bold>Bring a Friend",
                 "<gray>New players type <white>/referral <name>", "<gray>and you both get paid after", "<gray>they've played an hour.", "", "<yellow>Click for details"));
@@ -472,7 +515,8 @@ public final class Journey implements Listener {
         m.inv.setItem(28, Ui.item(Material.BELL, "<#ffb347><bold>Events", "<gray>World bosses, KOTH, Double Scrap,", "<gray>the Weekend Cup and more.", "", Events.sidebarLine(), "", "<yellow>Click for the calendar"));
         m.inv.setItem(29, Ui.item(Material.EXPERIENCE_BOTTLE, "<gold><bold>Achievements", "<gray>" + Achievements.ALL.size() + " goals, each pays once.", "", "<yellow>Click to open"));
         m.inv.setItem(30, Ui.item(Material.CAKE, "<#7bd88f><bold>Daily Calendar", "<gray>Log in every day for bigger", "<gray>rewards, up to day 7.",
-                "", calendarReady(load(p.getUniqueId())) ? "<green>Today's reward is ready!" : "<gray>Come back tomorrow", "<yellow>Click to open"));
+                "", plugin.economy().walletOf(p.getUniqueId()) == null ? "<gray>Each game mode has its own" : calendarReady(cal(p.getUniqueId())) ? "<green>Today's reward is ready!" : "<gray>Come back tomorrow",
+                plugin.economy().walletOf(p.getUniqueId()) == null ? "<gray>calendar - claim it there." : "<yellow>Click to open"));
         m.inv.setItem(32, Ui.item(Material.PLAYER_HEAD, "<#7bd88f><bold>Friends", "<gray>See who's online and where.", "<white>/friend add <name>", "", "<yellow>Click for your list"));
         m.inv.setItem(33, Ui.item(Material.FIREWORK_ROCKET, "<#ffb347><bold>Party", "<gray>Play together: follow the leader", "<gray>between servers, queue together.", "<white>/party invite <name>", "", "<yellow>Click for details"));
         m.inv.setItem(34, Ui.item(Material.PAPER, "<white><bold>What's New", "<gray>The latest updates.", "", "<yellow>Click to read"));
@@ -528,7 +572,7 @@ public final class Journey implements Listener {
             case 31 -> { if (server.equals("hub")) { p.closeInventory(); p.performCommand("tutorial"); } }
             case 28 -> p.performCommand("events");
             case 29 -> p.performCommand("achievements");
-            case 30 -> openCalendar(p);
+            case 30 -> { if (plugin.economy().walletOf(p.getUniqueId()) != null) openCalendar(p); }
             case 32 -> { p.closeInventory(); p.performCommand("friend list"); }
             case 33 -> { p.closeInventory(); p.performCommand("party list"); }
             case 34 -> { p.closeInventory(); p.performCommand("news"); }

@@ -63,6 +63,11 @@ public final class SkyblockModule implements Listener {
         // the Skyblock Hub picks the game; Skyblock and OneBlock keep separate inventories, crates and auction houses
         skyHub = new SkyHub(plugin, world, spawn());
         groups = new InventoryGroups(plugin, skyHub::groupOf);
+        // money and Scrap: separate for Skyblock and OneBlock (like their inventories); none in the Skyblock Hub lobby
+        plugin.economy().setWallet(id -> {
+            String g = groups.currentOf(id);
+            return g == null || g.equals("skyblock") ? "skyblock" : g.equals("oneblock") ? "oneblock" : null;
+        });
         skyHub.setGroups(groups);
         obCrates = new Crates(plugin, skyHub.oneblockSpawnWorld(), SkyHub.OB_CRATES, SkyHub.Y + 1);
         // AFK zone off the side of the Skyblock Hub: Scrap only (keys would land in the hub's empty inventory)
