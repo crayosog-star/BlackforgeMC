@@ -38,7 +38,7 @@ import java.util.*;
  * Everything runs off {@link #tick()} (called every tick by the match), so there are no scheduler tasks to leak.
  */
 final class Golem {
-    enum State { INTRO, RISING, WALK, WINDUP, ACT, STUNNED, DEAD }
+    enum State { INTRO, RISING, WALK, WINDUP, ACT, STUNNED, DYING, DEAD }
 
     private static final double LEASH = 7.5, SPEED = 0.11, ENRAGED_SPEED = 0.15, RING_SPEED = 0.3, RING_REACH = 12, CHARGE_SPEED = 0.55, ERUPT_SPEED = 0.6;
     private static final double S = GolemModel.SCALE;
@@ -268,6 +268,7 @@ final class Golem {
             case WINDUP -> stateT >= windup * 0.75 ? GolemAnim.tremble(GolemAnim.windup(move), t, 1) : GolemAnim.windup(move);
             case ACT -> GolemAnim.strike(move, stateT);
             case STUNNED -> GolemAnim.stunned(t);
+            case DYING -> GolemAnim.dying(stateT);
             case DEAD -> last;
         };
     }
@@ -392,7 +393,10 @@ final class Golem {
         tickRubble();
         tickCracks();
         tickFx();
-        if (state != State.DEAD) { tickChill(); tickBlind(); tickDim(); tickSpent(); tickBlood(); }
+        if (state != State.DEAD && state != State.DYING) { tickChill(); tickBlind(); tickDim(); tickSpent(); tickBlood(); }
+        // the hall bleeds with it: red grit sifts down from the ceiling once its crystals turn
+        if (blood > 0.3 && body != null && state != State.INTRO && state != State.DEAD && t % 14 == 0)
+            ceilingDust(home.getX() + (rnd.nextDouble() - 0.5) * 18, home.getZ() + (rnd.nextDouble() - 0.5) * 18, 3, 2 + (int) (blood * 4));
         switch (state) {
             case INTRO -> intro();
             case RISING -> {
@@ -401,6 +405,7 @@ final class Golem {
                 if (stateT >= 60) { to(State.WALK, 10); world.playSound(home, Sound.ENTITY_RAVAGER_ROAR, SoundCategory.HOSTILE, 3f, 0.6f); }
             }
             case WALK -> walk();
+            case DYING -> dying();
             case WINDUP -> windup();
             case ACT -> act();
             case STUNNED -> {
@@ -1287,6 +1292,7 @@ final class Golem {
         debris(f.getX(), f.getZ(), rubble, 1.15);
         world.spawnParticle(Particle.DUST_PILLAR, f.clone().add(0, 0.1, 0), (int) (radius * 10), radius * 0.6, 0.05, radius * 0.6, 0.2, floorAt(f.getX(), f.getZ()));
         world.spawnParticle(Particle.EXPLOSION, f.clone().add(0, 0.3, 0), 3, 1.5, 0.1, 1.5);
+        ceilingDust(f.getX(), f.getZ(), 3, 6 + (int) radius * 2);   // the whole hall feels it
         world.playSound(f, Sound.ENTITY_GENERIC_EXPLODE, SoundCategory.HOSTILE, 2f, 0.6f);
         world.playSound(f, Sound.ITEM_MACE_SMASH_GROUND_HEAVY, SoundCategory.HOSTILE, 2.5f, 0.6f);
     }
@@ -1675,7 +1681,7 @@ final class Golem {
 
     /** A player hit the body. Only damage from living players counts, +50% while it's stunned. */
     void onDamaged(EntityDamageEvent e, Player attacker) {
-        if (state == State.INTRO || state == State.RISING || state == State.DEAD || attacker == null || !m.isAlive(attacker)) { e.setCancelled(true); return; }
+        if (state == State.INTRO || state == State.RISING || state == State.DYING || state == State.DEAD || attacker == null || !m.isAlive(attacker)) { e.setCancelled(true); return; }
         if (state == State.STUNNED) e.setDamage(e.getDamage() * 1.5);
         double dmg = e.getFinalDamage();
         Team tm = m.team(attacker);
@@ -1702,11 +1708,21 @@ final class Golem {
             world.playSound(body.getLocation(), Sound.ENTITY_RAVAGER_ROAR, SoundCategory.HOSTILE, 3f, 0.4f);
             for (Player p : m.undercroftPlayers(home)) p.sendMessage(Ui.mm("<red><bold>The Golem is enraged!</bold> <gray>Faster, more crystals, and every slam hits twice."));
         }
+        ceilingDust(home.getX(), home.getZ(), 9, 70);
+        world.playSound(home, Sound.BLOCK_DEEPSLATE_BREAK, SoundCategory.HOSTILE, 3f, 0.5f);
         refreshBar();
     }
 
+    private Team dieBest;
+    private UUID dieTop;
+
+    /** Grit shaken off the hall's ceiling (red once the Golem is bleeding). */
+    private void ceilingDust(double x, double z, double spread, int n) {
+        world.spawnParticle(Particle.FALLING_DUST, x, home.getY() + 18, z, n, spread, 0.5, spread, Bukkit.createBlockData(blood > 0.5 ? Material.RED_CONCRETE_POWDER : Material.TUFF));
+    }
+
+    /** The killing blow: it doesn't fall at once. It's thrown back, sinks to its knees and shudders ({@link #dying}). */
     private void die() {
-        Location at = body.getLocation();
         // the team that dealt the most damage wins it; the last hit breaks a tie
         Team best = null;
         double top = -1;
@@ -1714,14 +1730,52 @@ final class Golem {
         UUID topPlayer = null;
         double topDmg = -1;
         for (var e : playerDamage.entrySet()) if (best != null && best.members.contains(e.getKey()) && e.getValue() > topDmg) { topDmg = e.getValue(); topPlayer = e.getKey(); }
-        to(State.DEAD, 0);
-        body.remove();
-        body = null;
+        dieBest = best;
+        dieTop = topPlayer;
+        to(State.DYING, 8);
+        body.setInvulnerable(true);
+        body.setVelocity(new Vector(0, 0, 0));
         hideBar();
         for (Shard s : shards) shatter(s);
         shards.clear();
         if (blindTag != null) { blindTag.remove(); blindTag = null; }
-        // it falls apart
+        Location at = body.getLocation();
+        hitStop(5);
+        world.playSound(at, Sound.ENTITY_WARDEN_HURT, SoundCategory.HOSTILE, 3f, 0.5f);
+        world.playSound(at, Sound.ENTITY_IRON_GOLEM_DEATH, SoundCategory.HOSTILE, 3f, 0.5f);
+        crack(at.getX(), at.getZ(), 2.5, 0.9);
+        debris(at.getX(), at.getZ(), 10, 0.9);
+        ceilingDust(at.getX(), at.getZ(), 4, 20);
+    }
+
+    /** Its last second or so: crystals go dark one by one, cracks run across the floor, the hall sheds grit. */
+    private void dying() {
+        int s = stateT;
+        Location at = body.getLocation();
+        for (int i = 0; i < parts.size(); i++) {
+            if (data.get(i).group() != GolemModel.Group.ORE || s != GolemFinale.lightsOut(i, parts.size())) continue;
+            ore(i, Ore.OUT);
+            world.spawnParticle(Particle.DUST, local(0, 4.6, -1.0), 3, 0.9, 0.7, 0.6, dust(1.2f));
+            world.playSound(at, Sound.BLOCK_AMETHYST_BLOCK_BREAK, SoundCategory.HOSTILE, 1.4f, 0.5f + rnd.nextFloat() * 0.4f);
+        }
+        if (s == 34) eyes(3);
+        if (s == 54) eyes(0);
+        if (s % 5 == 0) {
+            double a = rnd.nextDouble() * Math.PI * 2, r = 0.8 + s * 0.06;
+            crack(at.getX() + Math.cos(a) * r, at.getZ() + Math.sin(a) * r, 1.2, 0.7);
+        }
+        ceilingDust(at.getX(), at.getZ(), 5, 1 + s / 12);
+        if (s % 4 == 0) world.spawnParticle(Particle.BLOCK, at.clone().add(0, 2.5, 0), 5, 1, 1.2, 1, STONE);   // bits shaken off it
+        if (s % 8 == 0) world.playSound(at, Sound.BLOCK_DEEPSLATE_BREAK, SoundCategory.HOSTILE, 2f, 0.5f);
+        if (s >= GolemFinale.DIE) collapse();
+    }
+
+    /** The end: it falls apart, the floor breaks, grit pours down, and the winners are named. */
+    private void collapse() {
+        Location at = body.getLocation();
+        to(State.DEAD, 0);
+        body.remove();
+        body = null;
         for (int i = 0; i < parts.size(); i++) {
             BlockDisplay d = parts.get(i);
             if (!d.isValid()) continue;
@@ -1731,12 +1785,15 @@ final class Golem {
             d.setTransformation(transform(p, (rnd.nextDouble() - 0.5) * 2, -p.cy() + 0.1, (rnd.nextDouble() - 0.5) * 2, 0.8));
             if (p.group() == GolemModel.Group.ORE || p.bright()) { d.setBrightness(new Display.Brightness(7, 7)); d.setGlowing(false); }   // the light goes out
         }
-        crack(at.getX(), at.getZ(), 3.5, 0.9);
-        debris(at.getX(), at.getZ(), 20, 1.0);
+        crack(at.getX(), at.getZ(), 4.5, 0.95);
+        debris(at.getX(), at.getZ(), 28, 1.1);
+        ceilingDust(at.getX(), at.getZ(), 6, 70);
         world.spawnParticle(Particle.EXPLOSION_EMITTER, at, 1);
         world.spawnParticle(Particle.DUST, at.clone().add(0, 2, 0), 80, 1.5, 1.5, 1.5, dust(1.4f));
+        world.spawnParticle(Particle.POOF, at.clone().add(0, 0.5, 0), 40, 2, 0.3, 2, 0.08);
         world.playSound(at, Sound.ENTITY_WARDEN_DEATH, SoundCategory.HOSTILE, 3f, 0.7f);
-        m.golemDefeated(best, topPlayer, at);
+        world.playSound(at, Sound.ENTITY_GENERIC_EXPLODE, SoundCategory.HOSTILE, 3f, 0.5f);
+        m.golemDefeated(dieBest, dieTop, at);
     }
 
     private void hideBar() {

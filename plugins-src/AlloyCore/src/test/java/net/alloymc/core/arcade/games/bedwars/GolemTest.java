@@ -264,4 +264,43 @@ class GolemTest {
         assertArrayEquals(new double[]{10, 0, 0}, b, 1e-9);
         assertTrue(mid[1] > 4, "it arcs up on the way");
     }
+
+    @Test void deathThroesFlowAndTheShakingDiesDown() {
+        GolemAnim.Pose prev = GolemAnim.dying(0);
+        for (int s = 1; s <= GolemFinale.DIE; s++) {
+            GolemAnim.Pose p = GolemAnim.dying(s);
+            assertTrue(Math.abs(p.armR().x() - prev.armR().x()) < 40, "arm jumps at death tick " + s);
+            assertTrue(Math.abs(p.leanX() - prev.leanX()) < 12, "body jumps at death tick " + s);
+            assertTrue(Math.abs(p.bob() - prev.bob()) < 0.25, "body drops at death tick " + s);
+            prev = p;
+        }
+        GolemAnim.Pose end = GolemAnim.dying(GolemFinale.DIE);
+        assertTrue(Math.abs(end.leanZ()) < 0.2, "the shudder has died away: " + end.leanZ());
+        assertTrue(end.bob() < -0.5 && end.leanX() > 15, "it ends on its knees, head down");
+    }
+
+    @Test void crystalsGoDarkOneByOneInsideTheDeath() {
+        Set<Integer> ticks = new java.util.HashSet<>();
+        for (int i = 0; i < GolemModel.PARTS.size(); i++) {
+            int t = GolemFinale.lightsOut(i, GolemModel.PARTS.size());
+            assertTrue(t >= 14 && t < GolemFinale.DIE - 4, "lights out at " + t);
+            ticks.add(t);
+        }
+        assertTrue(ticks.size() >= 15, "they go out over time, not all at once: " + ticks.size() + " different ticks");
+    }
+
+    @Test void theHallStirsMoreAndMoreBeforeTheGolemWakes() {
+        assertEquals(0, GolemFinale.stir(31), 1e-9);
+        assertEquals(0, GolemFinale.stir(0), 1e-9);
+        double last = -1;
+        int every = 99, dust = -1;
+        for (int left = GolemFinale.STIR_SECONDS; left >= 1; left--) {
+            double v = GolemFinale.stir(left);
+            assertTrue(v >= last && v >= 0 && v <= 1, "it only builds: " + left);
+            assertTrue(GolemFinale.rumbleEvery(left) <= every, "rumbles come quicker: " + left);
+            assertTrue(GolemFinale.dustPerSecond(left) >= dust, "more dust: " + left);
+            last = v; every = GolemFinale.rumbleEvery(left); dust = GolemFinale.dustPerSecond(left);
+        }
+        assertTrue(GolemFinale.stir(1) > 0.9, "nearly at its peak a second before");
+    }
 }
