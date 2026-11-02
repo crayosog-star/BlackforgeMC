@@ -289,7 +289,8 @@ public final class WorldCam {
                 float[] d = defaultUv(e, f);
                 float u0 = uv != null ? (float) num(uv.get(0), 0) : d[0], v0 = uv != null ? (float) num(uv.get(1), 0) : d[1];
                 float u1 = uv != null ? (float) num(uv.get(2), 16) : d[2], v1 = uv != null ? (float) num(uv.get(3), 16) : d[3];
-                int tint = fd.containsKey("tintindex") ? tintFor(blockName) : -1;
+                boolean untinted = blockName.contains("cherry") || blockName.contains("azalea") || blockName.contains("pale_oak");
+                int tint = fd.containsKey("tintindex") && !untinted ? tintFor(blockName) : -1;
                 boolean translucent = blockName.contains("glass") || blockName.contains("ice") && !blockName.contains("packed") && !blockName.contains("blue")
                         || blockName.contains("slime") || blockName.contains("honey_block") || blockName.equals("water");
                 e.faces[f] = new Face(texture(tex), texSize(tex), u0, v0, u1, v1, tint, translucent);

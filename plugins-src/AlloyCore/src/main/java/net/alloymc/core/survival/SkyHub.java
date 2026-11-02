@@ -46,6 +46,7 @@ public final class SkyHub implements Listener {
     private InventoryGroups groups;
     private java.util.function.BiConsumer<Player, String> firstVisit = (p, g) -> {};
     private final File visits;
+    private SkyHubLife life;
 
     /** An empty world: the islands are pasted in. */
     public static final class Void extends ChunkGenerator {}
@@ -59,10 +60,12 @@ public final class SkyHub implements Listener {
         this.visits = new File(plugin.getDataFolder(), "skyhub-visits.yml");
         hub.setSpawnLocation(hubSpawn());
         obSpawn.setSpawnLocation(oneblockSpawn());
-        for (World w : List.of(hub, obSpawn)) for (int cx = -3; cx <= 2; cx++) for (int cz = -3; cz <= 2; cz++) w.addPluginChunkTicket(cx, cz, plugin);
+        for (int cx = -3; cx <= 2; cx++) for (int cz = -3; cz <= 2; cz++) obSpawn.addPluginChunkTicket(cx, cz, plugin);
+        for (int cx = -8; cx <= 8; cx++) for (int cz = -4; cz <= 3; cz++) hub.addPluginChunkTicket(cx, cz, plugin);   // the three isles
         Bukkit.getPluginManager().registerEvents(this, plugin);
         build();
         Bukkit.getScheduler().runTaskLater(plugin, this::holograms, 60L);
+        life = new SkyHubLife(plugin, hub);   // signs, leaderboards, kiosk NPCs, the giant OneBlock, crystals, particles
         Bukkit.getScheduler().runTaskTimer(plugin, () -> { if (holos.stream().anyMatch(t -> !t.isValid())) holograms(); }, 200L, 200L);
     }
 
@@ -89,7 +92,7 @@ public final class SkyHub implements Listener {
         Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) firstVisit.accept(p, game); }, 20L);
     }
 
-    public Location hubSpawn() { return new Location(hub, 0.5, Y + 1, 7.5, 180, 0); }
+    public Location hubSpawn() { return new Location(hub, SkyHubBuilder.SPAWN_X, Y + 1, SkyHubBuilder.SPAWN_Z, 180, 0); }
     public Location oneblockSpawn() { return new Location(obSpawn, 0.5, Y + 1, 14.5, 180, 0); }
     public World oneblockSpawnWorld() { return obSpawn; }
     public World hubWorld() { return hub; }
@@ -134,7 +137,18 @@ public final class SkyHub implements Listener {
         World w = to.getWorld();
         if (w != hub && w != obSpawn) return;
         if (to.getY() < Y - 40) { p.teleport(w == hub ? hubSpawn() : oneblockSpawn()); return; }
-        int gz = w == hub ? HUB_GATE_Z : OB_GATE_Z;
+        if (w == hub) {
+            boolean vanilla = to.getBlockX() == SkyHubBuilder.VANILLA_GATE_X, oneblock = to.getBlockX() == SkyHubBuilder.ONEBLOCK_GATE_X;
+            if ((!vanilla && !oneblock) || Math.abs(to.getBlockZ()) > 2 || to.getY() < Y + 1 || to.getY() > Y + 7) return;
+            long now = System.currentTimeMillis();
+            if (cooldown.getOrDefault(p.getUniqueId(), 0L) > now) return;
+            cooldown.put(p.getUniqueId(), now + 2500);
+            p.playSound(p.getLocation(), Sound.BLOCK_PORTAL_TRAVEL, 0.3f, 1.6f);
+            if (vanilla) { p.teleport(harborSpawn); p.sendMessage(Ui.mm("<#4fd1c5>Welcome to <bold>Sky Harbor</bold>! <gray>Your island: <white>/is <gray>or the Island Gate")); arrived(p, SKYBLOCK); }
+            else { p.teleport(oneblockSpawn()); p.sendMessage(Ui.mm("<#b06bff>Welcome to <bold>OneBlock</bold>! <gray>Your island: <white>/ob <gray>or the portal ahead")); arrived(p, ONEBLOCK); }
+            return;
+        }
+        int gz = OB_GATE_Z;
         if (Math.abs(to.getBlockZ() - gz) > 0 || to.getY() < Y + 1 || to.getY() > Y + 5) return;
         boolean left = Math.abs(to.getBlockX() - LEFT_X) <= 1, right = Math.abs(to.getBlockX() - RIGHT_X) <= 1;
         if (!left && !right) return;
@@ -166,8 +180,14 @@ public final class SkyHub implements Listener {
     // ------------------------------------------------------------------ the islands
 
     private void build() {
-        if (!new File(plugin.getDataFolder(), "skyhub-built").exists())
-            Paster.paste(plugin, hub, hubIsland(), 4000, () -> mark("skyhub-built"));
+        if (!new File(plugin.getDataFolder(), "skyhub-v2-built").exists()) {
+            // the first hub was a small island here: clear it, then paste the new three-isle hub
+            for (int x = -24; x <= 24; x++) for (int z = -24; z <= 24; z++) for (int y = Y - 30; y <= Y + 12; y++) {
+                var b = hub.getBlockAt(x, y, z);
+                if (!b.getType().isAir()) b.setType(Material.AIR, false);
+            }
+            Paster.paste(plugin, hub, SkyHubBuilder.build(), 6000, () -> mark("skyhub-v2-built"));
+        }
         if (!new File(plugin.getDataFolder(), "oneblock-spawn-built").exists())
             Paster.paste(plugin, obSpawn, oneblockIsland(), 4000, () -> mark("oneblock-spawn-built"));
     }
@@ -247,13 +267,10 @@ public final class SkyHub implements Listener {
     private void holograms() {
         holos.forEach(TextDisplay::remove);
         holos.clear();
-        holos.add(Ui.hologram(new Location(hub, LEFT_X + 0.5, Y + 8.5, HUB_GATE_Z + 0.5), "<#4fd1c5><bold>SKYBLOCK</bold><newline><gray>Classic islands • Sky Harbor", 1.5f));
-        holos.add(Ui.hologram(new Location(hub, RIGHT_X + 0.5, Y + 8.5, HUB_GATE_Z + 0.5), "<#b06bff><bold>ONEBLOCK</bold><newline><gray>Start on a single block", 1.5f));
-        holos.add(Ui.hologram(new Location(hub, 0.5, Y + 4, 2.5), "<white><bold>SKYBLOCK HUB</bold><newline><gray>Pick a game - each keeps its own items", 1.2f));
         holos.add(Ui.hologram(new Location(obSpawn, LEFT_X + 0.5, Y + 8.5, OB_GATE_Z + 0.5), "<#b06bff><bold>YOUR ONEBLOCK</bold><newline><gray>Go to your island • <white>/ob", 1.5f));
         holos.add(Ui.hologram(new Location(obSpawn, RIGHT_X + 0.5, Y + 8.5, OB_GATE_Z + 0.5), "<#4fd1c5><bold>SKYBLOCK HUB</bold><newline><gray>Back to the game picker", 1.5f));
         holos.add(Ui.hologram(new Location(obSpawn, 0.5, Y + 5.2, 0.5), "<#b06bff><bold>ONEBLOCK</bold><newline><gray>Top islands: <white>/istop", 1.4f));
     }
 
-    void shutdown() { holos.forEach(TextDisplay::remove); }
+    void shutdown() { holos.forEach(TextDisplay::remove); if (life != null) life.remove(); }
 }

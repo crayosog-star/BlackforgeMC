@@ -291,12 +291,17 @@ public final class SkyHubBuilder {
             for (int z = -60; z <= -22; z++) {
                 double d = Math.hypot(x, (z + 14) * 1.15);
                 if (d < 22 || d > 44) continue;
-                double top = 18 + 12 * fbm(x * 0.09, z * 0.09, 33) - Math.max(0, d - 38) * 2.2;
-                int h = (int) Math.round(top * Math.min(1, (d - 22) / 6.0));
+                // the gap behind the arch: cliffs fall away so the arch frames open sky
+                double gap = Math.max(0, 1 - Math.max(0, Math.abs(x) - 15) / 2.5);
+                double top = (18 + 12 * fbm(x * 0.09, z * 0.09, 33) - Math.max(0, d - 38) * 2.2) * (1 - gap);
+                int h = (int) Math.round(top * Math.min(1, (d - 22) / 1.5));
                 if (h < 2) continue;
                 for (int y = Y + 1; y <= Y + h; y++) {
                     double n = noise(x * 0.25, y * 0.35 + z * 0.2, 41);
-                    c.set(x, y, z, mc(y == Y + h ? "grass_block" : y >= Y + h - 2 ? "dirt" : n < 0.3 ? "andesite" : n < 0.55 ? "stone" : n < 0.75 ? "tuff" : "mossy_cobblestone"));
+                    String m = y == Y + h ? "grass_block" : y == Y + h - 1 ? "dirt"
+                            : n < 0.28 ? "andesite" : n < 0.55 ? "stone" : n < 0.7 ? "tuff" : n < 0.85 ? "mossy_cobblestone" : "moss_block";
+                    c.set(x, y, z, mc(m));
+                    if (y < Y + h - 1 && noise(x * 0.5, y * 0.5 + 9, 43) > 0.78 && !c.isSet(x, y, z + 1)) c.setLate(x, y, z + 1, "minecraft:vine[north=true]");
                 }
                 if ((x * 31 + z * 17) % 9 == 0 && h > 10) c.setLate(x, Y + h + 1, z, "minecraft:short_grass");
             }
@@ -308,7 +313,7 @@ public final class SkyHubBuilder {
             if (top > Y) tree(c, t[i][0], top + 1, t[i][1], 9 + (i % 3) * 2, "oak_log", i % 2 == 0 ? "oak_leaves" : "azalea_leaves", 300 + i);
         }
         // two waterfalls: a notch in the cliff face, falling water, and a splash where they meet the pool
-        for (int wx : new int[]{-13, 13}) {
+        for (int wx : new int[]{-19, 19}) {
             int z0 = -24;
             int top = Y;
             while (top < Y + 40 && c.isSet(wx, top + 1, z0 - 3)) top++;
@@ -325,7 +330,7 @@ public final class SkyHubBuilder {
 
     /** The Heartwood Arch: a ring of gnarled living wood with roots on a raised dais, draped in leaves and vines. */
     private static void arch(Canvas c, int cx, int cz) {
-        int base = Y + 3, R = 11;
+        int base = Y + 3, R = 13;
         // the dais: three steps up from the walkway
         for (int x = -12; x <= 12; x++)
             for (int z = cz - 5; z <= cz + 6; z++) {
