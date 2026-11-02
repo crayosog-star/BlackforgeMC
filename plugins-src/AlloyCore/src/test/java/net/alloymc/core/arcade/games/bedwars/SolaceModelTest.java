@@ -9,10 +9,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Solace's model: size, part budget and that every animated group and claw is there. */
 class SolaceModelTest {
-    @Test void modelIsTitanSizedButWithinItsPartBudget() {
-        assertTrue(SolaceModel.height() >= 8 && SolaceModel.height() <= 10.5, "height " + SolaceModel.height());
-        assertTrue(SolaceModel.halfWidth() <= 5, "half-width " + SolaceModel.halfWidth());
-        assertTrue(SolaceModel.PARTS.size() <= 100, "too many display entities: " + SolaceModel.PARTS.size());
+    @Test void modelIsTallButWithinItsPartBudget() {
+        assertTrue(SolaceModel.height() >= 7 && SolaceModel.height() <= 9, "height " + SolaceModel.height());
+        assertTrue(SolaceModel.halfWidth() <= 4.5, "half-width " + SolaceModel.halfWidth());
+        assertTrue(SolaceModel.PARTS.size() <= 90, "too many display entities: " + SolaceModel.PARTS.size());
     }
 
     @Test void everyGroupHasValidParts() {
@@ -25,10 +25,14 @@ class SolaceModelTest {
         assertEquals(EnumSet.allOf(SolaceModel.Group.class), groups);
     }
 
-    @Test void bothHandsHaveFourTwoPartClaws() {
+    @Test void itFloatsWithNoPartBelowTheTatters() {
+        for (SolaceModel.Part p : SolaceModel.PARTS) assertTrue(p.cy() > 0.5, "part too close to the floor: " + p);
+    }
+
+    @Test void bothHandsHaveFourGoldTippedClaws() {
         for (SolaceModel.Group arm : new SolaceModel.Group[]{SolaceModel.Group.ARM_L, SolaceModel.Group.ARM_R}) {
-            long claws = SolaceModel.PARTS.stream().filter(p -> p.group() == arm && p.block().equals("minecraft:bone_block")).count();
-            assertEquals(8, claws, arm + " claw segments");
+            long tips = SolaceModel.PARTS.stream().filter(p -> p.group() == arm && p.block().equals("minecraft:gold_block")).count();
+            assertEquals(4, tips, arm + " claw tips");
         }
     }
 }
