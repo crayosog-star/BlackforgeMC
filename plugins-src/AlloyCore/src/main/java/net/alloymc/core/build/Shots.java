@@ -35,7 +35,8 @@ public final class Shots {
                 new Shot("skyhub_top", "skyblock", "skyhub", 0, 0, 200, WorldCam.Look.day(), new WorldCam.Cam(0.5, 160, 34, 0.5, 100, 33, 60)),
                 new Shot("skyhub_aerial", "skyblock", "skyhub", 0, 0, 200, day, new WorldCam.Cam(0.5, 170, 110, 0.5, 100, -5, 70)),
                 new Shot("factions", "factions", "overworld", 0, 0, 160, frozen, new WorldCam.Cam(62, 218, 84, 0.5, 192, 0, 70)),
-                new Shot("arcade", "arcade", "overworld", 0, 0, 120, sunset, new WorldCam.Cam(-32, 116, 42, 0.5, 102, 0, 72)));
+                new Shot("arcade", "arcade", "overworld", 0, 0, 150, WorldCam.Look.neonNight(), new WorldCam.Cam(0.5, 102.62, 33.5, 0.5, 112, -10, 78)),
+                new Shot("arcade_aerial", "arcade", "overworld", 0, 0, 150, WorldCam.Look.neonNight(), new WorldCam.Cam(0.5, 195, 165, 0.5, 100, -10, 72)));
     }
 
     static WorldCam.World load(WorldCam cam, Shot s) throws Exception {
