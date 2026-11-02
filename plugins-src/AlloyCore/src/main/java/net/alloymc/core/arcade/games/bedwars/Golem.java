@@ -2,6 +2,7 @@ package net.alloymc.core.arcade.games.bedwars;
 
 import net.alloymc.core.Ui;
 import net.alloymc.core.arcade.core.Team;
+import net.alloymc.core.survival.Rimelock;
 import net.kyori.adventure.bossbar.BossBar;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
@@ -23,17 +24,29 @@ import java.util.*;
  * arcade/games/forgewars.yml (golem-*).
  *
  * Body: an invisible, scaled-up iron golem with no AI carries the hitbox and health; the plugin moves it by teleporting.
- * Look: one block display per {@link GolemModel} part, all standing on the body's spot and turned with its yaw.
+ * Look: one block display per {@link GolemModel} part, all standing on the body's spot and turned with its yaw, posed
+ * by {@link GolemAnim} (arms swing from the shoulders, the body leans and twists). A new pose goes out every 2-3 ticks
+ * and the client glides between them.
+ *
+ * Moves: Swipe, Ground Slam, Boulder Hurl, Root Snare, Crystal Eruption (lanes of pink crystal bursting out of the floor)
+ * and Shard Volley (pink shards fired off its back at players up high or far off); from phase 2 Charge and Rockfall.
+ * Rimelock: while a cage's cold reaches it, everything it does is slower and the ore on its back dims and flickers.
  * Everything runs off {@link #tick()} (called every tick by the match), so there are no scheduler tasks to leak.
  */
 final class Golem {
     enum State { RISING, WALK, WINDUP, ACT, STUNNED, DEAD }
 
-    private static final double LEASH = 7.5, SPEED = 0.11, ENRAGED_SPEED = 0.15, RING_SPEED = 0.3, RING_REACH = 12, CHARGE_SPEED = 0.55;
+    private static final double LEASH = 7.5, SPEED = 0.11, ENRAGED_SPEED = 0.15, RING_SPEED = 0.3, RING_REACH = 12, CHARGE_SPEED = 0.55,
+            ERUPT_SPEED = 0.6, SHARD_SPEED = 1.1;
     private static final Particle.DustOptions PINK = new Particle.DustOptions(Color.fromRGB(GolemModel.ORE_PINK), 1.4f),
             GREEN = new Particle.DustOptions(Color.fromRGB(GolemModel.HEART_GREEN), 1.2f),
-            RED = new Particle.DustOptions(Color.fromRGB(0xFF3030), 1.1f);
-    private static final BlockData STONE = Bukkit.createBlockData(Material.MOSSY_STONE_BRICKS);
+            RED = new Particle.DustOptions(Color.fromRGB(0xFF3030), 1.1f),
+            FROST = new Particle.DustOptions(Color.fromRGB(0xBFF4FF), 1.2f);
+    private static final BlockData STONE = Bukkit.createBlockData(Material.MOSSY_STONE_BRICKS),
+            PINK_GLASS = Bukkit.createBlockData(Material.PINK_STAINED_GLASS), PINK_CORE = Bukkit.createBlockData(Material.PINK_CONCRETE);
+    /** How the ore looks: full glow, dimmed by the cold, or guttered out for a moment (the flicker). */
+    private enum Ore { FULL, DIM, OUT }
+    private static final int DIM_GLOW = 0xC0407F;
 
     private final BedWarsMatch m;
     private final World world;
@@ -43,6 +56,7 @@ final class Golem {
     private final List<GolemModel.Part> data = new ArrayList<>();
     private final List<Display> fx = new ArrayList<>();
     private final Map<Display, Integer> fxRemoveAt = new HashMap<>();
+    private final List<Glide> glides = new ArrayList<>();   // effect displays to animate a tick after they spawn
     private final BossBar bar;
     private final Set<UUID> viewers = new HashSet<>();
     private final Map<Team, Double> teamDamage = new HashMap<>();
@@ -54,6 +68,10 @@ final class Golem {
     private final Map<double[], BlockDisplay> rockShown = new IdentityHashMap<>();
     private final List<double[]> rocks = new ArrayList<>();   // x, z, impact tick, rock display index (-1 = not dropped yet)
     private final List<Location> marks = new ArrayList<>();
+    private final List<double[]> lanes = new ArrayList<>();   // Crystal Eruption: dir x, dir z, stopped (0/1)
+    private final List<Player> shardTargets = new ArrayList<>();
+    private final List<Shard> shards = new ArrayList<>();
+    private final Map<Integer, Integer> flickerUntil = new HashMap<>();
     private final double maxHealth;
     private final double damageScale;
     private IronGolem body;
@@ -61,13 +79,27 @@ final class Golem {
     private State state = State.RISING;
     private GolemMath.Move move;
     private Player target;
-    private Location aim;
+    private Location aim, eruptFrom;
     private Vector chargeDir;
     private BlockDisplay boulder;
     private float yaw;
-    private int t, stateT, windup, stunTicks, nextMove = 100, swipeCd, idle, phaseShown = 1, flight;
+    private int t, stateT, windup, stunTicks, nextMove = 100, swipeCd, idle, phaseShown = 1, flight, eruptStep, shardsFired, chillUntil = -1;
     private double heartScale = 1;
-    private boolean removed;
+    private boolean removed, moving, chillShown;
+    // animation: blend from the last pose sent towards the current target over `blend` ticks after a state change
+    private GolemAnim.Pose last = GolemAnim.rising(0), from = last;
+    private int blend;
+    private double fx0 = Double.NaN, fy0, fz0;
+    private float fyaw;
+
+    private record Glide(Display d, Transformation to, int at, int ticks) {}
+
+    private static final class Shard {
+        final BlockDisplay d;
+        final Vector pos, vel;
+        int life;
+        Shard(BlockDisplay d, Vector pos, Vector vel) { this.d = d; this.pos = pos; this.vel = vel; }
+    }
 
     Golem(BedWarsMatch m, World world, Location home, int playersBelow) {
         this.m = m;
@@ -95,7 +127,7 @@ final class Golem {
             e.setBrightness(p.bright() ? new Display.Brightness(15, 15) : new Display.Brightness(11, 11));
             e.setViewRange(1.6f);
             e.setTeleportDuration(2);
-            e.setTransformation(transform(p, 0, -GolemModel.height() - 0.2, 0, 1));   // starts under the floor: it rises in the first 3 s
+            e.setTransformation(tf(GolemAnim.transform(p, last)));   // starts under the floor: it rises in the first 3 s
             if (p.glow() >= 0) { e.setGlowing(true); e.setGlowColorOverride(Color.fromRGB(p.glow())); }
         });
     }
@@ -108,6 +140,7 @@ final class Golem {
             g.setPersistent(false);
             g.setRemoveWhenFarAway(false);
             g.setPlayerCreated(false);
+            g.addScoreboardTag(Rimelock.NO_HOLD_TAG);   // a Rimelock cage slows it (see tickChill), it doesn't pin it
             set(g, Attribute.MAX_HEALTH, maxHealth);
             set(g, Attribute.SCALE, 2.0);   // iron golem 1.4 x 2.7 -> a 2.8 x 5.4 hitbox round the model's body
             set(g, Attribute.KNOCKBACK_RESISTANCE, 1);
@@ -117,7 +150,14 @@ final class Golem {
 
     private static void set(LivingEntity e, Attribute a, double v) { var i = e.getAttribute(a); if (i != null) i.setBaseValue(v); }
 
-    /** A part's display transformation, shifted by (ox, oy, oz) and scaled about its own middle. */
+    /** {@link GolemAnim#transform} output as a display transformation. */
+    static Transformation tf(double[][] f) {
+        return new Transformation(new Vector3f((float) f[0][0], (float) f[0][1], (float) f[0][2]),
+                new Quaternionf((float) f[1][0], (float) f[1][1], (float) f[1][2], (float) f[1][3]),
+                new Vector3f((float) f[2][0], (float) f[2][1], (float) f[2][2]), new Quaternionf());
+    }
+
+    /** A part at rest, shifted by (ox, oy, oz) and scaled about its own middle (used as it falls apart). */
     static Transformation transform(GolemModel.Part p, double ox, double oy, double oz, double scale) {
         Quaternionf rot = new Quaternionf().rotateZ((float) Math.toRadians(p.rz())).rotateX((float) Math.toRadians(p.rx()));
         float sx = (float) (p.sx() * scale), sy = (float) (p.sy() * scale), sz = (float) (p.sz() * scale);
@@ -126,27 +166,54 @@ final class Golem {
                 rot, new Vector3f(sx, sy, sz), new Quaternionf());
     }
 
-    /** Glide every part of a group to an offset from its rest pose over {@code ticks}. */
-    private void pose(GolemModel.Group g, double dx, double dy, double dz, int ticks) {
+    /** Send a pose to every part, gliding there over {@code ticks}. */
+    private void apply(GolemAnim.Pose pose, int ticks) {
+        last = pose = pose.heart(heartScale);
         for (int i = 0; i < parts.size(); i++) {
-            GolemModel.Part p = data.get(i);
-            if (p.group() != g || !parts.get(i).isValid()) continue;
             BlockDisplay d = parts.get(i);
+            if (!d.isValid()) continue;
             d.setInterpolationDelay(0);
             d.setInterpolationDuration(ticks);
-            d.setTransformation(transform(p, dx, dy, dz, g == GolemModel.Group.HEART ? heartScale : 1));
+            d.setTransformation(tf(GolemAnim.transform(data.get(i), pose)));
         }
     }
 
-    private void rest(int ticks) { for (GolemModel.Group g : GolemModel.Group.values()) pose(g, 0, 0, 0, ticks); }
+    /** What it should look like right now (before blending in from the last state). */
+    private GolemAnim.Pose target() {
+        return switch (state) {
+            case RISING -> GolemAnim.rising(stateT / 60.0);
+            case WALK -> moving ? GolemAnim.walk(t, slow()) : GolemAnim.idle(t);
+            case WINDUP -> GolemAnim.windup(move);
+            case ACT -> GolemAnim.strike(move, stateT);
+            case STUNNED -> GolemAnim.stunned(t);
+            case DEAD -> last;
+        };
+    }
 
-    /** Keep every part standing on the body, turned the way it faces. */
+    /** A new pose every 2 ticks while fighting, every 3 while walking; big swings follow an arc, not a straight line. */
+    private void animate() {
+        int every = state == State.WALK || state == State.RISING ? 3 : 2;
+        if (t % every != 0) return;
+        GolemAnim.Pose tg = target();
+        apply(blend > 0 && stateT < blend ? GolemAnim.lerp(from, tg, GolemAnim.smooth(stateT / (double) blend)) : tg, every);
+    }
+
+    /** Keep every part standing on the body, turned the way it faces (only when it moved or turned). */
     private void follow() {
         if (body == null) return;
         Location at = body.getLocation();
+        if (at.getX() == fx0 && at.getY() == fy0 && at.getZ() == fz0 && yaw == fyaw) return;
+        fx0 = at.getX(); fy0 = at.getY(); fz0 = at.getZ(); fyaw = yaw;
         at.setYaw(yaw);
         at.setPitch(0);
         for (BlockDisplay d : parts) if (d.isValid()) d.teleport(at);
+    }
+
+    /** A point on the Golem in its own frame (x to its left, z ahead), in the world. */
+    private Location local(double x, double y, double z) {
+        Location at = body.getLocation();
+        double r = Math.toRadians(yaw), c = Math.cos(r), s = Math.sin(r);
+        return new Location(world, at.getX() + x * c - z * s, at.getY() + y, at.getZ() + x * s + z * c);
     }
 
     // ------------------------------------------------------------------ the fight
@@ -159,7 +226,7 @@ final class Golem {
 
     private String title() {
         String ph = switch (phaseShown) { case 1 -> ""; case 2 -> " <gray>· cracked"; default -> " <red>· ENRAGED"; };
-        return "<#ff3fa4><bold>THE GOLEM</bold>" + ph;
+        return "<#ff3fa4><bold>THE GOLEM</bold>" + ph + (chilled() ? " <#7FD8FF>· frozen" : "");
     }
 
     /** Called every tick by the match. */
@@ -168,32 +235,33 @@ final class Golem {
         t++;
         stateT++;
         if (state != State.DEAD && (body == null || !body.isValid())) { remove(); return; }
-        if (t == 3) for (GolemModel.Group g : GolemModel.Group.values()) pose(g, 0, 0, 0, 57);   // rise out of the floor
         if (t % 10 == 0) refreshBar();
         tickRoots();
         tickRocks();
+        tickShards();
         tickFx();
+        if (state != State.DEAD) tickChill();
         switch (state) {
             case RISING -> {
                 if (t % 4 == 0) world.spawnParticle(Particle.BLOCK, home, 25, 2.2, 0.2, 2.2, STONE);
-                if (stateT >= 60) { to(State.WALK); world.playSound(home, Sound.ENTITY_RAVAGER_ROAR, SoundCategory.HOSTILE, 3f, 0.6f); }
+                if (stateT >= 60) { to(State.WALK, 10); world.playSound(home, Sound.ENTITY_RAVAGER_ROAR, SoundCategory.HOSTILE, 3f, 0.6f); }
             }
             case WALK -> walk();
             case WINDUP -> windup();
             case ACT -> act();
             case STUNNED -> {
                 if (t % 4 == 0) world.spawnParticle(Particle.CRIT, body.getLocation().add(0, 5.8, 0), 6, 0.6, 0.2, 0.6, 0.05);
-                if (stateT >= stunTicks) { to(State.WALK); rest(8); }
+                if (stateT >= stunTicks) to(State.WALK, 10);
             }
             case DEAD -> {
                 if (stateT >= 40) remove();
                 return;
             }
         }
-        follow();
+        if (state != State.DEAD) { animate(); follow(); }
     }
 
-    private void to(State s) { state = s; stateT = 0; }
+    private void to(State s, int blendTicks) { from = last; blend = blendTicks; state = s; stateT = 0; }
 
     private void refreshBar() {
         if (body == null) return;
@@ -222,19 +290,20 @@ final class Golem {
     private boolean high(Player p) { return p.getLocation().getY() > home.getY() + 2.5; }
 
     private void walk() {
+        moving = false;
         List<Player> below = m.undercroftPlayers(home);
         if (t % 20 == 0 || target == null || !target.isOnline() || !m.isAlive(target)) retarget(below);
         if (below.isEmpty()) {
             if (++idle > 400 && body.getHealth() < maxHealth) body.setHealth(Math.min(maxHealth, body.getHealth() + maxHealth * 0.02 / 20));
         } else idle = 0;
-        if (target == null) { stepTo(home, SPEED); return; }
+        if (target == null) { stepTo(home, SPEED * slow()); return; }
         Location tl = target.getLocation();
         double dx = tl.getX() - body.getLocation().getX(), dz = tl.getZ() - body.getLocation().getZ(), dist = Math.hypot(dx, dz);
         yaw = GolemMath.yawTo(dx, dz);
         swipeCd--;
         if (--nextMove <= 0) { start(GolemMath.pick(phase(), dist, high(target), below.size(), rnd)); return; }
         if (dist <= 4.1 && swipeCd <= 0 && !high(target)) { start(GolemMath.Move.SWIPE); return; }
-        if (dist > 3.4) stepTo(tl, phase() >= 3 ? ENRAGED_SPEED : SPEED);
+        if (dist > 3.4) stepTo(tl, (phase() >= 3 ? ENRAGED_SPEED : SPEED) * slow());
     }
 
     /** Walk towards {@code dest} (kept on the hall floor), sliding along anything in the way. */
@@ -250,6 +319,7 @@ final class Golem {
         }
         double[] l = GolemMath.leash(nx - home.getX(), nz - home.getZ(), LEASH);
         body.teleport(new Location(world, home.getX() + l[0], home.getY(), home.getZ() + l[1], yaw, 0));
+        moving = true;
     }
 
     /** Something solid where the Golem's feet, waist or shoulders would be at (x, z)? */
@@ -269,23 +339,78 @@ final class Golem {
         return false;
     }
 
+    // ------------------------------------------------------------------ Rimelock: the cold
+
+    private boolean chilled() { return t < chillUntil; }
+
+    /** 1 normally; less while a Rimelock cage's cold has it (walking, wind-ups, charges, eruptions, shards, the gap between moves). */
+    private double slow() { return chilled() ? GolemMath.CHILL_SLOW : 1; }
+
+    /** Every 5 ticks: is a cage's cold on it? It stays slowed 2 s after the cage is gone. The ore dims and flickers meanwhile. */
+    private void tickChill() {
+        if (t % 5 == 0 && body != null) {
+            ForgeArsenal a = ForgeArsenal.get();
+            if (a != null && a.rimelockTouches(body.getLocation(), 1.4)) chillUntil = t + 40;
+        }
+        boolean c = chilled();
+        if (c != chillShown) {
+            chillShown = c;
+            if (c) {
+                for (int i = 0; i < parts.size(); i++) ore(i, Ore.DIM);
+                world.playSound(body.getLocation(), Sound.ENTITY_PLAYER_HURT_FREEZE, SoundCategory.HOSTILE, 2f, 0.5f);
+                world.playSound(body.getLocation(), Sound.BLOCK_GLASS_BREAK, SoundCategory.HOSTILE, 1.5f, 0.6f);
+                for (Player p : m.undercroftPlayers(home)) p.sendMessage(Ui.mm("<#7FD8FF>The frost bites into the Golem. <gray>It slows, and the ore on its back dims."));
+            } else {
+                flickerUntil.clear();
+                for (int i = 0; i < parts.size(); i++) ore(i, Ore.FULL);
+                world.playSound(body.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_RESONATE, SoundCategory.HOSTILE, 2f, 0.8f);
+                world.spawnParticle(Particle.DUST, local(0, 5, -1), 30, 1.2, 0.8, 0.8, PINK);
+            }
+            refreshBar();
+        }
+        if (!c) return;
+        if (t % 4 == 0) {
+            world.spawnParticle(Particle.SNOWFLAKE, body.getLocation().add(0, 3, 0), 6, 1.6, 2, 1.6, 0.01);
+            world.spawnParticle(Particle.DUST, body.getLocation().add(0, 3, 0), 4, 1.5, 2, 1.5, FROST);
+        }
+        // the flicker: now and then a crystal gutters out for a moment
+        for (int i = 0; i < parts.size(); i++) {
+            if (data.get(i).group() != GolemModel.Group.ORE) continue;
+            Integer until = flickerUntil.get(i);
+            if (until != null) { if (t >= until) { flickerUntil.remove(i); ore(i, Ore.DIM); } continue; }
+            if (rnd.nextInt(100) < 2) { flickerUntil.put(i, t + 2 + rnd.nextInt(4)); ore(i, Ore.OUT); }
+        }
+    }
+
+    /** Set one ore part's glow (other parts are left alone). */
+    private void ore(int i, Ore look) {
+        GolemModel.Part p = data.get(i);
+        BlockDisplay d = parts.get(i);
+        if (p.group() != GolemModel.Group.ORE || !d.isValid()) return;
+        switch (look) {
+            case FULL -> d.setBrightness(new Display.Brightness(15, 15));
+            case DIM -> d.setBrightness(new Display.Brightness(10, 10));
+            case OUT -> d.setBrightness(new Display.Brightness(6, 6));
+        }
+        if (p.glow() < 0) return;
+        d.setGlowing(look != Ore.OUT);
+        d.setGlowColorOverride(Color.fromRGB(look == Ore.FULL ? p.glow() : DIM_GLOW));
+    }
+
     // ------------------------------------------------------------------ moves
 
     private void start(GolemMath.Move mv) {
         move = mv;
-        to(State.WINDUP);
-        windup = GolemMath.telegraph(mv, phase());
+        windup = (int) Math.round(GolemMath.telegraph(mv, phase()) / slow());
+        to(State.WINDUP, windup);
         hit.clear();
         slamHit.clear();
         marks.clear();
         flare();
         switch (mv) {
-            case SWIPE -> pose(GolemModel.Group.ARM_R, 0, 0.9, -0.5, windup);
-            case SLAM -> { pose(GolemModel.Group.ARM_L, 0, 1.7, -0.7, windup); pose(GolemModel.Group.ARM_R, 0, 1.7, -0.7, windup); }
             case BOULDER -> {
                 Player p = farTarget();
                 aim = (p != null ? p : target).getLocation().clone();
-                pose(GolemModel.Group.ARM_R, 0, 1.5, -0.9, windup);
             }
             case ROOTS -> {
                 List<Player> below = new ArrayList<>(m.undercroftPlayers(home));
@@ -297,13 +422,34 @@ final class Golem {
                 chargeDir = new Vector(tl.getX() - body.getLocation().getX(), 0, tl.getZ() - body.getLocation().getZ());
                 if (chargeDir.lengthSquared() < 0.01) chargeDir = new Vector(0, 0, 1);
                 chargeDir.normalize();
-                pose(GolemModel.Group.HEAD, 0, -0.3, 0.3, windup);
                 world.playSound(body.getLocation(), Sound.ENTITY_RAVAGER_ROAR, SoundCategory.HOSTILE, 2f, 1.1f);
             }
-            case ROCKFALL -> {
-                pose(GolemModel.Group.HEAD, 0, 0.4, -0.2, windup);
-                world.playSound(body.getLocation(), Sound.ENTITY_RAVAGER_ROAR, SoundCategory.HOSTILE, 3f, 0.4f);
+            case ROCKFALL -> world.playSound(body.getLocation(), Sound.ENTITY_RAVAGER_ROAR, SoundCategory.HOSTILE, 3f, 0.4f);
+            case ERUPTION -> {
+                eruptFrom = body.getLocation().clone();
+                double base = Math.atan2(target.getLocation().getZ() - eruptFrom.getZ(), target.getLocation().getX() - eruptFrom.getX());
+                lanes.clear();
+                for (double off : GolemMath.eruptionLanes(phase())) {
+                    double a = base + Math.toRadians(off);
+                    lanes.add(new double[]{Math.cos(a), Math.sin(a), 0});
+                }
+                eruptStep = 0;
+                world.playSound(eruptFrom, Sound.BLOCK_AMETHYST_BLOCK_RESONATE, SoundCategory.HOSTILE, 3f, 0.5f);
             }
+            case SHARDS -> {
+                shardTargets.clear();
+                List<Player> below = new ArrayList<>(m.undercroftPlayers(home));
+                below.removeIf(p -> !body.hasLineOfSight(p));
+                below.sort(Comparator.comparingDouble(p -> -(p.getLocation().distance(body.getLocation()) + (high(p) ? 20 : 0))));   // up high and far off first
+                shardTargets.addAll(below.subList(0, Math.min(3, below.size())));
+                if (shardTargets.isEmpty() && target != null) shardTargets.add(target);
+                for (Player p : shardTargets) {
+                    p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, SoundCategory.HOSTILE, 1.5f, 1.8f);
+                    p.sendActionBar(Ui.mm("<#ff3fa4>⚠ The ore on the Golem's back turns towards you"));
+                }
+                shardsFired = 0;
+            }
+            default -> {}
         }
     }
 
@@ -312,6 +458,13 @@ final class Golem {
         Location c = body.getLocation().add(0, 2.1 * GolemModel.SCALE, 0);
         world.spawnParticle(Particle.DUST, c, 20, 0.4, 0.4, 0.4, GREEN);
         world.playSound(c, Sound.ENTITY_WARDEN_HEARTBEAT, SoundCategory.HOSTILE, 1.5f, 1.4f);
+    }
+
+    /** The ore on its back charging up: pink motes gathering on the crystals. */
+    private void oreCharge() {
+        Location c = local(0, 5.4, -1.1);
+        world.spawnParticle(Particle.DUST, c, 6, 1.1, 0.7, 0.5, PINK);
+        if (stateT % 6 == 0) world.spawnParticle(Particle.END_ROD, c, 2, 1, 0.6, 0.5, 0.02);
     }
 
     private Player farTarget() {
@@ -333,14 +486,28 @@ final class Golem {
                 Location c = body.getLocation().add(0, 0.2, 0);
                 for (double s = 2; s <= 14; s += 0.8) world.spawnParticle(Particle.DUST, c.clone().add(chargeDir.clone().multiply(s)), 1, 0.15, 0, 0.15, RED);
             }
+            case ERUPTION -> {
+                oreCharge();
+                for (double[] ln : lanes)   // where the crystals will come up: pink lines on the floor, up to the first thing in the way
+                    for (double r = 1.5; r <= GolemMath.ERUPTION_REACH; r += 0.9) {
+                        double x = eruptFrom.getX() + ln[0] * r, z = eruptFrom.getZ() + ln[1] * r;
+                        if (!floorClear(x, z)) break;
+                        world.spawnParticle(Particle.DUST, x, home.getY() + 0.15, z, 1, 0.1, 0, 0.1, PINK);
+                    }
+            }
+            case SHARDS -> {
+                oreCharge();
+                for (Player p : shardTargets) if (p.isOnline()) circle(p.getLocation(), 1.0, PINK);
+            }
             default -> {}
         }
-        if (stateT >= windup) { to(State.ACT); flight = 0; }
+        if (stateT >= windup) { to(State.ACT, GolemAnim.strikeTicks(move)); flight = 0; }
     }
 
     private void act() {
         switch (move) {
             case SWIPE -> {
+                if (stateT < 2) return;   // the arm comes round first
                 Location at = body.getLocation();
                 for (Player p : m.undercroftPlayers(home)) {
                     Location l = p.getLocation();
@@ -350,21 +517,21 @@ final class Golem {
                 }
                 world.playSound(at, Sound.ENTITY_IRON_GOLEM_ATTACK, SoundCategory.HOSTILE, 1.5f, 0.6f);
                 world.spawnParticle(Particle.SWEEP_ATTACK, at.clone().add(new Vector(-Math.sin(Math.toRadians(yaw)), 0, Math.cos(Math.toRadians(yaw))).multiply(2)).add(0, 1.2, 0), 3, 0.6, 0.2, 0.6);
-                pose(GolemModel.Group.ARM_R, 0, -0.2, 0.6, 3);
                 swipeCd = 30;
-                end(8);
+                end(10);
             }
-            case SLAM -> {
+            case SLAM, ROCKFALL -> {
+                if (move == GolemMath.Move.ROCKFALL) { rockfall(); return; }
                 Location at = body.getLocation();
-                if (stateT == 1) {
-                    pose(GolemModel.Group.ARM_L, 0, -0.3, 0.4, 3);
-                    pose(GolemModel.Group.ARM_R, 0, -0.3, 0.4, 3);
+                if (stateT == 2) {   // the fists hit the floor
                     world.playSound(at, Sound.ENTITY_GENERIC_EXPLODE, SoundCategory.HOSTILE, 2f, 0.6f);
-                    world.spawnParticle(Particle.EXPLOSION, at.clone().add(0, 0.3, 0), 3, 1.5, 0.1, 1.5);
+                    world.spawnParticle(Particle.EXPLOSION, local(0, 0.3, 2.5), 3, 1.5, 0.1, 1.5);
                 }
+                if (stateT < 2) return;
                 boolean twice = phase() >= 3;
+                int tt0 = stateT - 1;
                 for (int wave = 0; wave < (twice ? 2 : 1); wave++) {
-                    int tt = stateT - wave * 15;
+                    int tt = tt0 - wave * 15;
                     if (tt < 1) continue;
                     double r = tt * RING_SPEED;
                     if (r <= RING_REACH) ring(at, r, Particle.DUST);
@@ -375,13 +542,12 @@ final class Golem {
                                 && slamHit.add(p.getUniqueId() + ":" + wave)) hurt(p, 6, new Vector(0, 0.75, 0));   // each wave hits a player once
                     }
                 }
-                if (stateT * RING_SPEED > RING_REACH + (twice ? 15 * RING_SPEED : 0)) end(8);
+                if (tt0 * RING_SPEED > RING_REACH + (twice ? 15 * RING_SPEED : 0)) end(10);
             }
             case BOULDER -> {
-                Location from = body.getLocation().add(new Vector(-Math.sin(Math.toRadians(yaw - 50)), 0, Math.cos(Math.toRadians(yaw - 50))).multiply(3.2)).add(0, 4.5, 0);
+                Location from = local(-2.4, 5.6, 0.6);   // out of its right hand, now forward of the shoulder
                 int ticks = (int) Math.max(12, Math.min(24, from.distance(aim) * 1.1));
-                if (stateT == 1) {
-                    pose(GolemModel.Group.ARM_R, 0, 0.3, 0.9, 4);
+                if (stateT == 2) {
                     boulder = world.spawn(from, BlockDisplay.class, e -> {
                         e.setBlock(Bukkit.createBlockData(Material.COBBLESTONE));
                         e.setPersistent(false);
@@ -390,8 +556,9 @@ final class Golem {
                     });
                     world.playSound(from, Sound.BLOCK_STONE_BREAK, SoundCategory.HOSTILE, 2f, 0.5f);
                 }
+                if (stateT < 2) return;
                 if (boulder != null && boulder.isValid()) {
-                    double f = Math.min(1, stateT / (double) ticks);
+                    double f = Math.min(1, (stateT - 2) / (double) ticks);
                     double[] p = GolemMath.arc(from.getX(), from.getY(), from.getZ(), aim.getX(), aim.getY() + 0.6, aim.getZ(), 4, f);
                     boulder.teleport(new Location(world, p[0], p[1], p[2]));
                     if (f >= 1) {
@@ -409,6 +576,7 @@ final class Golem {
                 } else end(10);
             }
             case ROOTS -> {
+                if (stateT < 2) return;   // fists into the floor first
                 for (Location l : marks) {
                     for (Player p : m.undercroftPlayers(home))
                         if (p.getLocation().distance(l) <= 1.5 && hit.add(p.getUniqueId())) {
@@ -419,30 +587,30 @@ final class Golem {
                     for (int i = 0; i < 4; i++) {
                         double a = Math.PI / 2 * i + rnd.nextDouble();
                         Location at = l.clone().add(Math.cos(a) * 0.6, -0.2, Math.sin(a) * 0.6);
+                        float lean = (float) (rnd.nextDouble() - 0.5);
                         BlockDisplay r = world.spawn(at, BlockDisplay.class, e -> {
                             e.setBlock(Bukkit.createBlockData(Material.MANGROVE_ROOTS));
                             e.setPersistent(false);
-                            e.setTransformation(new Transformation(new Vector3f(-0.15f, -1.2f, -0.15f), new Quaternionf().rotateZ((float) (rnd.nextDouble() - 0.5)), new Vector3f(0.3f, 1.2f, 0.3f), new Quaternionf()));
+                            e.setTransformation(new Transformation(new Vector3f(-0.15f, -1.2f, -0.15f), new Quaternionf().rotateZ(lean), new Vector3f(0.3f, 1.2f, 0.3f), new Quaternionf()));
                         });
-                        r.setInterpolationDelay(0);
-                        r.setInterpolationDuration(4);
-                        r.setTransformation(new Transformation(new Vector3f(-0.15f, 0, -0.15f), new Quaternionf().rotateZ((float) (rnd.nextDouble() - 0.5)), new Vector3f(0.3f, 1.8f, 0.3f), new Quaternionf()));
-                        fx.add(r);
-                        fxRemoveAt.put(r, t + 40);
+                        effect(r, 40);
+                        glides.add(new Glide(r, new Transformation(new Vector3f(-0.15f, 0, -0.15f), new Quaternionf().rotateZ(lean), new Vector3f(0.3f, 1.8f, 0.3f), new Quaternionf()), t + 1, 4));
                     }
                     world.playSound(l, Sound.BLOCK_ROOTS_BREAK, SoundCategory.HOSTILE, 2f, 0.6f);
                 }
-                end(6);
+                end(8);
             }
             case CHARGE -> {
                 Location at = body.getLocation();
-                double nx = at.getX() + chargeDir.getX() * CHARGE_SPEED, nz = at.getZ() + chargeDir.getZ() * CHARGE_SPEED;
+                double sp = CHARGE_SPEED * slow();
+                double nx = at.getX() + chargeDir.getX() * sp, nz = at.getZ() + chargeDir.getZ() * sp;
                 double[] l = GolemMath.leash(nx - home.getX(), nz - home.getZ(), LEASH);
                 boolean leashed = Math.abs(l[0] - (nx - home.getX())) > 1e-6 || Math.abs(l[1] - (nz - home.getZ())) > 1e-6;
                 if (wallAt(nx, nz)) { stun(60, "<#ff3fa4>The Golem slammed into a pillar! <white>It's stunned and takes +50% damage."); return; }
-                if (leashed || blocked(nx, nz) || stateT > 32) { end(10); return; }
+                if (leashed || blocked(nx, nz) || stateT > 32 / slow()) { end(10); return; }
                 body.teleport(new Location(world, nx, home.getY(), nz, yaw, 0));
                 if (stateT % 2 == 0) world.spawnParticle(Particle.BLOCK, at, 12, 1.2, 0.1, 1.2, STONE);
+                if (stateT % 6 == 0) world.playSound(at, Sound.ENTITY_RAVAGER_STEP, SoundCategory.HOSTILE, 2f, 0.6f);
                 for (Player p : m.undercroftPlayers(home)) {
                     Location pl = p.getLocation();
                     if (Math.hypot(pl.getX() - nx, pl.getZ() - nz) <= 2.4 && Math.abs(pl.getY() - home.getY()) < 3 && hit.add(p.getUniqueId())) {
@@ -452,36 +620,183 @@ final class Golem {
                     }
                 }
             }
-            case ROCKFALL -> {
-                List<Player> below = m.undercroftPlayers(home);
-                for (int i = 0; i < 10; i++) {
-                    double x, z;
-                    if (!below.isEmpty() && rnd.nextBoolean()) {
-                        Location pl = below.get(rnd.nextInt(below.size())).getLocation();
-                        x = pl.getX() - home.getX() + rnd.nextGaussian();
-                        z = pl.getZ() - home.getZ() + rnd.nextGaussian();
-                    } else {
-                        double a = rnd.nextDouble() * Math.PI * 2, r = Math.sqrt(rnd.nextDouble()) * 11;
-                        x = Math.cos(a) * r;
-                        z = Math.sin(a) * r;
-                    }
-                    rocks.add(new double[]{home.getX() + x, home.getZ() + z, t + 20 + i * 10, -1});
-                }
-                end(10);
-            }
+            case ERUPTION -> erupt();
+            case SHARDS -> volley();
         }
     }
 
+    /** Rockfall: it hammers the floor and the ceiling starts coming down, mostly on top of players. */
+    private void rockfall() {
+        if (stateT < 2) return;
+        Location at = body.getLocation();
+        world.playSound(at, Sound.ENTITY_GENERIC_EXPLODE, SoundCategory.HOSTILE, 2f, 0.5f);
+        world.spawnParticle(Particle.EXPLOSION, local(0, 0.3, 2.5), 3, 1.5, 0.1, 1.5);
+        List<Player> below = m.undercroftPlayers(home);
+        for (int i = 0; i < 10; i++) {
+            double x, z;
+            if (!below.isEmpty() && rnd.nextBoolean()) {
+                Location pl = below.get(rnd.nextInt(below.size())).getLocation();
+                x = pl.getX() - home.getX() + rnd.nextGaussian();
+                z = pl.getZ() - home.getZ() + rnd.nextGaussian();
+            } else {
+                double a = rnd.nextDouble() * Math.PI * 2, r = Math.sqrt(rnd.nextDouble()) * 11;
+                x = Math.cos(a) * r;
+                z = Math.sin(a) * r;
+            }
+            rocks.add(new double[]{home.getX() + x, home.getZ() + z, t + 20 + i * 10, -1});
+        }
+        end(10);
+    }
+
+    // ------------------------------------------------------------------ Crystal Eruption
+
+    /** Standing room at (x, z) on the hall floor: nothing solid at feet height, and floor under it. */
+    private boolean floorClear(double x, double z) {
+        int bx = (int) Math.floor(x), bz = (int) Math.floor(z), fy = home.getBlockY();
+        return world.getBlockAt(bx, fy, bz).isPassable() && world.getBlockAt(bx, fy + 1, bz).isPassable() && !world.getBlockAt(bx, fy - 1, bz).isPassable();
+    }
+
+    /**
+     * Its fists go into the floor and lanes of pink crystal race out from it towards the target, a spike every 1.2
+     * blocks. A spike throws anyone standing on it into the air. Step between the lanes (the gap opens up further out)
+     * or get out of their way; a lane stops at the first pillar or boulder.
+     */
+    private void erupt() {
+        if (stateT < 2) return;
+        if (stateT == 2) {
+            world.playSound(eruptFrom, Sound.ENTITY_GENERIC_EXPLODE, SoundCategory.HOSTILE, 1.5f, 0.5f);
+            world.spawnParticle(Particle.BLOCK, local(0, 0.3, 2.5), 50, 1.2, 0.2, 1.2, STONE);
+        }
+        double front = 1.5 + (stateT - 2) * ERUPT_SPEED * slow();
+        while (true) {
+            double r = 1.5 + eruptStep * GolemMath.SPIKE_GAP;
+            if (r > Math.min(front, GolemMath.ERUPTION_REACH)) break;
+            for (double[] ln : lanes) {
+                if (ln[2] != 0) continue;
+                double x = eruptFrom.getX() + ln[0] * r, z = eruptFrom.getZ() + ln[1] * r;
+                if (!floorClear(x, z)) { ln[2] = 1; world.spawnParticle(Particle.BLOCK, x, home.getY() + 0.5, z, 20, 0.3, 0.3, 0.3, PINK_GLASS); continue; }
+                spike(x, z, ln);
+            }
+            world.playSound(new Location(world, eruptFrom.getX() + lanes.get(lanes.size() / 2)[0] * r, home.getY(), eruptFrom.getZ() + lanes.get(lanes.size() / 2)[1] * r),
+                    Sound.BLOCK_AMETHYST_CLUSTER_BREAK, SoundCategory.HOSTILE, 1.6f, 0.55f + eruptStep * 0.04f);
+            eruptStep++;
+        }
+        boolean left = false;
+        for (double[] ln : lanes) left |= ln[2] == 0;
+        if (front > GolemMath.ERUPTION_REACH || !left) end(10);
+    }
+
+    /** One crystal: a glowing core in a glass sheath, shooting up out of the floor, then sinking back after a second and a half. */
+    private void spike(double x, double z, double[] lane) {
+        Location at = new Location(world, x, home.getY(), z);
+        Quaternionf q = new Quaternionf().rotateX((float) Math.toRadians((rnd.nextDouble() - 0.5) * 24)).rotateZ((float) Math.toRadians((rnd.nextDouble() - 0.5) * 24));
+        float h = (float) (1.6 + rnd.nextDouble() * 1.1);
+        for (int layer = 0; layer < 2; layer++) {
+            boolean core = layer == 1;
+            float w = core ? 0.3f : 0.7f, hh = core ? h + 0.4f : h;
+            BlockDisplay d = world.spawn(at, BlockDisplay.class, e -> {
+                e.setBlock(core ? PINK_CORE : PINK_GLASS);
+                e.setPersistent(false);
+                e.setBrightness(new Display.Brightness(15, 15));
+                e.setTransformation(column(w, hh, -hh - 0.1f, q));
+                if (core) { e.setGlowing(true); e.setGlowColorOverride(Color.fromRGB(GolemModel.ORE_PINK)); }
+            });
+            effect(d, 40);
+            glides.add(new Glide(d, column(w, hh, -0.3f, q), t + 1, 3));          // up...
+            glides.add(new Glide(d, column(w, hh, -hh - 0.1f, q), t + 30, 8));    // ...and back down
+        }
+        world.spawnParticle(Particle.BLOCK, at, 12, 0.4, 0.1, 0.4, STONE);
+        world.spawnParticle(Particle.DUST, at.clone().add(0, 1, 0), 6, 0.3, 0.6, 0.3, PINK);
+        for (Player p : m.undercroftPlayers(home)) {
+            Location l = p.getLocation();
+            if (Math.hypot(l.getX() - x, l.getZ() - z) <= GolemMath.SPIKE_HIT + 0.3 && Math.abs(l.getY() - home.getY()) < 2.5 && hit.add(p.getUniqueId()))
+                hurt(p, 5, new Vector(lane[0] * 0.3, 0.95, lane[1] * 0.3));
+        }
+    }
+
+    /** A column {@code w} wide and {@code h} tall, tilted by {@code q} about the middle of its foot, foot at height {@code y}. */
+    private static Transformation column(float w, float h, float y, Quaternionf q) {
+        Vector3f c = new Vector3f(-w / 2, 0, -w / 2).rotate(new Quaternionf(q));
+        return new Transformation(new Vector3f(c.x, c.y + y, c.z), new Quaternionf(q), new Vector3f(w, h, w), new Quaternionf());
+    }
+
+    // ------------------------------------------------------------------ Shard Volley
+
+    /**
+     * The crystals on its back fire pink shards, one every 3 ticks, at the players it marked (up high and far off
+     * first), aimed a little ahead of where they're going. Shards fly straight: break line of sight or keep moving.
+     */
+    private void volley() {
+        int n = phase() >= 3 ? 9 : 6;
+        int every = (int) Math.round(3 / slow());
+        if (stateT % every == 1 && shardsFired < n && !shardTargets.isEmpty()) {
+            Player p = shardTargets.get(shardsFired % shardTargets.size());
+            shardsFired++;
+            if (p.isOnline() && m.isAlive(p) && p.getGameMode() == GameMode.SURVIVAL) fire(p);
+        }
+        if (shardsFired >= n || shardTargets.isEmpty()) end(10);
+    }
+
+    private void fire(Player p) {
+        Location from = local((rnd.nextDouble() - 0.5) * 2.2, 5.3 + rnd.nextDouble() * 0.6, -1.0);
+        Location to = p.getLocation().add(0, 1.0, 0);
+        double speed = SHARD_SPEED * slow();
+        Vector v = p.getVelocity();
+        double[] a = GolemMath.leadAim(to.getX(), to.getY(), to.getZ(), v.getX(), v.getY(), v.getZ(), from.distance(to), speed, 0.6);
+        Vector dir = new Vector(a[0] - from.getX(), a[1] - from.getY(), a[2] - from.getZ());
+        if (dir.lengthSquared() < 1e-4) return;
+        dir.normalize().multiply(speed);
+        BlockDisplay d = world.spawn(from, BlockDisplay.class, e -> {
+            e.setBlock(PINK_CORE);
+            e.setPersistent(false);
+            e.setTeleportDuration(1);
+            e.setBrightness(new Display.Brightness(15, 15));
+            Quaternionf q = new Quaternionf().rotateX(0.7854f).rotateZ(0.7854f);
+            e.setTransformation(new Transformation(new Vector3f(-0.17f, -0.17f, -0.17f).rotate(new Quaternionf(q)), q, new Vector3f(0.34f), new Quaternionf()));
+            e.setGlowing(true);
+            e.setGlowColorOverride(Color.fromRGB(GolemModel.ORE_PINK));
+        });
+        shards.add(new Shard(d, from.toVector(), dir));
+        world.playSound(from, Sound.BLOCK_AMETHYST_CLUSTER_BREAK, SoundCategory.HOSTILE, 1.4f, 1.4f);
+        world.spawnParticle(Particle.DUST, from, 8, 0.2, 0.2, 0.2, PINK);
+    }
+
+    private void tickShards() {
+        for (var it = shards.iterator(); it.hasNext(); ) {
+            Shard s = it.next();
+            s.life++;
+            s.pos.add(s.vel);
+            Location at = s.pos.toLocation(world);
+            boolean gone = s.life > 40 || !s.d.isValid();
+            if (!gone && !at.getBlock().isPassable()) gone = true;
+            if (!gone) for (Player p : m.undercroftPlayers(home)) {
+                if (p.getLocation().add(0, 0.9, 0).distanceSquared(at) > 0.9 * 0.9) continue;
+                hurt(p, 3, s.vel.clone().normalize().multiply(0.4).setY(0.25));
+                gone = true;
+                break;
+            }
+            if (gone) {
+                world.spawnParticle(Particle.BLOCK, at, 10, 0.15, 0.15, 0.15, PINK_GLASS);
+                world.playSound(at, Sound.BLOCK_AMETHYST_BLOCK_BREAK, SoundCategory.HOSTILE, 0.8f, 1.6f);
+                s.d.remove();
+                it.remove();
+                continue;
+            }
+            s.d.teleport(at);
+            world.spawnParticle(Particle.DUST, at, 1, 0, 0, 0, PINK);
+        }
+    }
+
+    // ------------------------------------------------------------------ helpers
+
     private void end(int restTicks) {
-        rest(restTicks);
-        to(State.WALK);
-        nextMove = GolemMath.moveGap(phase()) + rnd.nextInt(20);
+        to(State.WALK, restTicks + 4);
+        nextMove = (int) ((GolemMath.moveGap(phase()) + rnd.nextInt(20)) / slow());
     }
 
     private void stun(int ticks, String msg) {
-        to(State.STUNNED);
+        to(State.STUNNED, 6);
         stunTicks = ticks;
-        pose(GolemModel.Group.HEAD, 0, -0.5, 0.2, 6);
         world.playSound(body.getLocation(), Sound.ENTITY_GENERIC_EXPLODE, SoundCategory.HOSTILE, 1.5f, 1.4f);
         world.spawnParticle(Particle.BLOCK, body.getLocation().add(0, 2, 0), 60, 1.2, 1, 1.2, STONE);
         for (Player p : m.undercroftPlayers(home)) p.sendMessage(Ui.mm(msg));
@@ -489,10 +804,13 @@ final class Golem {
 
     /** Hurt a player, scaled by golem-damage-percent, with a shove. */
     private void hurt(Player p, double dmg, Vector push) {
-        if (!m.isAlive(p) || p.getGameMode() != GameMode.SURVIVAL) return;
+        if (!m.isAlive(p) || p.getGameMode() != GameMode.SURVIVAL || body == null) return;
         p.damage(dmg * damageScale, body);
         if (push.lengthSquared() > 0) p.setVelocity(push);
     }
+
+    /** An effect display that goes away by itself after {@code life} ticks. */
+    private void effect(Display d, int life) { fx.add(d); fxRemoveAt.put(d, t + life); }
 
     private void tickRoots() {
         for (var it = rooted.entrySet().iterator(); it.hasNext(); ) {
@@ -520,8 +838,7 @@ final class Golem {
                     e.setTeleportDuration(13);
                     e.setTransformation(new Transformation(new Vector3f(-0.5f, 0, -0.5f), new Quaternionf(), new Vector3f(1f), new Quaternionf()));
                 });
-                fx.add(rock);
-                fxRemoveAt.put(rock, t + 16);
+                effect(rock, 16);
                 rockShown.put(r, rock);
             }
             if (left == 13) {   // ...and drops the next tick, gliding down over 13 ticks (a teleport on the spawn tick isn't animated)
@@ -540,6 +857,15 @@ final class Golem {
     }
 
     private void tickFx() {
+        for (var it = glides.iterator(); it.hasNext(); ) {   // a transformation set on the spawn tick isn't animated, so it waits a tick
+            Glide g = it.next();
+            if (g.at() > t) continue;
+            it.remove();
+            if (!g.d().isValid()) continue;
+            g.d().setInterpolationDelay(0);
+            g.d().setInterpolationDuration(g.ticks());
+            g.d().setTransformation(g.to());
+        }
         for (var it = fx.iterator(); it.hasNext(); ) {
             Display d = it.next();
             Integer at = fxRemoveAt.get(d);
@@ -587,14 +913,13 @@ final class Golem {
         phaseShown = ph;
         if (ph == 2) {
             for (int i = 0; i < parts.size(); i++) if (data.get(i).group() == GolemModel.Group.PLATE) parts.get(i).remove();
-            heartScale = 1.6;
-            pose(GolemModel.Group.HEART, 0, 0, 0.05, 6);
+            heartScale = 1.6;   // the next pose sent shows the bigger heart
             world.spawnParticle(Particle.BLOCK, body.getLocation().add(0, 2.6, 1.5), 80, 0.8, 0.6, 0.3, Bukkit.createBlockData(Material.CRACKED_STONE_BRICKS));
             world.playSound(body.getLocation(), Sound.ENTITY_GENERIC_EXPLODE, SoundCategory.HOSTILE, 2f, 0.8f);
             for (Player p : m.undercroftPlayers(home)) p.sendMessage(Ui.mm("<#ff3fa4>The Golem's chest plate shatters! <gray>It charges and brings the ceiling down now."));
         } else {
             world.playSound(body.getLocation(), Sound.ENTITY_RAVAGER_ROAR, SoundCategory.HOSTILE, 3f, 0.4f);
-            for (Player p : m.undercroftPlayers(home)) p.sendMessage(Ui.mm("<red><bold>The Golem is enraged!</bold> <gray>Faster, and every slam hits twice."));
+            for (Player p : m.undercroftPlayers(home)) p.sendMessage(Ui.mm("<red><bold>The Golem is enraged!</bold> <gray>Faster, more crystals, and every slam hits twice."));
         }
         refreshBar();
     }
@@ -608,10 +933,12 @@ final class Golem {
         UUID topPlayer = null;
         double topDmg = -1;
         for (var e : playerDamage.entrySet()) if (best != null && best.members.contains(e.getKey()) && e.getValue() > topDmg) { topDmg = e.getValue(); topPlayer = e.getKey(); }
-        to(State.DEAD);
+        to(State.DEAD, 0);
         body.remove();
         body = null;
         hideBar();
+        for (Shard s : shards) s.d.remove();
+        shards.clear();
         // it falls apart
         for (int i = 0; i < parts.size(); i++) {
             BlockDisplay d = parts.get(i);
@@ -620,6 +947,7 @@ final class Golem {
             d.setInterpolationDelay(0);
             d.setInterpolationDuration(20);
             d.setTransformation(transform(p, (rnd.nextDouble() - 0.5) * 2, -p.cy() + 0.1, (rnd.nextDouble() - 0.5) * 2, 0.8));
+            if (p.group() == GolemModel.Group.ORE) { d.setBrightness(new Display.Brightness(7, 7)); d.setGlowing(false); }   // the ore goes dark
         }
         world.spawnParticle(Particle.EXPLOSION_EMITTER, at, 1);
         world.spawnParticle(Particle.DUST, at.clone().add(0, 2, 0), 80, 1.5, 1.5, 1.5, PINK);
@@ -639,6 +967,9 @@ final class Golem {
         hideBar();
         parts.forEach(Entity::remove);
         fx.forEach(Entity::remove);
+        for (Shard s : shards) s.d.remove();
+        shards.clear();
+        glides.clear();
         if (boulder != null) boulder.remove();
         if (body != null) body.remove();
         rooted.clear();
