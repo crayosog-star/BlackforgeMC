@@ -5,14 +5,16 @@ package net.alloymc.core.arcade.games.bedwars;
  * the game does. Everything a projectile does with its body (turning, spinning, stretching) is eased and updated every
  * tick; only its path is allowed to be sharp.
  *
- * <p>A shard's timeline from the tick it peels off its crystal: {@link #PEEL} ticks sliding out along the crystal, a short
- * {@link #HANG}, a smooth {@link #TURN} onto its target (still tracking), then {@link #LOCK} ticks pointing at where the
- * target was (so a quick player can dodge), then it flies.
+ * <p>A shard's timeline from the tick it flies off its crystal: {@link #PEEL} ticks swooping up to a spot above and behind
+ * the Golem, {@link #CHARGE} ticks hovering there and charging (swelling, spinning faster, light gathering in), a smooth
+ * {@link #TURN} onto its target (still tracking), then {@link #LOCK} ticks pulled back like a drawn bow pointing at where
+ * the target was (so a quick player can dodge), then it crawls forward and whips away ({@link GolemMath#shardSpeed}).
  */
 final class GolemProjectile {
     private GolemProjectile() {}
 
-    static final int PEEL = 8, HANG = 2, TURN = 5, LOCK = 3, FIRE_DELAY = PEEL + HANG + TURN + LOCK;
+    static final int PEEL = 8, CHARGE = 10, TURN = 5, LOCK = 4, FIRE_DELAY = PEEL + CHARGE + TURN + LOCK;
+
     /** A roll faster than this per tick (radians) would alias: a smoothly turning shard would look like it spins backwards. */
     static final double MAX_ROLL = 1.2;
 
@@ -61,4 +63,25 @@ final class GolemProjectile {
         f = Math.max(0, Math.min(1, f));
         return tight + (wide - tight) * (1 - f * f);
     }
+
+    /** The swoop off the back: bursts out, overshoots its spot a little and settles. 0 to 1 (peaks about 1.07 on the way). */
+    static double peel(double u) { return GolemAnim.easeOutBack(Math.max(0, Math.min(1, u)), 1.1); }
+
+    /** Charge level 0 to 1 {@code u} of the way through the charge: builds slowly, then quickly. */
+    static double charge(double u) { u = Math.max(0, Math.min(1, u)); return u * u * u; }
+
+    /** How far back a shard is drawn (0..1) {@code u} of the way through the lock: it eases back like a bowstring. */
+    static double pullBack(double u) { u = Math.max(0, Math.min(1, u)); return u * u; }
+
+    /**
+     * Where shard {@code i} of {@code n} hovers, relative to the Golem (x sideways, y up, z forward; negative z is behind
+     * it): a crescent over its shoulders, higher in the middle.
+     */
+    static double[] hoverSlot(int i, int n) {
+        double f = n <= 1 ? 0.5 : i / (double) (n - 1), a = Math.toRadians(-68 + 136 * f);
+        return new double[]{Math.sin(a) * 3.8, 8.2 + Math.cos(a) * 1.2, -2.6 - (1 - Math.cos(a)) * 0.6};
+    }
+
+    /** How far a falling rock has dropped (0..1) {@code u} of the way down: a slow start, a savage finish. */
+    static double rockDrop(double u) { u = Math.max(0, Math.min(1, u)); return u * u * (0.4 + 0.6 * u); }
 }

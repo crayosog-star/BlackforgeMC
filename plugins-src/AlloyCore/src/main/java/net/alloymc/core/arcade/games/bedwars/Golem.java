@@ -128,8 +128,8 @@ final class Golem {
     /** One shard of the volley, off one crystal: peels off, hangs, turns to its target, then whips forward. */
     private static final class Shard {
         final int part; final Player target; final int launchAt, fireAt;
-        BlockDisplay core, glass; Vector pos, from, hover, dir, axis, lockDir; boolean spawned, fired; int flyT, idx; double travelled; float spin;
-        Shard(int part, Player target, int launchAt, int fireAt, int idx) { this.part = part; this.target = target; this.launchAt = launchAt; this.fireAt = fireAt; this.idx = idx; }
+        BlockDisplay core, glass; Vector pos, from, hover, dir, axis, lockDir; double[] slot; boolean spawned, fired; int flyT, idx, n; double travelled; float spin;
+        Shard(int part, Player target, int launchAt, int fireAt, int idx, int n) { this.part = part; this.target = target; this.launchAt = launchAt; this.fireAt = fireAt; this.idx = idx; this.n = n; }
     }
 
     Golem(BedWarsMatch m, World world, Location home, Location breach, int playersBelow) {
@@ -1421,8 +1421,10 @@ final class Golem {
     }
 
     /**
-     * Every crystal on its back fires its own shard: top one first, one every 2 ticks. Each peels off along its crystal,
-     * hangs for a beat, turns to face its target and whips forward. The crystal is left a dim stub that grows back.
+     * Every crystal on its back fires its own shard, one every 2 ticks. Each swoops off its crystal to a spot above and
+     * behind the Golem, hovers there and charges (swelling, spinning up, light gathering in), turns onto its target, draws
+     * back like a bowstring, then crawls forward and whips away (time-remapped: slow, then quickly fast). The crystal is
+     * left a dim stub that grows back.
      * Shards are split between the marked players; 1 heart each, at most 3 hearts per player per volley.
      */
     private void volley() {
@@ -1432,7 +1434,7 @@ final class Golem {
             int every = (int) Math.round(2 / slow());
             for (int i = 0; i < sp.size(); i++) {
                 int launch = t + i * every, fire = launch + GolemProjectile.FIRE_DELAY;
-                shards.add(new Shard(sp.get(i), shardTargets.get(i % shardTargets.size()), launch, fire, i));
+                shards.add(new Shard(sp.get(i), shardTargets.get(i % shardTargets.size()), launch, fire, i, sp.size()));
                 volleyEnd = fire;
             }
             world.playSound(body.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_RESONATE, SoundCategory.HOSTILE, 3f, 0.6f);
@@ -1446,16 +1448,18 @@ final class Golem {
         return new Transformation(c, q, new Vector3f(w, w, len), new Quaternionf());
     }
 
-    private void shardLook(Shard s, Vector dir, float spin, int ticks) { shardLook(s, dir, spin, ticks, 1f); }
+    private void shardLook(Shard s, Vector dir, float spin, int ticks) { shardLook(s, dir, spin, ticks, 1f, 1f); }
 
-    /** Pose a shard's two parts: pointing along {@code dir}, rolled {@code spin} about its length, stretched into a streak when fast. */
-    private void shardLook(Shard s, Vector dir, float spin, int ticks, float stretch) {
+    private void shardLook(Shard s, Vector dir, float spin, int ticks, float stretch) { shardLook(s, dir, spin, ticks, stretch, 1f); }
+
+    /** Pose a shard's two parts: pointing along {@code dir}, rolled {@code spin} about its length, stretched into a streak when fast, swollen while charging. */
+    private void shardLook(Shard s, Vector dir, float spin, int ticks, float stretch, float swell) {
         for (BlockDisplay d : new BlockDisplay[]{s.core, s.glass}) {
             if (d == null || !d.isValid()) continue;
             boolean core = d == s.core;
             d.setInterpolationDelay(0);
             d.setInterpolationDuration(ticks);
-            d.setTransformation(shardTf(core ? 0.16f : 0.32f, (core ? 0.85f : 0.6f) * stretch, dir, spin));
+            d.setTransformation(shardTf((core ? 0.16f : 0.32f) * swell, (core ? 0.85f : 0.6f) * stretch * (1 + (swell - 1) * 0.7f), dir, spin));
         }
     }
 
@@ -1468,7 +1472,8 @@ final class Golem {
         Player p = s.target;
         Location to = p.getLocation().add(0, 1.0, 0);
         Vector v = p.getVelocity();
-        double[] a = GolemMath.leadAim(to.getX(), to.getY(), to.getZ(), v.getX(), v.getY(), v.getZ(), s.pos.distance(to.toVector()), 1.6, 0.6);
+        double dist = s.pos.distance(to.toVector());
+        double[] a = GolemMath.leadAim(to.getX(), to.getY(), to.getZ(), v.getX(), v.getY(), v.getZ(), dist, GolemMath.shardEffectiveSpeed(dist), 0.6);
         Vector dir = new Vector(a[0], a[1], a[2]).subtract(s.pos);
         return dir.lengthSquared() < 1e-4 ? new Vector(0, 0, 1) : dir.normalize();
     }
@@ -1485,13 +1490,30 @@ final class Golem {
             boolean gone = !s.core.isValid();
             if (!s.fired) {
                 int u = t - s.launchAt;
-                if (u <= GolemProjectile.PEEL) {   // peel off along the crystal, fast then easing to a stop, turning as it goes
-                    double e = GolemIntro.easeOut(u / (double) GolemProjectile.PEEL);
-                    s.pos = s.from.clone().add(s.hover.clone().subtract(s.from).multiply(e));
-                    s.spin += 0.15f + 0.5f * (float) (1 - e);
-                } else {   // hang there, drifting and slowly turning
-                    s.pos = s.hover.clone().add(new Vector(0, Math.sin(u * 0.6) * 0.04, 0));
-                    s.spin += 0.15f;
+                Vector hover = body != null ? local(s.slot[0], s.slot[1], s.slot[2]).toVector() : s.hover;   // it follows the Golem
+                s.hover = hover;
+                double c = 0;   // charge, 0..1
+                int cu = u - GolemProjectile.PEEL;
+                if (cu < 0) {   // fly off the back: bursts out, overshoots its spot a little, settles
+                    double e = GolemProjectile.peel(u / (double) GolemProjectile.PEEL);
+                    s.pos = s.from.clone().add(hover.clone().subtract(s.from).multiply(e)).add(new Vector(0, Math.sin(Math.PI * u / GolemProjectile.PEEL) * 0.9, 0));
+                    s.spin += 0.15f + 0.5f * (float) Math.max(0, 1 - e);
+                } else {   // hover and charge: it trembles harder, spins up and swells as the light gathers in
+                    c = GolemProjectile.charge(cu / (double) GolemProjectile.CHARGE);
+                    double sh = 0.04 + 0.1 * c;
+                    s.pos = hover.clone().add(new Vector(Math.sin(cu * 0.5) * 0.12 + Math.sin(t * 2.7 + s.idx) * sh, Math.sin(cu * 0.6) * 0.08 + Math.sin(t * 3.1 + s.idx * 2) * sh, Math.sin(t * 2.3 + s.idx * 3) * sh));
+                    s.spin += 0.15f + 0.9f * (float) c;
+                    if (t % 2 == 0 && c > 0.04) {   // light gathers in on it
+                        double rad = 1.3 * (1 - c) + 0.15;
+                        for (int k = 0; k < 2; k++) {
+                            Vector off = new Vector(rnd.nextGaussian(), rnd.nextGaussian(), rnd.nextGaussian());
+                            if (off.lengthSquared() < 1e-6) continue;
+                            off.normalize().multiply(rad);
+                            world.spawnParticle(Particle.DUST_COLOR_TRANSITION, s.pos.getX() + off.getX(), s.pos.getY() + off.getY(), s.pos.getZ() + off.getZ(), 1, 0, 0, 0, 0,
+                                new Particle.DustTransition(Color.fromRGB(oreRgb()), Color.WHITE, 0.9f));
+                        }
+                    }
+                    if (s.idx % 3 == 0 && t % 3 == 0) world.playSound(s.pos.toLocation(world), Sound.BLOCK_AMETHYST_BLOCK_RESONATE, SoundCategory.HOSTILE, 0.6f, (float) (0.6 + 1.3 * c));   // the hum climbs as it charges
                 }
                 // then a smooth turn onto the target (it keeps tracking), and a short lock so a quick player can dodge
                 int turnStart = s.fireAt - GolemProjectile.LOCK - GolemProjectile.TURN, lockAt = s.fireAt - GolemProjectile.LOCK;
@@ -1502,14 +1524,15 @@ final class Golem {
                     double[] v = GolemProjectile.slerp(new double[]{s.axis.getX(), s.axis.getY(), s.axis.getZ()}, new double[]{to.getX(), to.getY(), to.getZ()}, GolemProjectile.turn(t - turnStart));
                     facing = new Vector(v[0], v[1], v[2]);
                 }
-                shardLook(s, facing, s.spin, 1);
+                if (t >= lockAt) s.pos = s.pos.clone().subtract(facing.clone().multiply(0.8 * GolemProjectile.pullBack((t - lockAt + 1) / (double) GolemProjectile.LOCK)));   // drawn back like a bowstring
+                shardLook(s, facing, s.spin, 1, 1f, (float) (1 + 0.5 * c));
                 if (t >= s.fireAt) {
                     s.fired = true;
                     s.dir = s.lockDir != null ? s.lockDir.clone() : s.axis.clone();
                     Location at = s.pos.toLocation(world);
                     world.playSound(at, Sound.ITEM_TRIDENT_THROW, SoundCategory.HOSTILE, 1f, 1.7f);
                     world.playSound(at, Sound.BLOCK_AMETHYST_CLUSTER_BREAK, SoundCategory.HOSTILE, 1.2f, 1.5f);
-                    world.spawnParticle(Particle.END_ROD, at, 5, 0.05, 0.05, 0.05, 0.08);
+                    world.spawnParticle(Particle.END_ROD, at, 8, 0.05, 0.05, 0.05, 0.12);
                 }
             } else {
                 // flight: creeps for a moment, then whips forward (time-remapped); it rolls faster and stretches into a streak as it speeds up
@@ -1553,7 +1576,8 @@ final class Golem {
         if (s.axis.lengthSquared() < 1e-6) s.axis = new Vector(0, 1, 0);
         s.axis.normalize();
         s.from = tipW.toVector();
-        s.hover = s.from.clone().add(s.axis.clone().multiply(1.6)).add(new Vector(0, 0.4, 0));
+        s.slot = GolemProjectile.hoverSlot(s.idx, s.n);   // a spot above and behind the Golem, in its own frame
+        s.hover = local(s.slot[0], s.slot[1], s.slot[2]).toVector();
         s.pos = s.from.clone();
         BlockData coreB = crystalCore(), glassB = crystalGlass();
         int glowRgb = oreRgb();
@@ -1657,18 +1681,19 @@ final class Golem {
                 rockShown.put(r, rock);
                 world.spawnParticle(Particle.FALLING_DUST, top, 8, 0.4, 0.1, 0.4, Bukkit.createBlockData(Material.TUFF));
             }
-            if (left < 15 && left > 0) {   // gravity: slow off the ceiling, fast at the floor
+            if (left < 15 && left > 0) {   // hangs at the ceiling, trembling, then drops: a slow start, a savage finish
                 BlockDisplay rock = rockShown.get(r);
-                double u = (14 - left) / 14.0;
+                double u = left > 10 ? 0 : (10 - left) / 10.0;
                 if (rock != null && rock.isValid()) {
-                    Location at = spot.clone().add(0, 16.9 * (1 - u * u), 0);
+                    double wob = left > 10 ? Math.sin(t * 3.3) * 0.1 : 0;
+                    Location at = spot.clone().add(wob, 16.9 * (1 - GolemProjectile.rockDrop(u)), -wob);
                     rock.teleport(at);
-                    Quaternionf q = rockTurn(r, GolemProjectile.rockSpin(u));   // it tumbles all the way down
+                    Quaternionf q = rockTurn(r, GolemProjectile.rockSpin(u) + wob);   // it tumbles all the way down
                     rock.setInterpolationDelay(0);
                     rock.setInterpolationDuration(1);
                     rock.setTransformation(new Transformation(new Vector3f(-0.5f).rotate(new Quaternionf(q)), q, new Vector3f(1f), new Quaternionf()));
                     world.spawnParticle(Particle.FALLING_DUST, at, 2, 0.3, 0.4, 0.3, Bukkit.createBlockData(Material.TUFF));
-                    if (left == 10) world.playSound(spot.clone().add(0, 6, 0), Sound.ENTITY_PHANTOM_SWOOP, SoundCategory.HOSTILE, 1.2f, 0.6f);
+                    if (left == 9) world.playSound(spot.clone().add(0, 6, 0), Sound.ENTITY_PHANTOM_SWOOP, SoundCategory.HOSTILE, 1.2f, 0.6f);
                 }
             }
             if (left <= 0) {
