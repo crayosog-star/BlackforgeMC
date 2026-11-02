@@ -467,13 +467,13 @@ final class BedWarsMatch extends Match {
     private void golemSecond() {
         if (golemWakeAt > 0 && golem == null) {
             if (elapsed == golemWakeAt - 30) {
-                broadcast(prefix() + "<#ff3fa4>The ground shakes... <white>the Golem wakes under the Core in 30 seconds.");
+                broadcast(prefix() + "<#ff3fa4>The walls of the Undercroft shake... <white>the Golem wakes in 30 seconds.");
                 world.playSound(pad, Sound.ENTITY_WARDEN_HEARTBEAT, SoundCategory.HOSTILE, 4f, 0.5f);
             }
             if (elapsed >= golemWakeAt) {
                 golemWakeAt = -1;
-                golem = new Golem(this, world, pad.clone(), undercroftPlayers(pad).size());
-                broadcast(prefix() + "<#ff3fa4><bold>THE GOLEM HAS WOKEN</bold> <gray>in the Undercroft. The team that hurts it most wins the <#6cff7a>Golem's Heart<gray>.");
+                golem = new Golem(this, world, pad.clone(), point("golem_breach"), undercroftPlayers(pad).size());
+                broadcast(prefix() + "<#ff3fa4><bold>THE GOLEM IS BREAKING OUT</bold> <gray>of the Undercroft wall. The team that hurts it most wins the <#6cff7a>Golem's Heart<gray>.");
             }
         }
         for (var e : heartUntil.entrySet()) {

@@ -58,11 +58,18 @@ public final class ForgeArsenal {
     static ForgeArsenal get() { return installed; }
 
     private Rimelock rimelock;
+    private final Map<UUID, Long> darkened = new HashMap<>();
 
     private ForgeArsenal(AlloyCore plugin, Arcade arcade) {
         Predicate<Location> inMatch = l -> inForgeWars(arcade, l);
         GaiaPotion gaia = new GaiaPotion(plugin, (p, l) -> inMatch.test(l));
         DarknessPotion darkness = new DarknessPotion(plugin, inMatch);
+        darkness.onHit(le -> {   // the Golem (or any non-player) caught in the splash: it picks this up on its next tick
+            if (le instanceof Player) return;
+            long now = System.currentTimeMillis();
+            darkened.values().removeIf(at -> now - at > 10_000);
+            darkened.put(le.getUniqueId(), now);
+        });
         Surge surge = new Surge(plugin, inMatch);
         GaleBellows bellows = new GaleBellows(plugin);   // hits only where PvP works, so the match decides who can be hit
         GodsEye eye = new GodsEye(plugin, inMatch);
@@ -93,6 +100,9 @@ public final class ForgeArsenal {
         Price price = PRICES.stream().filter(p -> p.id().equals(id)).findFirst().orElseThrow();
         abilities.put(id, new Ability(price, item, is));
     }
+
+    /** True once if a Potion of Darkness splashed this entity since the last ask (the Golem: it's blinded). */
+    boolean takeDarkened(UUID id) { return darkened.remove(id) != null; }
 
     /** A Rimelock cage reaches something {@code reach} blocks round {@code l} (the Golem: it's slowed while in the cold). */
     boolean rimelockTouches(Location l, double reach) { return rimelock != null && rimelock.touches(l, reach); }

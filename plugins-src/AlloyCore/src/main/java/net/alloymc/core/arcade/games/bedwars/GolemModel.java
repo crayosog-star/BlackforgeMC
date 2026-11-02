@@ -52,12 +52,12 @@ final class GolemModel {
         // cracked chest plate (falls off in phase 2) and the heart-stone in front of it
         l.add(box(Group.PLATE, cracked, -1.2, 1.4, 1.0, 1.2, 2.8, 1.22));
         l.add(new Part(Group.HEART, "minecraft:verdant_froglight", 0, 2.1, 1.28, 0.55, 0.55, 0.12, 0, 0, HEART_GREEN, true));
-        // low, wide head out in front of the shoulders: heavy brow, jaw, two glowing eyes under the brow
+        // low, wide head out in front of the shoulders: heavy brow, jaw, two glowing eyes set into the face under the brow
         l.add(box(Group.HEAD, cobble, -0.75, 3.25, 1.75, 0.75, 4.0, 2.5));
         l.add(box(Group.HEAD, stone, -1.0, 4.0, 1.7, 1.0, 4.3, 2.8));
         l.add(box(Group.HEAD, cobble, -0.5, 3.0, 2.0, 0.5, 3.25, 2.5));
         for (int s : new int[]{-1, 1})
-            l.add(new Part(Group.HEAD, "minecraft:verdant_froglight", s * 0.45, 3.6, 2.52, 0.22, 0.16, 0.06, 0, 0, HEART_GREEN, true));
+            l.add(new Part(Group.HEAD, "minecraft:verdant_froglight", s * 0.45, 3.6, 2.475, 0.24, 0.16, 0.07, 0, 0, -1, true));   // set into the face (flush), lit, no outline
         // long arms, knuckle-walking: shoulder, upper arm, forearm, fist
         for (int s : new int[]{-1, 1}) {
             Group g = s < 0 ? Group.ARM_R : Group.ARM_L;   // -x is the golem's right (it faces +z)

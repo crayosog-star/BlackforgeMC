@@ -46,6 +46,7 @@ public final class DarknessPotion implements Listener, Hackable {
     private final Predicate<Location> pvpAt;          // where players can be darkened (supplied by each server)
     private final Map<UUID, Long> readyAt = new HashMap<>(), darkUntil = new HashMap<>(), immuneUntil = new HashMap<>(), confusedUntil = new HashMap<>();
     private final Random rnd = new Random();
+    private final List<java.util.function.Consumer<LivingEntity>> hitHooks = new ArrayList<>();
 
     public DarknessPotion(AlloyCore plugin, Predicate<Location> pvpAt) {
         this.plugin = plugin;
@@ -131,8 +132,12 @@ public final class DarknessPotion implements Listener, Hackable {
         for (LivingEntity le : hit) {
             if (le instanceof Player p) darken(p, now);
             else if (le instanceof Mob m) confuse(m, now);
+            for (var f : hitHooks) f.accept(le);
         }
     }
+
+    /** Also run {@code f} for every living thing a Potion of Darkness splashes (after its own effects). Forge Wars: the Golem. */
+    public void onHit(java.util.function.Consumer<LivingEntity> f) { hitHooks.add(f); }
 
     // ------------------------------------------------------------------ players: the dark + the audio glitch
 
