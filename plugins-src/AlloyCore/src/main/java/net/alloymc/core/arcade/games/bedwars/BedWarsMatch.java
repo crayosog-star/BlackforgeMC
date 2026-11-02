@@ -35,6 +35,13 @@ final class BedWarsMatch extends Match {
     // Launch pad (Forge Wars only): the slime pad on the cave floor throws you up the shaft onto the plaza
     private Location pad, padTop;
     private final Map<UUID, Integer> riding = new HashMap<>(), padCooldown = new HashMap<>(), noFallUntil = new HashMap<>();
+    // The Golem (Forge Wars only): the Undercroft's mini boss, when it next wakes (match second, -1 = not scheduled),
+    // which teams hold the Golem's Heart until when, and who has a free premium Black Market deal until when
+    static final int DIAMOND_II = 360;
+    private Golem golem;
+    private int golemWakeAt = -1;
+    private final Map<Team, Integer> heartUntil = new HashMap<>();
+    private final Map<UUID, Integer> voucherUntil = new HashMap<>();
     private final Map<UUID, Integer> armour = new HashMap<>(), pick = new HashMap<>(), axe = new HashMap<>(), respawnAt = new HashMap<>();
     private final Set<UUID> shears = new HashSet<>();
     private final List<TextDisplay> genLabels = new ArrayList<>();
@@ -81,6 +88,7 @@ final class BedWarsMatch extends Match {
         pad = arsenal ? point("launch_pad") : null;
         padTop = pad != null ? point("core") : null;
         if (padTop == null) pad = null;
+        if (pad != null && settings.i("golem-enabled", 1) != 0) golemWakeAt = DIAMOND_II;   // first wakes with diamond generators II
         Location bm = arsenal ? point("black_market") : null;
         if (bm != null) { marketNpc = npc(bm, "<dark_purple><bold>BLACK MARKET", Villager.Profession.CLERIC).getUniqueId(); restockMarket(false); }
         // starting emeralds (a Forge Wars testing setting; 0 = none). Only at the start, not on respawn.
@@ -110,6 +118,7 @@ final class BedWarsMatch extends Match {
         p.teleport(teamPoint(t, "spawn"));
         kit(p);
         applyUpgrades(t);
+        if (heartUntil.getOrDefault(t, -1) > elapsed) p.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, 20 * 120, 1, false, true));   // Golem's Heart
     }
 
     private void kit(Player p) {
@@ -207,6 +216,7 @@ final class BedWarsMatch extends Match {
     @Override protected void fastTick() {
         ticks++;
         if (pad != null) launchPad();
+        if (golem != null) { golem.tick(); if (golem.removed()) golem = null; }
         int cap = settings.i("generator-cap", 48);
         for (Team t : teams) {
             if (t.members.stream().noneMatch(alive::contains)) continue;
@@ -236,7 +246,8 @@ final class BedWarsMatch extends Match {
             td.text(Ui.mm(dia ? "<aqua><bold>Diamond " + roman(diamondLevel) + "</bold><newline><gray>in <white>" + diamondTimer + "s" : "<green><bold>Emerald " + roman(emeraldLevel) + "</bold><newline><gray>in <white>" + emeraldTimer + "s"));
         }
         // timeline
-        if (elapsed == 360) { diamondLevel = 2; broadcast(prefix() + "<aqua>Diamond generators are now level II!"); }
+        if (elapsed == DIAMOND_II) { diamondLevel = 2; broadcast(prefix() + "<aqua>Diamond generators are now level II!"); }
+        golemSecond();
         if (elapsed == 720) { emeraldLevel = 2; broadcast(prefix() + "<green>Emerald generators are now level II!"); }
         if (elapsed == 1080) { diamondLevel = 3; broadcast(prefix() + "<aqua>Diamond generators are now level III!"); }
         if (elapsed == 1440) { emeraldLevel = 3; broadcast(prefix() + "<green>Emerald generators are now level III!"); }
@@ -348,6 +359,7 @@ final class BedWarsMatch extends Match {
 
     @Override protected void onInteractEntity(Player p, PlayerInteractEntityEvent e) {
         UUID id = e.getRightClicked().getUniqueId();
+        if (golem != null && golem.owns(e.getRightClicked())) { e.setCancelled(true); return; }   // no iron-ingot "repairs"
         if (e.getHand() != EquipmentSlot.HAND) return;
         if (shopNpcs.contains(id)) { e.setCancelled(true); BedWarsShop.openShop(this, p); }
         else if (upgradeNpcs.contains(id)) { e.setCancelled(true); BedWarsShop.openUpgrades(this, p); }
@@ -427,6 +439,74 @@ final class BedWarsMatch extends Match {
     }
 
     int armourTier(Player p) { return armour.getOrDefault(p.getUniqueId(), 0); }
+
+    // ------------------------------------------------------------------ the Golem
+
+    /** Players fighting in the Undercroft: alive, in survival, on the hall floor, ramps or ledges (not up on the Core). */
+    List<Player> undercroftPlayers(Location home) {
+        List<Player> out = new ArrayList<>();
+        for (Team t : teams) for (Player p : online(t.members)) {
+            if (!isAlive(p) || p.getGameMode() != GameMode.SURVIVAL) continue;
+            Location l = p.getLocation();
+            if (l.getWorld() != home.getWorld() || l.getY() < home.getY() - 2 || l.getY() > home.getY() + 21) continue;
+            if (Math.hypot(l.getX() - home.getX(), l.getZ() - home.getZ()) <= 17) out.add(p);
+        }
+        return out;
+    }
+
+    /** Once a second: warn 30 s before the Golem wakes, wake it, keep the Golem's Heart's Haste on its team. */
+    private void golemSecond() {
+        if (golemWakeAt > 0 && golem == null) {
+            if (elapsed == golemWakeAt - 30) {
+                broadcast(prefix() + "<#ff3fa4>The ground shakes... <white>the Golem wakes under the Core in 30 seconds.");
+                world.playSound(pad, Sound.ENTITY_WARDEN_HEARTBEAT, SoundCategory.HOSTILE, 4f, 0.5f);
+            }
+            if (elapsed >= golemWakeAt) {
+                golemWakeAt = -1;
+                golem = new Golem(this, world, pad.clone(), undercroftPlayers(pad).size());
+                broadcast(prefix() + "<#ff3fa4><bold>THE GOLEM HAS WOKEN</bold> <gray>in the Undercroft. The team that hurts it most wins the <#6cff7a>Golem's Heart<gray>.");
+            }
+        }
+        for (var e : heartUntil.entrySet()) {
+            if (e.getValue() <= elapsed) continue;
+            for (Player p : online(e.getKey().members))
+                if (isAlive(p) && p.getGameMode() == GameMode.SURVIVAL) p.addPotionEffect(new PotionEffect(PotionEffectType.HASTE, 40, 0, false, false));
+        }
+    }
+
+    /** The Golem fell: reward the team that hurt it most, scatter its loot, and wake the next one later. */
+    void golemDefeated(Team best, UUID topPlayer, Location at) {
+        int heart = settings.i("golem-heart-seconds", 180);
+        golemWakeAt = elapsed + settings.i("golem-respawn-seconds", 240);
+        for (int i = 0; i < 12; i++) world.dropItemNaturally(at.clone().add(0, 1, 0), new ItemStack(Material.EMERALD));
+        for (int i = 0; i < 6; i++) world.dropItemNaturally(at.clone().add(0, 1, 0), new ItemStack(Material.DIAMOND));
+        if (best == null) { broadcast(prefix() + "<#ff3fa4>The Golem crumbles."); return; }
+        heartUntil.put(best, elapsed + heart);
+        for (Player p : online(best.members))
+            if (isAlive(p) && p.getGameMode() == GameMode.SURVIVAL) p.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, 20 * 120, 1, false, true));
+        Player top = topPlayer == null ? null : Bukkit.getPlayer(topPlayer);
+        if (top != null) {
+            voucherUntil.put(topPlayer, elapsed + 60);
+            arcade.stats().add(topPlayer, game.id, "golem_kills", 1);
+            top.sendMessage(Ui.mm("<#ff3fa4>You hit the Golem hardest! <white>Your next premium Black Market deal is free <gray>(60 s)."));
+        }
+        broadcast(prefix() + "<#ff3fa4><bold>THE GOLEM FALLS!</bold> " + best.name() + " <gray>team takes the <#6cff7a>Golem's Heart<gray>: +4 hearts on every respawn and Haste for " + heart / 60 + " minutes.");
+        title("<#ff3fa4><bold>GOLEM DEFEATED", best.color.mm + best.color.label + " <gray>team wins the Golem's Heart");
+    }
+
+    /** A free premium Black Market deal, won by hitting the Golem hardest (good for 60 s). */
+    boolean hasGolemVoucher(Player p) { return voucherUntil.getOrDefault(p.getUniqueId(), -1) > elapsed; }
+
+    void spendGolemVoucher(Player p) { voucherUntil.remove(p.getUniqueId()); }
+
+    @Override protected void onEntityDamage(org.bukkit.event.entity.EntityDamageEvent e, Player attacker) {
+        if (golem != null && golem.owns(e.getEntity())) golem.onDamaged(e, attacker);
+        else e.setCancelled(true);
+    }
+
+    @Override protected void onCleanup() {
+        if (golem != null) { golem.remove(); golem = null; }
+    }
 
     @Override protected void onDeath(Player p, Player killer, String how) {
         riding.remove(p.getUniqueId());
