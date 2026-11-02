@@ -42,7 +42,7 @@ final class ForgeWarsMaps {
         d.display = name; d.description = desc; d.teams = teams;
         d.minPlayers = 2; d.maxPlayers = teams * 4;
         d.variants.addAll(java.util.List.of(variants));
-        d.builderVersion = 4;   // v4: Black Market grotto off the north wall (v3: the Undercroft); a bump makes servers rebuild the template
+        d.builderVersion = 5;   // v5: easter eggs (v4: Black Market grotto, v3: the Undercroft); a bump makes servers rebuild the template
         int ext = ringR + 26;
         d.bounds = Box.of(-ext, -56, -ext, ext, 40, ext);
         d.voidY = -50;           // below the bottom of the Core's rock: the cave floor (-27) must be well above the void
@@ -50,6 +50,7 @@ final class ForgeWarsMaps {
 
         core(k, d, teams, t, id.hashCode());
         for (int i = 0; i < teams; i++) base(k, d, i, teams, ringR, t);
+        diamondVein(k, d, teams, ringR);
         d.waiting = d.spectator;
         return new BuiltMap(d, k.c);
     }
@@ -70,7 +71,8 @@ final class ForgeWarsMaps {
             for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) k.set(e[0] + dx, 1, e[1] + dz, dx == 0 && dz == 0 ? "emerald_block" : t.accent());
             d.add("emerald_generators", Pt.of(e[0] + 0.5, 2, e[1] + 0.5));
         }
-        new Ruin(k, seed, teams, em).build();
+        Ruin ruin = new Ruin(k, seed, teams, em);
+        ruin.build();
         Cave c = new Cave(k, seed);
         c.carve();
         c.ledges();
@@ -79,6 +81,51 @@ final class ForgeWarsMaps {
         c.shaft(d);
         c.market(d);
         c.overgrow();
+        secrets(k, d, ruin, c);
+    }
+
+    // ------------------------------------------------------------------ easter eggs (see ForgeLore)
+
+    static final String VEIN = "pearlescent_froglight[axis=y]", CRACK = "cracked_stone_bricks";
+
+    /**
+     * The Smith's three hammers (top of the tallest tower, the cap of the fairy-ring mushroom, the Smith's Rest), the
+     * pink ore veins that tell the Golem's story, and two cracked walls: the Smith's Rest in the Undercroft wall and
+     * the song vault off the east crypt stairs. Cracked stone bricks appear nowhere else underground, so a cracked
+     * brick down there is always a secret. Veins are listed in story order (the diamond-island vein, the last line,
+     * is added after the islands are built).
+     */
+    private static void secrets(MapKit k, MapDef d, Ruin r, Cave c) {
+        int[] t = r.tallTower;
+        for (int y = t[1] + 1; y <= t[1] + 2; y++) k.set(t[0], y, t[2], "air");
+        d.add("easter.hammer", Pt.of(t[0] + 0.5, t[1] + 1, t[2] + 0.5));
+        int[] f = r.fairy;
+        for (int y = 7; y <= 8; y++) k.set(f[0], y, f[1], "air");
+        d.add("easter.hammer", Pt.of(f[0] + 0.5, 7, f[1] + 0.5));
+        // vein 1: glowing through the podzol of the fairy ring
+        int[] v = {f[0] + 5, f[1]};
+        search:
+        for (int dx = -5; dx <= 5; dx++) for (int dz = -5; dz <= 5; dz++) {
+            double dd = Math.hypot(dx, dz);
+            if (dd >= 4.2 && dd <= 5.2 && String.valueOf(k.get(f[0] + dx, 0, f[1] + dz)).startsWith("minecraft:podzol")) { v = new int[]{f[0] + dx, f[1] + dz}; break search; }
+        }
+        k.set(v[0], 0, v[1], VEIN);
+        k.set(v[0], 1, v[1], "amethyst_cluster[facing=up]");
+        d.add("easter.vein", Pt.of(v[0], 0, v[1]));
+        c.grottoVein(d);
+        c.smithsRest(d);
+        c.vault(d);
+    }
+
+    /** The last vein: a glowing pink tip hanging under the diamond island between the first two teams. */
+    private static void diamondVein(MapKit k, MapDef d, int teams, int ringR) {
+        double b2 = -Math.PI / 2 + Math.PI / teams;
+        int dx = (int) Math.round(Math.cos(b2) * (ringR + 10)), dz = (int) Math.round(Math.sin(b2) * (ringR + 10));
+        int low = 0;
+        while (low > -40 && !air(k, dx, low - 1, dz) && k.get(dx, low - 1, dz) != null) low--;
+        k.set(dx, low - 1, dz, VEIN);
+        k.set(dx, low - 2, dz, "pink_stained_glass");
+        d.add("easter.vein", Pt.of(dx, low - 1, dz));
     }
 
     /** Solid rock under the Core, tapering to a point, so the cave and tunnels never open into the void. */
@@ -113,6 +160,8 @@ final class ForgeWarsMaps {
         final double[] teamAng;
         final int[][] pedestals;
         final java.util.Set<Long> built = new java.util.HashSet<>();   // castle blocks, for the vines
+        int[] tallTower;   // x, top floor y, z of the tallest tower (a hammer waits on top)
+        int[] fairy;       // x, z of the fairy ring's giant mushroom
 
         Ruin(MapKit k, long seed, int teams, int[][] pedestals) {
             this.k = k; this.seed = seed; this.pedestals = pedestals;
@@ -187,6 +236,7 @@ final class ForgeWarsMaps {
             for (int i = 0; i < 4; i++) {
                 double ang = teamAng[0] + Math.PI / teamAng.length + i * Math.PI / 2;
                 int cx = (int) Math.round(Math.cos(ang) * WALL_MID), cz = (int) Math.round(Math.sin(ang) * WALL_MID), h = hs[i];
+                if (i == 0) tallTower = new int[]{cx, h, cz};
                 int ox, oz;   // outward, snapped to an axis
                 if (Math.abs(Math.cos(ang)) >= Math.abs(Math.sin(ang))) { ox = (int) Math.signum(Math.cos(ang)); oz = 0; } else { ox = 0; oz = (int) Math.signum(Math.sin(ang)); }
                 for (int dx = -4; dx <= 4; dx++) for (int dz = -4; dz <= 4; dz++) {
@@ -293,6 +343,7 @@ final class ForgeWarsMaps {
             }
             cherry(tx, tz);
             fairyRing(rx, rz);
+            fairy = new int[]{rx, rz};
         }
 
         void cherry(int cx, int cz) {
@@ -519,7 +570,7 @@ final class ForgeWarsMaps {
             for (int z : new int[]{-2, 2}) {
                 if (y + 1 > 0) { k.set(x, y, z, "mossy_stone_bricks"); continue; }   // the open top steps: the surface rail covers it
                 for (int h = 0; h <= 3; h++) if (y + h <= 0)
-                    k.set(x, y + h, z, h == 2 && s % 3 == 1 ? "shroomlight" : k.rnd.nextInt(5) == 0 ? "cracked_stone_bricks" : "mossy_stone_bricks");
+                    k.set(x, y + h, z, h == 2 && s % 3 == 1 ? "shroomlight" : k.rnd.nextInt(5) == 0 ? "mossy_cobblestone" : "mossy_stone_bricks");
             }
         }
 
@@ -584,7 +635,7 @@ final class ForgeWarsMaps {
                     if (rock) { k.set(x, sy + 3, z, "mossy_stone_bricks"); top.put(col(x, z), sy + 2); grotto.add(col(x, z)); }
                 }
                 for (int x : new int[]{-3, 3}) if (!inCave(x, z) || top.get(col(x, z)) < sy + 3)
-                    for (int y = sy; y <= sy + 3; y++) k.set(x, y, z, y == sy + 1 && Math.floorMod(z, 3) == 0 ? "shroomlight" : k.rnd.nextInt(4) == 0 ? "cracked_stone_bricks" : "mossy_stone_bricks");
+                    for (int y = sy; y <= sy + 3; y++) k.set(x, y, z, y == sy + 1 && Math.floorMod(z, 3) == 0 ? "shroomlight" : k.rnd.nextInt(4) == 0 ? "mossy_cobblestone" : "mossy_stone_bricks");
             }
             // the stall at the back of the chamber, counter facing the passage
             int cz = GROTTO_Z - 1;
@@ -663,6 +714,75 @@ final class ForgeWarsMaps {
                 else if (d > 9 && r < 49 && !grotto.contains(e.getKey())) k.set(x, sy, z, k.rnd.nextBoolean() ? "azalea" : "flowering_azalea");
                 else if (r < 53) k.set(x, sy, z, "pink_petals[facing=north,flower_amount=" + (2 + k.rnd.nextInt(3)) + "]");
             }
+        }
+
+        /** First column south of the middle (z > 0) at this x that isn't part of the cave. */
+        int firstRock(int x) { int z = 0; while (z < 24 && inCave(x, z)) z++; return z; }
+
+        /** Vein 2: pink ore glowing in the grotto's west wall, by the Black Market. */
+        void grottoVein(MapDef d) {
+            int sy = CAVE_FLOOR + 1, z = GROTTO_Z + 2;
+            for (int x = -3; x >= -10; x--) {
+                if (air(k, x, sy + 1, z)) continue;
+                k.set(x, sy + 1, z, VEIN);
+                k.set(x - 1, sy + 2, z, VEIN);
+                d.add("easter.vein", Pt.of(x, sy + 1, z));
+                return;
+            }
+        }
+
+        /**
+         * The Smith's Rest: a sealed workshop behind a cracked wall in the south side of the hall, at floor level.
+         * Inside: the Smith's anvil with the third hammer over it, a smithing table, a cold blast furnace, the Smith's
+         * skull among candles, and pink ore (vein 3) breaking through the back wall. Always at least one block of rock
+         * between the room and the hall, so the only way in is through the crack.
+         */
+        void smithsRest(MapDef d) {
+            int fy = CAVE_FLOOR, sy = fy + 1, door = firstRock(0), edge = door;
+            for (int x = -3; x <= 3; x++) edge = Math.max(edge, firstRock(x));
+            int z0 = edge + 2, z1 = z0 + 3;   // the room's floor runs z0..z1, x -2..2
+            for (int x = -3; x <= 3; x++) for (int z = z0 - 1; z <= z1 + 1; z++) for (int y = fy; y <= sy + 3; y++) {
+                boolean inside = Math.abs(x) <= 2 && z >= z0 && z <= z1 && y >= sy && y <= sy + 2;
+                k.set(x, y, z, inside ? "air" : y == fy ? "smooth_stone" : k.rnd.nextInt(4) == 0 ? "mossy_stone_bricks" : "stone_bricks");
+            }
+            // from the hall: the cracked wall, then a short passage into the room
+            for (int z = door + 1; z < z0; z++) for (int y = sy; y <= sy + 1; y++) k.set(0, y, z, "air");
+            for (int y = sy; y <= sy + 1; y++) k.set(0, y, door, CRACK);
+            for (int y = sy; y <= sy + 1; y++) k.set(0, y, door - 1, "air");   // no bush in front of it
+            d.add("easter.crack", Pt.of(0, sy, door));
+            k.set(0, sy, z1, "chipped_anvil[facing=east]");
+            d.add("easter.hammer", Pt.of(0.5, sy + 1, z1 + 0.5));
+            k.set(-2, sy, z1, "smithing_table");
+            k.set(2, sy, z1, "blast_furnace[facing=north,lit=false]");
+            k.set(2, sy, z0 + 1, "skeleton_skull[rotation=8]");
+            k.set(2, sy, z0, "candle[lit=true,candles=3]");
+            k.set(1, sy, z0 + 1, "candle[lit=true,candles=1]");
+            k.set(0, sy + 2, z0 + 1, "lantern[hanging=true]");
+            k.set(-2, sy + 2, z0, "cobweb");
+            k.set(2, sy + 2, z1, "cobweb");
+            k.set(-1, sy + 1, z1 + 1, VEIN);
+            k.set(1, sy + 2, z1 + 1, VEIN);
+            d.add("easter.vein", Pt.of(-1, sy + 1, z1 + 1));
+        }
+
+        /**
+         * The song vault: a little room behind a cracked brick in the south wall of the east crypt stairs, six steps
+         * down. A jukebox inside plays the Smith's Song.
+         */
+        void vault(MapDef d) {
+            int s = 6, x0 = TUNNEL_TOP - s, y = -s;   // the step: stairs at y, so you walk in at y + 1
+            for (int x = x0 - 2; x <= x0 + 2; x++) for (int z = 3; z <= 6; z++) for (int yy = y; yy <= y + 4; yy++) {
+                boolean inside = Math.abs(x - x0) <= 1 && z <= 5 && yy >= y + 1 && yy <= y + 3;
+                k.set(x, yy, z, inside ? "air" : yy == y ? "mossy_stone_bricks" : k.rnd.nextInt(4) == 0 ? "mossy_cobblestone" : "mossy_stone_bricks");
+            }
+            for (int yy = y + 1; yy <= y + 2; yy++) k.set(x0, yy, 2, CRACK);
+            d.add("easter.crack", Pt.of(x0, y + 1, 2));
+            k.set(x0, y + 1, 5, "jukebox");
+            d.point("easter.jukebox", Pt.of(x0, y + 1, 5));
+            k.set(x0 - 1, y + 1, 5, "decorated_pot");
+            k.set(x0 + 1, y + 1, 5, "candle[lit=true,candles=4]");
+            k.set(x0 + 1, y + 1, 3, "lantern[hanging=false]");
+            k.set(x0 - 1, y + 3, 5, "cobweb");
         }
     }
 

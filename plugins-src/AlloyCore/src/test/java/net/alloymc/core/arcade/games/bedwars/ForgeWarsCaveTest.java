@@ -136,6 +136,12 @@ class ForgeWarsCaveTest {
             return l;
         }
 
+        /** Column (x, z) is passable from standing height {@code low} up to a body standing at {@code high} (both doubled). */
+        boolean open(int x, int z, int low, int high) {
+            for (int y = (int) Math.ceil(low / 2.0); y <= (int) Math.floor(high / 2.0 + 1.8); y++) if (!passable(c.get(x, y, z))) return false;
+            return true;
+        }
+
         static long key(int x, int s2, int z) { return (((long) (x + 512)) << 40) | (((long) (s2 + 4096)) << 20) | (z + 512); }
 
         boolean has(Set<Long> r, int x, int y, int z) { return r.contains(key(x, y * 2, z)); }
@@ -157,6 +163,7 @@ class ForgeWarsCaveTest {
                         boolean stair = s % 2 != 0 && String.valueOf(c.get(nx, Math.floorDiv(s, 2), nz)).contains("stairs");
                         if (s - n[1] > (stair ? Math.max(rise, 2) : rise)) continue;
                         if (s < n[1] && st.stream().anyMatch(o -> o > s && o <= n[1])) continue;   // you land on the first stand below
+                        if (s < n[1] && !open(nx, nz, s, n[1])) continue;   // a drop needs open air from where you step in down to where you land
                         if (seen.add(key(nx, s, nz))) q.add(new int[]{nx, s, nz});
                     }
                 }
