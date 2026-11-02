@@ -25,7 +25,7 @@ final class BedWarsMaps {
         MapDef d = new MapDef("bedwars", id);
         d.display = name; d.description = desc; d.teams = teams;
         d.minPlayers = 2; d.maxPlayers = teams * 4;
-        d.builderVersion = 2;
+        d.builderVersion = 3;   // v3: lamp posts use iron_chain (26.x renamed "chain", which pasted as stone); a bump makes servers rebuild the template
         int ext = ringR + 24;
         d.bounds = Box.of(-ext, -40, -ext, ext, 40, ext);
         d.voidY = -22;
@@ -96,7 +96,7 @@ final class BedWarsMaps {
             }
             // decoration off the platform
             if (!t.tree().isEmpty()) for (int side : new int[]{1, -1}) base.tree(-3, 11 * side, t);
-            else for (int side : new int[]{1, -1}) for (int y = 1; y <= 4; y++) base.set(-3, y, 11 * side, y == 4 ? t.light() : "chain[axis=y]");
+            else for (int side : new int[]{1, -1}) for (int y = 1; y <= 4; y++) base.set(-3, y, 11 * side, y == 4 ? t.light() : "iron_chain[axis=y]");
 
             // a stepping islet halfway to the middle, a little to one side
             int hx = (int) Math.round(ca * ringR * 0.52 - sa * 4), hz = (int) Math.round(sa * ringR * 0.52 + ca * 4);
