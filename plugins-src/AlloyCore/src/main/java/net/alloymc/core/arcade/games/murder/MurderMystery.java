@@ -46,6 +46,7 @@ public final class MurderMystery extends ArcadeGame {
     }
 
     @Override public Match newMatch(MatchContext c) { return new MurderMatch(c); }
+    @Override public int minTestPlayers() { return 2; }
 
     @Override public List<BuiltMap> builtInMaps() {
         return List.of(build("old_manor", "Old Manor", "A creaky two-storey manor full of rooms.", 111, 4, 3, 2,

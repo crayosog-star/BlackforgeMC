@@ -54,4 +54,7 @@ public abstract class ArcadeGame {
 
     /** Seconds the queue counts down once enough players are waiting. */
     public int queueCountdown() { return 15; }
+
+    /** Fewest players /arcade test can start this game with (2 when it can't work without an opponent). */
+    public int minTestPlayers() { return 1; }
 }

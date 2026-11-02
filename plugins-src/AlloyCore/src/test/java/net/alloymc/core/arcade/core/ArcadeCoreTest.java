@@ -88,6 +88,15 @@ class ArcadeCoreTest {
         }
     }
 
+    @Test void underMinPicksAMapOnlyForTestMatches() {
+        MapSelector s = new MapSelector(0);
+        MapDef a = map("g", "a");
+        a.minPlayers = 2; a.maxPlayers = 8;
+        assertTrue(s.pick("g", List.of(a), SOLO, 1, Set.of(), x -> true, new Random()).isEmpty());
+        assertEquals("a", s.pick("g", List.of(a), SOLO, 1, Set.of(), x -> true, new Random(), true).orElseThrow().id);
+        assertTrue(s.pick("g", List.of(a), SOLO, 9, Set.of(), x -> true, new Random(), true).isEmpty(), "the maximum still applies");
+    }
+
     @Test void recentMapsAreTrackedPerGame() {
         MapSelector s = new MapSelector(1);
         s.played("bedwars", "a");

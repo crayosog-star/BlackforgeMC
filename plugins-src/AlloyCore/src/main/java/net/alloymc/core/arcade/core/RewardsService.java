@@ -41,6 +41,7 @@ public final class RewardsService {
     }
 
     public void kill(Match m, Player killer) {
+        if (m.test) return;
         // each kill is its own ledger entry: matchId|player|kill#n
         long n = m.kills.getOrDefault(killer.getUniqueId(), 0);
         pay(killer, m, "kill #" + n, num(m.game.id, "kill-money", 10), (long) num(m.game.id, "kill-scrap", 1));

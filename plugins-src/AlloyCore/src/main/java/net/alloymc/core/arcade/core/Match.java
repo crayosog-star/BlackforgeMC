@@ -58,6 +58,9 @@ public abstract class Match {
     private int endTimer;
     List<UUID> winners = List.of();
     private boolean ended;
+    /** Started with /arcade test: private, no stats or rewards, and one player alone isn't an instant win. */
+    boolean test;
+    public boolean isTest() { return test; }
 
     protected Match(MatchContext c) {
         this.id = c.id(); this.game = c.game(); this.variant = c.variant(); this.map = c.map(); this.slot = c.slot();
@@ -170,6 +173,7 @@ public abstract class Match {
     protected List<UUID> checkWinners() {
         if (variant.isTeams()) {
             List<Team> left = teams.stream().filter(t -> !t.eliminated && t.members.stream().anyMatch(alive::contains)).toList();
+            if (test && players.size() < 2 && !left.isEmpty()) return null;   // solo test: keeps running until they're out
             if (left.size() <= 1) return left.isEmpty() ? List.of() : new ArrayList<>(left.getFirst().members);
             return null;
         }

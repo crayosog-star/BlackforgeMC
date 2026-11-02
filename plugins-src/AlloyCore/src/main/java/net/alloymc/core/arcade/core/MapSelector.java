@@ -15,14 +15,23 @@ public final class MapSelector {
     public MapSelector(int remember) { this.remember = Math.max(0, remember); }
 
     public List<MapDef> eligible(Collection<MapDef> pool, Variant v, int players, Set<String> exclude, Predicate<MapDef> valid) {
+        return eligible(pool, v, players, exclude, valid, false);
+    }
+
+    /** {@code underMin}: a staff test match may run with fewer players than the map's minimum (never more than its maximum). */
+    private List<MapDef> eligible(Collection<MapDef> pool, Variant v, int players, Set<String> exclude, Predicate<MapDef> valid, boolean underMin) {
         List<MapDef> out = new ArrayList<>();
         for (MapDef m : pool)
-            if (m.enabled && m.supports(v) && m.fits(v, players) && !exclude.contains(m.id) && valid.test(m)) out.add(m);
+            if (m.enabled && m.supports(v) && m.fits(v, underMin ? Math.max(players, m.minPlayers) : players) && !exclude.contains(m.id) && valid.test(m)) out.add(m);
         return out;
     }
 
     public Optional<MapDef> pick(String game, Collection<MapDef> pool, Variant v, int players, Set<String> exclude, Predicate<MapDef> valid, Random rnd) {
-        List<MapDef> ok = eligible(pool, v, players, exclude, valid);
+        return pick(game, pool, v, players, exclude, valid, rnd, false);
+    }
+
+    public Optional<MapDef> pick(String game, Collection<MapDef> pool, Variant v, int players, Set<String> exclude, Predicate<MapDef> valid, Random rnd, boolean underMin) {
+        List<MapDef> ok = eligible(pool, v, players, exclude, valid, underMin);
         if (ok.isEmpty()) return Optional.empty();
         Deque<String> rec = recent.getOrDefault(game, new ArrayDeque<>());
         // remember at most (pool size - 1) maps so there is always something fresh to pick

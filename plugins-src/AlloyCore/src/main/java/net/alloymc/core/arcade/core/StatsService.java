@@ -39,13 +39,18 @@ public final class StatsService {
     public long get(UUID u, String game, String stat) { return of(u).getLong(game + "." + stat); }
     public boolean has(UUID u, String game, String stat) { return of(u).contains(game + "." + stat); }
 
-    public void add(UUID u, String game, String stat, long n) { YamlConfiguration y = of(u); y.set(game + "." + stat, y.getLong(game + "." + stat) + n); dirty.add(u); }
-    public void set(UUID u, String game, String stat, long v) { of(u).set(game + "." + stat, v); dirty.add(u); }
+    /** Players in a test match: nothing they do counts until they're unmuted. In memory only. */
+    private final Set<UUID> muted = new HashSet<>();
+    public void mute(UUID u) { muted.add(u); }
+    public void unmute(UUID u) { muted.remove(u); }
+
+    public void add(UUID u, String game, String stat, long n) { if (muted.contains(u)) return; YamlConfiguration y = of(u); y.set(game + "." + stat, y.getLong(game + "." + stat) + n); dirty.add(u); }
+    public void set(UUID u, String game, String stat, long v) { if (muted.contains(u)) return; of(u).set(game + "." + stat, v); dirty.add(u); }
     public void max(UUID u, String game, String stat, long v) { if (!has(u, game, stat) || get(u, game, stat) < v) set(u, game, stat, v); }
 
     /** Lower-is-better records (parkour/dropper times). Returns true if it's a new personal best. */
     public boolean best(UUID u, String game, String stat, long v) {
-        if (has(u, game, stat) && get(u, game, stat) <= v) return false;
+        if (muted.contains(u) || has(u, game, stat) && get(u, game, stat) <= v) return false;
         set(u, game, stat, v);
         return true;
     }

@@ -22,6 +22,7 @@ public final class MatchManager {
         final LinkedHashSet<UUID> waiting = new LinkedHashSet<>();
         int countdown = -1;
         boolean loading;
+        boolean test;
         Queue(ArcadeGame g, Variant v) { game = g; variant = v; }
         public int size() { return waiting.size(); }
         public int countdown() { return countdown; }
@@ -79,7 +80,7 @@ public final class MatchManager {
         // free-for-all modes: drop straight into a running match that has room
         if (g.lateJoin()) {
             for (Match m : active.values())
-                if (m.game == g && m.variant.equals(v) && m.state() == MatchState.IN_PROGRESS && m.players().size() < Math.min(v.maxPlayers(), m.map.maxPlayers)) {
+                if (m.game == g && !m.test && m.variant.equals(v) && m.state() == MatchState.IN_PROGRESS && m.players().size() < Math.min(v.maxPlayers(), m.map.maxPlayers)) {
                     leaveQueue(p, false);
                     playerMatch.put(p.getUniqueId(), m);
                     p.sendMessage(Ui.mm(TAG + "<green>Joining a game in progress on <white>" + m.map.display + "<green>."));
@@ -150,13 +151,29 @@ public final class MatchManager {
         start(q);
     }
 
+    public boolean inMatch(Player p) { return playerMatch.containsKey(p.getUniqueId()); }
+
+    /** A private staff test match for exactly these players, starting now: no minimum, no strangers, no stats or rewards. */
+    public void startTest(ArcadeGame g, Variant v, List<Player> ps) {
+        Queue q = new Queue(g, v);
+        q.test = true;
+        for (Player p : ps) { leaveQueue(p, false); q.waiting.add(p.getUniqueId()); queuedIn.put(p.getUniqueId(), q); p.sendMessage(Ui.mm(TAG + "<gold>Test match: <gray>finding an arena...")); }
+        start(q);
+    }
+
+    /** A test queue isn't ticked, so nothing would retry it: send everyone back out with the reason. */
+    private void abandonTest(Queue q, String why) {
+        for (UUID u : new ArrayList<>(q.waiting)) { Player p = Bukkit.getPlayer(u); if (p != null) { leaveQueue(p, false); p.sendMessage(Ui.mm(TAG + why)); } }
+        q.waiting.clear();
+    }
+
     /** /arcade leave: out of the queue or match, back to the lobby. */
     public void leave(Player p) {
         if (leaveQueue(p, true)) { arcade.toLobby(p); return; }
         Match sp = spectating.remove(p.getUniqueId());
         if (sp != null) { sp.spectators.remove(p.getUniqueId()); arcade.toLobby(p); return; }
         Match m = playerMatch.remove(p.getUniqueId());
-        if (m != null) { m.remove(p, false); arcade.toLobby(p); p.sendMessage(Ui.mm(TAG + "<gray>You left the match.")); return; }
+        if (m != null) { m.remove(p, false); if (m.test) arcade.stats().unmute(p.getUniqueId()); arcade.toLobby(p); p.sendMessage(Ui.mm(TAG + "<gray>You left the match.")); return; }
         p.sendMessage(Ui.mm(TAG + "<gray>You're not in a queue or match."));
     }
 
@@ -166,9 +183,10 @@ public final class MatchManager {
         if (sp != null) sp.spectators.remove(p.getUniqueId());
         Match m = playerMatch.remove(p.getUniqueId());
         if (m != null) {
-            if (m.supportsRejoin() && m.state() == MatchState.IN_PROGRESS)
+            if (!m.test && m.supportsRejoin() && m.state() == MatchState.IN_PROGRESS)
                 rejoin.put(p.getUniqueId(), new String[]{m.id, String.valueOf(System.currentTimeMillis() + 120_000)});
             m.remove(p, true);
+            if (m.test) arcade.stats().unmute(p.getUniqueId());
         }
     }
 
@@ -228,6 +246,7 @@ public final class MatchManager {
         String id = q.game.id.toUpperCase().replace("_", "") + "-" + Integer.toString(++counter, 36).toUpperCase() + Long.toString(System.currentTimeMillis() % 46656, 36).toUpperCase();
         int slot = slots.acquire(id);
         if (slot < 0) {
+            if (q.test) { abandonTest(q, "<red>All arenas are busy - try the test again in a moment."); return; }
             q.countdown = 5;
             for (UUID u : taking) msg(u, TAG + "<yellow>All arenas are busy - you're first in line, retrying in 5s.");
             return;
@@ -244,10 +263,11 @@ public final class MatchManager {
             MapDef f = arcade.maps().get(q.game.id, forcedId);
             if (f != null && arcade.isValid(f) && f.supports(q.variant)) pick = Optional.of(f);
         }
-        if (pick.isEmpty()) pick = selector.pick(q.game.id, pool, q.variant, taking.size(), failed, arcade::isValid, rnd);
+        if (pick.isEmpty()) pick = selector.pick(q.game.id, pool, q.variant, taking.size(), failed, arcade::isValid, rnd, q.test);
         if (pick.isEmpty()) {
             slots.release(slot, id);
             q.loading = false;
+            if (q.test) { abandonTest(q, "<red>No " + q.game.name + " " + q.variant.label() + " map could be loaded for this test."); return; }
             q.countdown = 10;
             for (UUID u : taking)
                 msg(u, TAG + (failed.isEmpty() ? "<red>No " + q.game.name + " map fits " + taking.size() + " players right now - waiting for more players." : "<red>No arena could be loaded. Staying in the queue."));
@@ -275,8 +295,13 @@ public final class MatchManager {
             // only players still waiting in this queue go in (someone may have left during loading)
             if (p != null && q.waiting.contains(u) && !playerMatch.containsKey(u)) ps.add(p);
         }
-        int need = Math.min(q.variant.minPlayers(), Math.max(1, map.minPlayers));
+        int need = q.test ? q.game.minTestPlayers() : Math.min(q.variant.minPlayers(), Math.max(1, map.minPlayers));
         if (ps.size() < need) {
+            if (q.test) {
+                abandonTest(q, "<yellow>Not enough players left for the test - cancelled.");
+                arcade.worlds().clearSlot(slot, map.copyRegion().grow(4), map.templateY, () -> slots.release(slot, id));
+                return;
+            }
             for (Player p : ps) p.sendMessage(Ui.mm(TAG + "<yellow>Players left while the arena loaded - back in the queue."));
             arcade.worlds().clearSlot(slot, map.copyRegion().grow(4), map.templateY, () -> slots.release(slot, id));
             return;
@@ -284,8 +309,10 @@ public final class MatchManager {
         for (Player p : ps) { q.waiting.remove(p.getUniqueId()); queuedIn.remove(p.getUniqueId()); }
         Settings s = new Settings(arcade.gameSettings(q.game), map.settings);
         Match m = q.game.newMatch(new MatchContext(arcade, id, q.game, q.variant, map, slot, arcade.worlds().matches(), SlotAllocator.originX(slot), map.templateY, 0, s));
+        m.test = q.test;
         active.put(id, m);
         for (Player p : ps) playerMatch.put(p.getUniqueId(), m);
+        if (q.test) for (Player p : ps) { arcade.stats().mute(p.getUniqueId()); p.sendMessage(Ui.mm(TAG + "<gold>Test match: <gray>no stats or rewards. <white>/arcade leave <gray>to stop.")); }
         arcade.plugin().getLogger().info("[Arcade] " + id + " started: " + q.game.name + " " + q.variant.label() + " on " + map + " (slot " + slot + ") with " + ps.stream().map(Player::getName).toList());
         try { m.begin(ps); }
         catch (Exception e) {
@@ -298,6 +325,7 @@ public final class MatchManager {
 
     /** The match declared its result: stats, rating and rewards (each exactly once). */
     void onFinished(Match m) {
+        if (m.test) return;
         for (UUID u : m.players()) {
             Player p = Bukkit.getPlayer(u);
             if (p == null) continue;
@@ -316,6 +344,7 @@ public final class MatchManager {
         if (m.state() == MatchState.RESETTING || m.state() == MatchState.AVAILABLE) return;
         m.state.go(MatchState.RESETTING);
         m.cleanup();
+        if (m.test) for (UUID u : m.players()) arcade.stats().unmute(u);
         for (UUID u : new ArrayList<>(m.players())) {
             if (playerMatch.get(u) == m) playerMatch.remove(u);
             Player p = Bukkit.getPlayer(u);
