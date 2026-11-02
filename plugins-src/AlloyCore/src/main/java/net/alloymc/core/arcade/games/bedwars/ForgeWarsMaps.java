@@ -42,7 +42,7 @@ final class ForgeWarsMaps {
         d.display = name; d.description = desc; d.teams = teams;
         d.minPlayers = 2; d.maxPlayers = teams * 4;
         d.variants.addAll(java.util.List.of(variants));
-        d.builderVersion = 5;   // v5: easter eggs (v4: Black Market grotto, v3: the Undercroft); a bump makes servers rebuild the template
+        d.builderVersion = 6;   // v6: the Golem's breach point (v5: easter eggs, v4: Black Market grotto, v3: the Undercroft); a bump makes servers rebuild the template
         int ext = ringR + 26;
         d.bounds = Box.of(-ext, -56, -ext, ext, 40, ext);
         d.voidY = -50;           // below the bottom of the Core's rock: the cave floor (-27) must be well above the void
@@ -82,6 +82,7 @@ final class ForgeWarsMaps {
         c.market(d);
         c.overgrow();
         secrets(k, d, ruin, c);
+        c.breach(d);
     }
 
     // ------------------------------------------------------------------ easter eggs (see ForgeLore)
@@ -714,6 +715,24 @@ final class ForgeWarsMaps {
                 else if (d > 9 && r < 49 && !grotto.contains(e.getKey())) k.set(x, sy, z, k.rnd.nextBoolean() ? "azalea" : "flowering_azalea");
                 else if (r < 53) k.set(x, sy, z, "pink_petals[facing=north,flower_amount=" + (2 + k.rnd.nextInt(3)) + "]");
             }
+        }
+
+        /** The angle the Golem breaks out of the wall at: under the high part of the first ramp, clear of every other room. */
+        static final double BREACH_ANGLE = 0.3;
+
+        /**
+         * Where the Golem bursts out of the wall when it first wakes (see GolemIntro): the last open floor along a ray
+         * from the middle at {@link #BREACH_ANGLE}, facing the middle. Nothing is built here; the hole is carved in game
+         * and filled with rubble behind it.
+         */
+        void breach(MapDef d) {
+            double cx = Math.cos(BREACH_ANGLE), cz = Math.sin(BREACH_ANGLE), last = 0;
+            for (double r = 0; r < 20; r += 0.25) {
+                int x = (int) Math.floor(r * cx), z = (int) Math.floor(r * cz);
+                if (!inCave(x, z) || !air(k, x, CAVE_FLOOR + 2, z)) break;   // head height: floor plants don't count
+                last = r;
+            }
+            d.point("golem_breach", Pt.of(last * cx, CAVE_FLOOR + 1, last * cz).facing(0.5, 0.5));
         }
 
         /** First column south of the middle (z > 0) at this x that isn't part of the cave. */

@@ -94,6 +94,33 @@ final class GolemMath {
     /** Rimelock: while the Golem is in the cold everything it does is this much slower (1 = normal). */
     static final double CHILL_SLOW = 0.55;
 
+    /** Potion of Darkness: how long the Golem is blinded (it loses every target and wanders) and how slow it is meanwhile. */
+    static final int BLIND_TICKS = 100;
+    static final double BLIND_SLOW = 0.6;
+
+    /** Shard Volley: damage per shard, the most one player can take from one volley, and how fast a shard flies (blocks a tick). */
+    static final double SHARD_DAMAGE = 2, SHARD_CAP = 6;
+
+    /** Time-remapped flight: a shard creeps off for a moment, then whips forward (capped at 2.4 blocks a tick). */
+    static double shardSpeed(int ticksFlying) { return Math.min(2.4, 0.12 + 0.2 * ticksFlying); }
+
+    /** Blood: 0 above 30% health, fading to 1 (full blood red) at 20%. */
+    static double blood(double health, double max) {
+        double f = max <= 0 ? 0 : health / max;
+        return Math.max(0, Math.min(1, (0.30 - f) / 0.10));
+    }
+
+    static final int BLOOD_RED = 0x8A0303, BLOOD_GLOW = 0xB3000C;
+
+    /** Mix two 0xRRGGBB colours: f = 0 gives a, 1 gives b. */
+    static int mix(int a, int b, double f) {
+        f = Math.max(0, Math.min(1, f));
+        int r = (int) Math.round(((a >> 16) & 255) * (1 - f) + ((b >> 16) & 255) * f);
+        int g = (int) Math.round(((a >> 8) & 255) * (1 - f) + ((b >> 8) & 255) * f);
+        int bl = (int) Math.round((a & 255) * (1 - f) + (b & 255) * f);
+        return (r << 16) | (g << 8) | bl;
+    }
+
     /** Ticks between special moves: about 4 s in phase 1, 3 s in phase 2, 2.2 s enraged. */
     static int moveGap(int phase) { return phase == 1 ? 80 : phase == 2 ? 60 : 44; }
 

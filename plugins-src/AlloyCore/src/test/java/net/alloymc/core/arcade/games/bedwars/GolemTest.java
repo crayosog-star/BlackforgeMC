@@ -192,6 +192,72 @@ class GolemTest {
         assertEquals(0, GolemAnim.rising(1).lift(), 1e-9);
     }
 
+    @Test void timingCurvesFeelRight() {
+        // wind-up: arrives by 75% and holds; strike: overshoots a little and settles; hang: fast, slow in the middle, fast
+        assertEquals(1, GolemAnim.windupCurve(0.75), 1e-9);
+        assertEquals(1, GolemAnim.windupCurve(1), 1e-9);
+        assertEquals(0, GolemAnim.strikeCurve(0), 1e-9);
+        assertEquals(1, GolemAnim.strikeCurve(1), 1e-9);
+        double peak = 0;
+        for (double u = 0; u <= 1; u += 0.01) peak = Math.max(peak, GolemAnim.strikeCurve(u));
+        assertTrue(peak > 1.02 && peak < 1.12, "strike overshoot should be small but visible: " + peak);
+        assertEquals(0, GolemIntro.hang(0, 0.75), 1e-9);
+        assertEquals(1, GolemIntro.hang(1, 0.75), 1e-9);
+        double prev = -1, fastStart = GolemIntro.hang(0.1, 0.75) - GolemIntro.hang(0, 0.75), slowMid = GolemIntro.hang(0.55, 0.75) - GolemIntro.hang(0.45, 0.75);
+        for (double f = 0; f <= 1; f += 0.01) { double h = GolemIntro.hang(f, 0.75); assertTrue(h >= prev, "hang goes backwards"); prev = h; }
+        assertTrue(fastStart > 2 * slowMid, "a leap should hang at the top");
+    }
+
+    @Test void introLeapLandsOnThePadAndStaysUnderTheCeiling() {
+        double[] end = GolemIntro.position(GolemIntro.LAND, 12, 4, -0.95, -0.3, 0.5, 0.5);
+        assertArrayEquals(new double[]{0.5, 0, 0.5}, end, 1e-6);
+        double top = 0, lastX = GolemIntro.position(GolemIntro.LEAP, 12, 4, -0.95, -0.3, 0.5, 0.5)[0];
+        for (int s = GolemIntro.LEAP; s <= GolemIntro.LAND; s++) {
+            double[] p = GolemIntro.position(s, 12, 4, -0.95, -0.3, 0.5, 0.5);
+            top = Math.max(top, p[1]);
+            assertTrue(Math.abs(p[0] - lastX) < 1.6, "leap jumps " + Math.abs(p[0] - lastX) + " blocks in one tick");
+            lastX = p[0];
+        }
+        assertTrue(top + GolemModel.height() < 22, "the Golem would hit the ceiling at the top of its leap");
+        assertTrue(GolemIntro.SEAL >= GolemIntro.LEAP, "the hole shouldn't close before it's out");
+        assertTrue(GolemIntro.SEAL + GolemIntro.SEAL_TICKS <= GolemIntro.END, "seal finishes before the fight starts");
+        // inside the wall, before the breach, it's far enough back to be hidden
+        assertTrue(GolemIntro.START_BACK > 3.6 * GolemModel.SCALE * 0.9, "its head would poke out of the wall before the breach");
+    }
+
+    @Test void bloodRedCreepsInBelowThirtyPercent() {
+        assertEquals(0, GolemMath.blood(31, 100), 1e-9);
+        assertEquals(0, GolemMath.blood(30, 100), 1e-9);
+        assertEquals(0.5, GolemMath.blood(25, 100), 1e-9);
+        assertEquals(1, GolemMath.blood(20, 100), 1e-9);
+        assertEquals(1, GolemMath.blood(3, 100), 1e-9);
+        assertEquals(GolemModel.ORE_PINK, GolemMath.mix(GolemModel.ORE_PINK, GolemMath.BLOOD_GLOW, 0));
+        assertEquals(GolemMath.BLOOD_GLOW, GolemMath.mix(GolemModel.ORE_PINK, GolemMath.BLOOD_GLOW, 1));
+        int half = GolemMath.mix(0xFF0000, 0x0000FF, 0.5);
+        assertEquals(0x80, half >> 16, 1);
+        assertEquals(0x80, half & 255, 1);
+    }
+
+    @Test void shardsAreFairAndWhipForward() {
+        assertTrue(GolemMath.SHARD_DAMAGE <= 2 && GolemMath.SHARD_CAP <= 6, "a volley shouldn't do more than 3 hearts to one player");
+        assertTrue(GolemMath.shardSpeed(0) < 0.3, "shards creep off for a moment");
+        assertEquals(2.4, GolemMath.shardSpeed(30), 1e-9);
+        for (int i = 1; i < 30; i++) assertTrue(GolemMath.shardSpeed(i) >= GolemMath.shardSpeed(i - 1), "shards never slow down");
+        long spikes = GolemModel.PARTS.stream().filter(p -> p.group() == GolemModel.Group.ORE && p.glow() >= 0 && p.sy() > 0.5).count();
+        assertTrue(spikes >= 8 && spikes <= 12, "one shard per crystal on its back: " + spikes);
+    }
+
+    @Test void introPosesFlowWithoutJumps() {
+        GolemAnim.Pose prev = GolemAnim.intro(0);
+        for (int s = 1; s <= GolemIntro.END; s++) {
+            GolemAnim.Pose p = GolemAnim.intro(s);
+            // snappy is fine (the roar whips back ~20 degrees a frame); a break in the motion isn't
+            assertTrue(Math.abs(p.armR().x() - prev.armR().x()) < 75, "arm jumps at intro tick " + s);
+            assertTrue(Math.abs(p.leanX() - prev.leanX()) < 30, "body jumps at intro tick " + s);
+            prev = p;
+        }
+    }
+
     @Test void boulderArcStartsAndEndsWhereItShould() {
         double[] a = GolemMath.arc(0, 4, 0, 10, 0, 0, 4, 0), b = GolemMath.arc(0, 4, 0, 10, 0, 0, 4, 1), mid = GolemMath.arc(0, 4, 0, 10, 0, 0, 4, 0.5);
         assertArrayEquals(new double[]{0, 4, 0}, a, 1e-9);

@@ -54,6 +54,69 @@ final class GolemAnim {
 
     static double smooth(double u) { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); }
 
+    // ------------------------------------------------------------------ timing (how a move moves, not where it ends up)
+
+    /** Wind-up: eases in, arrives at 75% of the wind-up and holds there, trembling (the tension before the hit). */
+    static double windupCurve(double u) { return smooth(Math.min(1, u / 0.75)); }
+
+    /** Strike: snaps to the pose, overshoots it a little and settles back (ease-out-back, ~6% over). */
+    static double strikeCurve(double u) {
+        u = Math.max(0, Math.min(1, u));
+        double c1 = 1.0, c3 = c1 + 1, v = u - 1;
+        return 1 + c3 * v * v * v + c1 * v * v;
+    }
+
+    /** A held pose shaking with effort: {@code amount} 1 = a small tremble. */
+    static Pose tremble(Pose p, int t, double amount) {
+        double a = Math.sin(t * 2.3) * 0.9 * amount, b = Math.sin(t * 3.1 + 1) * 0.7 * amount;
+        return new Pose(p.lift, p.bob + Math.sin(t * 2.9) * 0.02 * amount, p.leanX + b * 0.5, p.leanZ + a, p.twist + b, p.armL, p.armR, p.head, p.ore, p.heart);
+    }
+
+    /** Accelerates into the end (a strike landing). */
+    static double easeIn(double u) { u = Math.max(0, Math.min(1, u)); return u * u * u; }
+
+    /** Overshoots a little past 1 and settles back (s ~ 1.2-1.7: how far past). */
+    static double easeOutBack(double u, double s) { u = Math.max(0, Math.min(1, u)) - 1; return 1 + u * u * ((s + 1) * u + s); }
+
+    // ------------------------------------------------------------------ timing: anticipation, strike, hit-stop, follow-through
+
+    /** Share of a wind-up spent moving into the pose; the rest is held with a tremble until release. */
+    static final double WINDUP_MOVE = 0.65;
+    /** Ticks frozen on the impact pose, then ticks of follow-through past it and back. */
+    static final int HIT_STOP = 2, FOLLOW = 6;
+    static final double OVERSHOOT = 0.14;
+
+    /**
+     * {@code s} ticks into a {@code windup}-tick wind-up from pose {@code from}: it eases into the wind-up pose with a
+     * little overshoot over the first 65%, then holds it, trembling with the strain, until it lets go.
+     */
+    static Pose windupAt(Pose from, GolemMath.Move m, int s, int windup) {
+        Pose target = windup(m);
+        double move = Math.max(1, windup * WINDUP_MOVE);
+        Pose p = lerp(from, target, easeOutBack(s / move, 1.3));
+        if (s <= move) return p;
+        double k = Math.min(1, (s - move) / Math.max(1, windup - move));   // the tremble builds towards release
+        double a = 0.6 + 1.4 * k;
+        return new Pose(p.lift, p.bob - 0.04 * k, p.leanX, p.leanZ + a * Math.sin(s * 2.3), p.twist + a * Math.sin(s * 1.9 + 1), p.armL, p.armR, p.head, p.ore, p.heart);
+    }
+
+    /**
+     * {@code s} ticks into a strike from the wind-up pose {@code wind}: it accelerates into the strike pose over
+     * {@link #strikeTicks}, freezes there for {@link #HIT_STOP} ticks (the hit lands on this frame), swings
+     * {@link #OVERSHOOT} past it and settles back over {@link #FOLLOW} ticks.
+     */
+    static Pose strikeAt(Pose wind, GolemMath.Move m, int s, int t) {
+        Pose hit = strike(m, t);
+        int k = strikeTicks(m);
+        if (s <= k) return lerp(wind, hit, easeIn(s / (double) k));
+        int after = s - k - HIT_STOP;
+        if (after <= 0 || after >= FOLLOW) return hit;
+        return lerp(wind, hit, 1 + OVERSHOOT * Math.sin(Math.PI * after / FOLLOW));
+    }
+
+    /** The tick a strike connects: the end of its acceleration. */
+    static int impactTick(GolemMath.Move m) { return strikeTicks(m); }
+
     static Pose lerp(Pose a, Pose b, double f) {
         return new Pose(a.lift + (b.lift - a.lift) * f, a.bob + (b.bob - a.bob) * f, a.leanX + (b.leanX - a.leanX) * f,
                 a.leanZ + (b.leanZ - a.leanZ) * f, a.twist + (b.twist - a.twist) * f, Rot.lerp(a.armL, b.armL, f),
@@ -113,6 +176,29 @@ final class GolemAnim {
             }
             case SHARDS -> pose().lean(22).arms(12, 0, -25).head(14, 0, 0).ore(-32 + 10 * Math.max(0, Math.sin(t * 1.05))).build();   // the ore kicks as each shard leaves
         };
+    }
+
+    /** The entrance (see {@link GolemIntro}): pushing through the wall, the roar, the crouch, the leap, the landing. */
+    static Pose intro(int s) {
+        Pose push = pose().lean(25).bob(-0.1).arms(-85, 0, -12).head(10, 0, 0).build();
+        Pose roar = pose().lean(-18).bob(0.2).arms(-125, 0, -55).head(-28, 0, 0).ore(-15).build();
+        Pose crouch = pose().lean(22).bob(-0.7).arms(30, 0, -15).head(12, 0, 0).build();
+        Pose air = pose().lean(-5).bob(0.1).arms(-150, 0, -20).head(-10, 0, 0).build();
+        Pose land = pose().lean(18).bob(-0.6).arms(-5, 0, -10).head(10, 0, 0).build();
+        if (s < GolemIntro.BREACH) return push;
+        if (s < GolemIntro.ROAR) {   // bursting out: shoulders forward, then a heave
+            double u = (s - GolemIntro.BREACH) / (double) (GolemIntro.ROAR - GolemIntro.BREACH);
+            return lerp(push, pose().lean(30).bob(-0.2).arms(-95, 0, -20).head(14, 0, 0).build(), Math.sin(Math.PI * u));
+        }
+        if (s < GolemIntro.CROUCH) {
+            double shake = s > GolemIntro.ROAR + 8 ? Math.sin(s * 1.7) * 2 : 0;   // shaking with the roar
+            Pose p = lerp(push, roar, easeOutBack((s - GolemIntro.ROAR) / 8.0, 1.6));
+            return new Pose(p.lift(), p.bob(), p.leanX(), p.leanZ() + shake, p.twist() + shake, p.armL(), p.armR(), p.head(), p.ore(), 1);
+        }
+        if (s < GolemIntro.LEAP) return lerp(roar, crouch, smooth((s - GolemIntro.CROUCH) / 9.0));   // sinks low, ready to spring (a flowing wind-up: the leap is the snap)
+        if (s < GolemIntro.LAND - 4) return lerp(crouch, air, smooth((s - GolemIntro.LEAP) / 9.0));   // spring up over a beat: eased, no pose snap
+        if (s < GolemIntro.END - 16) return lerp(air, land, easeIn((s - (GolemIntro.LAND - 4)) / 6.0));   // slams down over the last frames before touchdown
+        return lerp(land, idle(s), smooth((s - (GolemIntro.END - 16)) / 16.0));
     }
 
     /** Rising out of the floor over the first 3 seconds. */
