@@ -384,7 +384,7 @@ public final class SkyHubBuilder {
         // glow berries and lanterns hanging inside the arch
         for (int x : new int[]{-6, 0, 6}) {
             int top = base + (int) Math.round(Math.sqrt(Math.max(0, R * R - x * x)) * 1.15) - 2;
-            for (int k = 0; k < 3; k++) c.setLate(cx + x, top - k, cz, "minecraft:chain[axis=y]");
+            for (int k = 0; k < 3; k++) c.setLate(cx + x, top - k, cz, "minecraft:iron_chain[axis=y]");
             c.setLate(cx + x, top - 3, cz, "minecraft:lantern[hanging=true]");
         }
     }
@@ -412,7 +412,7 @@ public final class SkyHubBuilder {
                 }
             }
             // supports hanging under the deck every few blocks
-            if (i % 6 == 3) for (int k = 1; k <= 3; k++) c.setLate(x, y - k, 0, mc(crystal ? "end_rod[facing=down]" : "chain[axis=y]"));
+            if (i % 6 == 3) for (int k = 1; k <= 3; k++) c.setLate(x, y - k, 0, mc(crystal ? "end_rod[facing=down]" : "iron_chain[axis=y]"));
         }
     }
 

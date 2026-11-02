@@ -25,6 +25,7 @@ public final class Shots {
                 new Shot("hub_castle", "hub", "overworld", 0, 0, 230, inferno, new WorldCam.Cam(0.5, 205, 235, 0.5, 112, 0, 72)),
                 new Shot("survival_spawn", "survival", "overworld", 0, 0, 200, sunset, WorldCam.Cam.yawPitch(0.5, 152.62, 32.5, 180, -6, 75)),
                 new Shot("survival_aerial", "survival", "overworld", 0, 0, 200, sunset, WorldCam.Cam.yawPitch(0.5, 200, 95.5, 180, 28, 70)),
+                new Shot("survival_top", "survival", "overworld", 0, 0, 200, day, new WorldCam.Cam(0.5, 325, 1.5, 0.5, 150, 0.5, 62)),
                 new Shot("survival_crates", "survival", "overworld", 0, 0, 200, day, WorldCam.Cam.yawPitch(0.5, 153.62, -19.5, 180, 4, 75)),
                 new Shot("koth", "survival", "overworld", 0, -400, 140, sunset, new WorldCam.Cam(26, 166, -368, 0.5, 152, -400, 70)),
                 new Shot("scrapyard", "survival", "overworld", 0, 600, 160, sunset, WorldCam.Cam.yawPitch(0.5, 215, 655.5, 180, 30, 72)),

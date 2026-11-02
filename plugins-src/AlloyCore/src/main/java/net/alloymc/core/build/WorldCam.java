@@ -262,7 +262,8 @@ public final class WorldCam {
         }
         for (int k = chain.size() - 1; k >= 0; k--) {
             Map<String, Object> t = obj(chain.get(k).get("textures"));
-            if (t != null) for (var en : t.entrySet()) textures.put(en.getKey(), String.valueOf(en.getValue()));
+            if (t != null) for (var en : t.entrySet())   // 26.x: a texture can be {sprite, force_translucent}
+                textures.put(en.getKey(), en.getValue() instanceof Map<?, ?> sm ? String.valueOf(sm.get("sprite")) : String.valueOf(en.getValue()));
         }
         for (Map<String, Object> j : chain) if (j.containsKey("elements")) { elements = arr(j.get("elements")); break; }
         if (elements == null) return;
@@ -443,6 +444,31 @@ public final class WorldCam {
         w.models = new Model[w.states.size()];
         for (int i = 0; i < w.models.length; i++) w.models[i] = model(w.states.get(i));
         return w;
+    }
+
+    /** Lay a build over a loaded world, only where the world has air (how an additive paste behaves). Returns blocks placed. */
+    public int overlay(World w, Canvas c) {
+        int placed = 0;
+        java.util.Map<Long, String> all = new java.util.HashMap<>(c.blocks());
+        all.putAll(c.lateBlocks());
+        for (var e : all.entrySet()) {
+            long k = e.getKey();
+            int x = Canvas.kx(k), y = Canvas.ky(k), z = Canvas.kz(k);
+            if (w.get(x, y, z) != 0 && !w.states.get(w.get(x, y, z)).endsWith(":air")) {
+                if (System.getenv("OVERLAP") != null) System.out.println("  kept existing " + w.states.get(w.get(x, y, z)) + " @ " + x + " " + y + " " + z);
+                continue;
+            }
+            short[][] ch = w.blocks.computeIfAbsent(World.ck(x >> 4, z >> 4), kk -> new short[24][]);
+            int sec = (y + 64) >> 4;
+            if (sec < 0 || sec >= ch.length) continue;
+            if (ch[sec] == null) ch[sec] = new short[4096];
+            ch[sec][((y & 15) << 8) | ((z & 15) << 4) | (x & 15)] = w.id(e.getValue());
+            placed++;
+        }
+        w.grid();
+        w.models = new Model[w.states.size()];
+        for (int i = 0; i < w.models.length; i++) w.models[i] = model(w.states.get(i));
+        return placed;
     }
 
     /** Load every chunk with blocks between (x0,z0) and (x1,z1) from {@code regionDir}. */

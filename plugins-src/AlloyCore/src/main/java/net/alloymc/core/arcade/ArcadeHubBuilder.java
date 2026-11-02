@@ -367,7 +367,7 @@ public final class ArcadeHubBuilder {
             for (int y = 1; y <= 10; y++) for (int dx = 0; dx <= 1; dx++) for (int dz = 0; dz <= 1; dz++) c.set(d.x() + t[0] + dx, fy + y, d.z() + t[1] + dz, "minecraft:scaffolding[bottom=false,distance=0]");
         for (int y = 1; y <= 16; y++) c.set(d.x() - 12, fy + y, d.z(), "minecraft:yellow_concrete");
         for (int x = -12; x <= 4; x++) c.set(d.x() + x, fy + 16, d.z(), "minecraft:yellow_concrete");
-        for (int y = 10; y <= 15; y++) c.set(d.x() + 3, fy + y, d.z(), "minecraft:chain[axis=y]");
+        for (int y = 10; y <= 15; y++) c.set(d.x() + 3, fy + y, d.z(), "minecraft:iron_chain[axis=y]");
         c.set(d.x() + 3, fy + 9, d.z(), "minecraft:purple_concrete");
     }
 

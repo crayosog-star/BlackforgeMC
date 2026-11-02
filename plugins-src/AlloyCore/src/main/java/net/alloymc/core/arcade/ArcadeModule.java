@@ -64,7 +64,7 @@ public final class ArcadeModule implements Listener, Arcade.Lobby {
 
     public void shutdown() { arcade.shutdown(); if (life != null) life.remove(); }
 
-    private static final String LOBBY_MARKER = "arcade-lobby-v3";
+    private static final String LOBBY_MARKER = "arcade-lobby-v4";   // v4: real chains (26.x: iron_chain)
 
     /** Clear the lobby area (old lobby included) a few columns per tick, then paste the forge lobby. */
     public void buildAll(CommandSender who) {

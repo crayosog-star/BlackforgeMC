@@ -51,9 +51,26 @@ public final class DesignPreview {
                         new View("casual", new WorldCam.Cam(-66, Y + 14, 18, -96, Y + 4, 30, 72)),
                         new View("party", new WorldCam.Cam(-52, Y + 16, -20, -78, Y + 12, -40, 72)));
             }
+            case "spawnupgrade" -> {
+                c = net.alloymc.core.survival.SpawnUpgradeBuilder.phase1();
+                int Y = net.alloymc.core.survival.SurvivalLayout.Y;
+                look = WorldCam.Look.sunset();
+                look.fogStart = 220; look.fogEnd = 520; look.maxDist = 520;
+                views = List.of(
+                        new View("spawn", new WorldCam.Cam(0.5, Y + 2.62, 32.5, 0.5, Y + 30, -60, 80)),
+                        new View("plaza", new WorldCam.Cam(0.5, Y + 2.62, 14, 0.5, Y + 24, -2, 80)),
+                        new View("aerial", new WorldCam.Cam(0.5, Y + 80, 150, 0.5, Y + 10, -40, 75)),
+                        new View("overview", new WorldCam.Cam(160, Y + 140, 220, 0, Y + 10, -30, 75)),
+                        new View("forge", new WorldCam.Cam(14, Y + 30, 22, 0.5, Y + 28, 0, 70)),
+                        new View("tower", new WorldCam.Cam(40, Y + 6, 40, 70, Y + 14, 70, 75)));
+            }
             default -> throw new IllegalArgumentException("unknown design " + design);
         }
-        WorldCam.World world = cam.fromCanvas(c);
+        WorldCam.World world;
+        if (design.equals("spawnupgrade")) {   // the live Survival world, with phase 1 laid over it (only into air)
+            world = cam.load(new File(Shots.NET, "survival/world/dimensions/minecraft/overworld/region"), -200, -200, 200, 200);
+            System.out.println("phase 1 would place " + cam.overlay(world, c) + " blocks (all into air)");
+        } else world = cam.fromCanvas(c);
         System.out.println(design + ": " + c.size() + " blocks");
         String only = System.getenv("VIEW");
         for (View v : views) {

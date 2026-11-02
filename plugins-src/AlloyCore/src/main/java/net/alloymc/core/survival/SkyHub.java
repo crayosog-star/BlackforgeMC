@@ -180,14 +180,14 @@ public final class SkyHub implements Listener {
     // ------------------------------------------------------------------ the islands
 
     private void build() {
-        if (!new File(plugin.getDataFolder(), "skyhub-v3-built").exists()) {
+        if (!new File(plugin.getDataFolder(), "skyhub-v4-built").exists()) {
             // the first hub was a small island here: clear it (only if this is the first three-isle hub), then paste
             if (!new File(plugin.getDataFolder(), "skyhub-v2-built").exists())
                 for (int x = -24; x <= 24; x++) for (int z = -24; z <= 24; z++) for (int y = Y - 30; y <= Y + 12; y++) {
                     var b = hub.getBlockAt(x, y, z);
                     if (!b.getType().isAir()) b.setType(Material.AIR, false);
                 }
-            Paster.paste(plugin, hub, SkyHubBuilder.build(), 6000, () -> mark("skyhub-v3-built"));   // v3: a step ledge in the pool
+            Paster.paste(plugin, hub, SkyHubBuilder.build(), 6000, () -> mark("skyhub-v4-built"));   // v3: a step ledge in the pool; v4: real chains (26.x: iron_chain)
         }
         if (!new File(plugin.getDataFolder(), "oneblock-spawn-built").exists())
             Paster.paste(plugin, obSpawn, oneblockIsland(), 4000, () -> mark("oneblock-spawn-built"));

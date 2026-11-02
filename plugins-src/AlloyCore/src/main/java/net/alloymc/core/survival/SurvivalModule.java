@@ -49,6 +49,7 @@ public final class SurvivalModule implements Listener {
     private final Surge surge;
     private final LastRite rite;
     private final net.alloymc.core.VoidOut voidOut;
+    private final SpawnUpgrade upgrade;
     private final Rimelock cage;
     private final GodsEye eye;
     private final AshenChain chain;
@@ -113,6 +114,7 @@ public final class SurvivalModule implements Listener {
         new SilkSpawners(plugin);
         boss = new WorldBoss(plugin, world, crates, koth);   // five random world bosses in the KOTH arena, Saturdays
         // no land in sight around spawn, KOTH and the Scrapyard: they float in empty sky
+        upgrade = new SpawnUpgrade(plugin, world);   // the volcanic kingdom around spawn: /alloy spawnupgrade
         voidOut = new VoidOut(plugin, world, "survival", List.of(new VoidOut.Area(-270, -620, 270, 790)),
                 List.of(SpawnBuilder.spawn(), SpawnBuilder.arena(), PvpBuilder.build()), 60, pl -> spawn());
         if (new File(plugin.getDataFolder(), "survival-built").exists()) voidOut.autoStart();
@@ -354,7 +356,12 @@ public final class SurvivalModule implements Listener {
     /** Console/admin: /alloy crate give <player> <crate> [amount], /alloy koth start|stop, /alloy buildsurvival */
     public boolean admin(CommandSender s, String[] a) {
         if (rite.admin(s, a)) return true;   // /alloy rite give <player> (for crates)
-        if (a.length >= 1 && a[0].equalsIgnoreCase("voidout")) { voidOut.start(s); return true; }   // clear the land around spawn
+        if (upgrade.command(s, a)) return true;   // /alloy spawnupgrade apply|undo|status 1: the volcanic kingdom (additive only)
+        if (a.length >= 1 && a[0].equalsIgnoreCase("voidout")) {   // clear the land around spawn
+            if (new File(plugin.getDataFolder(), "spawn-upgrade-phase1").exists()) { s.sendMessage(Component.text("The spawn upgrade is in place - voidout would remove it. Undo it first.")); return true; }
+            voidOut.start(s);
+            return true;
+        }
         if (a.length >= 3 && a[0].equalsIgnoreCase("surge") && a[1].equalsIgnoreCase("give")) {   // /alloy surge give <player> (for crates)
             Player t = Bukkit.getPlayerExact(a[2]);
             if (t == null) { s.sendMessage(Component.text("Player must be online")); return true; }
