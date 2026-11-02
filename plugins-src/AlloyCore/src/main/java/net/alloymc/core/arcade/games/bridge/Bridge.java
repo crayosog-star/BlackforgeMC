@@ -44,6 +44,7 @@ public final class Bridge extends ArcadeGame {
     }
 
     @Override public Match newMatch(MatchContext c) { return new BridgeMatch(c); }
+    @Override public int minTestPlayers() { return 2; }
 
     @Override public List<BuiltMap> builtInMaps() {
         return List.of(build("classic_span", "Classic Span", "A straight bridge between two stone bases.", 30, "stone_bricks", "polished_andesite", false, 81),

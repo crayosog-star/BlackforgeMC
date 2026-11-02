@@ -57,6 +57,7 @@ public final class HideAndSeek extends ArcadeGame {
     }
 
     @Override public Match newMatch(MatchContext c) { return new HideMatch(c); }
+    @Override public int minTestPlayers() { return 2; }
 
     @Override public List<BuiltMap> builtInMaps() {
         return List.of(

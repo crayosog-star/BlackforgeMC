@@ -44,6 +44,7 @@ public final class ArcadeCommand {
                 case "status" -> { if (need(s, "arcade.match.manage")) status(s); }
                 case "reload" -> { if (need(s, "arcade.map.reload")) { arcade.reload(); msg(s, P + "<green>Arcade config, game settings and maps reloaded."); } }
                 case "forcestart" -> { if (need(s, "arcade.match.manage")) forceStart(s, a); }
+                case "test" -> { if (need(s, "arcade.match.manage")) testMatch(s, p, a); }
                 case "forcemap" -> { if (need(s, "arcade.match.manage")) forceMap(s, a); }
                 case "stop" -> { if (need(s, "arcade.match.manage")) stop(s, a); }
                 case "create-map", "createmap" -> { if (need(s, "arcade.map.create")) createMap(s, p, a); }
@@ -71,7 +72,7 @@ public final class ArcadeCommand {
         msg(s, "<white>/arcade <gray>menu • <white>/arcade join <game> [mode] <gray>• <white>/arcade leave <gray>• <white>/arcade games");
         msg(s, "<white>/arcade maps <game> <gray>• <white>/arcade top <game> [stat] <gray>• <white>/arcade stats [player] <gray>• <white>/arcade spectate <player>");
         if (has(s, "arcade.map.edit") || has(s, "arcade.match.manage")) {
-            msg(s, "<gold>Staff: <white>status, reload, forcestart <game> [mode], forcemap <game> <map>, stop <match>");
+            msg(s, "<gold>Staff: <white>status, reload, test <game> [mode] [player...], forcestart <game> [mode], forcemap <game> <map>, stop <match>");
             msg(s, "<gold>Maps: <white>create-map <game> <map>, edit <game> <map>, mapinfo <game> <map>, validate-map <game> <map>, enable|disable <game> <map>");
             msg(s, "<gold>Points: <white>setspawn <g> <m> [n|add], setteamspawn <g> <m> <team> [key], setlobby, setspectator, setboundary <g> <m> pos1|pos2,");
             msg(s, "<white>  setpoint <g> <m> <key>, addpoint <g> <m> <list>, clearpoints <g> <m> <list>, setregion <g> <m> <key> pos1|pos2, setvoid <g> <m>,");
@@ -171,6 +172,26 @@ public final class ArcadeCommand {
         if (q.size() == 0) { msg(s, P + "<red>Nobody is queued for " + g.name + " " + v.label() + "."); return; }
         arcade.matches().forceStart(q);
         msg(s, P + "<green>Starting " + g.name + " " + v.label() + " with " + q.size() + " players.");
+    }
+
+    /** /arcade test <game> [mode] [player...]: start right now with just you and the named players. */
+    private void testMatch(CommandSender s, Player p, String[] a) {
+        if (p == null) { msg(s, P + "<red>Run this in game."); return; }
+        ArcadeGame g = a.length > 1 ? arcade.game(a[1]) : null;
+        if (g == null) { msg(s, P + "<gray>/arcade test <game> [mode] [player...] <dark_gray>- <gray>starts now, no stats or rewards. <white>/arcade games"); return; }
+        Variant asked = a.length > 2 ? g.variant(a[2]) : null;
+        Variant v = asked != null ? asked : g.variants().getFirst();
+        LinkedHashSet<Player> who = new LinkedHashSet<>(List.of(p));
+        for (int i = asked != null ? 3 : 2; i < a.length; i++) {
+            Player o = Bukkit.getPlayerExact(a[i]);
+            if (o == null) { msg(s, P + "<red>'" + a[i] + "' isn't a " + g.name + " mode or an online player here. <gray>Modes: " + String.join(", ", g.variants().stream().map(Variant::id).toList())); return; }
+            who.add(o);
+        }
+        for (Player o : who) if (arcade.matches().inMatch(o)) { msg(s, P + "<red>" + o.getName() + " is already in a match. <white>/arcade leave <red>first."); return; }
+        if (who.size() < g.minTestPlayers()) { msg(s, P + "<red>" + g.name + " needs at least " + g.minTestPlayers() + " players: <white>/arcade test " + g.id + " " + v.id() + " <player>"); return; }
+        if (who.size() > v.maxPlayers()) { msg(s, P + "<red>" + g.name + " " + v.label() + " fits " + v.maxPlayers() + " at most."); return; }
+        if (!arcade.hasPlayableMap(g, v)) { msg(s, P + "<red>" + g.name + " " + v.label() + " has no available maps right now."); return; }
+        arcade.matches().startTest(g, v, new ArrayList<>(who));
     }
 
     private void forceMap(CommandSender s, String[] a) {

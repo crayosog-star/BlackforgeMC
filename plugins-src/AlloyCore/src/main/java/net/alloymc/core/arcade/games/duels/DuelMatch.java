@@ -148,6 +148,7 @@ final class DuelMatch extends Match {
 
     @Override protected void onCleanup() {
         for (Player p : everyone()) p.setMaximumNoDamageTicks(20);
+        if (isTest()) return;   // a rematch would be a real match with stats
         // offer a rematch to everyone who was in this duel
         List<UUID> ids = new ArrayList<>(players);
         for (Player p : everyone()) p.sendMessage(Ui.mm(MatchManager.TAG + "<gray>Good game! ").append(

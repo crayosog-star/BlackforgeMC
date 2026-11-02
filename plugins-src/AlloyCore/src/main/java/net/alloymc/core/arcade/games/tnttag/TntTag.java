@@ -35,6 +35,7 @@ public final class TntTag extends ArcadeGame {
     }
 
     @Override public Match newMatch(MatchContext c) { return new TagMatch(c); }
+    @Override public int minTestPlayers() { return 2; }
 
     @Override public List<BuiltMap> builtInMaps() { return List.of(rooftops(), courtyard()); }
 

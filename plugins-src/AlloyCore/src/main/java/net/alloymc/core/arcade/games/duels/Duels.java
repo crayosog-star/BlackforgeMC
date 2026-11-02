@@ -54,6 +54,7 @@ public final class Duels extends ArcadeGame {
     }
 
     @Override public Match newMatch(MatchContext c) { return new DuelMatch(c); }
+    @Override public int minTestPlayers() { return 2; }
 
     @Override public List<BuiltMap> builtInMaps() { return DuelMaps.all(); }
 }
