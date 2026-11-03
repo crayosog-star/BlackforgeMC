@@ -130,7 +130,7 @@ public final class SurvivalModule implements Listener {
         new ResourceWorld(plugin);
         votes.setScrap(scrap);
         ranks = new Ranks(plugin, crates);
-        plugin.discord().setRank(pl -> ranks.of(pl).name());   // Discord role sync
+        plugin.discord().setRank(pl -> { var r = ranks.of(pl); return r == null ? null : r.name(); });   // Discord role sync
         ranks.setClaims(claims);
         claims.setRanks(ranks);
         scrap.setRanks(ranks);
