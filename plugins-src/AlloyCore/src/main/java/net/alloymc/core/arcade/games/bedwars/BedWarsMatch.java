@@ -97,7 +97,10 @@ final class BedWarsMatch extends Match {
             eggs = new ForgeEggs(this, world, arcade.plugin(), points("easter.hammer"), points("easter.vein"), points("easter.crack"), point("easter.jukebox"));
         // starting emeralds (a Forge Wars testing setting; 0 = none). Only at the start, not on respawn.
         int em = settings.i("starting-emeralds", 0);
-        if (em > 0) for (Team t : teams) for (Player p : online(t.members)) BedWarsShop.give(p, new ItemStack(Material.EMERALD, em));
+        boolean testStacks = arsenal && isTest();   // /arcade test: a full stack of every resource instead
+        if (em > 0 && !testStacks) for (Team t : teams) for (Player p : online(t.members)) BedWarsShop.give(p, new ItemStack(Material.EMERALD, em));
+        if (testStacks) for (Team t : teams) for (Player p : online(t.members))
+            for (Material m : new Material[]{Material.IRON_INGOT, Material.GOLD_INGOT, Material.DIAMOND, Material.EMERALD}) BedWarsShop.give(p, new ItemStack(m, 64));
         // bases nobody plays on lose their bed, so they can't be "defended" by nobody
         for (int i = teams.size(); i < map.teams; i++) {
             Location bed = point("team." + i + ".bed");
