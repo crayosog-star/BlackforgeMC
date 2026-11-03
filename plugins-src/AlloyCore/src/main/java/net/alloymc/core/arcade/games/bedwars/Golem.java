@@ -40,7 +40,7 @@ import java.util.*;
 final class Golem {
     enum State { INTRO, RISING, WALK, WINDUP, ACT, STUNNED, DYING, DEAD }
 
-    private static final double LEASH = 7.5, SPEED = 0.14, ENRAGED_SPEED = 0.2, RING_SPEED = 0.3, RING_REACH = 12, CHARGE_SPEED = 0.55, ERUPT_SPEED = 0.6;
+    private static final double LEASH = 7.5 * ForgeWarsMaps.HALL, SPEED = 0.14, ENRAGED_SPEED = 0.2, RING_SPEED = 0.3, RING_REACH = 12 * ForgeWarsMaps.HALL, CHARGE_SPEED = 0.55, ERUPT_SPEED = 0.6;
     private static final double S = GolemModel.SCALE;
     private static final Particle.DustOptions GREEN = new Particle.DustOptions(Color.fromRGB(GolemModel.HEART_GREEN), 1.2f),
             RED = new Particle.DustOptions(Color.fromRGB(0xFF3030), 1.1f),
@@ -403,7 +403,7 @@ final class Golem {
         if (state != State.DEAD && state != State.DYING) { tickChill(); tickBlind(); tickDim(); tickSpent(); tickBlood(); }
         // the hall bleeds with it: red grit sifts down from the ceiling once its crystals turn
         if (blood > 0.3 && body != null && state != State.INTRO && state != State.DEAD && t % 14 == 0)
-            ceilingDust(home.getX() + (rnd.nextDouble() - 0.5) * 18, home.getZ() + (rnd.nextDouble() - 0.5) * 18, 3, 2 + (int) (blood * 4));
+            ceilingDust(home.getX() + (rnd.nextDouble() - 0.5) * 18 * ForgeWarsMaps.HALL, home.getZ() + (rnd.nextDouble() - 0.5) * 18 * ForgeWarsMaps.HALL, 3, 2 + (int) (blood * 4));
         switch (state) {
             case INTRO -> intro();
             case RISING -> {
@@ -1373,7 +1373,7 @@ final class Golem {
                 x = pl.getX() - home.getX() + rnd.nextGaussian();
                 z = pl.getZ() - home.getZ() + rnd.nextGaussian();
             } else {
-                double a = rnd.nextDouble() * Math.PI * 2, r = Math.sqrt(rnd.nextDouble()) * 11;
+                double a = rnd.nextDouble() * Math.PI * 2, r = Math.sqrt(rnd.nextDouble()) * 11 * ForgeWarsMaps.HALL;
                 x = Math.cos(a) * r;
                 z = Math.sin(a) * r;
             }

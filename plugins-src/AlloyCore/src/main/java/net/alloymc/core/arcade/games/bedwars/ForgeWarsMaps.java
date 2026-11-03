@@ -22,7 +22,21 @@ final class ForgeWarsMaps {
     static final Theme EMBER = new Theme("red_nether_bricks", "nether_bricks", "netherrack", "quartz_pillar[axis=y]",
             "polished_basalt[axis=y]", "glowstone", "crimson_planks", "chiseled_quartz_block", "red_concrete");
 
-    static final int CORE_R = 28;        // centre island radius
+    /**
+     * The Core and the Undercroft are drawn at the size they were designed at (every constant below, and the Ruin and
+     * Cave code, are in those units) and then stretched sideways by {@code HALL} = sqrt(2.5), so the island and the cave
+     * cover 2.5 times the ground. Heights stay as they are (the cave is already tall enough). The middle three columns
+     * (the launch shaft and slime pad) are not stretched.
+     */
+    static final double HALL = Math.sqrt(2.5);
+    /** Where a column drawn at {@code i} ends up once the Core is stretched. */
+    static int out(int i) { int a = Math.abs(i); return a <= 1 ? i : Integer.signum(i) * (1 + (int) Math.round((a - 1) * HALL)); }
+    /** The drawn column a stretched column comes from (the opposite of {@link #out}). */
+    private static int in(int x) { int a = Math.abs(x); return a <= 1 ? x : Integer.signum(x) * (1 + (int) Math.round((a - 1) / HALL)); }
+    /** A point drawn at {@code v}, stretched: the block it is in moves with the block, and where it stands in the block stays. */
+    private static double out(double v) { double i = Math.floor(v); return out((int) i) + (v - i); }
+
+    static final int CORE_R = 28;        // centre island radius, as drawn (it ends up out(28) = 44 wide)
     static final int PLAZA_R = 5;        // the plaza in the middle of the Core (the launch shaft comes up through it)
 
     // the Undercroft: the cave under the Core
@@ -37,18 +51,22 @@ final class ForgeWarsMaps {
     static final int GROTTO_Z = -19;     // the Black Market grotto: off the north wall, away from the middle of the hall
 
     static BuiltMap build(String id, String name, String desc, int teams, int ringR, Theme t, String... variants) {
+        ringR += out(CORE_R) - CORE_R;   // the Core is bigger now, so the bases move out with it and the gaps between islands stay the same
         MapKit k = new MapKit(id.hashCode());
         MapDef d = new MapDef(ForgeWars.ID, id);
         d.display = name; d.description = desc; d.teams = teams;
         d.minPlayers = 2; d.maxPlayers = teams * 4;
         d.variants.addAll(java.util.List.of(variants));
-        d.builderVersion = 6;   // v6: the Golem's breach point (v5: easter eggs, v4: Black Market grotto, v3: the Undercroft); a bump makes servers rebuild the template
+        d.builderVersion = 7;   // v7: the Core and Undercroft stretched to 2.5x the ground (v6: the Golem's breach point, v5: easter eggs, v4: Black Market grotto, v3: the Undercroft); a bump makes servers rebuild the template
         int ext = ringR + 26;
         d.bounds = Box.of(-ext, -56, -ext, ext, 40, ext);
         d.voidY = -50;           // below the bottom of the Core's rock: the cave floor (-27) must be well above the void
         d.spectator = new Pt(0.5, 32, 0.5, 0, 60);
 
-        core(k, d, teams, t, id.hashCode());
+        MapKit drawn = new MapKit(id.hashCode());
+        MapDef drawnDef = new MapDef(ForgeWars.ID, id);
+        core(drawn, drawnDef, teams, t, id.hashCode());
+        stretchCore(drawn, k, drawnDef, d);
         for (int i = 0; i < teams; i++) base(k, d, i, teams, ringR, t);
         diamondVein(k, d, teams, ringR);
         d.waiting = d.spectator;
@@ -56,6 +74,38 @@ final class ForgeWarsMaps {
     }
 
     // ------------------------------------------------------------------ the Core
+
+    /** Copies the Core as drawn into the map, stretched sideways by HALL, with every point and list moved to match. */
+    private static void stretchCore(MapKit from, MapKit to, MapDef fromDef, MapDef d) {
+        stretchBlocks(from.c.blocks(), to, false);
+        stretchBlocks(from.c.lateBlocks(), to, true);
+        fromDef.points.forEach((key, p) -> d.point(key, new Pt(out(p.x()), p.y(), out(p.z()), p.yaw(), p.pitch())));
+        fromDef.lists.forEach((key, list) -> { for (Pt p : list) d.add(key, new Pt(out(p.x()), p.y(), out(p.z()), p.yaw(), p.pitch())); });
+    }
+
+    private static void stretchBlocks(java.util.Map<Long, String> blocks, MapKit to, boolean late) {
+        if (blocks.isEmpty()) return;
+        int reach = 0, lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
+        for (long key : blocks.keySet()) {
+            reach = Math.max(reach, Math.max(Math.abs(net.alloymc.core.build.Canvas.kx(key)), Math.abs(net.alloymc.core.build.Canvas.kz(key))));
+            lo = Math.min(lo, net.alloymc.core.build.Canvas.ky(key));
+            hi = Math.max(hi, net.alloymc.core.build.Canvas.ky(key));
+        }
+        int lim = out(reach) + 1;
+        for (int x = -lim; x <= lim; x++) for (int z = -lim; z <= lim; z++) {
+            int sx = in(x), sz = in(z);
+            boolean copy = out(sx) != x || out(sz) != z;   // a second column drawn from the same one
+            for (int y = lo; y <= hi; y++) {
+                String b = blocks.get(net.alloymc.core.build.Canvas.key(sx, y, sz));
+                if (b == null) continue;
+                if (copy) {   // one-of-a-kind blocks (the secrets) stay single: the extra column gets plain brick or, for the jukebox, anvil and veins, nothing
+                    if (b.contains("cracked_stone_bricks") && y < 0) b = "minecraft:stone_bricks";
+                    else if (b.contains("jukebox") || b.contains("pearlescent_froglight") || b.contains("anvil")) b = "minecraft:air";
+                }
+                if (late) to.late(x, y, z, b); else to.set(x, y, z, b);
+            }
+        }
+    }
 
     private static void core(MapKit k, MapDef d, int teams, Theme t, long seed) {
         k.island(0, 0, 0, CORE_R, t.top(), t.mid(), t.bottom());
@@ -854,7 +904,8 @@ final class ForgeWarsMaps {
         for (int y = 1; y <= 6; y++) b.set(5, y, -7, y == 6 ? t.light() : col.block("stained_glass"));
 
         // a stepping islet halfway to the Core, a little to one side
-        int hx = (int) Math.round(ca * ringR * 0.6 - sa * 4), hz = (int) Math.round(sa * ringR * 0.6 + ca * 4);   // clear of the bigger Core
+        double mid = (out(CORE_R) + ringR - 14) / 2.0;   // halfway between the Core's edge and this island's
+        int hx = (int) Math.round(ca * mid - sa * 4), hz = (int) Math.round(sa * mid + ca * 4);
         k.island(hx, -1, hz, 3.2, t.top(), t.mid(), t.bottom());
         k.set(hx, 0, hz, t.light());
 

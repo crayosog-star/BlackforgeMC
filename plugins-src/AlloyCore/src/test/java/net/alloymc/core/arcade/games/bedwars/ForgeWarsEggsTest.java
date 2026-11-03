@@ -86,13 +86,13 @@ class ForgeWarsEggsTest {
 
             ForgeWarsCaveTest.Walk w = new ForgeWarsCaveTest.Walk(c);
             assertFalse(w.has(w.reach(3, STAND, 0, 1.0), ax, STAND, az - 1), id + ": the Smith's Rest can be reached without breaking the crack");
-            Set<Long> fromStairs = w.reach(ForgeWarsMaps.TUNNEL_TOP + 2, 1, 0, 1.0);
+            Set<Long> fromStairs = w.reach(ForgeWarsMaps.out(ForgeWarsMaps.TUNNEL_TOP + 2), 1, 0, 1.0);
             assertFalse(w.has(fromStairs, jx, jy, jz - 1), id + ": the song vault can be reached without breaking the crack");
 
             for (Pt p : cracks) for (int dy = 0; dy <= 1; dy++) c.set((int) p.x(), (int) p.y() + dy, (int) p.z(), "minecraft:air");
             ForgeWarsCaveTest.Walk open = new ForgeWarsCaveTest.Walk(c);
             assertTrue(open.has(open.reach(3, STAND, 0, 0.5), ax, STAND, az - 1), id + ": can't walk from the hall into the Smith's Rest once the crack is broken");
-            assertTrue(open.has(open.reach(ForgeWarsMaps.TUNNEL_TOP + 2, 1, 0, 0.5), jx, jy, jz - 1), id + ": can't walk from the crypt stairs into the song vault once the crack is broken");
+            assertTrue(open.has(open.reach(ForgeWarsMaps.out(ForgeWarsMaps.TUNNEL_TOP + 2), 1, 0, 0.5), jx, jy, jz - 1), id + ": can't walk from the crypt stairs into the song vault once the crack is broken");
         }
     }
 
