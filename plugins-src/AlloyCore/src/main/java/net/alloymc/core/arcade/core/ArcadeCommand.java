@@ -45,6 +45,7 @@ public final class ArcadeCommand {
                 case "reload" -> { if (need(s, "arcade.map.reload")) { arcade.reload(); msg(s, P + "<green>Arcade config, game settings and maps reloaded."); } }
                 case "forcestart" -> { if (need(s, "arcade.match.manage")) forceStart(s, a); }
                 case "test" -> { if (need(s, "arcade.match.manage")) testMatch(s, p, a); }
+                case "undercroft", "golem" -> { if (need(s, "arcade.match.manage")) testAction(s, p, sub); }
                 case "forcemap" -> { if (need(s, "arcade.match.manage")) forceMap(s, a); }
                 case "stop" -> { if (need(s, "arcade.match.manage")) stop(s, a); }
                 case "create-map", "createmap" -> { if (need(s, "arcade.map.create")) createMap(s, p, a); }
@@ -73,6 +74,7 @@ public final class ArcadeCommand {
         msg(s, "<white>/arcade maps <game> <gray>• <white>/arcade top <game> [stat] <gray>• <white>/arcade stats [player] <gray>• <white>/arcade spectate <player>");
         if (has(s, "arcade.map.edit") || has(s, "arcade.match.manage")) {
             msg(s, "<gold>Staff: <white>status, reload, test <game> [mode] [player...], forcestart <game> [mode], forcemap <game> <map>, stop <match>");
+            msg(s, "<gold>In a Forge Wars test match: <white>undercroft <gray>(teleport to the Undercroft) <white>golem <gray>(wake the Golem now)");
             msg(s, "<gold>Maps: <white>create-map <game> <map>, edit <game> <map>, mapinfo <game> <map>, validate-map <game> <map>, enable|disable <game> <map>");
             msg(s, "<gold>Points: <white>setspawn <g> <m> [n|add], setteamspawn <g> <m> <team> [key], setlobby, setspectator, setboundary <g> <m> pos1|pos2,");
             msg(s, "<white>  setpoint <g> <m> <key>, addpoint <g> <m> <list>, clearpoints <g> <m> <list>, setregion <g> <m> <key> pos1|pos2, setvoid <g> <m>,");
@@ -192,6 +194,15 @@ public final class ArcadeCommand {
         if (who.size() > v.maxPlayers()) { msg(s, P + "<red>" + g.name + " " + v.label() + " fits " + v.maxPlayers() + " at most."); return; }
         if (!arcade.hasPlayableMap(g, v)) { msg(s, P + "<red>" + g.name + " " + v.label() + " has no available maps right now."); return; }
         arcade.matches().startTest(g, v, new ArrayList<>(who));
+    }
+
+    /** /arcade undercroft | /arcade golem: staff shortcuts, only inside a test match (they'd wreck a real game). */
+    private void testAction(CommandSender s, Player p, String sub) {
+        if (p == null) { msg(s, P + "<red>Run this in game."); return; }
+        Match m = arcade.matches().matchOf(p);
+        if (m == null || !m.isTest()) { msg(s, P + "<red>This only works inside a test match. <white>/arcade test forgewars"); return; }
+        String r = m.testAction(p, sub);
+        msg(s, P + (r == null ? "<red>This game has no /arcade " + sub + "." : r));
     }
 
     private void forceMap(CommandSender s, String[] a) {

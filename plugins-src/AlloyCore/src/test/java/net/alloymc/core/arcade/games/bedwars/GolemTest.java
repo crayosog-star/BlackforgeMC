@@ -384,19 +384,41 @@ class GolemTest {
         }
     }
 
-    @Test void shardsHoverAboveAndBehindInACrescent() {
-        for (int n : new int[]{6, 9, 12}) {
-            double[] prev = null;
+    @Test void shardsSpreadOutInAWideFanAboveAndBehind() {
+        for (int n : new int[]{6, 9, 10, 12}) {
+            double lo = 99, hi = -99, widest = 0;
             for (int i = 0; i < n; i++) {
                 double[] h = GolemProjectile.hoverSlot(i, n);
-                assertTrue(h[1] > 7 && h[1] < 10, "above its head: " + h[1]);
+                assertTrue(h[1] > 6.5 && h[1] < 11, "above its head: " + h[1]);
                 assertTrue(h[2] < -1.5, "behind it: " + h[2]);
-                assertTrue(Math.abs(h[0]) <= 3.9, "within a crescent over the shoulders: " + h[0]);
-                if (prev != null) assertTrue(Math.hypot(h[0] - prev[0], h[1] - prev[1]) > 0.25, "neighbours don't overlap (n=" + n + ")");
-                prev = h;
+                lo = Math.min(lo, h[1]); hi = Math.max(hi, h[1]); widest = Math.max(widest, Math.abs(h[0]));
+                for (int j = 0; j < i; j++) {
+                    double[] o = GolemProjectile.hoverSlot(j, n);
+                    assertTrue(Math.sqrt(Math.pow(h[0] - o[0], 2) + Math.pow(h[1] - o[1], 2) + Math.pow(h[2] - o[2], 2)) > 1.4, "shards " + i + " and " + j + " bunch up (n=" + n + ")");
+                }
             }
+            assertTrue(widest >= 4.5, "a wide fan, not a bunch on its back: " + widest);
+            assertTrue(hi - lo >= 1.5, "at different heights: " + (hi - lo));
             assertEquals(-GolemProjectile.hoverSlot(n - 1, n)[0], GolemProjectile.hoverSlot(0, n)[0], 1e-9, "symmetric");
         }
+    }
+
+    @Test void pacedMovesAreQuickerButNeverUnderTheFloor() {
+        assertEquals(24, GolemMath.paced(24, 1, 8));
+        assertEquals(16, GolemMath.paced(24, 1.5, 8));
+        assertEquals(8, GolemMath.paced(10, 3, 8), "a wind-up never gets shorter than the minimum");
+        assertTrue(GolemMath.paced(80, 0.55, 20) > 80, "the cold still slows it");
+        assertEquals(20, GolemMath.paced(10, 1, 20));
+    }
+
+    @Test void turnsTheShortWayRoundAtALimitedRate() {
+        assertEquals(10f, GolemMath.turnToward(0, 90, 10), 1e-4);
+        assertEquals(-10f, GolemMath.turnToward(0, -90, 10), 1e-4);
+        assertEquals(-170f, GolemMath.turnToward(-160, 170, 10), 1e-3, "across the wrap it goes the short way");
+        assertEquals(90f, GolemMath.turnToward(85, 90, 10), 1e-4, "arrives without overshooting");
+        float y = 0;
+        for (int i = 0; i < 40; i++) y = GolemMath.turnToward(y, 135, 14);
+        assertEquals(135f, y, 1e-3);
     }
 
     @Test void swoopChargeAndDrawBackAreEased() {
