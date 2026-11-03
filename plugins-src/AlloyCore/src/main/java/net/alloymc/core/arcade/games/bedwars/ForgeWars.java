@@ -34,8 +34,10 @@ public final class ForgeWars extends ArcadeGame {
         // Black Market (the villager in the cave under the Core): how many deals it shows and how often it restocks
         m.put("black-market-slots", 5);
         m.put("black-market-restock-seconds", 180);
-        // emeralds every player starts a match with. FOR TESTING: set to 0 before real players play.
-        m.put("starting-emeralds", 64);
+        // emeralds every player starts a match with: none, they're earned in the Core. (Staff test matches,
+        // /arcade test, hand out a full stack of every resource instead.) Note: a server that already wrote
+        // arcade/games/forgewars.yml keeps its stored value - set starting-emeralds: 0 there too.
+        m.put("starting-emeralds", 0);   // production default (was 64 for testing)
         // the Golem: the Undercroft's mini boss (wakes with diamond generators II, then this long after each kill)
         m.put("golem-enabled", 1);
         m.put("golem-health-base", 300);
