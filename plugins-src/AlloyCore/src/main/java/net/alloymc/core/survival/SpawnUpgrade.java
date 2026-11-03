@@ -37,20 +37,20 @@ final class SpawnUpgrade {
         if (a.length < 2 || !a[0].equalsIgnoreCase("spawnupgrade")) return false;
         if (!s.hasPermission("alloy.admin")) return true;
         int phase = a.length > 2 ? Integer.parseInt(a[2]) : 1;
-        if (phase != 1) { s.sendMessage(Ui.mm("<red>Only phase 1 exists so far.")); return true; }
+        if (phase != 1 && phase != 2) { s.sendMessage(Ui.mm("<red>Phases 1 and 2 exist.")); return true; }
         if (running) { s.sendMessage(Ui.mm("<red>Already working - wait for it to finish.")); return true; }
         switch (a[1].toLowerCase()) {
             case "apply" -> run(s, phase, true);
             case "undo" -> run(s, phase, false);
             case "status" -> s.sendMessage(Ui.mm("<gray>Phase " + phase + ": " + (marker(phase).exists() ? "<green>applied" : "<yellow>not applied")));
-            default -> s.sendMessage(Ui.mm("<gray>/alloy spawnupgrade apply|undo|status 1"));
+            default -> s.sendMessage(Ui.mm("<gray>/blackforge spawnupgrade apply|undo|status 1|2"));
         }
         return true;
     }
 
     private void run(CommandSender s, int phase, boolean apply) {
         running = true;
-        Canvas c = SpawnUpgradeBuilder.phase1();
+        Canvas c = phase == 1 ? SpawnUpgradeBuilder.phase1() : SpawnUpgradeBuilder.phase2();
         Map<Long, String> all = new HashMap<>(c.blocks());
         all.putAll(c.lateBlocks());
         // chunk by chunk, so each chunk loads once
@@ -67,6 +67,9 @@ final class SpawnUpgrade {
             byChunk.computeIfAbsent(((long) (x >> 4) << 32) | ((z >> 4) & 0xFFFFFFFFL), kk -> new ArrayList<>()).add(new long[]{x, y, z, e.getValue().hashCode()});
         }
         if (!bad.isEmpty()) plugin.getLogger().warning("spawn upgrade: unknown block ids skipped: " + bad);
+        // phase 2 also cuts a doorway through the rampart for each bridge: only wall blocks are replaced (undo puts bricks back)
+        List<int[]> carves = new ArrayList<>();
+        if (phase == 2) SpawnUpgradeBuilder.phase2Carve().blocks().forEach((k, v) -> carves.add(new int[]{Canvas.kx(k), Canvas.ky(k), Canvas.kz(k)}));
         Map<Integer, String> byHash = new HashMap<>();
         all.values().forEach(v -> byHash.put(v.hashCode(), v));
         Deque<List<long[]>> todo = new ArrayDeque<>(byChunk.values());
@@ -98,6 +101,15 @@ final class SpawnUpgrade {
                 if (pct / 10 != lastPct[0] / 10) { lastPct[0] = pct; plugin.getLogger().info("Spawn upgrade phase " + phase + ": " + pct + "%"); }
             }
             if (!todo.isEmpty()) return;
+            if (!carves.isEmpty()) {
+                Set<Material> wall = Set.of(Material.POLISHED_BLACKSTONE_BRICKS, Material.BLACKSTONE, Material.POLISHED_DEEPSLATE,
+                        Material.CRACKED_POLISHED_BLACKSTONE_BRICKS, Material.ORANGE_STAINED_GLASS, Material.POLISHED_BLACKSTONE);
+                for (int[] p : carves) {
+                    Block b = world.getBlockAt(p[0], p[1], p[2]);
+                    if (apply && wall.contains(b.getType())) { b.setType(Material.AIR, false); done[1]++; }
+                    else if (!apply && b.getType().isAir()) { b.setType(Material.POLISHED_BLACKSTONE_BRICKS, false); done[1]++; }
+                }
+            }
             task.cancel();
             running = false;
             try {

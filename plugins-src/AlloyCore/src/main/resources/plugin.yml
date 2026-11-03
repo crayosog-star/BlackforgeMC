@@ -11,6 +11,7 @@ commands:
     description: Return to the BlackForgeMC hub
     aliases: [lobby, l]
   alloy:
+    aliases: [blackforge, bf]
     description: BlackForgeMC admin commands (buildhub, buildarcade, reload)
     permission: alloy.admin
   leave:

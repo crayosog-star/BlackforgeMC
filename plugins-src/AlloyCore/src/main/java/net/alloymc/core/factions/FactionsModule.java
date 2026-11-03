@@ -236,7 +236,7 @@ public final class FactionsModule implements Listener {
             }, plugin, true);
             plugin.getLogger().info("Factions: spawn claim protection active (" + (safe * 2 + 1) + "x" + (safe * 2 + 1) + " chunks)");
         } catch (ClassNotFoundException e) {
-            plugin.getLogger().warning("Factions plugin not found - spawn chunks are protected by AlloyCore only");
+            plugin.getLogger().warning("Factions plugin not found - spawn chunks are protected by the BlackForge core only");
         } catch (Exception e) {
             plugin.getLogger().warning("Factions claim hook failed: " + e);
         }
@@ -449,7 +449,7 @@ public final class FactionsModule implements Listener {
         }, 200L);
     }
 
-    /** /alloy season ... (staff). Returns true if handled. */
+    /** /blackforge season ... (staff). Returns true if handled. */
     public boolean admin(CommandSender s, String[] a) {
         if (a.length == 0) return false;
         if (rite.admin(s, a)) return true;   // /alloy rite give <player>
@@ -460,9 +460,9 @@ public final class FactionsModule implements Listener {
                 String sub = a.length > 1 ? a[1].toLowerCase() : "info";
                 switch (sub) {
                     case "standings" -> { for (String l : standings()) s.sendMessage(Ui.mm("<gray>" + l.replace("<", ""))); }
-                    case "end" -> { if (a.length > 2 && a[2].equalsIgnoreCase("confirm")) endSeason(s); else s.sendMessage(Ui.mm("<red>This ends the season NOW and resets the map. <white>/alloy season end confirm")); }
+                    case "end" -> { if (a.length > 2 && a[2].equalsIgnoreCase("confirm")) endSeason(s); else s.sendMessage(Ui.mm("<red>This ends the season NOW and resets the map. <white>/blackforge season end confirm")); }
                     case "set-end" -> {
-                        if (a.length < 3) { s.sendMessage(Ui.mm("<gray>/alloy season set-end <days from now>")); return true; }
+                        if (a.length < 3) { s.sendMessage(Ui.mm("<gray>/blackforge season set-end <days from now>")); return true; }
                         season.set("ends", System.currentTimeMillis() + (long) (Double.parseDouble(a[2]) * 86_400_000L));
                         try { season.save(seasonFile); } catch (Exception ignored) { }
                         s.sendMessage(Ui.mm("<green>Season ends in " + left() + "."));

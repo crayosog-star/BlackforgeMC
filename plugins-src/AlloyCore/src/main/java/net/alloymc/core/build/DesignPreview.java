@@ -64,12 +64,29 @@ public final class DesignPreview {
                         new View("forge", new WorldCam.Cam(14, Y + 30, 22, 0.5, Y + 28, 0, 70)),
                         new View("tower", new WorldCam.Cam(40, Y + 6, 40, 70, Y + 14, 70, 75)));
             }
+            case "spawnupgrade2" -> {
+                c = net.alloymc.core.survival.SpawnUpgradeBuilder.phase2();
+                int Y = net.alloymc.core.survival.SurvivalLayout.Y;
+                look = WorldCam.Look.sunset();
+                look.fogStart = 220; look.fogEnd = 520; look.maxDist = 520;
+                views = List.of(
+                        new View("overview", new WorldCam.Cam(260, Y + 150, 260, 0, Y + 5, 0, 75)),
+                        new View("smithy", new WorldCam.Cam(70, Y + 18, 40, 111, Y + 6, 0, 72)),
+                        new View("market", new WorldCam.Cam(-40, Y + 18, 70, 0, Y + 6, 111, 72)),
+                        new View("wilds", new WorldCam.Cam(-70, Y + 18, -40, -111, Y + 8, 0, 72)),
+                        new View("hall", new WorldCam.Cam(40, Y + 18, -70, 0, Y + 8, -111, 72)),
+                        new View("smithy_aerial", new WorldCam.Cam(92, Y + 40, 40, 112, Y + 4, -2, 70)),
+                        new View("hall_aerial", new WorldCam.Cam(40, Y + 40, -92, 2, Y + 4, -112, 70)),
+                        new View("gate_aerial", new WorldCam.Cam(-92, Y + 40, 40, -112, Y + 4, -2, 70)),
+                        new View("market_aerial", new WorldCam.Cam(40, Y + 40, 92, 2, Y + 4, 112, 70)),
+                        new View("hall_inside", new WorldCam.Cam(0.5, Y + 3, -106, 0.5, Y + 4, -118, 80)));
+            }
             default -> throw new IllegalArgumentException("unknown design " + design);
         }
         WorldCam.World world;
-        if (design.equals("spawnupgrade")) {   // the live Survival world, with phase 1 laid over it (only into air)
+        if (design.startsWith("spawnupgrade")) {   // the live Survival world, with phase 1 laid over it (only into air)
             world = cam.load(new File(Shots.NET, "survival/world/dimensions/minecraft/overworld/region"), -200, -200, 200, 200);
-            System.out.println("phase 1 would place " + cam.overlay(world, c) + " blocks (all into air)");
+            System.out.println("the upgrade would place " + cam.overlay(world, c) + " blocks (all into air)");
         } else world = cam.fromCanvas(c);
         System.out.println(design + ": " + c.size() + " blocks");
         String only = System.getenv("VIEW");

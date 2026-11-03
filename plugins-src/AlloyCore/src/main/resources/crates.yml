@@ -59,7 +59,7 @@ netherite:
     - {name: "<white>Enchanted Golden Apple", item: ENCHANTED_GOLDEN_APPLE, weight: 14}
     - {name: "<light_purple>Elytra", item: ELYTRA, weight: 10, announce: true}
     - {name: "<light_purple>Totem of Undying", item: TOTEM_OF_UNDYING, weight: 12}
-    - {name: "<gold>God Pickaxe", item: NETHERITE_PICKAXE, weight: 6, enchants: {efficiency: 5, unbreaking: 3, fortune: 3, mending: 1}, custom-name: "<gold><bold>Alloy Breaker", announce: true}
+    - {name: "<gold>God Pickaxe", item: NETHERITE_PICKAXE, weight: 6, enchants: {efficiency: 5, unbreaking: 3, fortune: 3, mending: 1}, custom-name: "<gold><bold>Black Forge Breaker", announce: true}
     - {name: "<gold>God Sword", item: NETHERITE_SWORD, weight: 6, enchants: {sharpness: 5, unbreaking: 3, looting: 3, mending: 1, fire_aspect: 2}, custom-name: "<gold><bold>Forgeblade", announce: true}
     - {name: "<gold>Beacon", item: BEACON, weight: 4, announce: true}
     - {name: "<gradient:#b9a7ff:#4a4043>Netherite Name Tag", item: NAME_TAG, weight: 6, give-item: false, commands: ["alloy tag give {player} netherite"], announce: true}

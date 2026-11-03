@@ -234,4 +234,209 @@ public final class SpawnUpgradeBuilder {
         c.blocks().forEach((k, v) -> { if (allowedAt(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k)) && !v.equals("minecraft:air")) out.set(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k), v); });
         return out;
     }
+
+    // ================================================================== phase 2: the four districts
+
+    /** One district: a floating platform beyond the rampart, with a bridge and a gate cut through the wall. d: 0 east, 1 south, 2 west, 3 north. */
+    private static final class Loc {
+        final Canvas c; final int dx, dz, sx, sz, cx, cz;
+        Loc(Canvas c, int d) {
+            this.c = c;
+            dx = new int[]{1, 0, -1, 0}[d]; dz = new int[]{0, 1, 0, -1}[d];
+            sx = -dz; sz = dx;   // "right" of someone looking outward, so text reads from the island side
+            cx = dx * DIST; cz = dz * DIST;
+        }
+        int wx(int u, int v) { return cx + u * dx + v * sx; }
+        int wz(int u, int v) { return cz + u * dz + v * sz; }
+        void set(int u, int y, int v, String b) { c.set(wx(u, v), Y + y, wz(u, v), mc(b)); }
+        void late(int u, int y, int v, String b) { c.setLate(wx(u, v), Y + y, wz(u, v), mc(b)); }
+        void fill(int u1, int y1, int v1, int u2, int y2, int v2, String b) {
+            for (int u = Math.min(u1, u2); u <= Math.max(u1, u2); u++) for (int y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) for (int v = Math.min(v1, v2); v <= Math.max(v1, v2); v++) set(u, y, v, b);
+        }
+        /** The compass facing of a local direction (du along u, dv along v). */
+        String face(int du, int dv) {
+            int x = du * dx + dv * sx, z = du * dz + dv * sz;
+            return x > 0 ? "east" : x < 0 ? "west" : z > 0 ? "south" : "north";
+        }
+        /** Walls, floor and a flat roof of a room; the door is a 3-wide gap in the wall nearest the island. */
+        void room(int u1, int u2, int v1, int v2, int h, String wall, String floor, String roof) {
+            for (int u = u1; u <= u2; u++) for (int v = v1; v <= v2; v++) {
+                set(u, 0, v, floor);
+                boolean edge = u == u1 || u == u2 || v == v1 || v == v2;
+                for (int y = 1; y <= h; y++) set(u, y, v, edge ? (y % 4 == 0 ? "polished_deepslate" : wall) : "air");
+                set(u, h + 1, v, roof);
+            }
+            for (int v = -1; v <= 1; v++) for (int y = 1; y <= 3; y++) set(u1, y, v, "air");
+        }
+        /** Burning letters on the outer face of a wall, facing the island. */
+        void sign(String text, int u, int y0, int scale) {
+            int w = BlockFont.width(text, 1) * scale;
+            BlockFont.draw(text, 1, (col, row, gr) -> {
+                for (int a = 0; a < scale; a++) for (int b = 0; b < scale; b++) {
+                    int v = -w / 2 + col * scale + a, y = y0 + row * scale + b;
+                    set(u, y, v, "shroomlight");
+                    set(u + 1, y, v, "blackstone");
+                }
+            });
+        }
+    }
+
+    static final int DIST = 111, PLAT_R = 9;
+
+    private static void platform(Loc l, long seed) {
+        Random rnd = new Random(seed);
+        for (int u = -PLAT_R - 1; u <= PLAT_R + 1; u++) for (int v = -PLAT_R - 1; v <= PLAT_R + 1; v++) {
+            double d = Math.hypot(u, v), R = PLAT_R + 0.8 * Math.sin(Math.atan2(v, u) * 4 + seed);
+            if (d > R) continue;
+            l.set(u, 0, v, d > R - 1.2 ? "polished_blackstone_bricks" : (((u >> 1) + (v >> 1)) & 1) == 0 ? "deepslate_tiles" : "polished_blackstone");
+            int depth = (int) Math.round(Math.pow(1 - d / R, 0.7) * 13 + 3 + rnd.nextInt(2));
+            for (int y = 1; y <= depth; y++) l.set(u, -y, v, y < depth - 1 ? (rnd.nextInt(45) == 0 ? "magma_block" : "blackstone") : "basalt[axis=y]");
+        }
+        // the bridge from the wall: a deck, balustrades with lamps, and piers
+        for (int u = -DIST + 94; u <= -PLAT_R + 1; u++) {
+            for (int v = -2; v <= 2; v++) l.set(u, 0, v, Math.abs(v) == 2 ? "polished_blackstone_bricks" : "polished_deepslate");
+            for (int v : new int[]{-2, 2}) {
+                l.set(u, 1, v, "polished_blackstone_brick_wall");
+                if ((u + DIST) % 4 == 0) { l.set(u, 2, v, "polished_blackstone_brick_wall"); l.late(u, 3, v, "soul_lantern"); }
+            }
+            if ((u + DIST) % 6 == 0) for (int y = -1; y >= -5; y--) l.set(u, y, 0, "blackstone");
+        }
+        // a pair of braziers flanking the bridge head
+        for (int v : new int[]{-3, 3}) { l.set(-PLAT_R + 1, 1, v, "chiseled_polished_blackstone"); l.late(-PLAT_R + 1, 2, v, "campfire[lit=true]"); }
+    }
+
+    /** Dressing for the gate cut through the wall: two buttresses with braziers and a gilded lintel, outside the wall face. */
+    private static void gateDressing(Loc l) {
+        for (int v : new int[]{-4, 4}) {
+            l.fill(-DIST + 91, 1, v, -DIST + 92, 12, v, "polished_blackstone_bricks");
+            l.set(-DIST + 91, 13, v, "gilded_blackstone");
+            l.late(-DIST + 91, 14, v, "campfire[lit=true]");
+        }
+        for (int v = -4; v <= 4; v++) l.set(-DIST + 91, 8, v, "gilded_blackstone");
+    }
+
+    private static void carve(Canvas out, int d) {
+        Loc l = new Loc(out, d);
+        for (int u = -DIST + 86; u <= -DIST + 91; u++) for (int v = -2; v <= 2; v++) for (int y = 1; y <= 6; y++) l.set(u, y, v, "air");
+    }
+
+    private static void smithy(Canvas c) {
+        Loc l = new Loc(c, 0);
+        platform(l, 5);
+        gateDressing(l);
+        l.room(-5, 6, -6, 6, 7, "polished_blackstone_bricks", "deepslate_tiles", "polished_blackstone_slab");
+        l.sign("SMITHY", -5, 8, 1);
+        String toIn = l.face(-1, 0), toOut = l.face(1, 0);
+        // the great furnace wall: blast furnaces and magma behind iron bars
+        for (int v = -5; v <= 5; v++) {
+            boolean f = v % 2 == 0;
+            l.set(5, 1, v, f ? "blast_furnace[facing=" + toIn + ",lit=true]" : "magma_block");
+            l.set(5, 2, v, f ? "furnace[facing=" + toIn + ",lit=true]" : "iron_bars");
+            l.set(5, 3, v, "iron_bars"); l.set(5, 4, v, "magma_block");
+        }
+        // the legendary forge: a lava basin ringed with blackstone, anvils round it
+        l.fill(-1, 1, -1, 1, 1, 1, "polished_blackstone_bricks");
+        l.set(0, 1, 0, "lava_cauldron");
+        for (int[] a : new int[][]{{-3, -3}, {-3, 3}, {2, -4}, {2, 4}}) l.set(a[0], 1, a[1], "anvil[facing=" + l.face(0, 1) + "]");
+        for (int v : new int[]{-5, 5}) { l.set(-3, 1, v, "smithing_table"); l.set(0, 1, v, "grindstone[face=floor,facing=" + l.face(0, 1) + "]"); l.set(3, 1, v, "blast_furnace[facing=" + toOut + "]"); }
+        // weapon and armour pedestals under hanging lanterns
+        for (int v : new int[]{-3, 0, 3}) { l.set(3, 1, v, "polished_blackstone"); l.set(3, 2, v, v == 0 ? "netherite_block" : "iron_block"); }
+        for (int v = -5; v <= 5; v += 5) { for (int y = 6; y >= 4; y--) l.set(-1, y, v, "iron_chain[axis=y]"); l.late(-1, 3, v, "lantern[hanging=true]"); }
+        // chimney
+        l.fill(4, 8, -1, 5, 14, 0, "blackstone"); l.late(4, 15, 0, "campfire[lit=true]");
+    }
+
+    private static void market(Canvas c) {
+        Loc l = new Loc(c, 1);
+        platform(l, 6);
+        gateDressing(l);
+        l.sign("MARKET", -4, 9, 1);
+        String[] wool = {"orange_wool", "black_wool"};
+        int n = 0;
+        for (int[] st : new int[][]{{-3, -5}, {-3, 5}, {3, -5}, {3, 5}}) {
+            int u = st[0], v = st[1];
+            for (int du : new int[]{-2, 2}) for (int dv : new int[]{-2, 2}) l.fill(u + du, 1, v + dv, u + du, 3, v + dv, "dark_oak_fence");
+            for (int du = -2; du <= 2; du++) for (int dv = -2; dv <= 2; dv++) l.set(u + du, 4, v + dv, wool[(du + dv + n + 8) % 2]);
+            l.set(u, 1, v - 1, "barrel[facing=up]"); l.set(u, 1, v + 1, "smoker[facing=" + l.face(1, 0) + "]");
+            l.set(u + 1, 1, v, "barrel[facing=up]"); l.late(u, 3, v, "lantern[hanging=true]");
+            n++;
+        }
+        // the central well: a ring of blackstone round a basin of lava, capped with a bell
+        l.fill(-1, 1, -1, 1, 1, 1, "polished_blackstone_bricks"); l.set(0, 1, 0, "lava_cauldron");
+        for (int y = 2; y <= 5; y++) for (int[] p : new int[][]{{-1, -1}, {-1, 1}, {1, -1}, {1, 1}}) l.set(p[0], y, p[1], "polished_blackstone_brick_wall");
+        l.fill(-1, 6, -1, 1, 6, 1, "polished_blackstone_slab");
+    }
+
+    private static void gate(Canvas c) {
+        Loc l = new Loc(c, 2);
+        platform(l, 7);
+        gateDressing(l);
+        l.sign("WILDS", -5, 16, 1);
+        // two great towers and an arch between them, at the far end of the platform
+        for (int v : new int[]{-6, 6}) {
+            for (int u = 2; u <= 6; u++) for (int w = -2; w <= 2; w++) for (int y = 1; y <= 20; y++) {
+                boolean edge = u == 2 || u == 6 || w == -2 || w == 2;
+                l.set(u, y, v + w, edge ? (y % 5 == 0 ? "polished_deepslate" : "polished_blackstone_bricks") : "air");
+            }
+            for (int y = 1; y <= 20; y += 6) l.set(2, y + 2, v, "orange_stained_glass");
+            for (int i = 0; i < 6; i++) l.fill(2 + (i < 3 ? 0 : 1), 21 + i, v - 2 + i / 2, 6 - (i < 3 ? 0 : 1), 21 + i, v + 2 - i / 2, i % 3 == 2 ? "deepslate_tiles" : "blackstone");
+            l.set(4, 27, v, "lightning_rod");
+        }
+        for (int v = -4; v <= 4; v++) for (int y = 11; y <= 15; y++) for (int u = 3; u <= 5; u++) l.set(u, y, v, y == 15 ? "gilded_blackstone" : "polished_blackstone_bricks");
+        // the portcullis, half raised, and a curtain of glowing glass
+        for (int v = -4; v <= 4; v++) for (int y = 8; y <= 10; y++) l.set(4, y, v, v % 2 == 0 ? "iron_bars" : "air");
+        for (int v = -3; v <= 3; v++) for (int y = 1; y <= 10; y++) l.set(5, y, v, y > 8 ? "iron_bars" : "orange_stained_glass_pane");
+        for (int v : new int[]{-3, 3}) { l.set(1, 1, v, "chiseled_polished_blackstone"); l.late(1, 2, v, "campfire[lit=true]"); }
+    }
+
+    private static void grandHall(Canvas c) {
+        Loc l = new Loc(c, 3);
+        platform(l, 8);
+        gateDressing(l);
+        l.room(-6, 8, -6, 6, 10, "polished_blackstone_bricks", "polished_deepslate", "deepslate_tiles");
+        l.sign("GRAND HALL", -6, 12, 1);
+        // a stepped roof and two flanking spires
+        for (int i = 0; i < 6; i++) l.fill(-6 + i, 12 + i, -6 + i, 8 - i, 12 + i, 6 - i, i % 3 == 2 ? "blackstone" : "deepslate_tiles");
+        for (int v : new int[]{-7, 7}) {
+            l.fill(-6, 1, v - 1, -4, 16, v + 1, "polished_blackstone_bricks");
+            for (int i = 0; i < 4; i++) l.fill(-6 + i / 2, 17 + i, v - 1 + i / 2, -4 - i / 2, 17 + i, v + 1 - i / 2, "deepslate_tiles");
+            l.set(-5, 21, v, "lightning_rod");
+        }
+        // the aisle, pillars, chandeliers and windows
+        for (int u = -5; u <= 7; u++) { l.set(u, 0, 0, "polished_blackstone_bricks"); l.set(u, 1, 0, u % 2 == 0 ? "red_carpet" : "black_carpet"); }
+        for (int u = -4; u <= 6; u += 3) for (int v : new int[]{-3, 3}) {
+            l.fill(u, 1, v, u, 9, v, "polished_blackstone_bricks"); l.set(u, 10, v, "gilded_blackstone");
+        }
+        for (int u = -4; u <= 6; u += 5) {
+            for (int y = 10; y >= 7; y--) l.set(u, y, 0, "iron_chain[axis=y]");
+            for (int[] o : new int[][]{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) l.late(u + o[0], 6, o[1], "lantern");
+            l.set(u, 6, 0, "gilded_blackstone");
+        }
+        for (int u = -3; u <= 5; u += 4) for (int v : new int[]{-6, 6}) for (int y = 3; y <= 8; y++) l.set(u, y, v, "orange_stained_glass");
+        // the throne dais at the far end: an anvil on a stepped plinth, flanked by braziers and banners
+        l.fill(6, 1, -3, 7, 1, 3, "polished_blackstone_bricks"); l.fill(7, 2, -2, 7, 2, 2, "polished_blackstone_bricks");
+        l.set(7, 3, 0, "anvil[facing=" + l.face(0, 1) + "]");
+        for (int v : new int[]{-5, 5}) { l.set(7, 5, v, "gold_block"); l.late(7, 6, v, "campfire[lit=true]"); }
+        for (int v : new int[]{-2, 2}) l.late(8, 7, v, "black_wall_banner[facing=" + l.face(-1, 0) + "]");
+    }
+
+    /** The four districts (blocks only ever go where the world has air). */
+    public static Canvas phase2() {
+        Canvas c = new Canvas();
+        smithy(c);
+        market(c);
+        gate(c);
+        grandHall(c);
+        Canvas out = new Canvas();
+        c.blocks().forEach((k, v) -> { if (allowedAt(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k)) && !v.equals("minecraft:air")) out.set(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k), v); });
+        c.lateBlocks().forEach((k, v) -> { if (allowedAt(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k))) out.setLate(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k), v); });
+        return out;
+    }
+
+    /** The doorways cut through the rampart (positions to turn to air; only wall blocks are ever replaced). */
+    public static Canvas phase2Carve() {
+        Canvas c = new Canvas();
+        for (int d = 0; d < 4; d++) carve(c, d);
+        return c;
+    }
 }

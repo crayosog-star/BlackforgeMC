@@ -82,7 +82,7 @@ public final class AlloyCore extends JavaPlugin implements Listener {
         new FrostEvent(this, mode, cosmetics);
         new ItemSkins(this);
         new Journey(this, mode, shared);
-        getLogger().info("AlloyCore enabled in " + mode + " mode");
+        getLogger().info("BlackForge core enabled in " + mode + " mode");
     }
 
     @Override
@@ -158,7 +158,7 @@ public final class AlloyCore extends JavaPlugin implements Listener {
                         String[] rest = java.util.Arrays.copyOfRange(args, 1, args.length);
                         RestartRequest.Parsed req = RestartRequest.parse(rest, mode);
                         if (req == null) {
-                            sender.sendMessage(Component.text("/alloy restart <hub|skyblock|survival|factions|arcade|all|this> [now]"));
+                            sender.sendMessage(Component.text("/blackforge restart <hub|skyblock|survival|factions|arcade|all|this> [now]"));
                             break;
                         }
                         try {
@@ -182,7 +182,7 @@ public final class AlloyCore extends JavaPlugin implements Listener {
                     }
                     default -> {
                         if (!sub.isEmpty()) sender.sendMessage(Component.text("Unknown subcommand: " + args[0]));
-                        sender.sendMessage(Component.text("/alloy buildhub | buildarena | buildarcade | spawn | welcomeshow [player] | restart <server|all|this> [now]"));
+                        sender.sendMessage(Component.text("/blackforge buildhub | buildarena | buildarcade | spawn | welcomeshow [player] | restart <server|all|this> [now]"));
                     }
                 }
             }

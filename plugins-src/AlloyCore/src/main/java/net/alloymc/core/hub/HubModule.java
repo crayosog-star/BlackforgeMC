@@ -68,7 +68,7 @@ public final class HubModule implements Listener {
         Bukkit.getPluginManager().registerEvents(new LobbyRules(p -> false).allowItems(p -> p.getWorld().getName().equals(TestArena.WORLD) || p.getWorld().getName().equals(net.alloymc.core.survival.RiteChambers.WORLD)), plugin);
         new net.alloymc.core.SpawnSafety(plugin, l -> l.getWorld() == world, p -> spawn()).withStuckCommand();
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        registerJoinCommand();   // the clickable links in the first-join guide run /alloyjoin
+        registerJoinCommand();   // the clickable links in the first-join guide run /bfjoin
         // keep the whole hub loaded: holograms survive, lava keeps flowing, first joins are instant
         for (int cx = -6; cx <= 5; cx++) for (int cz = -6; cz <= 5; cz++) world.addPluginChunkTicket(cx, cz, plugin);
         if (!new File(plugin.getDataFolder(), "hub-built").exists()) build(Bukkit.getConsoleSender());
@@ -143,7 +143,7 @@ public final class HubModule implements Listener {
     }
 
     private void registerJoinCommand() {
-        Bukkit.getCommandMap().register("alloy", new org.bukkit.command.Command("alloyjoin", "Join a game mode", "/alloyjoin <server>", List.of()) {
+        Bukkit.getCommandMap().register("alloy", new org.bukkit.command.Command("bfjoin", "Join a game mode", "/bfjoin <server>", List.of()) {
             @Override public boolean execute(org.bukkit.command.CommandSender s, String label, String[] a) {
                 if (s instanceof Player p && a.length == 1 && a[0].equals("arena")) arena.enter(p);
                 else if (s instanceof Player p && a.length == 1 && a[0].equals("forgewars")) joinForgeWars(p);
@@ -319,11 +319,11 @@ public final class HubModule implements Listener {
             p.sendMessage(Ui.mm(" "));
             p.sendMessage(Ui.mm("  " + Ui.TITLE + " <gray>- glad you're here, <white>" + p.getName() + "<gray>!"));
             p.sendMessage(Ui.mm("  <gray>Pick a game with the <gold>compass</gold> or walk into a portal:"));
-            p.sendMessage(Ui.mm("  <#4fd1c5>» <u><click:run_command:'/alloyjoin skyblock'>Skyblock</click></u> <gray>- grow your own sky island"));
-            p.sendMessage(Ui.mm("  <#d9dde3>» <u><click:run_command:'/alloyjoin survival'>Survival</click></u> <gray>- claims, crates, KOTH, the Scrapyard"));
-            p.sendMessage(Ui.mm("  <#e5484d>» <u><click:run_command:'/alloyjoin factions'>Factions</click></u> <gray>- build a faction, raid rivals"));
-            p.sendMessage(Ui.mm("  <#ffc53d>» <u><click:run_command:'/alloyjoin arcade'>Arcade</click></u> <gray>- BedWars, SkyWars, Duels + 15 more minigames"));
-            p.sendMessage(Ui.mm("  <#ff6a00>» <u><click:run_command:'/alloyjoin forgewars'>Forge Wars</click></u> <gray>- BedWars with BlackForgeMC abilities"));
+            p.sendMessage(Ui.mm("  <#4fd1c5>» <u><click:run_command:'/bfjoin skyblock'>Skyblock</click></u> <gray>- grow your own sky island"));
+            p.sendMessage(Ui.mm("  <#d9dde3>» <u><click:run_command:'/bfjoin survival'>Survival</click></u> <gray>- claims, crates, KOTH, the Scrapyard"));
+            p.sendMessage(Ui.mm("  <#e5484d>» <u><click:run_command:'/bfjoin factions'>Factions</click></u> <gray>- build a faction, raid rivals"));
+            p.sendMessage(Ui.mm("  <#ffc53d>» <u><click:run_command:'/bfjoin arcade'>Arcade</click></u> <gray>- BedWars, SkyWars, Duels + 15 more minigames"));
+            p.sendMessage(Ui.mm("  <#ff6a00>» <u><click:run_command:'/bfjoin forgewars'>Forge Wars</click></u> <gray>- BedWars with BlackForgeMC abilities"));
             p.sendMessage(Ui.mm("  <gray>Lost? The <#4fd1c5>Guide</#4fd1c5> book (or <white>/guide</white>) explains everything."));
             p.sendMessage(Ui.mm("  <gray>Brought by a friend? <white>/referral <name></white> pays you both."));
             p.sendMessage(Ui.mm("  <gray>Be respectful and have fun - type <white>/hub</white> any time to come back here."));
