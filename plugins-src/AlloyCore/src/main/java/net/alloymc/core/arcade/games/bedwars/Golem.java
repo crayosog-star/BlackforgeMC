@@ -102,7 +102,8 @@ final class Golem {
     private Vector chargeDir;
     private BlockDisplay boulder;
     private float yaw;
-    private int t, stateT, windup, stunTicks, nextMove = 100, swipeCd, idle, phaseShown = 1, eruptStep, chillUntil = -1, freezeUntil, stepSign, volleyEnd,
+    private final Pacing pacing = new Pacing(100);   // special-move countdown + swipe cooldown (FW-003)
+    private int t, stateT, windup, stunTicks, idle, phaseShown = 1, eruptStep, chillUntil = -1, freezeUntil, stepSign, volleyEnd,
             blindUntil = -1, wanderAt;
     private double heartScale = 1, blood;
     private boolean removed, moving, chillShown, dimShown, eyesRed;
@@ -493,15 +494,15 @@ final class Golem {
         if (below.isEmpty()) {
             if (++idle > 400 && body.getHealth() < maxHealth) body.setHealth(Math.min(maxHealth, body.getHealth() + maxHealth * 0.02 / 20));
         } else idle = 0;
-        swipeCd--;
+        pacing.tick();
         if (blinded()) { stumble(below); steps(); return; }
         if (target == null) stepTo(home, SPEED * slow());
         else {
             Location tl = target.getLocation();
             double dx = tl.getX() - body.getLocation().getX(), dz = tl.getZ() - body.getLocation().getZ(), dist = Math.hypot(dx, dz);
             yaw = GolemMath.turnToward(yaw, GolemMath.yawTo(dx, dz), turnRate());
-            if (--nextMove <= 0) { start(GolemMath.pick(phase(), dist, high(target), below.size(), rnd)); return; }
-            if (dist <= 4.1 && swipeCd <= 0 && !high(target)) { start(GolemMath.Move.SWIPE); return; }
+            if (pacing.specialDue()) { start(GolemMath.pick(phase(), dist, high(target), below.size(), rnd)); return; }
+            if (dist <= 4.1 && pacing.swipeReady() && !high(target)) { start(GolemMath.Move.SWIPE); return; }
             if (dist > 3.4) stepTo(tl, (phase() >= 3 ? ENRAGED_SPEED : SPEED) * (dist > 8 ? 1.5 : 1) * slow());   // and it closes a gap quickly
         }
         steps();
@@ -525,7 +526,7 @@ final class Golem {
             Integer hitAt = lastHitBy.get(p.getUniqueId());
             Location l = p.getLocation();
             double dx = l.getX() - at.getX(), dz = l.getZ() - at.getZ();
-            if (hitAt != null && t - hitAt < 10 && Math.hypot(dx, dz) <= 4.1 && swipeCd <= 0) {
+            if (hitAt != null && t - hitAt < 10 && Math.hypot(dx, dz) <= 4.1 && pacing.swipeReady()) {
                 yaw = GolemMath.yawTo(dx, dz);
                 start(GolemMath.Move.SWIPE);
                 return;
@@ -634,7 +635,7 @@ final class Golem {
         if (s >= GolemIntro.SEAL && s < GolemIntro.SEAL + GolemIntro.SEAL_TICKS) seal(s - GolemIntro.SEAL);
         if (s >= GolemIntro.END) {
             body.setInvulnerable(false);
-            nextMove = 50;
+            pacing.restart(50);
             to(State.WALK, 12);
             refreshBar();
         }
@@ -868,7 +869,7 @@ final class Golem {
         blindUntil = t + GolemMath.BLIND_TICKS;
         target = null;
         wander = null;
-        if (state == State.WINDUP) { to(State.WALK, 8); nextMove = 30; }   // lost track of who it was winding up at
+        if (state == State.WINDUP) { to(State.WALK, 8); pacing.restart(30); }   // lost track of who it was winding up at
         if (was) { if (blindTag != null) blindTag.text(Ui.mm(blindText())); return; }
         Location c = body.getLocation().add(0, 3, 0);
         world.playSound(c, Sound.ENTITY_IRON_GOLEM_HURT, SoundCategory.HOSTILE, 2f, 0.4f);
@@ -1184,8 +1185,12 @@ final class Golem {
                 world.spawnParticle(Particle.SWEEP_ATTACK, arc, 4, 1.2, 0.2, 0.8);
                 Location f = local(1.0, 0, 3.2);
                 crack(f.getX(), f.getZ(), 1.3, 0.45);   // its knuckles drag across the floor
-                swipeCd = (int) (30 / pace);
-                end(10);
+                // FW-003: fix melee lock - a swipe used to end() and restart the special countdown, and its cooldown
+                // (20 ticks at 150% speed) is shorter than that countdown (29-66), so a player in reach was swiped
+                // forever and no special ever fired. Now an in-between swipe leaves the countdown running; only a
+                // swipe that WAS the special pick restarts it.
+                if (pacing.swiped((int) (30 / pace))) end(10);
+                else to(State.WALK, 16);
             }
             case SLAM, ROCKFALL -> {
                 if (stateT < impact()) return;
@@ -1756,7 +1761,36 @@ final class Golem {
 
     private void end(int restTicks) {
         to(State.WALK, restTicks + 6);
-        nextMove = GolemMath.paced(GolemMath.moveGap(phase()) + rnd.nextInt(20), slow() * pace, 20);
+        pacing.restart(GolemMath.paced(GolemMath.moveGap(phase()) + rnd.nextInt(20), slow() * pace, 20));
+    }
+
+    /**
+     * When the Golem may start its next special move and its next swipe, counted in walking ticks. Plain Java (no Bukkit),
+     * so the scheduling can be unit-tested without loading the Golem itself.
+     */
+    static final class Pacing {
+        private int nextMove, swipeCd;
+
+        Pacing(int firstMove) { nextMove = firstMove; }
+
+        /** Every walking tick (blind or not): the swipe cooldown runs down. */
+        void tick() { swipeCd--; }
+
+        /** Every walking tick with a target: counts the special down; true when one is due. */
+        boolean specialDue() { return --nextMove <= 0; }
+
+        boolean swipeReady() { return swipeCd <= 0; }
+
+        /**
+         * A swipe landed: start its cooldown. Returns true if the special countdown must be restarted - only when this
+         * swipe was itself the special pick (countdown already at 0); otherwise the countdown keeps running. (FW-003)
+         */
+        boolean swiped(int cooldown) { swipeCd = cooldown; return nextMove <= 0; }
+
+        /** Start a fresh countdown to the next special move. */
+        void restart(int ticks) { nextMove = ticks; }
+
+        int nextMove() { return nextMove; }
     }
 
     private void stun(int ticks, String msg) {
