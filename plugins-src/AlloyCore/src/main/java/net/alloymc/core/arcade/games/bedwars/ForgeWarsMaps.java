@@ -94,13 +94,16 @@ final class ForgeWarsMaps {
         int lim = out(reach) + 1;
         for (int x = -lim; x <= lim; x++) for (int z = -lim; z <= lim; z++) {
             int sx = in(x), sz = in(z);
-            boolean copy = out(sx) != x || out(sz) != z;   // a second column drawn from the same one
+            boolean copyX = out(sx) != x, copy = copyX || out(sz) != z;   // a second column drawn from the same one
             for (int y = lo; y <= hi; y++) {
                 String b = blocks.get(net.alloymc.core.build.Canvas.key(sx, y, sz));
                 if (b == null) continue;
-                if (copy) {   // one-of-a-kind blocks (the secrets) stay single: the extra column gets plain brick or, for the jukebox, anvil and veins, nothing
-                    if (b.contains("cracked_stone_bricks") && y < 0) b = "minecraft:stone_bricks";
-                    else if (b.contains("jukebox") || b.contains("pearlescent_froglight") || b.contains("anvil")) b = "minecraft:air";
+                if (copy) {   // one-of-a-kind blocks (the secrets) stay single
+                    // both cracked walls face north or south: a copy along z would plug the way in, so it opens up; a copy along x is just more wall
+                    if (b.contains("cracked_stone_bricks") && y < 0) b = copyX ? "minecraft:stone_bricks" : "minecraft:air";
+                    else if (b.contains("jukebox") || b.contains("anvil")) b = "minecraft:air";
+                    // the froglight rings round the launch pad and the shaft are floor and must stay; a vein's copy goes back to plain ground or rock
+                    else if (b.contains("pearlescent_froglight") && Math.max(Math.abs(sx), Math.abs(sz)) != 2) b = y >= 0 ? "minecraft:podzol" : "minecraft:tuff";
                 }
                 if (late) to.late(x, y, z, b); else to.set(x, y, z, b);
             }

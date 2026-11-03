@@ -32,7 +32,7 @@ class ForgeWarsCaveTest {
             Walk w = new Walk(b.canvas());
             Pt m = b.def().point("black_market");
             int mx = (int) Math.floor(m.x()), mz = (int) Math.floor(m.z());
-            assertTrue(w.has(w.reach(OUT, 1, 0, 1.0), mx, STAND, mz + 2), b.def().id + ": no way down to the Black Market counter");
+            assertTrue(w.has(w.reach(OUT, 1, 0, 1.0), mx, STAND, ForgeWarsMaps.out(ForgeWarsMaps.GROTTO_Z + 1)), b.def().id + ": no way down to the Black Market counter");   // the row in front of the counter
         }
     }
 
@@ -113,6 +113,7 @@ class ForgeWarsCaveTest {
      * step-up (no jump), and dropping lands you on the highest stand below.
      */
     static final class Walk {
+        private static final int REACH = ForgeWarsMaps.out(ForgeWarsMaps.CORE_R) + 12;   // the whole Core, stretched, and a little past its edge
         final Canvas c;
         Walk(Canvas c) { this.c = c; }
 
@@ -157,7 +158,7 @@ class ForgeWarsCaveTest {
                 int[] n = q.poll();
                 for (int[] d : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
                     int nx = n[0] + d[0], nz = n[2] + d[1];
-                    if (Math.abs(nx) > 40 || Math.abs(nz) > 40) continue;
+                    if (Math.abs(nx) > REACH || Math.abs(nz) > REACH) continue;
                     List<Integer> st = stands(nx, nz);
                     for (int s : st) {
                         boolean stair = s % 2 != 0 && String.valueOf(c.get(nx, Math.floorDiv(s, 2), nz)).contains("stairs");
