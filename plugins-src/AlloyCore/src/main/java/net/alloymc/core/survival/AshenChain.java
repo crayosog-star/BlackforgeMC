@@ -79,6 +79,10 @@ public final class AshenChain implements Listener, Hackable {
     private boolean dealing;   // true while the chain itself is hurting / probing someone, so onMelee lets it through
     private final Map<UUID, ChainLine> lines = new HashMap<>();     // caster -> the chain model currently out
     private final BukkitTask sweeper;                               // removes a chain the tick after nothing draws it
+    private Rimelock cage;                                          // set by crystalsFrom: its rim crystals are a way out of a cage
+    private final Map<UUID, Rimelock.CrystalHook> crystalOf = new HashMap<>();   // caster -> the crystal they're being reeled to
+    private final int vaultTicks, noFallMaxTicks;                   // the carry over the rim, and the longest no-fall window after it
+    private final double vaultSpeed;                                // blocks a tick at the start of the carry
 
     /**
      * The visible chain: a row of real chain-block models from the caster's hand to the hook. Each tick something
@@ -174,12 +178,21 @@ public final class AshenChain implements Listener, Hackable {
         this.holdTicks = Math.max(1, (int) Math.round(plugin.getConfig().getDouble("ashen-chain.pull-delay-seconds", 0.5) * 20));
         this.throwSpeed = Math.max(0.2, plugin.getConfig().getDouble("ashen-chain.throw-speed", 30) / 20.0);
         this.tagKey = new NamespacedKey(plugin, "ashen_chain");
+        this.vaultTicks = Math.max(1, (int) Math.round(plugin.getConfig().getDouble("rimelock.crystal-escape.vault-seconds", 0.3) * 20));
+        this.vaultSpeed = Math.max(0.05, plugin.getConfig().getDouble("rimelock.crystal-escape.vault-speed", 0.4));
+        this.noFallMaxTicks = Math.max(20, (int) Math.round(plugin.getConfig().getDouble("rimelock.crystal-escape.no-fall-max-seconds", 4) * 20));
         Bukkit.getPluginManager().registerEvents(this, plugin);
         this.sweeper = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             int now = Bukkit.getCurrentTick();
             lines.values().removeIf(l -> { if (now - l.drawnAt > 1) { l.remove(); return true; } return false; });
         }, 1L, 1L);
     }
+
+    /**
+     * Lets a player a Rimelock is holding hook the crystals on its rim with a right-click, to be reeled up and over the
+     * wall (the Arena wires this up). Without it the chain ignores crystals.
+     */
+    public void crystalsFrom(Rimelock cage) { this.cage = cage; }
 
     // ------------------------------------------------------------------ the item
 
@@ -192,6 +205,7 @@ public final class AshenChain implements Listener, Hackable {
                     Ui.mm("<dark_gray><italic>It drags the living into the dark."),
                     Ui.mm(""),
                     Ui.mm("<white>Right-click<gray>: grapple to the block you aim at"),
+                    Ui.mm("<gray>Caged by a Rimelock? Hook a <#7FD8FF>crystal <gray>on its rim to escape"),
                     Ui.mm("<white>Left-click<gray>: strike - a hit sets them on fire <dark_gray>(" + secs(burnTicks) + ")"),
                     Ui.mm("<gray>and yanks them <white>1 block <gray>closer after <white>" + secs(holdTicks)),
                     Ui.mm("<gray>Break free in time - <white>Surge<gray>, your own chain,"),
@@ -272,6 +286,14 @@ public final class AshenChain implements Listener, Hackable {
         p.swingMainHand();
         throwSounds(p);
         RayTraceResult blockHit = w.rayTraceBlocks(eye, dir, ChainPull.GRAPPLE_RANGE, FluidCollisionMode.NEVER, true);
+        if (cage != null) {   // held by a Rimelock? a crystal on its rim (nearer than any block) is a way out
+            double blockDist = blockHit == null ? Double.MAX_VALUE : blockHit.getHitPosition().distance(eye.toVector());
+            Rimelock.CrystalHook crystal = cage.crystalHit(p, eye, dir, ChainPull.GRAPPLE_RANGE, blockDist);
+            if (crystal != null) {
+                fly(p, crystal::at, () -> crystalAnchor(p, crystal));
+                return;
+            }
+        }
         if (blockHit == null) {   // into the open air: it falls slack
             Location far = eye.clone().add(dir.multiply(ChainPull.GRAPPLE_RANGE));
             fly(p, () -> far, () -> slack(p));
@@ -520,11 +542,21 @@ public final class AshenChain implements Listener, Hackable {
 
     // ------------------------------------------------------------------ dragging yourself
 
-    private void anchor(Player p, Location at, Block b) {
+    /** The hook reached a Rimelock crystal: if it can still be hooked, reel in towards it (the wall lets you through); else it falls slack. */
+    private void crystalAnchor(Player p, Rimelock.CrystalHook h) {
+        if (!p.isOnline() || p.isDead() || cage == null || !cage.crystalBite(p, h)) { slack(p); return; }
+        crystalOf.put(p.getUniqueId(), h);
+        anchor(p, h.at(), null, h);
+    }
+
+    private void anchor(Player p, Location at, Block b) { anchor(p, at, b, null); }
+
+    /** {@code b} is the block bitten, or null with a {@code crystal} (then reaching it ends in a vault over the rim, see {@link #vault}). */
+    private void anchor(Player p, Location at, Block b, Rimelock.CrystalHook crystal) {
         breakFree(p, "your own chain");   // grappling away tears you loose from anyone's chain
         World w = at.getWorld();
         // the hook bites: sparks, ash, a shower of the block, a metal clank
-        w.spawnParticle(Particle.BLOCK, at, 16, 0.2, 0.2, 0.2, 0.1, b.getBlockData());
+        if (b != null) w.spawnParticle(Particle.BLOCK, at, 16, 0.2, 0.2, 0.2, 0.1, b.getBlockData());
         w.spawnParticle(Particle.SOUL_FIRE_FLAME, at, 10, 0.15, 0.15, 0.15, 0.05);
         w.spawnParticle(Particle.WHITE_ASH, at, 20, 0.4, 0.4, 0.4, 0.02);
         w.spawnParticle(Particle.CRIT, at, 8, 0.1, 0.1, 0.1, 0.3);
@@ -538,13 +570,13 @@ public final class AshenChain implements Listener, Hackable {
         int[] stuck = {0};
         Vector[] heading = {null};   // the pull's direction, turned gently each tick (no jitter from server lag)
         BukkitTask task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            if (!p.isOnline() || p.isDead() || p.getWorld() != w) { release(p, false); return; }
+            if (!p.isOnline() || p.isDead() || p.getWorld() != w || (crystal != null && !crystal.stillUp())) { release(p, false); return; }
             noFallUntil.put(id, System.currentTimeMillis() + NO_FALL_MS);
             Location body = p.getLocation().add(0, 1.0, 0);
             Vector off = at.toVector().subtract(body.toVector());
             double dist = off.length();
             int k = n[0]++;
-            if (ChainPull.arrived(dist)) { release(p, true); return; }
+            if (ChainPull.arrived(dist)) { if (crystal != null) vault(p, crystal); else release(p, true); return; }
             if (p.isSneaking() && k > 2) { release(p, false); return; }
             if (k >= ChainPull.REEL_MAX_TICKS) { release(p, false); return; }
             // snagged on something: only judged once it's up to speed (the slow start isn't a snag)
@@ -585,6 +617,53 @@ public final class AshenChain implements Listener, Hackable {
         w.playSound(l, Sound.ITEM_ARMOR_EQUIP_GENERIC, SoundCategory.PLAYERS, 0.9f, 0.6f);
     }
 
+    /**
+     * Reeled up to a crystal: the chain lets go, the crystal bursts, and for {@link #vaultTicks} ticks the pull turns
+     * outward over the rim and eases down ({@link CrystalAnchor#vaultSpeed}, {@link CrystalAnchor#vaultLift}), so you
+     * sail out past the glass instead of stopping dead. The wall lets you through meanwhile (Rimelock's grace period).
+     */
+    private void vault(Player p, Rimelock.CrystalHook h) {
+        UUID id = p.getUniqueId();
+        crystalOf.remove(id);   // arrived: this is not an early let-go
+        if (cage != null) cage.crystalEnd(id, h, true);
+        stop(id);               // the reel is over
+        World w = p.getWorld();
+        Location l = p.getLocation();
+        w.spawnParticle(Particle.WHITE_ASH, l, 30, 0.4, 0.3, 0.4, 0.03);
+        w.spawnParticle(Particle.SMALL_FLAME, l, 8, 0.3, 0.2, 0.3, 0.02);
+        w.playSound(l, Sound.BLOCK_CHAIN_BREAK, SoundCategory.PLAYERS, 1.0f, 0.7f);
+        w.playSound(l, Sound.ITEM_TRIDENT_RIPTIDE_1, SoundCategory.PLAYERS, 0.8f, 0.9f);
+        Vector out = h.outward();
+        int[] n = {0};
+        BukkitTask task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            int k = n[0]++;
+            if (!p.isOnline() || p.isDead() || p.getWorld() != w || k >= vaultTicks) { endVault(p); return; }
+            noFallUntil.put(id, System.currentTimeMillis() + 1000);
+            double sp = CrystalAnchor.vaultSpeed(k, vaultTicks, vaultSpeed);
+            p.setVelocity(new Vector(out.getX() * sp, CrystalAnchor.vaultLift(k, vaultTicks), out.getZ() * sp));
+            p.setFallDistance(0);
+            Location trail = p.getLocation().add(0, 0.9, 0);
+            if (k % 2 == 0) w.spawnParticle(Particle.WHITE_ASH, trail, 3, 0.2, 0.3, 0.2, 0.01);
+            if (k % 3 == 0) w.spawnParticle(Particle.SMALL_FLAME, trail, 1, 0.15, 0.2, 0.15, 0.005);
+        }, 0L, 1L);
+        active.put(id, task);
+    }
+
+    private void endVault(Player p) {
+        stop(p.getUniqueId());
+        if (!p.isOnline() || p.isDead()) return;
+        p.getWorld().playSound(p.getLocation(), Sound.ITEM_ARMOR_EQUIP_GENERIC, SoundCategory.PLAYERS, 0.9f, 0.6f);
+        // no fall damage until they land (the drop from the rim is about 17 blocks), up to the configured limit
+        UUID id = p.getUniqueId();
+        int[] n = {0};
+        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+            if (!p.isOnline() || p.isDead()) { task.cancel(); return; }
+            boolean landed = n[0]++ >= noFallMaxTicks || p.isOnGround();
+            noFallUntil.put(id, System.currentTimeMillis() + (landed ? 400 : 1000));   // a little past touchdown, so the landing itself never hurts
+            if (landed) task.cancel();
+        }, 0L, 1L);
+    }
+
     /** Nothing to bite: the chain drops slack and is pulled back in. */
     private void slack(Player p) {
         stop(p.getUniqueId());
@@ -597,6 +676,8 @@ public final class AshenChain implements Listener, Hackable {
     private void stop(UUID id) {
         BukkitTask t = active.remove(id);
         if (t != null) t.cancel();
+        Rimelock.CrystalHook h = crystalOf.remove(id);   // still on a crystal: the chain came off early, the wall holds them again
+        if (h != null && cage != null) cage.crystalEnd(id, h, false);
     }
 
     // ------------------------------------------------------------------ effects
@@ -727,6 +808,7 @@ public final class AshenChain implements Listener, Hackable {
     public void shutdown() {
         for (BukkitTask t : active.values()) t.cancel();
         active.clear();
+        crystalOf.clear();
         sweeper.cancel();
         lines.values().forEach(ChainLine::remove);
         lines.clear();

@@ -51,6 +51,11 @@ import java.util.function.Predicate;
  * posts, white glints with light streaks sweeping round the wall, a brightness ripple, an aurora over the rim, snow
  * inside, and a burst of shards when it breaks. Only where {@code allowedAt} says (the hub Arena for now). Never used
  * up; one cage per caster at a time. The geometry lives in {@link CageShape}.
+ *
+ * The way out: a player the cage is holding can right-click an Ashen Chain at one of the 8 crystals over the rim posts
+ * ({@link #crystalHit}). The hook bites, the wall lets that player through while they're reeled up and over the rim
+ * ({@link #crystalBite}, {@link #crystalEnd}), and the crystal shatters for the rest of that cage (rimelock.crystal-escape).
+ * The aim and vault maths live in {@link CrystalAnchor}; the reel itself is the Ashen Chain's.
  */
 public final class Rimelock implements Listener, Hackable {
     public static final String NAME = "<gradient:#BFF4FF:#3FA9FF><bold>Rimelock</bold></gradient>";
@@ -86,6 +91,13 @@ public final class Rimelock implements Listener, Hackable {
     private final Set<UUID> jammed = new HashSet<>();   // mid-leap when an EMP hit: no cage when they land
     private final Map<UUID, Long> fxReadyAt = new HashMap<>();     // per player: bounce / blocked-hit effects at most every 200 ms
     private final Random rnd = new Random();
+    private final boolean crystalEnabled, crystalSingleUse;
+    private final double crystalAim;      // blocks: the hit sphere round each crystal
+    private final long passGraceMs;       // the wall keeps letting an escaper through this long after the reel arrives
+    private final Map<UUID, Pass> passes = new HashMap<>();   // escapers the wall lets through: one cage, until a time
+
+    /** A held player let through ONE cage's wall: for as long as the chain is on, then for the grace period. */
+    private record Pass(Cage cage, long untilMs) {}
 
     public Rimelock(AlloyCore plugin, Predicate<Location> allowedAt) { this(plugin, allowedAt, (caster, p) -> false); }
 
@@ -96,6 +108,10 @@ public final class Rimelock implements Listener, Hackable {
         this.allies = allies;
         this.enabled = plugin.getConfig().getBoolean("rimelock.enabled", true);
         this.tagKey = new NamespacedKey(plugin, "rimelock");
+        this.crystalEnabled = plugin.getConfig().getBoolean("rimelock.crystal-escape.enabled", true);
+        this.crystalSingleUse = plugin.getConfig().getBoolean("rimelock.crystal-escape.single-use", true);
+        this.crystalAim = Math.max(0.3, plugin.getConfig().getDouble("rimelock.crystal-escape.aim-radius", 1.5));
+        this.passGraceMs = Math.max(0L, Math.round(plugin.getConfig().getDouble("rimelock.crystal-escape.pass-grace-seconds", 1.0) * 1000));
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -109,6 +125,7 @@ public final class Rimelock implements Listener, Hackable {
                     Ui.mm("<gray>Right-click to leap and slam down a tower"),
                     Ui.mm("<gray>of shimmering ice for <white>10s"),
                     Ui.mm("<gray>Nobody inside can leave, mobs included."),
+                    Ui.mm("<gray>Except by Ashen Chain: hook a crystal on the rim"),
                     Ui.mm("<gray>Anyone can walk in, but then they're stuck too"),
                     Ui.mm("<gray>You and your team come and go as you like"),
                     Ui.mm("<gray>No hits get through the wall, either way"),
@@ -278,7 +295,7 @@ public final class Rimelock implements Listener, Hackable {
         Player p = e.getPlayer();
         if (p.getGameMode() == GameMode.SPECTATOR) return;
         for (Cage c : cages) {
-            if (c.world != from.getWorld() || friendly(c.owner, p) || !c.inside(from)
+            if (c.world != from.getWorld() || friendly(c.owner, p) || !c.inside(from) || passed(c, p)
                     || CageShape.insideXZ(c.cx, c.cz, to.getX(), to.getZ(), CageShape.RADIUS - CageShape.BODY)) continue;
             Location back = from.clone();
             back.setYaw(to.getYaw());
@@ -355,14 +372,120 @@ public final class Rimelock implements Listener, Hackable {
         c.flash(out);
     }
 
+    // ------------------------------------------------------------------ the way out: crystals on the rim (Ashen Chain)
+
+    /** A crystal the Ashen Chain can hook: which cage, which of the 8, and how far along the aim it was. */
+    public final class CrystalHook {
+        private final Cage cage;
+        private final int index;
+        private final double distance;
+
+        private CrystalHook(Cage cage, int index, double distance) { this.cage = cage; this.index = index; this.distance = distance; }
+
+        /** The crystal's middle. */
+        public Location at() { return cage.crystalAt(index); }
+
+        public double distance() { return distance; }
+
+        /** False once the cage has ended (its time ran out, or an EMP). */
+        public boolean stillUp() { return cages.contains(cage); }
+
+        /** Horizontal unit vector pointing out of the cage at this crystal. */
+        public Vector outward() {
+            double a = CrystalAnchor.angle(index);
+            return new Vector(Math.cos(a), 0, Math.sin(a));
+        }
+    }
+
+    /**
+     * The nearest crystal on {@code p}'s aim line that they may hook, or null. Only a player a cage is holding can hook
+     * its crystals (never the caster or their team, so nobody can burn crystals to deny an escape). The ray starts at
+     * {@code eye} along the unit vector {@code dir}; crystals past {@code range}, or behind a block {@code blockDist}
+     * away, don't count.
+     */
+    public CrystalHook crystalHit(Player p, Location eye, Vector dir, double range, double blockDist) {
+        if (!crystalEnabled || cages.isEmpty() || p.getGameMode() == GameMode.SPECTATOR) return null;
+        double reach = Math.min(range, blockDist);
+        CrystalHook best = null;
+        for (Cage c : cages) {
+            if (c.world != eye.getWorld() || !c.standing || friendly(c.owner, p) || !c.inside(p.getLocation())) continue;
+            double sy = CrystalAnchor.y(c.y);
+            for (int k = 0; k < CrystalAnchor.COUNT; k++) {
+                if (c.spent[k] || c.hooked[k]) continue;
+                double d = CrystalAnchor.rayHit(eye.getX(), eye.getY(), eye.getZ(), dir.getX(), dir.getY(), dir.getZ(),
+                        CrystalAnchor.x(c.cx, k), sy, CrystalAnchor.z(c.cz, k), crystalAim, reach);
+                if (d >= 0 && (best == null || d < best.distance)) best = new CrystalHook(c, k, d);
+            }
+        }
+        return best;
+    }
+
+    /**
+     * The hook reached the crystal. It flares, the wall starts letting {@code p} through, and the cage's owner and team
+     * are warned. False if it can't be hooked any more (taken by someone else's chain, the cage ended, or {@code p} is
+     * no longer held): then nothing happens and the chain should fall slack.
+     */
+    public boolean crystalBite(Player p, CrystalHook h) {
+        Cage c = h.cage;
+        int k = h.index;
+        if (!crystalEnabled || !cages.contains(c) || !c.standing || c.spent[k] || c.hooked[k]
+                || friendly(c.owner, p) || !c.inside(p.getLocation())) return false;
+        c.hooked[k] = true;
+        if (crystalSingleUse) c.spent[k] = true;
+        passes.put(p.getUniqueId(), new Pass(c, Long.MAX_VALUE));   // open-ended until the chain lets go
+        c.flareCrystal(k, true);
+        Location at = c.crystalAt(k);
+        fx(c.owner, at, (v, pal) -> {
+            v.spawnParticle(Particle.ELECTRIC_SPARK, at, 14, 0.3, 0.3, 0.3, 0.2);
+            v.spawnParticle(Particle.DUST_COLOR_TRANSITION, at, 14, 0.3, 0.3, 0.3, 0, new Particle.DustTransition(pal.frost(), pal.azure(), 1.5f));
+            v.spawnParticle(Particle.END_ROD, at, 6, 0.2, 0.2, 0.2, 0.08);
+        });
+        c.world.playSound(at, Sound.BLOCK_CHAIN_HIT, SoundCategory.PLAYERS, 1.2f, 0.7f);
+        c.world.playSound(at, Sound.BLOCK_AMETHYST_BLOCK_RESONATE, SoundCategory.PLAYERS, 1.2f, 1.8f);
+        for (Player q : c.world.getPlayers()) if (friendly(c.owner, q)) {
+            q.sendActionBar(Ui.mm("<#7FD8FF>⛓ <white>" + p.getName() + " <gray>hooked a crystal and is escaping"));
+            q.playSound(q.getLocation(), Sound.BLOCK_BELL_USE, SoundCategory.PLAYERS, 0.8f, 0.6f);
+        }
+        return true;
+    }
+
+    /**
+     * The chain let go of the crystal. {@code arrived}: the reel got there, so the wall keeps letting {@code id} through
+     * for the grace period while they vault over the rim. Otherwise (sneak, snag, EMP, cage gone, quit) the pass ends at
+     * once. A single-use crystal shatters either way; a reusable one goes back to turning.
+     */
+    public void crystalEnd(UUID id, CrystalHook h, boolean arrived) {
+        Cage c = h.cage;
+        Pass cur = passes.get(id);
+        if (cur != null && cur.cage() == c) {
+            if (arrived) passes.put(id, new Pass(c, System.currentTimeMillis() + passGraceMs));
+            else passes.remove(id);
+        }
+        if (cages.contains(c)) {
+            if (crystalSingleUse) c.breakCrystal(h.index);
+            else { c.hooked[h.index] = false; c.flareCrystal(h.index, false); }
+        }
+        Player p = arrived ? Bukkit.getPlayer(id) : null;
+        if (p != null) p.sendActionBar(Ui.mm("<#7FD8FF>⛓ <gray>You tore through the ice"));
+    }
+
+    /** True while the wall is letting {@code p} through {@code c} (they hooked one of its crystals). */
+    private boolean passed(Cage c, Player p) {
+        Pass ps = passes.get(p.getUniqueId());
+        if (ps == null) return false;
+        if (ps.untilMs() < System.currentTimeMillis()) { passes.remove(p.getUniqueId()); return false; }
+        return ps.cage() == c;
+    }
+
     // ------------------------------------------------------------------ housekeeping
 
     /** Cancel a Rimelock leap {@code p} is still in the air for (a cage already standing stays). For fake deaths (the Arcade). */
-    public void endFor(Player p) { leaping.remove(p.getUniqueId()); }
+    public void endFor(Player p) { leaping.remove(p.getUniqueId()); passes.remove(p.getUniqueId()); }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
         leaping.remove(e.getPlayer().getUniqueId());
+        passes.remove(e.getPlayer().getUniqueId());
         fxReadyAt.remove(e.getPlayer().getUniqueId());
     }
 
@@ -403,6 +526,7 @@ public final class Rimelock implements Listener, Hackable {
         for (Cage c : new ArrayList<>(cages)) c.remove();
         cages.clear();
         leaping.clear();
+        passes.clear();
     }
 
     private static String secs(int ticks) { return String.format(Locale.ROOT, "%.1f", Math.max(0, ticks) / 20.0); }
@@ -462,6 +586,9 @@ public final class Rimelock implements Listener, Hackable {
         final Set<UUID> trapped = new HashSet<>();
         final Map<UUID, Location> shots = new HashMap<>();   // projectiles near the wall: where they were last tick
         final Map<UUID, Location> mobsIn = new HashMap<>();  // mobs in the cage: their last spot inside
+        final boolean[] spent = new boolean[CrystalAnchor.COUNT];    // crystals nobody can hook any more (single-use ones, once bitten)
+        final boolean[] hooked = new boolean[CrystalAnchor.COUNT];   // crystals with a chain on them right now
+        final boolean[] broken = new boolean[CrystalAnchor.COUNT];   // crystals that have already burst
         boolean standing;                                    // panes have finished rising: the shimmer may take over
         BukkitTask task;
         int t;
@@ -506,6 +633,32 @@ public final class Rimelock implements Listener, Hackable {
 
         /** Drop under whichever pane covers this angle. */
         private float dropAtAngle(double a) { return drop[CageShape.panelIndex(a)]; }
+
+        Location crystalAt(int k) { return new Location(world, CrystalAnchor.x(cx, k), CrystalAnchor.y(y), CrystalAnchor.z(cz, k)); }
+
+        /** A hooked crystal pops bigger and glows white (or settles back, for a reusable one). */
+        void flareCrystal(int k, boolean on) {
+            friends.flareCrystal(k, on);
+            foes.flareCrystal(k, on);
+        }
+
+        /** A spent crystal bursts outward into glass shards and the post is left bare. */
+        void breakCrystal(int k) {
+            spent[k] = true;
+            hooked[k] = false;
+            if (broken[k]) return;
+            broken[k] = true;
+            friends.popCrystal(k);
+            foes.popCrystal(k);
+            Location at = crystalAt(k);
+            fx(owner, at, (v, pal) -> {
+                v.spawnParticle(Particle.BLOCK, at, 30, 0.4, 0.4, 0.4, 0.2, pal.glass());
+                v.spawnParticle(Particle.DUST_COLOR_TRANSITION, at, 16, 0.4, 0.4, 0.4, 0, new Particle.DustTransition(pal.frost(), pal.azure(), 1.8f));
+                v.spawnParticle(Particle.END_ROD, at, 12, 0.2, 0.2, 0.2, 0.25);
+            });
+            world.playSound(at, Sound.BLOCK_GLASS_BREAK, SoundCategory.PLAYERS, 1.2f, 1.3f);
+            world.playSound(at, Sound.BLOCK_AMETHYST_CLUSTER_BREAK, SoundCategory.PLAYERS, 1.2f, 1.2f);
+        }
 
         int left() { return DURATION_TICKS - t; }
         boolean inside(Location l) { return l.getWorld() == world && CageShape.inside(cx, y, cz, l.getX(), l.getY(), l.getZ()); }
@@ -635,11 +788,29 @@ public final class Rimelock implements Listener, Hackable {
             /** Each crystal turns a quarter and bobs, a beat behind its neighbour. */
             void spinCrystals() {
                 for (int k = 0; k < crystals.size(); k++) {
+                    if (hooked[k] || broken[k]) continue;   // a hooked crystal holds still; a spent one is gone
                     double e = CageShape.edgeAngle(k * 4);
                     float spin = (float) ((t / 10 + k) % 4 * Math.PI / 2 + Math.PI / 2);
                     float bob = (float) (Math.sin((t / 10.0 + k) * 1.2) * 0.18);
                     move(crystals.get(k), crystal(e, 0.9f, spin, bob), 10);
                 }
+            }
+
+            /** Hooked: pop from 0.9 to 1.3 over 4 ticks and glow white. Off: back to the normal glow (spinCrystals settles the size). */
+            void flareCrystal(int k, boolean on) {
+                if (k >= crystals.size()) return;
+                ItemDisplay g = crystals.get(k);
+                if (!g.isValid()) return;
+                g.setGlowColorOverride(on ? pal.frost() : pal.ice());
+                if (on) move(g, crystal(CrystalAnchor.angle(k), 1.3f, (float) Math.PI / 2, 0.15f), 4);
+            }
+
+            /** Spent: shrinks away outward in the cage's break time, then is removed. */
+            void popCrystal(int k) {
+                if (k >= crystals.size()) return;
+                ItemDisplay g = crystals.get(k);
+                move(g, crystal(CrystalAnchor.angle(k), 0.01f, (float) Math.PI * 3, 1.5f), BREAK_TICKS);
+                later(BREAK_TICKS + 1, g::remove);
             }
 
             void frameGlow(boolean on) {
@@ -755,6 +926,7 @@ public final class Rimelock implements Listener, Hackable {
                             + " rimelock <dark_gray>· <white>" + secs(left) + "s <dark_gray>· <gray>you can come and go"));
                     continue;
                 }
+                if (passed(this, q)) continue;   // mid-escape: no "rimelocked" nag
                 if (trapped.add(q.getUniqueId())) {
                     q.showTitle(Title.title(Ui.mm(red.title()), Ui.mm("<gray>You walked in. Now you can't leave."),
                             Title.Times.times(Duration.ofMillis(100), Duration.ofMillis(900), Duration.ofMillis(300))));
@@ -874,6 +1046,7 @@ public final class Rimelock implements Listener, Hackable {
         void shatter() {
             if (task != null) task.cancel();
             cages.remove(this);
+            passes.values().removeIf(ps -> ps.cage() == this);
             friends.shatter();
             foes.shatter();
             world.playSound(center(), Sound.BLOCK_AMETHYST_BLOCK_RESONATE, SoundCategory.PLAYERS, 1.4f, 2f);
