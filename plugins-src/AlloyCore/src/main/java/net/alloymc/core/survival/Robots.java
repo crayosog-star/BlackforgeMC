@@ -24,6 +24,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockDispenseEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
@@ -66,7 +67,7 @@ public final class Robots implements Listener {
     static final int[] UP_CHARGE_HOURS = {2, 8, 24, 72};
     // fuel cells I..V
     static final int[] FUEL_MINUTES = {30, 120, 360, 720, 1440};
-    static final double[] FUEL_CHARGE = {1.0, 1.25, 1.5, 2.0, 3.0};
+    static final double[] FUEL_CHARGE = RobotRules.FUEL_CHARGE;
     static final int[] FUEL_MONEY = {500, 2_000, 6_000, 12_000, 25_000};
     static final int[] FUEL_ESSENCE = {8, 32, 96, 192, 400};
     static final Material[] FUEL_ICON = {Material.COAL, Material.BLAZE_POWDER, Material.GLOWSTONE_DUST, Material.PRISMARINE_CRYSTALS, Material.NETHER_STAR};
@@ -81,9 +82,15 @@ public final class Robots implements Listener {
     /** One robot's state; the entity is found by robot id each tick (entities can reload with new UUIDs). */
     final class Bot {
         final String id; UUID owner; Job job; int tier; long fuel, charge; int fuelTier = 1; int xp;
+        /** Fuel-weighted charge multiplier of what's in the tank; fuelTier is now only the icon/colour of the best cell added. */
+        double chargeRate;
+        /** Sub-millisecond charge left over between ticks (blended and Fisherman rates aren't whole numbers). Not saved. */
+        double chargeCarry;
         Location loc; Inventory storage; UUID entity; int timer; String status = "";
         Bot(String id) { this.id = id; }
-        int interval() { return job == Job.FISHERMAN ? INTERVAL[tier - 1] * 2 : INTERVAL[tier - 1]; }
+        int interval() { return job == Job.FISHERMAN ? (int) (RobotRules.fishIntervalMs(tier) / 1000) : INTERVAL[tier - 1]; }
+        /** Old saves and robot items have no rate: fall back to the burning cell tier's rate. */
+        void fixRate() { if (!(chargeRate > 0)) chargeRate = RobotRules.rateForTier(Math.max(1, Math.min(5, fuelTier))); }
     }
 
     private final AlloyCore plugin;
@@ -153,6 +160,16 @@ public final class Robots implements Listener {
         return it;
     }
 
+    /**
+     * The robot item only carries a fuel tier, and a placed robot burns at that tier's rate. Store the highest tier whose
+     * rate doesn't exceed the blended rate, so pick up + place never raises the rate (it can only round down).
+     */
+    static int itemFuelTier(double chargeRate) {
+        int t = 1;
+        for (int i = 2; i <= 5; i++) if (RobotRules.rateForTier(i) <= chargeRate + 1e-9) t = i;
+        return t;
+    }
+
     static boolean isRobotItem(ItemStack it) { return it != null && it.hasItemMeta() && it.getItemMeta().getPersistentDataContainer().has(ITEM); }
 
     static String time(long ms) {
@@ -185,6 +202,7 @@ public final class Robots implements Listener {
         b.charge = Long.parseLong(d[2]);
         b.fuel = Long.parseLong(d[3]);
         b.fuelTier = Integer.parseInt(d[4]);
+        b.fixRate();   // the item has no rate: derive it from fuelTier (see itemFuelTier)
         // face the way the player is looking, snapped to N/E/S/W, so a Miner mines what you clicked toward
         float yaw = Math.round(p.getYaw() / 90f) * 90f;
         b.loc = at.getLocation().add(0.5, 0, 0.5);
@@ -286,15 +304,22 @@ public final class Robots implements Listener {
             }
             if (b.fuel <= 0) { if (++b.timer % 5 == 0) style(b, g); continue; }
             boolean full = b.storage.firstEmpty() < 0;
-            b.status = full ? "<red>Storage full" : "";
-            if (!full) {
-                b.fuel = Math.max(0, b.fuel - 1000);
-                b.charge += (long) (1000 * FUEL_CHARGE[b.fuelTier - 1]);
+            boolean dry = !full && b.job == Job.FISHERMAN && !nearWater(b);
+            b.status = full ? "<red>Storage full" : dry ? "<red>Needs water" : "";
+            if (!full && !dry) {
+                // Fishermen burn fuel and build Charge at a quarter of the normal rate
+                long burn = Math.min(b.fuel, b.job == Job.FISHERMAN ? (long) (1000 * RobotRules.FISHER_BURN) : 1000);
+                b.fuel -= burn;
+                b.chargeCarry += burn * b.chargeRate;
+                long whole = (long) b.chargeCarry;
+                b.charge += whole;
+                b.chargeCarry -= whole;
                 if (++b.timer >= b.interval()) {
                     b.timer = 0;
                     try { work(b, g); } catch (Exception ex) { plugin.getLogger().warning("robot " + b.id + " " + b.job + ": " + ex); }
                 }
             }
+            else if (dry && ++b.timer >= 5) b.timer = 0;   // no burn, no fishing progress; keep refreshing the name tag
             if (b.timer % 5 == 0) style(b, g);
         }
     }
@@ -421,12 +446,15 @@ public final class Robots implements Listener {
         e.setDroppedExp(0);
     }
 
-    private void fish(Bot b, CopperGolem g) {
-        boolean water = false;
+    private static boolean nearWater(Bot b) {
         Block c = b.loc.getBlock();
-        for (int dx = -2; dx <= 2 && !water; dx++) for (int dy = -2; dy <= 0 && !water; dy++) for (int dz = -2; dz <= 2 && !water; dz++)
-            water = c.getRelative(dx, dy, dz).getType() == Material.WATER;
-        if (!water) { b.status = "<red>Needs water"; return; }
+        for (int dx = -2; dx <= 2; dx++) for (int dy = -2; dy <= 0; dy++) for (int dz = -2; dz <= 2; dz++)
+            if (c.getRelative(dx, dy, dz).getType() == Material.WATER) return true;
+        return false;
+    }
+
+    private void fish(Bot b, CopperGolem g) {
+        if (!nearWater(b)) { b.status = "<red>Needs water"; return; }
         double roll = rnd.nextDouble();
         ItemStack catchIt;
         if (roll < 0.02 * b.tier) {
@@ -456,59 +484,76 @@ public final class Robots implements Listener {
         public Inventory getInventory() { return inv; }
     }
 
-    private static final int[] JOB_SLOTS = {10, 12, 14, 16};
+    // row 1: job selector; row 2: actions; rows 3-6: storage
+    private static final int[] JOB_SLOTS = {1, 3, 5, 7};
+    private static final int SLOT_COLLECT = 9, SLOT_XP = 10, SLOT_FUEL = 11, SLOT_INFO = 13, SLOT_UPGRADE = 15, SLOT_PICKUP = 17;
+    private static final int STORAGE_START = 18;
+
+    /** "▮▮▮▮▯▯▯": lit segments coloured red/yellow/green by position, unlit ones dark grey. */
+    static String fuelMeter(long fuelMs) {
+        int lit = RobotRules.litSegments(fuelMs);
+        StringBuilder sb = new StringBuilder();
+        for (int seg = 1; seg <= RobotRules.SEGMENT_MS.length; seg++) {
+            if (seg > lit) { sb.append("<dark_gray>▯"); continue; }
+            sb.append(switch (RobotRules.segmentColor(seg)) { case RED -> "<red>"; case YELLOW -> "<yellow>"; case GREEN -> "<green>"; }).append('▮');
+        }
+        return sb.toString();
+    }
 
     void open(Player p, Bot b) {
         Menu m = new Menu(b.id, "robot");
         m.inv = Bukkit.createInventory(m, 54, Ui.mm("<dark_gray>⚙ " + b.job.label + " Robot " + Spawners.roman(b.tier)));
         ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
-        for (int i = 0; i < 18; i++) m.inv.setItem(i, pane);
+        for (int i = 0; i < STORAGE_START; i++) m.inv.setItem(i, pane);
         int used = 0;
         for (ItemStack it : b.storage.getContents()) if (it != null) used++;
-        m.inv.setItem(0, Ui.item(Material.CHEST, "<green><bold>Collect All", "<gray>Storage: <white>" + used + "/" + b.storage.getSize() + " slots", "<gray>Click an item below to take just that stack."));
-        m.inv.setItem(1, Ui.item(Material.EXPERIENCE_BOTTLE, "<green><bold>Collect XP", "<gray>Stored: <white>" + b.xp + " XP"));
-        m.inv.setItem(2, Ui.item(b.fuel > 0 ? FUEL_ICON[b.fuelTier - 1] : Material.BUCKET, "<gold><bold>Fuel: <white>" + time(b.fuel),
-                "<gray>Tank holds up to " + time(MAX_TANK) + ".", "<gray>Burning: " + FUEL_COLOR[b.fuelTier - 1] + "Fuel Cell " + Spawners.roman(b.fuelTier) + " <gray>(x" + FUEL_CHARGE[b.fuelTier - 1] + " charge)",
-                "", "<yellow>Click: <gray>add 1 Fuel Cell from your inventory", "<yellow>Shift-click: <gray>add as many as fit"));
+        m.inv.setItem(SLOT_COLLECT, Ui.item(Material.CHEST, "<green><bold>Collect All", "<gray>Storage: <white>" + used + "/" + b.storage.getSize() + " slots", "<gray>Click an item below to take just that stack."));
+        m.inv.setItem(SLOT_XP, Ui.item(Material.EXPERIENCE_BOTTLE, "<green><bold>Collect XP", "<gray>Stored: <white>" + b.xp + " XP"));
+        m.inv.setItem(SLOT_FUEL, Ui.item(b.fuel > 0 ? FUEL_ICON[b.fuelTier - 1] : Material.BUCKET, "<gold><bold>Fuel <dark_gray>— " + fuelMeter(b.fuel),
+                "<white>" + time(b.fuel) + " <gray>left <dark_gray>(tank holds " + time(MAX_TANK) + ")",
+                "<gray>Charge rate: <white>" + String.format(Locale.ROOT, "%.2f", b.chargeRate) + "x",
+                "<yellow>[Shift-click to add fuel from inventory]", "<dark_gray>Click: add 1 Fuel Cell"));
         List<String> info = new ArrayList<>(List.of("<gray>Owner: <white>" + Bukkit.getOfflinePlayer(b.owner).getName(),
                 "<gray>Job: " + b.job.color + b.job.label + " <dark_gray>- <gray>" + b.job.desc,
                 "<gray>Works every <white>" + b.interval() + "s" + (b.job == Job.MINER ? "" : " <gray>in a <white>" + RADIUS[b.tier - 1] + "<gray>-block radius"),
                 "<gray>Charge: <white>" + time(b.charge)));
         if (!b.status.isEmpty()) info.add(b.status);
-        m.inv.setItem(4, Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, b.job.color + "<bold>" + b.job.label + " Robot " + Spawners.roman(b.tier), info.toArray(String[]::new)));
-        if (b.tier >= MAX_TIER) m.inv.setItem(6, Ui.item(Material.NETHER_STAR, "<gold><bold>MAX TIER"));
+        m.inv.setItem(SLOT_INFO, Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, b.job.color + "<bold>" + b.job.label + " Robot " + Spawners.roman(b.tier), info.toArray(String[]::new)));
+        if (b.tier >= MAX_TIER) m.inv.setItem(SLOT_UPGRADE, Ui.item(Material.NETHER_STAR, "<gold><bold>MAX TIER"));
         else {
             int t = b.tier - 1;
             long need = UP_CHARGE_HOURS[t] * 3600_000L;
             int pct = (int) Math.min(100, 100 * b.charge / need);
             String bar = "<green>" + "|".repeat(pct / 5) + "<dark_gray>" + "|".repeat(20 - pct / 5);
-            m.inv.setItem(6, Ui.item(Material.ANVIL, "<aqua><bold>Upgrade to Tier " + Spawners.roman(b.tier + 1),
+            m.inv.setItem(SLOT_UPGRADE, Ui.item(Material.ANVIL, "<aqua><bold>Upgrade to Tier " + Spawners.roman(b.tier + 1),
                     "<gray>Faster, bigger radius, more storage.", "",
                     "<gray>Charge: " + bar + " <white>" + pct + "%", "<dark_gray>(" + time(b.charge) + " / " + UP_CHARGE_HOURS[t] + "h - burn fuel to charge)",
                     "<#9d7bff>" + UP_ESSENCE[t] + " Mob Essence", "<green>" + NetEconomy.money(UP_MONEY[t]), "", "<yellow>Click to upgrade"));
         }
-        m.inv.setItem(8, Ui.item(Material.HOPPER, "<red><bold>Pick Up Robot", "<gray>Gives you the robot item (keeps tier,", "<gray>charge and fuel) and its storage."));
+        m.inv.setItem(SLOT_PICKUP, Ui.item(Material.HOPPER, "<red><bold>Pick Up Robot", "<gray>Gives you the robot item (keeps tier,", "<gray>charge and fuel) and its storage."));
         for (int i = 0; i < 4; i++) {
             Job j = Job.values()[i];
             ItemStack icon = Ui.item(j.icon, j.color + "<bold>" + j.label, "<gray>" + j.desc, "", j == b.job ? "<green>✔ Current job" : "<yellow>Click to switch");
             if (j == b.job) icon.editMeta(x -> x.setEnchantmentGlintOverride(true));
             m.inv.setItem(JOB_SLOTS[i], icon);
         }
-        for (int i = 0; i < b.storage.getSize() && 18 + i < 54; i++) m.inv.setItem(18 + i, b.storage.getItem(i));
+        for (int i = 0; i < b.storage.getSize() && STORAGE_START + i < 54; i++) m.inv.setItem(STORAGE_START + i, b.storage.getItem(i));
         p.openInventory(m.inv);
     }
 
     @EventHandler
     public void onMenuClick(InventoryClickEvent e) {
         if (!(e.getInventory().getHolder() instanceof Menu m)) return;
+        // Cancel everything while a robot/shop menu is open, including shift-clicks, number keys and double-clicks in
+        // the player's own inventory, so nothing can be moved into the menu (the menu is a copy, not the real storage).
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
         if (m.kind.equals("shop")) { shopClick(p, e.getRawSlot()); return; }
         Bot b = bots.get(m.id);
         if (b == null) { p.closeInventory(); return; }
         int slot = e.getRawSlot();
-        if (slot >= 18) {
-            int i = slot - 18;
+        if (slot >= STORAGE_START) {
+            int i = slot - STORAGE_START;
             if (i >= b.storage.getSize()) return;
             ItemStack it = b.storage.getItem(i);
             if (it == null) return;
@@ -518,7 +563,7 @@ public final class Robots implements Listener {
             return;
         }
         switch (slot) {
-            case 0 -> {
+            case SLOT_COLLECT -> {
                 for (int i = 0; i < b.storage.getSize(); i++) {
                     ItemStack it = b.storage.getItem(i);
                     if (it == null) continue;
@@ -528,10 +573,15 @@ public final class Robots implements Listener {
                 p.playSound(p.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.6f, 1f);
                 open(p, b);
             }
-            case 1 -> { if (b.xp > 0) { p.giveExp(b.xp); p.playSound(p.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.6f, 1f); b.xp = 0; } open(p, b); }
-            case 2 -> { addFuel(p, b, e.isShiftClick()); open(p, b); }
-            case 6 -> { upgrade(p, b); open(p, b); }
-            case 8 -> pickUp(p, b);
+            case SLOT_XP -> { if (b.xp > 0) { p.giveExp(b.xp); p.playSound(p.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.6f, 1f); b.xp = 0; } open(p, b); }
+            case SLOT_FUEL -> {
+                // shift-click: every Fuel Cell in the inventory until the tank is full; plain click: one cell
+                ClickType c = e.getClick();
+                addFuel(p, b, c == ClickType.SHIFT_LEFT || c == ClickType.SHIFT_RIGHT);
+                open(p, b);
+            }
+            case SLOT_UPGRADE -> { upgrade(p, b); open(p, b); }
+            case SLOT_PICKUP -> pickUp(p, b);
             default -> {
                 for (int i = 0; i < 4; i++) if (JOB_SLOTS[i] == slot && b.job != Job.values()[i]) {
                     b.job = Job.values()[i];
@@ -548,17 +598,28 @@ public final class Robots implements Listener {
     private void addFuel(Player p, Bot b, boolean all) {
         int added = 0;
         ItemStack[] inv = p.getInventory().getStorageContents();
-        for (int i = 0; i < inv.length; i++) {
-            int t = fuelTier(inv[i]);
-            if (t == 0) continue;
-            while (inv[i] != null && inv[i].getAmount() > 0 && b.fuel + FUEL_MINUTES[t - 1] * 60_000L <= MAX_TANK) {
-                b.fuel += FUEL_MINUTES[t - 1] * 60_000L;
-                b.fuelTier = b.fuel - FUEL_MINUTES[t - 1] * 60_000L > 0 ? Math.max(b.fuelTier, t) : t;
-                inv[i].setAmount(inv[i].getAmount() - 1);
-                added++;
-                if (!all) break;
+        b.fixRate();
+        while (true) {
+            // cells that still fit in the tank, as plain values; the lowest tier goes in first
+            List<RobotRules.FuelCell> fits = new ArrayList<>();
+            List<Integer> slots = new ArrayList<>();
+            for (int i = 0; i < inv.length; i++) {
+                int t = fuelTier(inv[i]);
+                if (t == 0 || inv[i].getAmount() <= 0 || b.fuel + FUEL_MINUTES[t - 1] * 60_000L > MAX_TANK) continue;
+                fits.add(new RobotRules.FuelCell(t, FUEL_MINUTES[t - 1] * 60_000L));
+                slots.add(i);
             }
-            if (added > 0 && !all) break;
+            Optional<RobotRules.FuelCell> pick = RobotRules.lowestTierCell(fits);
+            if (pick.isEmpty()) break;
+            RobotRules.FuelCell c = pick.get();
+            int i = slots.get(fits.indexOf(c));
+            // blend the tank's current rate with only the newly accepted fuel
+            b.chargeRate = RobotRules.blendRate(b.fuel, b.chargeRate, c.chargeMs(), RobotRules.rateForTier(c.tier()));
+            b.fuelTier = b.fuel > 0 ? Math.max(b.fuelTier, c.tier()) : c.tier();   // icon/colour only now
+            b.fuel += c.chargeMs();
+            inv[i].setAmount(inv[i].getAmount() - 1);
+            added++;
+            if (!all) break;
         }
         p.getInventory().setStorageContents(inv);
         if (added == 0) p.sendMessage(Ui.mm(b.fuel >= MAX_TANK - 30 * 60_000L ? "<red>The tank is full." : "<red>You have no Fuel Cells. Buy them at <white>/robots<red> or the Scrap Shop."));
@@ -592,7 +653,7 @@ public final class Robots implements Listener {
         bots.remove(b.id);
         for (ItemStack it : b.storage.getContents()) if (it != null) give(p, it);
         if (b.xp > 0) p.giveExp(b.xp);
-        give(p, robotItem(b.job, b.tier, b.charge, b.fuel, b.fuelTier));
+        give(p, robotItem(b.job, b.tier, b.charge, b.fuel, itemFuelTier(b.chargeRate)));
         p.sendMessage(Ui.mm("<green>Robot picked up."));
         save();
     }
@@ -706,6 +767,8 @@ public final class Robots implements Listener {
             b.tier = s.getInt("tier", 1);
             b.fuel = s.getLong("fuel");
             b.fuelTier = Math.max(1, s.getInt("fuel-tier", 1));
+            b.chargeRate = s.getDouble("charge-rate", 0);
+            b.fixRate();
             b.charge = s.getLong("charge");
             b.xp = s.getInt("xp");
             b.loc = new Location(w, s.getDouble("x"), s.getDouble("y"), s.getDouble("z"), (float) s.getDouble("yaw"), 0);
@@ -729,6 +792,7 @@ public final class Robots implements Listener {
             y.set(k + "tier", b.tier);
             y.set(k + "fuel", b.fuel);
             y.set(k + "fuel-tier", b.fuelTier);
+            y.set(k + "charge-rate", b.chargeRate);
             y.set(k + "charge", b.charge);
             y.set(k + "xp", b.xp);
             y.set(k + "world", b.loc.getWorld().getName());
