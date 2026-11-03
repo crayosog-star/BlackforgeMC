@@ -36,6 +36,16 @@ final class DistrictLife implements Listener {
             new Spot("wilds", "the Gate of the Wilds", -(D - 6) + 0.5, 0.5, 90f),
             new Spot("hall", "the Grand Hall", 0.5, -(D - 7) + 0.5, 180f));
 
+    /** The five crate vaults, in the Grand Hall's side aisles (iron, gold, netherite on the west; KOTH and vote on the east). Vault y = Y + 2. */
+    static final List<SurvivalLayout.CrateSpot> CRATE_SPOTS = List.of(
+            new SurvivalLayout.CrateSpot("iron", -5, -(D - 1)), new SurvivalLayout.CrateSpot("gold", -5, -(D + 3)), new SurvivalLayout.CrateSpot("netherite", -5, -(D + 7)),
+            new SurvivalLayout.CrateSpot("koth", 5, -(D - 1)), new SurvivalLayout.CrateSpot("vote", 5, -(D + 3)));
+    /** /warp crates and the tour: the middle of the hall, among the vaults. */
+    static Location cratesWarp(World world) { return new Location(world, 0.5, Y + 1.07, -(D + 1) + 0.5, 180f, 0f); }
+    /** The auction bell: on a gold-flanked pedestal at the front of the Merchant District (bell y = Y + 2). */
+    static final int BELL_X = 0, BELL_Z = D - 3;
+    static Location marketWarp(World world) { return new Location(world, 0.5, Y + 1, BELL_Z - 2.5, 0f, 0f); }
+
     private final AlloyCore plugin;
     private final World world;
     private final NamespacedKey tag;
@@ -48,6 +58,29 @@ final class DistrictLife implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         for (Spot s : SPOTS) world.addPluginChunkTicket(((int) s.x()) >> 4, ((int) s.z()) >> 4, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::ensure, 200L, 600L);
+        Bukkit.getScheduler().runTaskLater(plugin, this::relocate, 160L);
+    }
+
+    /** Once: the crates move into the Grand Hall and the auction bell into the Merchant District; the old vaults and bell on the island are taken down. */
+    private void relocate() {
+        java.io.File marker = new java.io.File(plugin.getDataFolder(), "spawn-move-v1");
+        if (marker.exists() || !new java.io.File(plugin.getDataFolder(), "spawn-upgrade-phase2").exists()) return;
+        for (SurvivalLayout.CrateSpot s : CRATE_SPOTS) {
+            world.getBlockAt(s.x(), Y + 1, s.z()).setType(org.bukkit.Material.GILDED_BLACKSTONE, false);
+            world.getBlockAt(s.x(), Y + 2, s.z()).setBlockData(Bukkit.createBlockData("minecraft:vault[facing=" + (s.x() < 0 ? "east" : "west") + "]"), false);
+        }
+        for (SurvivalLayout.CrateSpot s : SurvivalLayout.CRATES) {   // the old pavilion's vaults become plain pedestals
+            var b = world.getBlockAt(s.x(), Y + 2, s.z());
+            if (b.getType() == org.bukkit.Material.VAULT) b.setType(org.bukkit.Material.CHISELED_POLISHED_BLACKSTONE, false);
+        }
+        world.getBlockAt(BELL_X, Y + 1, BELL_Z).setType(org.bukkit.Material.POLISHED_BLACKSTONE_BRICKS, false);
+        world.getBlockAt(BELL_X - 1, Y + 1, BELL_Z).setType(org.bukkit.Material.GOLD_BLOCK, false);
+        world.getBlockAt(BELL_X + 1, Y + 1, BELL_Z).setType(org.bukkit.Material.GOLD_BLOCK, false);
+        world.getBlockAt(BELL_X, Y + 2, BELL_Z).setBlockData(Bukkit.createBlockData("minecraft:bell[attachment=floor,facing=north]"), false);
+        var oldBell = world.getBlockAt(SurvivalLayout.BELL_X, Y + 2, SurvivalLayout.BELL_Z);
+        if (oldBell.getType() == org.bukkit.Material.BELL) oldBell.setType(org.bukkit.Material.AIR, false);
+        try { marker.createNewFile(); } catch (Exception ignored) { }
+        plugin.getLogger().info("Spawn move v1: crates are in the Grand Hall, the auction bell is in the Merchant District");
     }
 
     /** The arrival point: inside the Grand Hall, on the carpet, facing the throne. */

@@ -82,7 +82,7 @@ public final class SurvivalModule implements Listener {
         this.plugin = plugin;
         this.world = Bukkit.getWorlds().getFirst();
         claims = new Claims(plugin);
-        crates = new Crates(plugin, world);
+        crates = new Crates(plugin, world, DistrictLife.CRATE_SPOTS, Y + 2);   // in the Grand Hall
         koth = new Koth(plugin, world, crates);
         pvp = new PvpZone(plugin, world, crates);
         tags = new NameTags(plugin);
@@ -598,10 +598,10 @@ public final class SurvivalModule implements Listener {
         }
         switch (a[0].toLowerCase()) {
             case "spawn" -> teleportSafe(p, spawn(), "spawn");
-            case "crates", "crate" -> teleportSafe(p, new Location(world, CRATES_WARP_X, Y + 2, CRATES_WARP_Z, 180, 0), "crates");
+            case "crates", "crate" -> teleportSafe(p, DistrictLife.cratesWarp(world), "the crates");
             case "koth", "arena" -> dropInto(p, koth.arrival(), "the KOTH arena - PvP is on!");
             case "pvp", "scrapyard" -> { dropInto(p, pvp.arrival(), "the Scrapyard - PvP is on!"); }
-            case "market", "ah", "auction" -> teleportSafe(p, new Location(world, BELL_X + 0.5, Y + 1, BELL_Z - 4.5, 0, 0), "the market");
+            case "market", "ah", "auction" -> teleportSafe(p, DistrictLife.marketWarp(world), "the market");
             case "smithy", "blacksmith" -> teleportSafe(p, DistrictLife.warp(world, "smithy"), "the Smithy");
             case "merchant", "merchants" -> teleportSafe(p, DistrictLife.warp(world, "market"), "the Merchant District");
             case "wilds", "gate" -> teleportSafe(p, DistrictLife.warp(world, "wilds"), "the Gate of the Wilds");
@@ -700,7 +700,7 @@ public final class SurvivalModule implements Listener {
     public void onBell(PlayerInteractEvent e) {
         Block b = e.getClickedBlock();
         if (b == null || b.getType() != Material.BELL || e.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK) return;
-        if (b.getX() != BELL_X || b.getZ() != BELL_Z || b.getY() != Y + 2 || e.getHand() != org.bukkit.inventory.EquipmentSlot.HAND) return;
+        if (b.getX() != DistrictLife.BELL_X || b.getZ() != DistrictLife.BELL_Z || b.getY() != Y + 2 || e.getHand() != org.bukkit.inventory.EquipmentSlot.HAND) return;
         e.setCancelled(true);
         world.playSound(b.getLocation(), Sound.BLOCK_BELL_USE, 1f, 1f);
         if (ah != null) ah.openBrowse(e.getPlayer(), 0);
@@ -830,7 +830,7 @@ public final class SurvivalModule implements Listener {
         holos.add(Ui.board(new Location(world, -BOARD_X + 0.6, Y + 1.6, BOARD_Z + 0.5), RULES, 1.0f, -90));                         // 6
         leaderboard = Ui.board(new Location(world, BOARD_X + 0.4, Y + 1.6, BOARD_Z + 0.5), topText, 1.0f, 90);
         holos.add(leaderboard);                                                                                                      // 7
-        holos.add(Ui.hologram(new Location(world, BELL_X + 0.5, Y + 3.8, BELL_Z + 0.5),
+        holos.add(Ui.hologram(new Location(world, DistrictLife.BELL_X + 0.5, Y + 3.8, DistrictLife.BELL_Z + 0.5),
                 "<gold><bold>AUCTION HOUSE</bold><newline><gray>Ring the bell or type <white>/ah<newline><gray>Sell with <white>/ah sell <price>", 1.1f));   // 8
         holos.add(Ui.hologram(new Location(world, DROP_X + 0.5, Y + 3.2, PVP_SHAFT_Z + 0.5), "<#ff5a3c><bold>⬇ THE SCRAPYARD ⬇</bold><newline><gray>Supply drops • PvP", 1.2f));   // 9
         holos.add(Ui.hologram(new Location(world, DROP_X + 0.5, Y + 3.2, KOTH_SHAFT_Z + 0.5), "<#e5484d><bold>⬇ KOTH ARENA ⬇</bold><newline><gray>Hold the hill • PvP", 1.2f));       // 10
