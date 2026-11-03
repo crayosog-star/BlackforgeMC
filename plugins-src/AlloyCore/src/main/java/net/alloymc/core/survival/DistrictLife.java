@@ -50,6 +50,9 @@ final class DistrictLife implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, this::ensure, 200L, 600L);
     }
 
+    /** The arrival point: inside the Grand Hall, on the carpet, facing the throne. */
+    static Location arrival(World world) { return new Location(world, 0.5, Y + 1.07, -(D - 4) + 0.5 - 1, 180f, 0f); }
+
     static Location warp(World world, String id) {
         for (Spot s : SPOTS) if (s.id().equals(id)) return new Location(world, s.x(), Y + 1, s.z(), s.yaw(), 0);
         return null;

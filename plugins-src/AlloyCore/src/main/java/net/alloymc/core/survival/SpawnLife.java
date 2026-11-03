@@ -50,15 +50,16 @@ final class SpawnLife implements Listener {
         this.crates = crates;
         this.toured = new File(plugin.getDataFolder(), "tour-done.yml");
         this.stops = List.of(
-                new Stop("The Courtyard", spawn, "Welcome to the BlackForge kingdom! This is the courtyard, where you arrive. The Legendary Forge hangs above."),
+                new Stop("The Grand Hall", spawn, "Welcome to the BlackForge kingdom! This is the Grand Hall, where you arrive. Cross the bridge south to the fortress courtyard."),
+                new Stop("The Courtyard", () -> new Location(world, SurvivalLayout.SPAWN_X, SurvivalLayout.SPAWN_Y, SurvivalLayout.SPAWN_Z, SurvivalLayout.SPAWN_YAW, 0),
+                        "The fortress courtyard, with the fountain and the Legendary Forge hanging above. Everything else is a short walk from here."),
                 new Stop("The Crates", () -> new Location(world, SurvivalLayout.CRATES_WARP_X, Y + 2, SurvivalLayout.CRATES_WARP_Z, 180, 0),
                         "The crate vaults. Left-click a crate to see its rewards and odds; keys come from voting, the daily reward and events."),
                 new Stop("The Market", () -> new Location(world, SurvivalLayout.BELL_X + 0.5, Y + 1, SurvivalLayout.BELL_Z - 4.5, 0, 0),
                         "Ring the bell to open the Auction House, or use /ah. Buy and sell with other players."),
                 new Stop("The Smithy", () -> DistrictLife.warp(world, "smithy"), "The Blacksmith's anvil is free to use. Beyond this bridge, the forge never sleeps."),
                 new Stop("The Merchant District", () -> DistrictLife.warp(world, "market"), "The Merchant opens the Auction House too. Warp back any time with /warp merchant."),
-                new Stop("The Gate of the Wilds", () -> DistrictLife.warp(world, "wilds"), "Leave on an expedition with /warp wild. Claim your land with the golden shovel before you build."),
-                new Stop("The Grand Hall", () -> DistrictLife.warp(world, "hall"), "The heart of the kingdom. Type /warp to see every destination, /daily for your reward and /pv for vaults."));
+                new Stop("The Gate of the Wilds", () -> DistrictLife.warp(world, "wilds"), "Leave on an expedition with /warp wild. Claim your land with the golden shovel before you build."));
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getCommandMap().register("alloy", new Command("tour", "A guided tour of the BlackForge kingdom", "/tour", List.of()) {
             @Override public boolean execute(CommandSender s, String label, String[] args) {

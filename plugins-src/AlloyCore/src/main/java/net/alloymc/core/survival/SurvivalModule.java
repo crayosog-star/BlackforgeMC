@@ -218,7 +218,9 @@ public final class SurvivalModule implements Listener {
         hall.shutdown();
     }
 
-    public Location spawn() { return new Location(world, SPAWN_X, SPAWN_Y, SPAWN_Z, SPAWN_YAW, 0); }
+    /** Where everyone arrives and respawns: the Grand Hall of the BlackForge kingdom (the old courtyard pad is {@link #courtyard()}). */
+    public Location spawn() { return DistrictLife.arrival(world); }
+    public Location courtyard() { return new Location(world, SPAWN_X, SPAWN_Y, SPAWN_Z, SPAWN_YAW, 0); }
 
     public void build(CommandSender who) {
         who.sendMessage(Component.text("Building survival spawn + KOTH arena..."));
