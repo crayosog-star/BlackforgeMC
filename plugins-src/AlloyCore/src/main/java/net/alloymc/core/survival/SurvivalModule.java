@@ -48,6 +48,7 @@ public final class SurvivalModule implements Listener {
     private final DarknessPotion darkness;
     private final Surge surge;
     private final PlayerVaults vaults;
+    private final DistrictLife districts;
     private final LastRite rite;
     private final net.alloymc.core.VoidOut voidOut;
     private final SpawnUpgrade upgrade;
@@ -174,6 +175,7 @@ public final class SurvivalModule implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         new net.alloymc.core.SpawnSafety(plugin, l -> l.getWorld() == world && inSpawn(l.getX(), l.getY(), l.getZ()), p -> spawn());
         new TradingHall(plugin, world, ranks);
+        districts = new DistrictLife(plugin, world);
         registerCommands();
         if (!new File(plugin.getDataFolder(), "survival-built").exists()) build(Bukkit.getConsoleSender());
         else if (!new File(plugin.getDataFolder(), "spawn-v2").exists()) rebuildSpawn(Bukkit.getConsoleSender());
@@ -201,6 +203,7 @@ public final class SurvivalModule implements Listener {
 
     public void shutdown() {
         boss.stop(null);
+        districts.shutdown();
         jobs.save();
         gaia.shutdown();   // first: removes every cloud's barrier blocks
         surge.shutdown();
@@ -346,7 +349,7 @@ public final class SurvivalModule implements Listener {
                 return true;
             }
             @Override public List<String> tabComplete(CommandSender s, String alias, String[] args) {
-                if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "koth", "pvp", "wild", "market");
+                if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "koth", "pvp", "wild", "market", "smithy", "merchant", "wilds", "hall");
                 if (name.equals("ah") && args.length == 1) return List.of("sell", "listings", "collect", "help");
                 if (name.equals("claim") && args.length == 1) return List.of("map", "show", "info", "list", "trust", "untrust", "unclaimall", "help");
                 return super.tabComplete(s, alias, args);
@@ -586,7 +589,7 @@ public final class SurvivalModule implements Listener {
 
     private void warp(Player p, String[] a) {
         if (a.length == 0) {
-            p.sendMessage(Ui.mm("<gold><bold>Warps</bold> <dark_gray>» <yellow>spawn <gray>• <yellow>crates <gray>• <yellow>market <gray>• <yellow>koth <gray>• <yellow>pvp <gray>• <yellow>wild"));
+            p.sendMessage(Ui.mm("<gold><bold>Warps</bold> <dark_gray>» <yellow>spawn <gray>• <yellow>crates <gray>• <yellow>market <gray>• <yellow>smithy <gray>• <yellow>merchant <gray>• <yellow>wilds <gray>• <yellow>hall <gray>• <yellow>koth <gray>• <yellow>pvp <gray>• <yellow>wild"));
             p.sendMessage(Ui.mm("<gray>Use <white>/warp <name>"));
             return;
         }
@@ -596,6 +599,10 @@ public final class SurvivalModule implements Listener {
             case "koth", "arena" -> dropInto(p, koth.arrival(), "the KOTH arena - PvP is on!");
             case "pvp", "scrapyard" -> { dropInto(p, pvp.arrival(), "the Scrapyard - PvP is on!"); }
             case "market", "ah", "auction" -> teleportSafe(p, new Location(world, BELL_X + 0.5, Y + 1, BELL_Z - 4.5, 0, 0), "the market");
+            case "smithy", "blacksmith" -> teleportSafe(p, DistrictLife.warp(world, "smithy"), "the Smithy");
+            case "merchant", "merchants" -> teleportSafe(p, DistrictLife.warp(world, "market"), "the Merchant District");
+            case "wilds", "gate" -> teleportSafe(p, DistrictLife.warp(world, "wilds"), "the Gate of the Wilds");
+            case "hall", "grandhall" -> teleportSafe(p, DistrictLife.warp(world, "hall"), "the Grand Hall");
             case "wild", "rtp" -> rtp(p);
             default -> p.sendMessage(Ui.mm("<red>No warp called " + a[0] + ". <gray>Try /warp"));
         }
