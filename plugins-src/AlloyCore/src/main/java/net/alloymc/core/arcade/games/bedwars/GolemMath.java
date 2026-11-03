@@ -80,7 +80,7 @@ final class GolemMath {
     static double[] eruptionLanes(int phase) { return phase >= 3 ? new double[]{-60, -30, 0, 30, 60} : new double[]{-30, 0, 30}; }
 
     /** Crystal Eruption: spikes along each lane every {@code SPIKE_GAP} blocks, from 1.5 out to 12; each hurts within {@code SPIKE_HIT}. */
-    static final double SPIKE_GAP = 1.2, SPIKE_HIT = 0.8, ERUPTION_REACH = 12;
+    static final double SPIKE_GAP = 1.2, SPIKE_HIT = 0.8, ERUPTION_REACH = 12 * ForgeWarsMaps.HALL;   // the hall is HALL times wider than it was drawn
 
     /**
      * Where a target will be when a shard gets there: aim {@code lead} of the way along its current velocity

@@ -488,7 +488,7 @@ final class BedWarsMatch extends Match {
             if (!isAlive(p) || p.getGameMode() != GameMode.SURVIVAL) continue;
             Location l = p.getLocation();
             if (l.getWorld() != home.getWorld() || l.getY() < home.getY() - 2 || l.getY() > home.getY() + 21) continue;
-            if (Math.hypot(l.getX() - home.getX(), l.getZ() - home.getZ()) <= 17) out.add(p);
+            if (Math.hypot(l.getX() - home.getX(), l.getZ() - home.getZ()) <= 17 * ForgeWarsMaps.HALL) out.add(p);
         }
         return out;
     }

@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * into the void, the Black Market villager stands free, and every restock has premium deals.
  */
 class ForgeWarsCaveTest {
-    private static final int FLOOR = ForgeWarsMaps.CAVE_FLOOR, STAND = FLOOR + 1, OUT = ForgeWarsMaps.TUNNEL_TOP + 2;
+    private static final int FLOOR = ForgeWarsMaps.CAVE_FLOOR, STAND = FLOOR + 1, OUT = ForgeWarsMaps.out(ForgeWarsMaps.TUNNEL_TOP + 2);
 
     @Test void youCanWalkOutOfTheCaveUpBothStairwaysWithoutJumping() {
         for (BuiltMap b : new ForgeWars().builtInMaps()) {
@@ -32,7 +32,7 @@ class ForgeWarsCaveTest {
             Walk w = new Walk(b.canvas());
             Pt m = b.def().point("black_market");
             int mx = (int) Math.floor(m.x()), mz = (int) Math.floor(m.z());
-            assertTrue(w.has(w.reach(OUT, 1, 0, 1.0), mx, STAND, mz + 2), b.def().id + ": no way down to the Black Market counter");
+            assertTrue(w.has(w.reach(OUT, 1, 0, 1.0), mx, STAND, ForgeWarsMaps.out(ForgeWarsMaps.GROTTO_Z + 1)), b.def().id + ": no way down to the Black Market counter");   // the row in front of the counter
         }
     }
 
@@ -43,7 +43,7 @@ class ForgeWarsCaveTest {
             for (int i = 0; i < teams; i++) {
                 double a = Math.PI * 2 * i / teams - Math.PI / 2;
                 int[] start = null;   // where a bridge from this team lands: the first standable spot in from the edge
-                for (double r = 27.5; r > 20 && start == null; r -= 0.5) {
+                for (double r = ForgeWarsMaps.out(ForgeWarsMaps.CORE_R) - 0.5; r > ForgeWarsMaps.out(20) && start == null; r -= 0.5) {
                     int x = (int) Math.round(Math.cos(a) * r), z = (int) Math.round(Math.sin(a) * r);
                     if (w.stands(x, z).contains(2)) start = new int[]{x, z};
                 }
@@ -63,8 +63,8 @@ class ForgeWarsCaveTest {
             int x = (int) Math.floor(m.x()), y = (int) Math.floor(m.y()), z = (int) Math.floor(m.z());
             assertEquals(STAND, y, b.def().id + ": villager isn't at cave floor level");
             assertTrue(Math.hypot(m.x(), m.z()) >= 15, b.def().id + ": the Black Market must stay out of the middle of the hall (boss arena)");
-            for (int dx = -8; dx <= 8; dx++) for (int dz = -8; dz <= 8; dz++)   // and the middle of the hall stays open floor
-                if (Math.hypot(dx, dz) <= 4 && Math.max(Math.abs(dx), Math.abs(dz)) > 2)
+            for (int dx = -10; dx <= 10; dx++) for (int dz = -10; dz <= 10; dz++)   // and the middle of the hall stays open floor
+                if (Math.hypot(dx, dz) <= ForgeWarsMaps.out(4) && Math.max(Math.abs(dx), Math.abs(dz)) > ForgeWarsMaps.out(2))
                     assertTrue(Walk.passable(c.get(dx, STAND, dz)), b.def().id + ": something is built in the middle of the hall at " + dx + "," + dz + ": " + c.get(dx, STAND, dz));
             assertEquals("minecraft:spruce_planks", c.get(x, y - 1, z), b.def().id + ": villager isn't on the stall floor");
             assertTrue(Walk.passable(c.get(x, y, z)) && Walk.passable(c.get(x, y + 1, z)), b.def().id + ": villager is stuck in a block");
@@ -89,7 +89,7 @@ class ForgeWarsCaveTest {
         for (BuiltMap b : new ForgeWars().builtInMaps()) {
             Canvas c = b.canvas();
             assertTrue(b.def().voidY < FLOOR - 10, b.def().id + ": void level " + b.def().voidY + " would kill players on the cave floor");
-            for (int x = -18; x <= 18; x++) for (int z = -18; z <= 18; z++)
+            for (int x = -ForgeWarsMaps.out(18); x <= ForgeWarsMaps.out(18); x++) for (int z = -ForgeWarsMaps.out(18); z <= ForgeWarsMaps.out(18); z++)
                 if ("minecraft:air".equals(c.get(x, STAND, z)))
                     assertFalse(Walk.passable(c.get(x, FLOOR, z)), b.def().id + ": hole in the cave floor at " + x + "," + z);
         }
@@ -113,6 +113,7 @@ class ForgeWarsCaveTest {
      * step-up (no jump), and dropping lands you on the highest stand below.
      */
     static final class Walk {
+        private static final int REACH = ForgeWarsMaps.out(ForgeWarsMaps.CORE_R) + 12;   // the whole Core, stretched, and a little past its edge
         final Canvas c;
         Walk(Canvas c) { this.c = c; }
 
@@ -157,7 +158,7 @@ class ForgeWarsCaveTest {
                 int[] n = q.poll();
                 for (int[] d : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
                     int nx = n[0] + d[0], nz = n[2] + d[1];
-                    if (Math.abs(nx) > 40 || Math.abs(nz) > 40) continue;
+                    if (Math.abs(nx) > REACH || Math.abs(nz) > REACH) continue;
                     List<Integer> st = stands(nx, nz);
                     for (int s : st) {
                         boolean stair = s % 2 != 0 && String.valueOf(c.get(nx, Math.floorDiv(s, 2), nz)).contains("stairs");

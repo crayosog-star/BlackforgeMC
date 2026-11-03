@@ -30,7 +30,7 @@ class ForgeWarsBreachTest {
             assertNotNull(p, b.def().id + ": no golem_breach point");
             assertEquals(STAND, (int) p.y(), b.def().id + ": breach isn't at floor level");
             double r = Math.hypot(p.x(), p.z());
-            assertTrue(r > 10 && r < 17, b.def().id + ": breach isn't out at the wall: " + r);
+            assertTrue(r > ForgeWarsMaps.out(10) && r < ForgeWarsMaps.out(17), b.def().id + ": breach isn't out at the wall: " + r);
             double inX = -p.x() / r, inZ = -p.z() / r;
             // just behind the breach spot is rock
             int bx = (int) Math.floor(p.x() - inX * 1.5), bz = (int) Math.floor(p.z() - inZ * 1.5);
