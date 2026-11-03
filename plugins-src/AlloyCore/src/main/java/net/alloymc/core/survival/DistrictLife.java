@@ -59,6 +59,8 @@ final class DistrictLife implements Listener {
         for (Spot s : SPOTS) world.addPluginChunkTicket(((int) s.x()) >> 4, ((int) s.z()) >> 4, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::ensure, 200L, 600L);
         Bukkit.getScheduler().runTaskLater(plugin, this::relocate, 160L);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::relocate2, 240L, 600L);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::gateGlow, 100L, 8L);
     }
 
     /** Once: the crates move into the Grand Hall and the auction bell into the Merchant District; the old vaults and bell on the island are taken down. */
@@ -89,6 +91,39 @@ final class DistrictLife implements Listener {
     static Location warp(World world, String id) {
         for (Spot s : SPOTS) if (s.id().equals(id)) return new Location(world, s.x(), Y + 1, s.z(), s.yaw(), 0);
         return null;
+    }
+
+    /** Once the annexes are built: the old Trading Hall villagers, drop shafts and Wild gate on the island are taken down, the new gate opened. */
+    private void relocate2() {
+        java.io.File marker = new java.io.File(plugin.getDataFolder(), "spawn-move-v2");
+        if (marker.exists() || !new java.io.File(plugin.getDataFolder(), "spawn-upgrade-phase3").exists()) return;
+        // the old villagers
+        Location oldHall = new Location(world, 0, Y + 2, -69);
+        for (Entity e : world.getNearbyEntities(oldHall, 20, 12, 14)) if (e instanceof Villager v && v.isInvulnerable() && !v.hasAI()) v.remove();
+        // the old drop shafts (x -41..-39, z -6..-4 and 4..6): capped at floor level
+        for (int z : new int[]{-5, 5}) for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+            var b = world.getBlockAt(-40 + dx, Y, z + dz);
+            if (b.getType().isAir()) b.setType(org.bukkit.Material.POLISHED_BLACKSTONE_BRICKS, false);
+        }
+        // the old Wild gate's portal blocks (they would send players to the Nether)
+        for (int x = 40; x <= 44; x++) for (int z = -5; z <= 6; z++) for (int y = Y + 1; y <= Y + 11; y++) {
+            var b = world.getBlockAt(x, y, z);
+            if (b.getType() == org.bukkit.Material.NETHER_PORTAL) b.setType(org.bukkit.Material.AIR, false);
+        }
+        // the new gate: the glass curtain becomes an open doorway
+        for (int z = -3; z <= 3; z++) for (int y = Y + 1; y <= Y + 8; y++) {
+            var b = world.getBlockAt(-D - 5, y, z);
+            if (b.getType() == org.bukkit.Material.ORANGE_STAINED_GLASS_PANE) b.setType(org.bukkit.Material.AIR, false);
+        }
+        try { marker.createNewFile(); } catch (Exception ignored) { }
+        plugin.getLogger().info("Spawn move v2: Trading Hall, Hall of Fame, Wild gate and Drop Zone are in the kingdom");
+    }
+
+    /** The Wild gate shimmers while anyone is near. */
+    private void gateGlow() {
+        if (world.getPlayers().stream().noneMatch(p -> Math.abs(p.getX() + D) < 30 && Math.abs(p.getZ()) < 20)) return;
+        world.spawnParticle(org.bukkit.Particle.PORTAL, -D - 4.5, Y + 4, 0.5, 18, 0.4, 2.6, 3.0, 0.3);
+        world.spawnParticle(org.bukkit.Particle.REVERSE_PORTAL, -D - 4.5, Y + 3, 0.5, 6, 0.3, 2.0, 2.5, 0.05);
     }
 
     private void ensure() {

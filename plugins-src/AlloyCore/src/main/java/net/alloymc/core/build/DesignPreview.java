@@ -81,6 +81,18 @@ public final class DesignPreview {
                         new View("market_aerial", new WorldCam.Cam(40, Y + 40, 92, 2, Y + 4, 112, 70)),
                         new View("hall_inside", new WorldCam.Cam(0.5, Y + 3, -106, 0.5, Y + 4, -118, 80)));
             }
+            case "spawnupgrade3" -> {
+                c = net.alloymc.core.survival.SpawnUpgradeBuilder.phase3();
+                int Y = net.alloymc.core.survival.SurvivalLayout.Y;
+                look = WorldCam.Look.sunset();
+                look.fogStart = 220; look.fogEnd = 520; look.maxDist = 520;
+                views = List.of(
+                        new View("trading_aerial", new WorldCam.Cam(10, Y + 38, 80, 33, Y + 4, 101, 70)),
+                        new View("trading_inside", new WorldCam.Cam(33.5, Y + 3, 96.5, 33.5, Y + 3, 106, 80)),
+                        new View("fame_aerial", new WorldCam.Cam(8, Y + 38, -84, 33, Y + 6, -102, 70)),
+                        new View("drop_aerial", new WorldCam.Cam(-84, Y + 36, 8, -103, Y + 4, 31, 70)),
+                        new View("overview", new WorldCam.Cam(150, Y + 120, 150, 0, Y + 5, 0, 75)));
+            }
             default -> throw new IllegalArgumentException("unknown design " + design);
         }
         WorldCam.World world;

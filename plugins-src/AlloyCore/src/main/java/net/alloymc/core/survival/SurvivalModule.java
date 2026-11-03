@@ -784,14 +784,14 @@ public final class SurvivalModule implements Listener {
         if (!e.hasChangedBlock()) return;
         Location to = e.getTo();
         if (to.getWorld() != world) return;
-        if (inShaft(to.getX(), to.getY(), to.getZ(), PVP_SHAFT_Z)) { dropInto(p, pvp.arrival(), "the Scrapyard - PvP is on!"); return; }
-        if (inShaft(to.getX(), to.getY(), to.getZ(), KOTH_SHAFT_Z)) { dropInto(p, koth.arrival(), "the KOTH arena - PvP is on!"); return; }
-        boolean wild = inWildGate(to.getX(), to.getY(), to.getZ()), arena = false;
+        if (KingdomLayout.inShaft(to.getX(), to.getY(), to.getZ(), KingdomLayout.SCRAP_Z)) { dropInto(p, pvp.arrival(), "the Scrapyard - PvP is on!"); return; }
+        if (KingdomLayout.inShaft(to.getX(), to.getY(), to.getZ(), KingdomLayout.KOTH_Z)) { dropInto(p, koth.arrival(), "the KOTH arena - PvP is on!"); return; }
+        boolean wild = KingdomLayout.inWildGate(to.getX(), to.getY(), to.getZ()), arena = false;
         if (!wild) return;
         long now = System.currentTimeMillis();
         if (gateCooldown.getOrDefault(p.getUniqueId(), 0L) > now) return;
         gateCooldown.put(p.getUniqueId(), now + 3000);
-        p.setVelocity(new org.bukkit.util.Vector(wild ? -0.8 : 0.8, 0.3, 0));
+        p.setVelocity(new org.bukkit.util.Vector(0.8, 0.3, 0));   // the Wilds gate is on the west side: back toward the kingdom
         if (wild) rtp(p); else dropInto(p, koth.arrival(), "the KOTH arena - PvP is on!");
     }
 
@@ -819,22 +819,22 @@ public final class SurvivalModule implements Listener {
         int archZ = (int) SPAWN_Z - 9;
         holos.add(Ui.hologram(new Location(world, 0.5, Y + 10.6, archZ + 0.5),
                 "<gray>Welcome to</gray><newline>" + Ui.TITLE + " <white><bold>SURVIVAL", 1.6f));                                    // 0
-        holos.add(Ui.hologram(new Location(world, GATE_X - 2.5, Y + 9.5, 0.5), "<#7ddc4a><bold>THE WILD</bold><newline><gray>Random teleport", 1.5f));   // 1
-        holos.add(Ui.hologram(new Location(world, DROP_X + 0.5, Y + 11.4, 0.5), "<#b06bff><bold>THE DROP ZONE</bold><newline><gray>Jump in a shaft to drop into a fight", 1.5f));      // 2
+        holos.add(Ui.hologram(new Location(world, -(KingdomLayout.D) + 2.5, Y + 9.5, 0.5), "<#7ddc4a><bold>THE WILD</bold><newline><gray>Random teleport", 1.5f));   // 1
+        holos.add(Ui.hologram(new Location(world, KingdomLayout.DROP_X + 0.5, Y + 11.4, 31.5), "<#b06bff><bold>THE DROP ZONE</bold><newline><gray>Jump in a shaft to drop into a fight", 1.5f));      // 2
         holos.add(Ui.hologram(new Location(world, 0.5, Y + 2.6, 9.5),
                 "<gold><bold>GETTING STARTED</bold><newline><green>/rtp <gray>head out into the wild<newline><yellow>/claim <gray>protect the chunk you're in"
                         + "<newline><yellow>/sethome <gray>then <yellow>/home <gray>to come back<newline><gold>/ah <gray>buy and sell • <gold>/warp crates <gray>open keys<newline><red>/pvp <gray>the Scrapyard: supply drops every 5h<newline><light_purple>/tags <gray>colour your name • <gold>/kits <gray>god kits • <aqua>/enchants<newline><gold>/daily <gray>free reward • <#5fd35f>/vote <gray>for keys • <#c6a15b>/scrap <gray>the Scrap Shop", 0.9f));  // 3
         kothHolo = Ui.hologram(new Location(world, SurvivalLayout.KOTH_X + 0.5, HILL_TOP + 4.5, SurvivalLayout.KOTH_Z + 0.5), "<#e5484d><bold>KING OF THE HILL", 2.0f);
         holos.add(kothHolo);                                                                                                         // 4
-        holos.add(Ui.hologram(new Location(world, DROP_X + 0.5, Y + 6.6, 0.5), koth.status(), 1.0f));                              // 5
-        holos.add(Ui.board(new Location(world, -BOARD_X + 0.6, Y + 1.6, BOARD_Z + 0.5), RULES, 1.0f, -90));                         // 6
-        leaderboard = Ui.board(new Location(world, BOARD_X + 0.4, Y + 1.6, BOARD_Z + 0.5), topText, 1.0f, 90);
+        holos.add(Ui.hologram(new Location(world, KingdomLayout.DROP_X + 0.5, Y + 8.4, 31.5), koth.status(), 1.0f));                              // 5
+        holos.add(Ui.board(new Location(world, -3.5, Y + 3.4, KingdomLayout.BOARD_Z), RULES, 1.0f, 180));                         // 6
+        leaderboard = Ui.board(new Location(world, 3.5, Y + 3.4, KingdomLayout.BOARD_Z), topText, 1.0f, 180);
         holos.add(leaderboard);                                                                                                      // 7
         holos.add(Ui.hologram(new Location(world, DistrictLife.BELL_X + 0.5, Y + 3.8, DistrictLife.BELL_Z + 0.5),
                 "<gold><bold>AUCTION HOUSE</bold><newline><gray>Ring the bell or type <white>/ah<newline><gray>Sell with <white>/ah sell <price>", 1.1f));   // 8
-        holos.add(Ui.hologram(new Location(world, DROP_X + 0.5, Y + 3.2, PVP_SHAFT_Z + 0.5), "<#ff5a3c><bold>⬇ THE SCRAPYARD ⬇</bold><newline><gray>Supply drops • PvP", 1.2f));   // 9
-        holos.add(Ui.hologram(new Location(world, DROP_X + 0.5, Y + 3.2, KOTH_SHAFT_Z + 0.5), "<#e5484d><bold>⬇ KOTH ARENA ⬇</bold><newline><gray>Hold the hill • PvP", 1.2f));       // 10
-        holos.add(Ui.hologram(new Location(world, HALL_CX + 0.5, Y + 9.0, HALL_CZ - 8.5), "<gradient:#ffd27a:#ff7a1a><bold>HALL OF FAME</bold></gradient><newline><gray>The best players on BlackForgeMC", 1.6f));
+        holos.add(Ui.hologram(new Location(world, KingdomLayout.DROP_X + 0.5, Y + 3.2, KingdomLayout.SCRAP_Z + 0.5), "<#ff5a3c><bold>⬇ THE SCRAPYARD ⬇</bold><newline><gray>Supply drops • PvP", 1.2f));   // 9
+        holos.add(Ui.hologram(new Location(world, KingdomLayout.DROP_X + 0.5, Y + 3.2, KingdomLayout.KOTH_Z + 0.5), "<#e5484d><bold>⬇ KOTH ARENA ⬇</bold><newline><gray>Hold the hill • PvP", 1.2f));       // 10
+        holos.add(Ui.hologram(new Location(world, KingdomLayout.HALL_CX + 0.5, Y + 8.6, KingdomLayout.HALL_CZ + 0.5), "<gradient:#ffd27a:#ff7a1a><bold>HALL OF FAME</bold></gradient><newline><gray>The best players on BlackForgeMC", 1.6f));
         crates.spawnHolograms();
         Bukkit.getScheduler().runTaskLater(plugin, hall::refresh, 5L);
     }

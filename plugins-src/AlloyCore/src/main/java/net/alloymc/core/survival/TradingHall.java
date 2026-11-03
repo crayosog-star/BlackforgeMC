@@ -21,7 +21,8 @@ import org.bukkit.persistence.PersistentDataType;
 
 import java.util.*;
 
-import static net.alloymc.core.survival.SurvivalLayout.*;
+import net.alloymc.core.survival.SurvivalLayout.TradeStall;
+import static net.alloymc.core.survival.KingdomLayout.*;
 
 /**
  * The Trading Hall north of spawn: a villager in each stall with fixed, fair trades that never change or lock
@@ -55,10 +56,10 @@ final class TradingHall implements Listener {
 
     /** Make sure every stall has exactly one of our villagers (spawn missing ones, remove duplicates). */
     void ensureVillagers() {
-        if (!world.isChunkLoaded(0 >> 4, TH_Z1 >> 4) && Bukkit.getOnlinePlayers().isEmpty()) return;
+        if (!world.isChunkLoaded(((TH_X1 + TH_X2) / 2) >> 4, TH_Z1 >> 4) && Bukkit.getOnlinePlayers().isEmpty()) return;
         Map<Integer, Villager> found = new HashMap<>();
-        Location c = new Location(world, 0, Y + 2, (TH_Z1 + TH_Z2) / 2.0);
-        for (Entity e : world.getNearbyEntities(c, 20, 10, 14)) {
+        Location c = new Location(world, (TH_X1 + TH_X2) / 2.0, Y + 2, (TH_Z1 + TH_Z2) / 2.0);
+        for (Entity e : world.getNearbyEntities(c, 14, 10, 8)) {
             if (!(e instanceof Villager v)) continue;
             Integer i = v.getPersistentDataContainer().get(tag, PersistentDataType.INTEGER);
             if (i == null) continue;
@@ -115,8 +116,8 @@ final class TradingHall implements Listener {
     }
 
     private void restock() {
-        Location c = new Location(world, 0, Y + 2, (TH_Z1 + TH_Z2) / 2.0);
-        for (Entity e : world.getNearbyEntities(c, 20, 10, 14))
+        Location c = new Location(world, (TH_X1 + TH_X2) / 2.0, Y + 2, (TH_Z1 + TH_Z2) / 2.0);
+        for (Entity e : world.getNearbyEntities(c, 14, 10, 8))
             if (e instanceof Villager v && v.getPersistentDataContainer().has(tag)) {
                 List<MerchantRecipe> rs = new ArrayList<>(v.getRecipes());
                 rs.forEach(r -> r.setUses(0));

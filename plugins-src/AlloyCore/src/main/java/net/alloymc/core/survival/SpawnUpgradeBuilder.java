@@ -439,4 +439,146 @@ public final class SpawnUpgradeBuilder {
         for (int d = 0; d < 4; d++) carve(c, d);
         return c;
     }
+
+    // ================================================================== phase 3: the annexes (Trading Hall, Hall of Fame, Drop Zone)
+
+    private static void ab(Canvas c, int x, int y, int z, String b) { c.set(x, Y + y, z, mc(b)); }
+    private static void abLate(Canvas c, int x, int y, int z, String b) { c.setLate(x, Y + y, z, mc(b)); }
+    private static void abFill(Canvas c, int x1, int y1, int z1, int x2, int y2, int z2, String b) {
+        for (int x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) for (int y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) for (int z = Math.min(z1, z2); z <= Math.max(z1, z2); z++) ab(c, x, y, z, b);
+    }
+
+    /** A rectangular floating platform with a tapering rock underside; holes ({x1,z1,x2,z2}) are left open all the way down. */
+    private static void rectPlatform(Canvas c, int x1, int z1, int x2, int z2, long seed, int[][] holes) {
+        Random rnd = new Random(seed);
+        for (int x = x1; x <= x2; x++) for (int z = z1; z <= z2; z++) {
+            boolean hole = false;
+            for (int[] h : holes) if (x >= h[0] && x <= h[2] && z >= h[1] && z <= h[3]) hole = true;
+            if (hole) continue;
+            int e = Math.min(Math.min(x - x1, x2 - x), Math.min(z - z1, z2 - z));
+            ab(c, x, 0, z, e == 0 ? "polished_blackstone_bricks" : (((x >> 1) + (z >> 1)) & 1) == 0 ? "deepslate_tiles" : "polished_blackstone");
+            int depth = (int) Math.round(3 + Math.min(e, 9) * 1.3 + rnd.nextInt(2));
+            for (int y = 1; y <= depth; y++) ab(c, x, -y, z, y < depth - 1 ? (rnd.nextInt(50) == 0 ? "magma_block" : "blackstone") : "basalt[axis=y]");
+        }
+    }
+
+    /** A bridge 5 wide with balustrades, lamps and piers, along x (fixed z centre) or along z (fixed x centre). */
+    private static void bridge(Canvas c, boolean alongX, int from, int to, int fixed) {
+        for (int t = Math.min(from, to); t <= Math.max(from, to); t++) {
+            for (int s = -2; s <= 2; s++) {
+                int x = alongX ? t : fixed + s, z = alongX ? fixed + s : t;
+                ab(c, x, 0, z, Math.abs(s) == 2 ? "polished_blackstone_bricks" : "polished_deepslate");
+            }
+            for (int s : new int[]{-2, 2}) {
+                int x = alongX ? t : fixed + s, z = alongX ? fixed + s : t;
+                ab(c, x, 1, z, "polished_blackstone_brick_wall");
+                if (t % 4 == 0) { ab(c, x, 2, z, "polished_blackstone_brick_wall"); abLate(c, x, 3, z, "soul_lantern"); }
+            }
+            if (t % 6 == 0) for (int y = -1; y >= -5; y--) ab(c, alongX ? t : fixed, y, alongX ? fixed : t, "blackstone");
+        }
+    }
+
+    /** Burning letters on a vertical plane z = plane, reading left to right for someone looking along dir (+1: toward -x ... see callers). */
+    private static void lettersZ(Canvas c, String text, int cx, int y0, int plane, int dirX) {
+        int w = BlockFont.width(text, 1);
+        BlockFont.draw(text, 1, (col, row, gr) -> {
+            int x = cx + dirX * (col - w / 2), y = y0 + row;
+            ab(c, x, y, plane, "shroomlight");
+            ab(c, x, y, plane + (dirX < 0 ? 1 : -1), "blackstone");
+        });
+    }
+
+    private static void tradingHall(Canvas c) {
+        rectPlatform(c, 20, 93, 46, 109, 11, new int[0][]);
+        bridge(c, true, 8, 19, 106);
+        // the hall: dark stone walls with oak beams, a lit roof
+        int x1 = KingdomLayout.TH_X1, x2 = KingdomLayout.TH_X2, z1 = KingdomLayout.TH_Z1, z2 = KingdomLayout.TH_Z2, h = 8;
+        for (int x = x1; x <= x2; x++) for (int z = z1; z <= z2; z++) {
+            boolean edge = x == x1 || x == x2 || z == z1 || z == z2;
+            ab(c, x, 0, z, (((x >> 1) + (z >> 1)) & 1) == 0 ? "dark_oak_planks" : "spruce_planks");
+            for (int y = 1; y <= h; y++) if (edge) ab(c, x, y, z, (x - x1) % 4 == 0 && (x == x1 || x == x2 || (z == z1 || z == z2)) ? "dark_oak_log[axis=y]" : "polished_blackstone_bricks");
+            ab(c, x, h + 1, z, "deepslate_tiles");
+        }
+        for (int x = 31; x <= 33; x++) for (int y = 1; y <= 4; y++) { ab(c, x, y, z1, "air"); }   // the doorway
+        for (int x = x1 + 2; x <= x2 - 2; x += 4) for (int z : new int[]{z1, z2}) for (int y = 3; y <= 5; y++) if (!(z == z1 && x >= 30 && x <= 34)) ab(c, x + 1, y, z, "orange_stained_glass");
+        for (int z = z1 + 2; z <= z2 - 2; z += 4) for (int x : new int[]{x1, x2}) for (int y = 3; y <= 5; y++) ab(c, x, y, z + 1, "orange_stained_glass");
+        // ceiling beams and lanterns
+        for (int z = z1 + 2; z <= z2 - 2; z += 4) for (int x = x1 + 1; x <= x2 - 1; x++) ab(c, x, h, z, "dark_oak_log[axis=x]");
+        for (int z = z1 + 2; z <= z2 - 2; z += 4) for (int x = x1 + 4; x <= x2 - 3; x += 4) abLate(c, x, h - 1, z, "lantern[hanging=true]");
+        // the stalls: a workstation behind each villager, a canopy over each
+        for (SurvivalLayout.TradeStall st : KingdomLayout.STALLS) {
+            int behind = st.facing().equals("south") ? -1 : 1;
+            String station = st.station();
+            if (station.equals("blast_furnace") || station.equals("smoker")) station += "[facing=" + st.facing() + "]";
+            else if (station.equals("grindstone")) station += "[face=floor,facing=" + st.facing() + "]";
+            else if (station.equals("fletching_table") || station.equals("smithing_table") || station.equals("loom") || station.equals("stonecutter") || station.equals("lectern")) station += station.equals("lectern") || station.equals("loom") || station.equals("stonecutter") ? "[facing=" + st.facing() + "]" : "";
+            ab(c, st.x(), 1, st.z() + behind, station);
+            for (int dx = -1; dx <= 1; dx++) ab(c, st.x() + dx, 4, st.z(), "dark_oak_slab");
+            ab(c, st.x() - 1, 1, st.z() + behind, "polished_blackstone_bricks");
+            ab(c, st.x() + 1, 1, st.z() + behind, "polished_blackstone_bricks");
+        }
+        // the sign over the door and a flag of lanterns along the front
+        lettersZ(c, "TRADING HALL", 33, 10, z1, -1);
+        for (int x : new int[]{30, 36}) { abFill(c, x, 1, z1 - 1, x, 3, z1 - 1, "polished_blackstone_brick_wall"); abLate(c, x, 4, z1 - 1, "lantern"); }
+    }
+
+    private static void hallOfFame(Canvas c) {
+        rectPlatform(c, 20, -109, 46, -93, 12, new int[0][]);
+        bridge(c, true, 8, 19, -106);
+        int x1 = 22, x2 = 44, zb = -108, zf = -98;
+        // back wall with lit niches, a stepped roof held up by a row of pillars
+        abFill(c, x1, 1, zb, x2, 12, zb + 1, "polished_blackstone_bricks");
+        for (int x = x1 + 2; x <= x2 - 2; x += 4) for (int y = 3; y <= 9; y++) { ab(c, x, y, zb + 2, y == 9 ? "gilded_blackstone" : "shroomlight"); }
+        for (int x = x1; x <= x2; x += 4) { abFill(c, x, 1, zf, x, 11, zf, "polished_blackstone_bricks"); ab(c, x, 12, zf, "gilded_blackstone"); }
+        abFill(c, x1 - 1, 13, zb, x2 + 1, 13, zf, "deepslate_tiles");
+        abFill(c, x1 + 1, 14, zb, x2 - 1, 14, zf - 1, "blackstone");
+        abFill(c, x1 + 3, 15, zb, x2 - 3, 15, zf - 2, "deepslate_tiles");
+        // the floor inside is a carpet of black and red
+        for (int x = x1; x <= x2; x++) for (int z = zb + 2; z <= zf; z++) ab(c, x, 0, z, (x + z) % 4 == 0 ? "gilded_blackstone" : "polished_deepslate");
+        for (SurvivalLayout.HallSpot s : KingdomLayout.HALL) {
+            ab(c, s.x(), 1, s.z(), "gilded_blackstone");
+            abFill(c, s.x(), 2, s.z(), s.x(), 3, s.z(), "chiseled_polished_blackstone");
+            ab(c, s.x(), 4, s.z(), "polished_blackstone_slab");
+            for (int dx : new int[]{-1, 1}) { ab(c, s.x() + dx, 1, s.z(), "polished_blackstone_brick_wall"); abLate(c, s.x() + dx, 2, s.z(), "soul_lantern"); }
+        }
+        for (int x = x1 + 2; x <= x2 - 2; x += 4) for (int y = 10; y >= 8; y--) abLate(c, x, y, zf - 1, "iron_chain[axis=y]");
+        for (int x = x1 + 2; x <= x2 - 2; x += 4) abLate(c, x, 7, zf - 1, "lantern[hanging=true]");
+        for (int x : new int[]{x1 - 1, x2 + 1}) { ab(c, x, 1, zf + 3, "chiseled_polished_blackstone"); abLate(c, x, 2, zf + 3, "campfire[lit=true]"); }
+    }
+
+    private static void dropZone(Canvas c) {
+        int[][] holes = {{KingdomLayout.DROP_X - 1, KingdomLayout.SCRAP_Z - 1, KingdomLayout.DROP_X + 1, KingdomLayout.SCRAP_Z + 1},
+                {KingdomLayout.DROP_X - 1, KingdomLayout.KOTH_Z - 1, KingdomLayout.DROP_X + 1, KingdomLayout.KOTH_Z + 1}};
+        rectPlatform(c, -111, 18, -95, 44, 13, holes);
+        bridge(c, false, 8, 17, -106);
+        for (int sz : new int[]{KingdomLayout.SCRAP_Z, KingdomLayout.KOTH_Z}) {
+            int cx = KingdomLayout.DROP_X;
+            // a rim of gilded stone round the shaft and four lamp pillars at the corners
+            for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
+                if (Math.abs(dx) <= 1 && Math.abs(dz) <= 1) continue;
+                ab(c, cx + dx, 0, sz + dz, "gilded_blackstone");
+            }
+            for (int dx : new int[]{-3, 3}) for (int dz : new int[]{-3, 3}) {
+                abFill(c, cx + dx, 1, sz + dz, cx + dx, 4, sz + dz, "polished_blackstone_bricks");
+                ab(c, cx + dx, 5, sz + dz, "chiseled_polished_blackstone");
+                abLate(c, cx + dx, 6, sz + dz, "soul_lantern");
+            }
+            // a lintel of chains over the opening
+            for (int dx = -3; dx <= 3; dx += 3) for (int y = 9; y >= 7; y--) abLate(c, cx + dx, y, sz, "iron_chain[axis=y]");
+            abFill(c, cx - 3, 10, sz, cx + 3, 10, sz, "polished_blackstone_brick_wall");
+        }
+        for (int z : new int[]{22, 31, 40}) { ab(c, -95, 1, z, "chiseled_polished_blackstone"); abLate(c, -95, 2, z, "campfire[lit=true]"); }
+    }
+
+    /** The annexes (blocks only ever go where the world has air). */
+    public static Canvas phase3() {
+        Canvas c = new Canvas();
+        tradingHall(c);
+        hallOfFame(c);
+        dropZone(c);
+        Canvas out = new Canvas();
+        c.blocks().forEach((k, v) -> { if (allowedAt(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k)) && !v.equals("minecraft:air")) out.set(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k), v); });
+        c.lateBlocks().forEach((k, v) -> { if (allowedAt(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k))) out.setLate(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k), v); });
+        return out;
+    }
 }
