@@ -176,6 +176,7 @@ public final class SurvivalModule implements Listener {
         new net.alloymc.core.SpawnSafety(plugin, l -> l.getWorld() == world && inSpawn(l.getX(), l.getY(), l.getZ()), p -> spawn());
         new TradingHall(plugin, world, ranks);
         districts = new DistrictLife(plugin, world);
+        new SpawnLife(plugin, world, crates, this::spawn);
         registerCommands();
         if (!new File(plugin.getDataFolder(), "survival-built").exists()) build(Bukkit.getConsoleSender());
         else if (!new File(plugin.getDataFolder(), "spawn-v2").exists()) rebuildSpawn(Bukkit.getConsoleSender());
