@@ -230,7 +230,10 @@ public final class Supporters implements Listener {
 
     private void registerCommands() {
         reg("trails", List.of("trail", "particles"), (s, a) -> { if (s instanceof Player p) open(p); else s.sendMessage("Players only."); });
-        reg("store", List.of("buy", "shop", "donate"), (s, a) -> storeLink(s));
+        // On Survival /shop is the Trader (sell shop); everywhere else it still means the store. /store works everywhere.
+        boolean survival = mode.equals("survival");
+        reg("store", survival ? List.of("buy", "donate") : List.of("buy", "shop", "donate"), (s, a) -> storeLink(s));
+        if (survival) new net.alloymc.core.survival.SellShop(plugin);
         reg("supporter", List.of("supporters", "support"), (s, a) -> info(s));
     }
 

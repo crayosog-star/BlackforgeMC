@@ -1,0 +1,69 @@
+# Survival Trader sell prices (/shop). Source: docs/economy.md (SHOP-001).
+# Copied to plugins/AlloyCore/shop.yml on first start; edit that copy and restart to change prices.
+# Only plain vanilla items are bought (no custom names, lore, enchants or plugin data).
+# Emerald is deliberately NOT sold: the Trading Hall mason pays 1 emerald for 32 stone (cobblestone-generator loop).
+
+# Items each player may sell per category per day. Resets at 00:00 UTC. 0 = unlimited.
+limits:
+  crops: 5000
+  mob_drops: 3000
+  fishing: 1000
+  wood: 3000
+  mining: 2000
+
+# price = $ per item. daily_limit (optional) = an extra per-item limit inside the category limit.
+shop:
+  # ---- crops
+  wheat:          { price: 0.40, category: crops }
+  carrot:         { price: 0.30, category: crops }
+  potato:         { price: 0.30, category: crops }
+  beetroot:       { price: 0.40, category: crops }
+  melon_slice:    { price: 0.10, category: crops }
+  pumpkin:        { price: 0.50, category: crops }
+  sugar_cane:     { price: 0.30, category: crops }
+  cactus:         { price: 0.30, category: crops }
+  bamboo:         { price: 0.05, category: crops }
+  nether_wart:    { price: 0.30, category: crops }
+  cocoa_beans:    { price: 0.25, category: crops }
+
+  # ---- mob drops (raw cod/salmon are under fishing)
+  rotten_flesh:   { price: 0.10, category: mob_drops }
+  bone:           { price: 0.30, category: mob_drops }
+  string:         { price: 0.30, category: mob_drops }
+  spider_eye:     { price: 0.50, category: mob_drops }
+  gunpowder:      { price: 0.75, category: mob_drops }
+  ender_pearl:    { price: 2.00, category: mob_drops, daily_limit: 500 }
+  blaze_rod:      { price: 2.50, category: mob_drops, daily_limit: 500 }
+  leather:        { price: 0.75, category: mob_drops }
+  feather:        { price: 0.20, category: mob_drops }
+  chicken:        { price: 0.25, category: mob_drops }
+  beef:           { price: 0.40, category: mob_drops }
+  porkchop:       { price: 0.40, category: mob_drops }
+  mutton:         { price: 0.40, category: mob_drops }
+  rabbit:         { price: 0.60, category: mob_drops }
+
+  # ---- fishing
+  cod:            { price: 0.50, category: fishing }
+  salmon:         { price: 0.75, category: fishing }
+  tropical_fish:  { price: 2.00, category: fishing }
+  pufferfish:     { price: 1.50, category: fishing }
+
+  # ---- wood
+  oak_log:        { price: 0.50, category: wood }
+  spruce_log:     { price: 0.50, category: wood }
+  birch_log:      { price: 0.50, category: wood }
+  jungle_log:     { price: 0.50, category: wood }
+  acacia_log:     { price: 0.50, category: wood }
+  dark_oak_log:   { price: 0.50, category: wood }
+  mangrove_log:   { price: 0.50, category: wood }
+  cherry_log:     { price: 0.50, category: wood }
+
+  # ---- mining (raw ores only; ingots, blocks and emerald are not bought)
+  coal:           { price: 0.50, category: mining }
+  raw_copper:     { price: 0.30, category: mining }
+  raw_iron:       { price: 1.25, category: mining }
+  raw_gold:       { price: 2.00, category: mining }
+  redstone:       { price: 0.25, category: mining }
+  lapis_lazuli:   { price: 0.30, category: mining }
+  quartz:         { price: 0.40, category: mining }
+  diamond:        { price: 10.00, category: mining }

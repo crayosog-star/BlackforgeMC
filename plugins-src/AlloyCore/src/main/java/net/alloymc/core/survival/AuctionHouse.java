@@ -1,6 +1,7 @@
 package net.alloymc.core.survival;
 
 import net.alloymc.core.AlloyCore;
+import net.alloymc.core.NetEconomy;
 import net.alloymc.core.Ui;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
@@ -29,13 +30,17 @@ import java.util.*;
 public final class AuctionHouse implements Listener {
     static final class Listing {
         final String id; final UUID seller; final String sellerName; final ItemStack item; final double price; final long listedAt;
-        Listing(String id, UUID seller, String sellerName, ItemStack item, double price, long listedAt) {
-            this.id = id; this.seller = seller; this.sellerName = sellerName; this.item = item; this.price = price; this.listedAt = listedAt;
+        /** The wallet (game mode / Skyblock group) the seller listed from; the sale is paid into this wallet. */
+        final String group;
+        Listing(String id, UUID seller, String sellerName, ItemStack item, double price, long listedAt, String group) {
+            this.id = id; this.seller = seller; this.sellerName = sellerName; this.item = item; this.price = price; this.listedAt = listedAt; this.group = group;
         }
     }
 
     private static final long EXPIRE_MS = 48L * 3600_000;
     private static final int MAX_LISTINGS = 10;
+    /** Listing fee: 5% of the price, paid when listing, not refunded (a money sink). */
+    static final double LISTING_FEE = 0.05;
     private static final DecimalFormat MONEY = new DecimalFormat("#,##0.##");
 
     private final AlloyCore plugin;
@@ -44,6 +49,10 @@ public final class AuctionHouse implements Listener {
     private final LinkedHashMap<String, Listing> listings = new LinkedHashMap<>();
     private final Map<UUID, List<ItemStack>> collection = new HashMap<>();
     private final Map<UUID, Double> unpaidNotice = new HashMap<>();
+    /** This auction house's own wallet group (survival / skyblock / oneblock ...); used for listings saved before groups. */
+    private final String group;
+    /** group -> seller -> money from sales waiting until the seller's wallet is that group again. */
+    private final Map<String, Map<UUID, Double>> owed = new HashMap<>();
 
     AuctionHouse(AlloyCore plugin, Economy eco) { this(plugin, eco, "auctions.yml"); }
 
@@ -52,9 +61,17 @@ public final class AuctionHouse implements Listener {
         this.plugin = plugin;
         this.eco = eco;
         this.file = new File(plugin.getDataFolder(), fileName);
+        this.group = groupFor(plugin.getConfig().getString("mode", ""), fileName);
         load();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::expire, 1200L, 1200L);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::payOwed, 600L, 1200L);
+    }
+
+    /** The OneBlock auction house has its own file; the others belong to their server's mode. */
+    static String groupFor(String mode, String fileName) {
+        if (fileName.contains("oneblock")) return "oneblock";
+        return switch (mode) { case "survival", "skyblock", "factions", "arcade" -> mode; default -> null; };
     }
 
     public static String money(double d) { return "$" + MONEY.format(d); }
@@ -67,7 +84,8 @@ public final class AuctionHouse implements Listener {
         if (ls != null) for (String id : ls.getKeys(false)) {
             var s = ls.getConfigurationSection(id);
             listings.put(id, new Listing(id, UUID.fromString(s.getString("seller")), s.getString("name"),
-                    ItemStack.deserializeBytes(Base64.getDecoder().decode(s.getString("item"))), s.getDouble("price"), s.getLong("at")));
+                    ItemStack.deserializeBytes(Base64.getDecoder().decode(s.getString("item"))), s.getDouble("price"), s.getLong("at"),
+                    s.getString("group", group)));   // listings from before the fix belong to this auction house's group
         }
         var cs = y.getConfigurationSection("collection");
         if (cs != null) for (String u : cs.getKeys(false)) {
@@ -77,6 +95,11 @@ public final class AuctionHouse implements Listener {
         }
         var ps = y.getConfigurationSection("paid");
         if (ps != null) for (String u : ps.getKeys(false)) unpaidNotice.put(UUID.fromString(u), ps.getDouble(u));
+        var os = y.getConfigurationSection("owed");
+        if (os != null) for (String g : os.getKeys(false)) {
+            var gs = os.getConfigurationSection(g);
+            if (gs != null) for (String u : gs.getKeys(false)) owed.computeIfAbsent(g, k -> new HashMap<>()).put(UUID.fromString(u), gs.getDouble(u));
+        }
     }
 
     private void save() {
@@ -88,7 +111,9 @@ public final class AuctionHouse implements Listener {
             y.set(b + "item", Base64.getEncoder().encodeToString(l.item.serializeAsBytes()));
             y.set(b + "price", l.price);
             y.set(b + "at", l.listedAt);
+            y.set(b + "group", l.group);
         }
+        owed.forEach((g, m) -> m.forEach((u, d) -> y.set("owed." + g + "." + u, d)));
         collection.forEach((u, items) -> y.set("collection." + u, items.stream().map(i -> Base64.getEncoder().encodeToString(i.serializeAsBytes())).toList()));
         unpaidNotice.forEach((u, d) -> y.set("paid." + u, d));
         try { y.save(file); } catch (Exception e) { plugin.getLogger().warning("auctions save failed: " + e.getMessage()); }
@@ -134,22 +159,33 @@ public final class AuctionHouse implements Listener {
 
     private void sell(Player p, String[] a) {
         if (a.length < 2) { p.sendMessage(Ui.mm(PREFIX + "<gray>Hold an item and type <white>/ah sell <price>")); return; }
-        double price;
-        try { price = Double.parseDouble(a[1].replace(",", "").replace("$", "").toLowerCase().replace("k", "000").replace("m", "000000")); }
-        catch (NumberFormatException e) { p.sendMessage(Ui.mm(PREFIX + "<red>That's not a valid price.")); return; }
+        // Before: replace("k", "000") turned "1.5k" into "1.5000" = $1.50. After: 1.5k = 1,500, 1.5m = 1,500,000.
+        double price = ShopPrices.parseAmount(a[1]);
+        if (price < 0) { p.sendMessage(Ui.mm(PREFIX + "<red>That's not a valid price.")); return; }
+        price = Math.round(price * 100) / 100.0;
         if (price < 1 || price > 100_000_000) { p.sendMessage(Ui.mm(PREFIX + "<red>Price must be between $1 and $100,000,000.")); return; }
         ItemStack hand = p.getInventory().getItemInMainHand();
         if (hand.getType().isAir()) { p.sendMessage(Ui.mm(PREFIX + "<red>Hold the item you want to sell.")); return; }
         long mine = listings.values().stream().filter(l -> l.seller.equals(p.getUniqueId())).count();
         if (mine >= MAX_LISTINGS) { p.sendMessage(Ui.mm(PREFIX + "<red>You can only have " + MAX_LISTINGS + " listings at once.")); return; }
+        // 5% listing fee, taken before the item; not refunded if the listing is cancelled or expires
+        double fee = listingFee(price);
+        if (!eco.withdrawPlayer(p, fee).transactionSuccess()) {
+            p.sendMessage(Ui.mm(PREFIX + "<red>Listing costs a 5% fee of <gold>" + money(fee) + "<red> (you have " + money(eco.getBalance(p)) + ")."));
+            return;
+        }
+        String g = plugin.economy().walletOf(p.getUniqueId());
         ItemStack item = hand.clone();
         p.getInventory().setItemInMainHand(null);
         String id = Long.toString(System.currentTimeMillis(), 36) + Integer.toString(new Random().nextInt(1296), 36);
-        listings.put(id, new Listing(id, p.getUniqueId(), p.getName(), item, price, System.currentTimeMillis()));
+        listings.put(id, new Listing(id, p.getUniqueId(), p.getName(), item, price, System.currentTimeMillis(), g != null ? g : group));
         save();
-        p.sendMessage(Ui.mm(PREFIX + "<green>Listed <white>" + item.getAmount() + "x " + itemName(item) + " <green>for <gold>" + money(price) + "<green>."));
+        p.sendMessage(Ui.mm(PREFIX + "<green>Listed <white>" + item.getAmount() + "x " + itemName(item) + " <green>for <gold>" + money(price) + "<green>. <gray>Fee paid: <gold>" + money(fee)));
         p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_YES, 0.7f, 1.2f);
     }
+
+    /** 5% of the price, rounded up to the cent. */
+    static double listingFee(double price) { return Math.ceil(Math.round(price * 100) * LISTING_FEE - 1e-9) / 100.0; }
 
     private static String itemName(ItemStack it) {
         if (it.hasItemMeta() && it.getItemMeta().hasDisplayName())
@@ -310,12 +346,13 @@ public final class AuctionHouse implements Listener {
         if (!eco.withdrawPlayer(p, l.price).transactionSuccess()) { p.sendMessage(Ui.mm(PREFIX + "<red>Payment failed.")); return; }
         listings.remove(id);
         OfflinePlayer seller = Bukkit.getOfflinePlayer(l.seller);
-        eco.depositPlayer(seller, l.price);
+        boolean paidNow = credit(seller, l.group, l.price);
         if (seller.getPlayer() != null) net.alloymc.core.Hooks.stat(seller.getPlayer(), "ah_sold", 1);
         give(p, l.item);
         Player sp = seller.getPlayer();
         if (sp != null) {
-            sp.sendMessage(Ui.mm(PREFIX + "<green>" + p.getName() + " bought your <white>" + itemName(l.item) + " <green>for <gold>" + money(l.price) + "<green>!"));
+            sp.sendMessage(Ui.mm(PREFIX + "<green>" + p.getName() + " bought your <white>" + itemName(l.item) + " <green>for <gold>" + money(l.price) + "<green>!"
+                    + (paidNow ? "" : " <gray>(paid into your " + NetEconomy.walletName(l.group) + " balance when you're back there)")));
             sp.playSound(sp.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1.2f);
         } else unpaidNotice.merge(l.seller, l.price, Double::sum);
         save();
@@ -323,9 +360,40 @@ public final class AuctionHouse implements Listener {
         p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_TRADE, 0.8f, 1.1f);
     }
 
+    /**
+     * Pays a sale into the wallet it was listed from. The economy pays whatever wallet the seller is in right now (on the
+     * Skyblock server that follows their current/last group), so if that's a different wallet the money waits in
+     * {@link #owed} until they're back in the listing's group. Returns true if paid now.
+     */
+    private boolean credit(OfflinePlayer seller, String g, double amount) {
+        if (g == null || g.equals(plugin.economy().walletOf(seller.getUniqueId()))) { eco.depositPlayer(seller, amount); return true; }
+        owed.computeIfAbsent(g, k -> new HashMap<>()).merge(seller.getUniqueId(), amount, Double::sum);
+        return false;
+    }
+
+    /** Pay out sales that were waiting for their sellers to be back in the right wallet (every minute and on join). */
+    private void payOwed() {
+        boolean changed = false;
+        for (var ge : owed.entrySet()) {
+            for (Iterator<Map.Entry<UUID, Double>> it = ge.getValue().entrySet().iterator(); it.hasNext(); ) {
+                var e = it.next();
+                if (!ge.getKey().equals(plugin.economy().walletOf(e.getKey()))) continue;
+                OfflinePlayer op = Bukkit.getOfflinePlayer(e.getKey());
+                if (!eco.depositPlayer(op, e.getValue()).transactionSuccess()) continue;
+                it.remove();
+                changed = true;
+                Player p = op.getPlayer();
+                if (p != null) p.sendMessage(Ui.mm(PREFIX + "<green>Auction sales paid: <gold>" + money(e.getValue()) + "<green>."));
+            }
+        }
+        owed.values().removeIf(Map::isEmpty);
+        if (changed) save();
+    }
+
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
         Player p = e.getPlayer();
+        Bukkit.getScheduler().runTaskLater(plugin, this::payOwed, 40L);
         Double earned = unpaidNotice.remove(p.getUniqueId());
         if (earned != null) {
             save();
