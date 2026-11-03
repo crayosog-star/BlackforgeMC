@@ -71,6 +71,22 @@ public final class Jobs implements Listener {
 
     public Job jobOf(Player p) { String j = data.getString(p.getUniqueId() + ".job"); try { return j == null ? null : Job.valueOf(j); } catch (Exception e) { return null; } }
     private double xp(Player p, Job j) { return data.getDouble(p.getUniqueId() + ".xp." + j.name()); }
+    public int prestige(Player p, Job j) { return data.getInt(p.getUniqueId() + ".prestige." + j.name()); }
+
+    /** At level 50 a job can be prestiged: its XP resets and every later payout is 5% higher for good. */
+    public void prestige(Player p) {
+        Job j = jobOf(p);
+        if (j == null) { p.sendMessage(Ui.mm("<red>Pick a job first with /jobs.")); return; }
+        if (level(p, j) < MAX_LEVEL) { p.sendMessage(Ui.mm("<red>Reach <white>level " + MAX_LEVEL + "<red> in " + j.label + " first (you are level " + level(p, j) + ").")); return; }
+        int now = prestige(p, j) + 1;
+        data.set(p.getUniqueId() + ".xp." + j.name(), 0.0);
+        data.set(p.getUniqueId() + ".prestige." + j.name(), now);
+        dirty = true;
+        plugin.economy().deposit(p, 2500.0 * now);
+        Bukkit.broadcast(Ui.mm("<gold>★ <white>" + p.getName() + " <gray>prestiged <gold><bold>" + j.label + "</bold> <gray>to <gold>★" + now + "<gray>! Permanent <white>+" + (now * 5) + "% <gray>pay."));
+        p.playSound(p.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.9f, 1.1f);
+    }
+
     public int level(Player p, Job j) { return Math.min(MAX_LEVEL, 1 + (int) Math.floor(Math.sqrt(xp(p, j) / 40.0))); }
 
     /** Credit a job action: pay (with the level bonus) and give job XP. */
@@ -80,7 +96,7 @@ public final class Jobs implements Listener {
         data.set(p.getUniqueId() + ".xp." + j.name(), xp(p, j) + xp);
         dirty = true;
         int after = level(p, j);
-        pending.merge(p.getUniqueId(), pay * (1 + (before - 1) * 0.03), Double::sum);
+        pending.merge(p.getUniqueId(), pay * (1 + (before - 1) * 0.03) * (1 + 0.05 * prestige(p, j)), Double::sum);
         if (after > before) {
             p.sendMessage(Ui.mm("<gold>⚒ <bold>" + j.label + " level " + after + "!</bold> <gray>You now earn <white>" + Math.round((after - 1) * 3) + "% <gray>more."));
             p.playSound(p.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7f, 1.3f);
@@ -94,7 +110,7 @@ public final class Jobs implements Listener {
             if (p == null || amount <= 0) continue;
             plugin.economy().deposit(p, amount);
             Job j = jobOf(p);
-            p.sendActionBar(Ui.mm("<green>+" + NetEconomy.money(amount) + " <gray>(" + (j == null ? "Job" : j.label + " Lv " + level(p, j)) + ")"));
+            p.sendActionBar(Ui.mm("<green>+" + NetEconomy.money(amount) + " <gray>(" + (j == null ? "Job" : j.label + " Lv " + level(p, j) + (prestige(p, j) > 0 ? " ★" + prestige(p, j) : "")) + ")"));
         }
         pending.clear();
     }

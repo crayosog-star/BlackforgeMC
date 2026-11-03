@@ -131,7 +131,45 @@ public final class Ranks implements Listener {
 
     // ------------------------------------------------------------------ /ranks, /repairhand, /fly
 
+    private static final class PerksHolder implements org.bukkit.inventory.InventoryHolder {
+        org.bukkit.inventory.Inventory inv;
+        public org.bukkit.inventory.Inventory getInventory() { return inv; }
+    }
+
+    @EventHandler
+    public void onPerksClick(org.bukkit.event.inventory.InventoryClickEvent e) { if (e.getInventory().getHolder() instanceof PerksHolder) e.setCancelled(true); }
+
+    @EventHandler
+    public void onPerksDrag(org.bukkit.event.inventory.InventoryDragEvent e) { if (e.getInventory().getHolder() instanceof PerksHolder) e.setCancelled(true); }
+
+    /** /ranks: every rank with its perks, your own highlighted, and what is above it. */
     public void info(Player p) {
+        Rank cur = of(p);
+        PerksHolder h = new PerksHolder();
+        org.bukkit.inventory.Inventory inv = Bukkit.createInventory(h, 27, Ui.mm("<dark_gray>BlackForgeMC Ranks"));
+        h.inv = inv;
+        ItemStack pane = Ui.item(Material.BLACK_STAINED_GLASS_PANE, " ");
+        for (int i = 0; i < 27; i++) inv.setItem(i, pane);
+        int curIdx = cur == null ? -1 : RANKS.indexOf(cur);
+        for (int i = 0; i < RANKS.size(); i++) {
+            Rank r = RANKS.get(i);
+            Material icon = switch (r.id()) { case "copper" -> Material.COPPER_INGOT; case "iron" -> Material.IRON_INGOT; case "gold" -> Material.GOLD_INGOT; case "diamond" -> Material.DIAMOND; case "netherite" -> Material.NETHERITE_INGOT; default -> Material.PAPER; };
+            List<String> lore = new java.util.ArrayList<>();
+            lore.add(i == curIdx ? "<green>✔ Your rank" : i < curIdx ? "<gray>Included in your rank" : "<yellow>Above your rank");
+            lore.add("");
+            for (String perk : r.perks()) lore.add("<gray>• <white>" + perk);
+            lore.add("");
+            lore.add("<gray>Homes <white>" + r.homes() + " <gray>• Claim chunks <white>+" + r.bonusClaims() + " <gray>• Scrap <white>+" + Math.round(r.scrapBoost() * 100) + "%");
+            ItemStack it = Ui.item(icon, r.color() + "<bold>" + r.name().toUpperCase() + "</bold>", lore.toArray(String[]::new));
+            if (i == curIdx) it.editMeta(m -> m.setEnchantmentGlintOverride(true));
+            inv.setItem(10 + i, it);
+        }
+        inv.setItem(4, Ui.item(Material.NETHER_STAR, "<gold><bold>Your rank: " + (cur == null ? "<white>Member" : cur.color() + cur.name()), "<gray>Ranks come from <white>Rank Vouchers<gray> (KOTH crates, events)", "<gray>Support the server: <white>/supporter"));
+        p.openInventory(inv);
+    }
+
+    /** The same list in chat. */
+    public void infoChat(Player p) {
         Rank cur = of(p);
         p.sendMessage(Ui.mm("<gold><bold>BlackForgeMC Ranks</bold> <gray>- your rank: " + (cur == null ? "<white>Member" : cur.color() + "<bold>" + cur.name())));
         for (Rank r : RANKS)

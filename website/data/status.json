@@ -1,0 +1,37 @@
+{
+  "updated": 1793684682,
+  "total": 1,
+  "servers": [
+    {
+      "id": "hub",
+      "name": "Hub",
+      "online": 0,
+      "up": true
+    },
+    {
+      "id": "skyblock",
+      "name": "Skyblock",
+      "online": 0,
+      "up": true
+    },
+    {
+      "id": "survival",
+      "name": "Survival",
+      "online": 1,
+      "up": true
+    },
+    {
+      "id": "factions",
+      "name": "Factions",
+      "online": 0,
+      "up": true
+    },
+    {
+      "id": "arcade",
+      "name": "Arcade",
+      "online": 0,
+      "up": true
+    }
+  ],
+  "gladiators": []
+}

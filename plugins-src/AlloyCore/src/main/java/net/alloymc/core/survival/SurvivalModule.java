@@ -50,6 +50,8 @@ public final class SurvivalModule implements Listener {
     private final PlayerVaults vaults;
     private final DistrictLife districts;
     private final Gladiators gladiators;
+    private final CollectionBook collection;
+    private final BlockLog blockLog;
     private final LastRite rite;
     private final net.alloymc.core.VoidOut voidOut;
     private final SpawnUpgrade upgrade;
@@ -179,6 +181,12 @@ public final class SurvivalModule implements Listener {
         districts = new DistrictLife(plugin, world);
         new SpawnLife(plugin, world, crates, this::spawn);
         gladiators = new Gladiators(plugin, world, this::spawn);
+        plugin.discord().setGladiator(gladiators::discordRole);
+        collection = new CollectionBook(plugin);
+        new DailyShop(plugin);
+        new ShowcaseWarp(plugin);
+        new LagGuard(plugin, world, this::protectedArea);
+        blockLog = new BlockLog(plugin);
         registerCommands();
         if (!new File(plugin.getDataFolder(), "survival-built").exists()) build(Bukkit.getConsoleSender());
         else if (!new File(plugin.getDataFolder(), "spawn-v2").exists()) rebuildSpawn(Bukkit.getConsoleSender());
@@ -208,6 +216,8 @@ public final class SurvivalModule implements Listener {
         boss.stop(null);
         districts.shutdown();
         gladiators.shutdown();
+        collection.save();
+        blockLog.shutdown();
         jobs.save();
         gaia.shutdown();   // first: removes every cloud's barrier blocks
         surge.shutdown();
@@ -312,7 +322,7 @@ public final class SurvivalModule implements Listener {
         reg("scrap", List.of("scrapshop", "shards"), (p, a) -> scrap.command(p, a));
         reg("jl", List.of("jellylegs"), (p, a) -> jelly.toggle(p));
         reg("bounty", List.of("bounties", "wanted"), (p, a) -> bounties.command(p, a));
-        reg("jobs", List.of("job"), (p, a) -> jobs.open(p));
+        reg("jobs", List.of("job"), (p, a) -> { if (a.length > 0 && a[0].equalsIgnoreCase("prestige")) jobs.prestige(p); else jobs.open(p); });
         reg("jbello", List.of("bellows", "galebellows"), (p, a) -> {   // staff only: players get bellows from crates
             if (p.hasPermission("alloy.admin")) bellows.give(p);
             else p.sendMessage(Ui.mm("<#9EE6FF>🌬 <gray>The " + GaleBellows.NAME + " <gray>only comes from <white>crates <gray>and <white>Scrapyard supply drops<gray>."));

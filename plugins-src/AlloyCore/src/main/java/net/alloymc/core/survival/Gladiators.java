@@ -112,8 +112,25 @@ final class Gladiators implements Listener {
 
     /** The first time: paste the Colosseum onto its floating rock south of the kingdom. */
     private void buildIfNeeded() {
-        File marker = new File(plugin.getDataFolder(), "coliseum-v1-built");
-        if (marker.exists()) { keepLoaded(); return; }
+        File v2 = new File(plugin.getDataFolder(), "coliseum-v2-built"), v1 = new File(plugin.getDataFolder(), "coliseum-v1-built");
+        if (v2.exists()) { keepLoaded(); return; }
+        if (v1.exists()) {   // v1 stood at z=250 facing the Scrapyard: take it down one slice per tick, then build the new one
+            plugin.getLogger().info("Removing the first Colosseum...");
+            int[] x = {-66};
+            Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+                if (x[0] > 66) { task.cancel(); v1.delete(); paste(v2); return; }
+                for (int z = 184; z <= 340; z++) for (int y = Y - 32; y <= Y + 72; y++) {
+                    var b = world.getBlockAt(x[0], y, z);
+                    if (!b.getType().isAir()) b.setType(Material.AIR, false);
+                }
+                x[0]++;
+            }, 1L, 1L);
+            return;
+        }
+        paste(v2);
+    }
+
+    private void paste(File marker) {
         plugin.getLogger().info("Building the Colosseum...");
         net.alloymc.core.build.Paster.paste(plugin, world, ColiseumBuilder.build(), 4000, () -> {
             try { marker.createNewFile(); } catch (Exception ignored) { }
@@ -124,7 +141,7 @@ final class Gladiators implements Listener {
     }
 
     private void keepLoaded() {
-        for (int cx = (CX - 34) >> 4; cx <= (CX + 34) >> 4; cx++) for (int cz = (CZ - 34) >> 4; cz <= (CZ + 72) >> 4; cz++) world.addPluginChunkTicket(cx, cz, plugin);
+        for (int cx = (CX - 48) >> 4; cx <= (CX + 48) >> 4; cx++) for (int cz = (CZ - 86) >> 4; cz <= (CZ + 56) >> 4; cz++) world.addPluginChunkTicket(cx, cz, plugin);
     }
 
     private void reload() {
@@ -159,7 +176,7 @@ final class Gladiators implements Listener {
         String b = "locations." + key + ".";
         return new Location(world, cfg.getDouble(b + "x", x), cfg.getDouble(b + "y", y), cfg.getDouble(b + "z", z), (float) cfg.getDouble(b + "yaw", yaw), (float) cfg.getDouble(b + "pitch", 0));
     }
-    private Location lobby() { return loc("lobby", ColiseumBuilder.LOBBY_X, Y + 1, ColiseumBuilder.LOBBY_Z, 180); }
+    private Location lobby() { return loc("lobby", ColiseumBuilder.LOBBY_X, Y + 1, ColiseumBuilder.LOBBY_Z, 0); }
     private Location arenaCenter() { return loc("arena", CX + 0.5, Y + 1, CZ + 0.5, 0); }
     private Location fighter(int n) { return n == 1 ? loc("spawn1", ColiseumBuilder.FIGHTER_A_X, Y + 1, ColiseumBuilder.FIGHT_Z, -90) : loc("spawn2", ColiseumBuilder.FIGHTER_B_X, Y + 1, ColiseumBuilder.FIGHT_Z, 90); }
     private Location exitLoc() { return cfg.contains("locations.exit.x") ? loc("exit", 0, 0, 0, 0) : exit.get(); }
@@ -176,7 +193,7 @@ final class Gladiators implements Listener {
     private boolean inColiseum(Location l) {
         if (l.getWorld() != world || l.getY() < Y - 40 || l.getY() > Y + 60) return false;
         double dx = l.getX() - CX, dz = l.getZ() - CZ;
-        return Math.hypot(dx, dz) <= 50 || (Math.abs(dx) <= 36 && dz >= 30 && dz <= 72);
+        return Math.hypot(dx, dz) <= 58 || (Math.abs(dx) <= 48 && dz <= -28 && dz >= -86);
     }
     private boolean inPit(Location l) { return l.getWorld() == world && Math.hypot(l.getX() - CX, l.getZ() - CZ) < ColiseumBuilder.PIT_R + 3 && l.getY() < Y + 7; }
 
@@ -209,6 +226,12 @@ final class Gladiators implements Listener {
         var sec = data.getConfigurationSection("players");
         if (sec != null) for (String k : sec.getKeys(false)) if (data.getBoolean("players." + k + ".display")) out.add(UUID.fromString(k));
         return out;
+    }
+
+    /** The Discord role a player earns from the ladder (top three only), or null. */
+    String discordRole(Player p) {
+        int r = rankOf(p.getUniqueId());
+        return r >= 1 && r <= 3 ? titleOf(r) : null;
     }
 
     int rankOf(UUID u) { int i = ranking.indexOf(u); return i < 0 ? 0 : i + 1; }
@@ -751,7 +774,7 @@ final class Gladiators implements Listener {
     // ------------------------------------------------------------------ holograms
 
     private void updateHolograms() {
-        if (!new File(plugin.getDataFolder(), "coliseum-v1-built").exists()) return;
+        if (!new File(plugin.getDataFolder(), "coliseum-v2-built").exists()) return;
         StringBuilder top = new StringBuilder("<#ffd27a><bold>🏆 GLADIATOR RANKINGS 🏆</bold><newline>");
         if (ranking.isEmpty()) top.append("<gray>No ranked gladiators yet.<newline><white>/duel <player> to climb!");
         for (int i = 0; i < Math.min(10, ranking.size()); i++) top.append(boardLine(i, ranking.get(i))).append("<newline>");
@@ -760,11 +783,11 @@ final class Gladiators implements Listener {
         if (holos.size() != 4 || holos.stream().anyMatch(t -> !t.isValid())) {
             holos.forEach(TextDisplay::remove);
             holos.clear();
-            double fz = ColiseumBuilder.FACADE_Z + 5.4;
-            holos.add(Ui.hologram(new Location(world, CX - 24 + 0.5, Y + 7.5, fz), top.toString(), 1.0f));
-            holos.add(Ui.hologram(new Location(world, CX + 24 + 0.5, Y + 7.5, fz), info, 1.0f));
-            holos.add(Ui.hologram(new Location(world, CX + 0.5, Y + 19.5, CZ - 31.5), champ, 1.6f));
-            holos.add(Ui.hologram(new Location(world, CX + 0.5, Y + 5, ColiseumBuilder.FACADE_Z + 10), "<#ff6a00><bold>THE COLOSSEUM</bold><newline><gray>Enter, fight, rise", 1.4f));
+            double fz = ColiseumBuilder.FACADE_Z - 2.4;
+            holos.add(Ui.hologram(new Location(world, CX - 31 + 0.5, Y + 7.5, fz), top.toString(), 1.0f));
+            holos.add(Ui.hologram(new Location(world, CX + 31 + 0.5, Y + 7.5, fz), info, 1.0f));
+            holos.add(Ui.hologram(new Location(world, CX + 0.5, Y + ColiseumBuilder.PROM + 9.5, ColiseumBuilder.THRONE_Z - 1.5), champ, 1.6f));
+            holos.add(Ui.hologram(new Location(world, CX + 0.5, Y + 5, CZ - 66), "<#ff6a00><bold>THE COLOSSEUM</bold><newline><gray>Enter, fight, rise", 1.4f));
             return;
         }
         Ui.setText(holos.get(0), top.toString());
@@ -874,7 +897,7 @@ final class Gladiators implements Listener {
         Location to = e.getTo();
         if (fighting(p) && duel.phase == 0 && (e.getFrom().getX() != to.getX() || e.getFrom().getZ() != to.getZ())) { e.setTo(e.getFrom()); return; }
         if (!e.hasChangedBlock()) return;
-        if (to.getWorld() == world && to.getY() < Y - 30 && Math.hypot(to.getX() - CX, to.getZ() - (CZ + 30)) < 60 && !fighting(p)) { p.teleport(lobby()); return; }
+        if (to.getWorld() == world && to.getY() < Y - 30 && Math.hypot(to.getX() - CX, to.getZ() - (CZ - 30)) < 70 && !fighting(p)) { p.teleport(lobby()); return; }
         if (duel != null && !fighting(p) && inPit(to) && !p.hasPermission("alloy.admin")) {   // outsiders keep out of the sand during a duel
             p.teleport(seat());
             p.sendMessage(Ui.mm("<red>The pit is closed during a duel."));

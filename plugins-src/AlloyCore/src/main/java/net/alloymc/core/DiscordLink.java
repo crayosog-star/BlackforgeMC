@@ -61,6 +61,8 @@ public final class DiscordLink implements Listener {
     }
 
     public void setRank(java.util.function.Function<Player, String> rank) { this.rank = rank; }
+    private java.util.function.Function<Player, String> gladiator = p -> null;   // Survival supplies the Colosseum title
+    public void setGladiator(java.util.function.Function<Player, String> f) { this.gladiator = f; }
 
     // ------------------------------------------------------------------ JSON files shared with the bot
 
@@ -121,10 +123,12 @@ public final class DiscordLink implements Listener {
             File f = new File(dir, "players/" + p.getUniqueId() + ".json");
             Supporters.Tier t = Supporters.tierOf(p);
             String r = rank.apply(p);
+            String g = gladiator.apply(p);
             update(f, o -> {
                 o.addProperty("name", p.getName());
                 if (t != null) o.addProperty("supporter", t.name()); else o.remove("supporter");
                 if (r != null) o.addProperty("rank", r);
+                if (g != null) o.addProperty("gladiator", g); else o.remove("gladiator");
                 o.addProperty("updated", System.currentTimeMillis());
             });
             reward(p);

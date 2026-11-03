@@ -110,6 +110,8 @@ public final class AuctionHouse implements Listener {
     }
 
     private static final String PREFIX = "<dark_gray>[<gold>AH<dark_gray>] ";
+    /** The auction house keeps this share of every sale: a money sink that keeps prices honest. */
+    private static final double TAX = 0.05;
 
     // ------------------------------------------------------------------ commands
 
@@ -310,14 +312,15 @@ public final class AuctionHouse implements Listener {
         if (!eco.withdrawPlayer(p, l.price).transactionSuccess()) { p.sendMessage(Ui.mm(PREFIX + "<red>Payment failed.")); return; }
         listings.remove(id);
         OfflinePlayer seller = Bukkit.getOfflinePlayer(l.seller);
-        eco.depositPlayer(seller, l.price);
+        double afterTax = Math.round(l.price * (1 - TAX) * 100) / 100.0;
+        eco.depositPlayer(seller, afterTax);
         if (seller.getPlayer() != null) net.alloymc.core.Hooks.stat(seller.getPlayer(), "ah_sold", 1);
         give(p, l.item);
         Player sp = seller.getPlayer();
         if (sp != null) {
-            sp.sendMessage(Ui.mm(PREFIX + "<green>" + p.getName() + " bought your <white>" + itemName(l.item) + " <green>for <gold>" + money(l.price) + "<green>!"));
+            sp.sendMessage(Ui.mm(PREFIX + "<green>" + p.getName() + " bought your <white>" + itemName(l.item) + " <green>for <gold>" + money(l.price) + "<green>! <gray>You received <gold>" + money(afterTax) + "<gray> after the " + Math.round(TAX * 100) + "% auction tax."));
             sp.playSound(sp.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1.2f);
-        } else unpaidNotice.merge(l.seller, l.price, Double::sum);
+        } else unpaidNotice.merge(l.seller, afterTax, Double::sum);
         save();
         p.sendMessage(Ui.mm(PREFIX + "<green>Bought <white>" + l.item.getAmount() + "x " + itemName(l.item) + " <green>for <gold>" + money(l.price) + "<green>."));
         p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_TRADE, 0.8f, 1.1f);

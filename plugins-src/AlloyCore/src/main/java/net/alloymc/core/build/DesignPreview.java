@@ -97,14 +97,14 @@ public final class DesignPreview {
                 c = net.alloymc.core.survival.ColiseumBuilder.build();
                 int Y = net.alloymc.core.survival.SurvivalLayout.Y, CZ = net.alloymc.core.survival.ColiseumBuilder.CZ;
                 look = WorldCam.Look.sunset();
-                look.fogStart = 260; look.fogEnd = 600; look.maxDist = 600;
+                look.fogStart = 300; look.fogEnd = 700; look.maxDist = 700;
                 views = List.of(
-                        new View("front", new WorldCam.Cam(0.5, Y + 6, CZ + 95, 0.5, Y + 16, CZ + 40, 70)),
-                        new View("aerial", new WorldCam.Cam(70, Y + 70, CZ + 100, 0.5, Y + 8, CZ, 70)),
-                        new View("pit", new WorldCam.Cam(0.5, Y + 12, CZ + 28, 0.5, Y + 3, CZ - 5, 75)),
-                        new View("throne", new WorldCam.Cam(0.5, Y + 6, CZ - 8, 0.5, Y + 16, CZ - 33, 70)),
-                        new View("gate", new WorldCam.Cam(0.5, Y + 3, CZ + 62, 0.5, Y + 6, CZ + 20, 75)),
-                        new View("tunnel", new WorldCam.Cam(0.5, Y + 3, CZ + 38, 0.5, Y + 4, CZ + 12, 80)));
+                        new View("front", new WorldCam.Cam(0.5, Y + 10, CZ - 120, 0.5, Y + 24, CZ - 40, 70)),
+                        new View("front_low", new WorldCam.Cam(0.5, Y + 4, CZ - 92, 0.5, Y + 26, CZ - 46, 72)),
+                        new View("aerial", new WorldCam.Cam(90, Y + 80, CZ - 130, 0.5, Y + 14, CZ - 10, 70)),
+                        new View("side", new WorldCam.Cam(-120, Y + 40, CZ - 60, 0.5, Y + 20, CZ - 20, 70)),
+                        new View("pit", new WorldCam.Cam(0.5, Y + 28, CZ - 36, 0.5, Y + 3, CZ + 8, 80)),
+                        new View("throne", new WorldCam.Cam(0.5, Y + 22, CZ + 4, 0.5, Y + 26, CZ + 39, 75)));
             }
             default -> throw new IllegalArgumentException("unknown design " + design);
         }

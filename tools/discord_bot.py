@@ -35,6 +35,7 @@ DEFAULT_GUILD = 1564978643069829143
 MEMBER_ROLE = "Member"
 RANKS = ["Copper", "Iron", "Gold", "Diamond", "Netherite"]
 SUPPORTER = ["Ember", "Blaze", "Inferno", "Forgemaster"]
+GLADIATOR = ("Grand Champion", "Elite Gladiator", "Veteran Champion")   # the Colosseum ladder's top three
 SYNC_SECONDS = 300
 
 
@@ -127,7 +128,9 @@ class Bot(discord.Client):
             want.add(info["rank"])
         if info.get("supporter") in SUPPORTER:
             want.add(info["supporter"])
-        managed = {MEMBER_ROLE, *RANKS, *SUPPORTER}
+        if info.get("gladiator") in GLADIATOR:
+            want.add(info["gladiator"])
+        managed = {MEMBER_ROLE, *RANKS, *SUPPORTER, *GLADIATOR}
         by_name = {r.name: r for r in guild.roles if r.name in managed}
         add = [by_name[n] for n in want if n in by_name and by_name[n] not in member.roles]
         drop = [r for r in member.roles if r.name in managed and r.name not in want]
