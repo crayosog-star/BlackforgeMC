@@ -1,4 +1,4 @@
-"""BlackForgeMC Discord bot: account linking and rank-role sync (the Discord half of AlloyCore's DiscordLink).
+"""BlackForgeMC Discord bot: account linking and rank-role sync (the Discord half of BlackForgeCore's DiscordLink).
 
   In game:     /link              -> a 6-character code
   In Discord:  /link <code>       -> accounts linked, roles given, the player is paid in game

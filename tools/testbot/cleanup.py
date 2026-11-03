@@ -18,14 +18,14 @@ for s in servers:
             if any(t in os.path.basename(f) for t in testers):
                 os.remove(f); removed += 1
     for fn in ["claims.yml", "auctions.yml", "stats.yml"]:
-        p = os.path.join(root, s, "plugins", "AlloyCore", fn)
+        p = os.path.join(root, s, "plugins", "BlackForgeCore", fn)
         if os.path.exists(p):
             lines = open(p, encoding="utf-8").read().splitlines()
             open(p, "w", encoding="utf-8").write("\n".join(l for l in lines if not any(t in l for t in testers)) + "\n")
     ops = os.path.join(root, s, "ops.json")
     if os.path.exists(ops):
         json.dump([o for o in json.load(open(ops)) if not o["name"].startswith("Alloy")], open(ops, "w"), indent=2)
-vp = os.path.join(root, "survival", "plugins", "AlloyCore", "votes.yml")
+vp = os.path.join(root, "survival", "plugins", "BlackForgeCore", "votes.yml")
 if os.path.exists(vp):
     import re as _re
     open(vp, "w", encoding="utf-8").write(_re.sub(r"(?m)^party: \d+", "party: 0", open(vp, encoding="utf-8").read()))
@@ -40,12 +40,12 @@ if os.path.exists(sh):
         out.append(l)
     open(sh, "w", encoding="utf-8").write(chr(10).join(out) + chr(10))
 for s in servers:   # robots owned by testers (robots.yml: one "  <id>:" block per robot)
-    rp = os.path.join(root, s, "plugins", "AlloyCore", "robots.yml")
+    rp = os.path.join(root, s, "plugins", "BlackForgeCore", "robots.yml")
     if os.path.exists(rp):
         import re as _r
         parts = _r.split(r"(?m)^(?=  \S)", open(rp, encoding="utf-8").read())
         open(rp, "w", encoding="utf-8").write("".join(p for p in parts if not any(t in p for t in testers)))
-sd = os.path.join(root, "arcade", "plugins", "AlloyCore", "arcade", "stats")   # arcade per-player stats
+sd = os.path.join(root, "arcade", "plugins", "BlackForgeCore", "arcade", "stats")   # arcade per-player stats
 if os.path.isdir(sd):
     for fn in os.listdir(sd):
         if any(t in fn for t in testers): os.remove(os.path.join(sd, fn)); removed += 1

@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const once = (b, e) => new Promise(r => b.once(e, r));
 const rcon = c => { try { return execSync(`python ../netctl.py cmd arcade "${c}"`).toString().replace(/§./g, '').trim(); } catch (e) { return 'ERR'; } };
-const SKIP = /Chunk size|partial packet|joined|left the|Welcome|daily|mail|online|commands|ALLOYMC|BLACKFORGEMC|Pick a game|Skyblock -|Survival -|Factions -|Arcade -|respectful|type \/hub|^\s*$|Finding a match|Loading arena|spectating|Kit:/;
+const SKIP = /Chunk size|partial packet|joined|left the|Welcome|daily|mail|online|commands|BLACKFORGEMC|Pick a game|Skyblock -|Survival -|Factions -|Arcade -|respectful|type \/hub|^\s*$|Finding a match|Loading arena|spectating|Kit:/;
 const mk = n => { const b = mineflayer.createBot({ host: '127.0.0.1', port: 25577, username: n, version: '1.20.4', auth: 'offline' });
   b.on('message', m => { const t = m.toString(); if (!SKIP.test(t)) console.log(n.replace('AlloyTester', ''), '>', t.slice(0, 140)); });
   b.on('kicked', r => console.log(n, 'kicked', JSON.stringify(r).slice(0, 100))); b.on('error', () => {}); return b; };

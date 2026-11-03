@@ -1,0 +1,46 @@
+name: BlackForgeCore
+version: '1.0.0'
+main: net.blackforge.core.BlackForgeCore
+api-version: '26.1'
+description: BlackForgeMC network core - hub, arcade minigames, server switching
+authors: [BlackForgeMC]
+loadbefore: [Essentials]
+softdepend: [Vault]
+commands:
+  hub:
+    description: Return to the BlackForgeMC hub
+    aliases: [lobby, l]
+  blackforge:
+    aliases: [bf, alloy]   # alloy: old name, kept only so existing store packages and scripts keep working until they are updated
+    description: BlackForgeMC admin commands (buildhub, buildarcade, reload)
+    permission: blackforge.admin
+  leave:
+    description: Leave your current arcade game
+  arcade:
+    description: BlackForge Arcade - menu, join, leave, maps, stats; staff map and match tools
+    aliases: [games, play]
+permissions:
+  blackforge.admin:
+    default: op
+  blackforge.staff:
+    description: Moderation commands, AutoMod bypass and anti-cheat alerts
+    default: op
+  arcade.play:
+    description: Join arcade queues and matches
+    default: true
+  arcade.admin:
+    description: Every arcade staff command
+    default: op
+    children:
+      arcade.map.create: true
+      arcade.map.edit: true
+      arcade.map.reload: true
+      arcade.match.manage: true
+  arcade.map.create:
+    default: op
+  arcade.map.edit:
+    default: op
+  arcade.map.reload:
+    default: op
+  arcade.match.manage:
+    default: op

@@ -65,7 +65,7 @@ async function goServer(slot) {
   check('no fall damage from drops', hurt === 0, `${hurt}/6 hurt`);
   // ---- crates renamed (alias accepted)
   rcon('survival', 'minecraft:clear AlloyTesterA');
-  console.log('  give:', rcon('survival', 'alloy crate give AlloyTesterA molten 1'));
+  console.log('  give:', rcon('survival', 'blackforge crate give AlloyTesterA molten 1'));
   await sleep(1000);
   const key = A.inventory.items().find(i => i.name === 'tripwire_hook');
   const keyName = key ? JSON.stringify(key.customName || key.nbt || '') : 'none';

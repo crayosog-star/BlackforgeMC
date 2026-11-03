@@ -1,4 +1,4 @@
-"""Factions season reset - started by AlloyCore when a season ends (or by hand).
+"""Factions season reset - started by BlackForgeCore when a season ends (or by hand).
 
   python tools/factions_reset.py <ending season number> [months]
 
@@ -6,7 +6,7 @@
 2. archives the old season into factions/seasons/season-<n>/  (worlds, factions plugin data, Essentials
    homes) - nothing is deleted
 3. picks a new random world seed
-4. starts season n+1 (season.yml) lasting `months` (default 3) and starts the server again; AlloyCore
+4. starts season n+1 (season.yml) lasting `months` (default 3) and starts the server again; BlackForgeCore
    rebuilds the spawn citadel on the new map automatically
 
 Network-wide things are untouched: money, Scrap and ranks are shared and carry over.
@@ -73,7 +73,7 @@ def main():
 
     now = datetime.datetime.now()
     end = add_months(now, months)
-    season = FAC / "plugins" / "AlloyCore" / "season.yml"
+    season = FAC / "plugins" / "BlackForgeCore" / "season.yml"
     season.write_text(f"number: {n + 1}\nstarted: {int(now.timestamp() * 1000)}\nends: {int(end.timestamp() * 1000)}\n", encoding="utf-8")
     print(f"season {n + 1}: {now:%Y-%m-%d} -> {end:%Y-%m-%d}, seed {seed}", flush=True)
 

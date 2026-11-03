@@ -50,7 +50,7 @@ Most sites have a **"Test Votifier"** button. Use it: you should see "✔ <name>
 ## After each listing: send Claude the vote link
 Each site gives the server a **vote page**, e.g. `https://minecraft-mp.com/server/12345/vote/`.
 Send all five links to Claude, who adds them in two places:
-- **In game** (`/vote`): `votes.sites` in `survival/plugins/AlloyCore/config.yml`, then a restart of Survival
+- **In game** (`/vote`): `votes.sites` in `survival/plugins/BlackForgeCore/config.yml`, then a restart of Survival
 - **On the website** (Vote section): `votes` in `website/assets/js/main.js`, then a redeploy
 
 Both currently show the five site names as "At launch" until the links are added.

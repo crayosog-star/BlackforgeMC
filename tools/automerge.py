@@ -37,13 +37,13 @@ def full_check():
     """Build with tests, then walkcheck. Returns (ok, output)."""
     env = dict(au.os.environ, JAVA_HOME=str(next(au.TOOLS.glob("jdk-*"))))
     gradle = next(au.TOOLS.glob("gradle-*")) / "bin" / "gradle.bat"
-    code, out = au.run([str(gradle), "-q", "build", "walkcheck"], cwd=au.ROOT / "plugins-src" / "AlloyCore", env=env, timeout=1200)
+    code, out = au.run([str(gradle), "-q", "build", "walkcheck"], cwd=au.ROOT / "plugins-src" / "BlackForgeCore", env=env, timeout=1200)
     return code == 0, out
 
 
 def main():
     # First catch up with main itself: PRs merged on GitHub (not Colin's) are pulled, built and installed here,
-    # and /alloy restart requests are handled. Nothing else runs autoupdate.py on a schedule.
+    # and /blackforge restart requests are handled. Nothing else runs autoupdate.py on a schedule.
     au.main()
     try:
         prs = open_prs()

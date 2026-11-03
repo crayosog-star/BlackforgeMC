@@ -24,7 +24,7 @@ async function openCmd(b, cmd) {
   B.on('message', (m, pos) => { if (/AlloyTesterA/.test(m.toString()) && /hello/.test(m.toString())) console.log('B sees chat json:', flat(m.json || m)); });
 
   // --- name tag item
-  console.log(rcon('alloy tag give AlloyTesterA molten'));
+  console.log(rcon('blackforge tag give AlloyTesterA molten'));
   await sleep(800);
   const tagItem = A.inventory.items().find(i => i.name === 'name_tag');
   console.log('tag item:', tagItem && flat(tagItem.customName));
@@ -52,12 +52,12 @@ async function openCmd(b, cmd) {
   }
   A.chat('/clear'); await sleep(300);
   console.log(rcon('clear AlloyTesterA'));
-  console.log(rcon('alloy kit give AlloyTesterA ares'));
+  console.log(rcon('blackforge kit give AlloyTesterA ares'));
   await sleep(1500);
   console.log('A after store kit:', A.inventory.items().map(i => i.name + (i.count > 1 ? 'x' + i.count : '')).join(','));
   // --- glowing supply crates
   A.chat('/pvp'); await sleep(3500);
-  console.log(rcon('alloy pvp drop'));
+  console.log(rcon('blackforge pvp drop'));
   await sleep(3000);
   const kinds = {};
   for (const e of Object.values(A.entities)) kinds[e.name] = (kinds[e.name] || 0) + 1;

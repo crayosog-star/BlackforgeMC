@@ -62,12 +62,12 @@ async function toSurvival(b) { b.setQuickBarSlot(4); await sleep(400); const w =
 
   chat.length = 0;
   const before = A.inventory.items().filter(i => i.name !== 'compass').reduce((n, i) => n + i.count, 0);
-  console.log(rcon('survival', 'alloy keyall iron 1 test goal'));
+  console.log(rcon('survival', 'blackforge keyall iron 1 test goal'));
   await sleep(1500);
   const after = A.inventory.items().filter(i => i.name !== 'compass').reduce((n, i) => n + i.count, 0);
   check('key all broadcast', chat.some(t => /KEY ALL/.test(t)), chat.find(t => /KEY ALL/.test(t)));
   check('key all gave a key', after > before, `${before} -> ${after}`);
-  rcon('survival', `alloy thanks ${NAME} Blaze Supporter`); await sleep(1000);
+  rcon('survival', `blackforge thanks ${NAME} Blaze Supporter`); await sleep(1000);
   check('thanks broadcast', chat.some(t => /just supported the server with Blaze Supporter/.test(t)));
 
   // refund: group removed -> badge and colour drop

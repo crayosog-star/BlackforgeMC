@@ -1,0 +1,93 @@
+package net.blackforge.core.survival;
+
+/**
+ * Timing for the Potion of Gaia: how big the mist is, how solid the platform is, and how high it is at each moment.
+ * Pure maths (no Bukkit), so it can be unit tested. Time is in seconds after the splash.
+ *
+ *   mist    0.0 - 1.7   particles only; radius 0.5 -> 3.5, cubic ease-in: barely moves at first, then faster and faster
+ *   bloom   1.7 - 2.0   the fog flares out to 4.6, then snaps back to 3.5
+ *   harden  2.0 - 3.0   blocks fade in from the centre outward, thin and dim at first, thickening as the mist thins
+ *   rise    3.0 - 5.5   the solid platform climbs 8 blocks, easing in and out
+ *   hold    5.5 - 11.5  stays at the top (riders slowly heal)
+ *   fade   11.5 - 13.0  shatters and drifts down
+ *
+ * (Leaves the ground 1.5 s sooner than v2, which rose at 4.5 s: mist, bloom and harden are each about a third
+ * shorter; rise, hold and fade keep their lengths.)
+ */
+public final class BloomCurve {
+    private BloomCurve() {}
+
+    public static final double GROW_END = 1.7, BLOOM_PEAK = 1.85, BLOOM_END = 2.0, HARDEN_END = 3.0,
+            RISE_END = 5.5, HOLD_END = 11.5, FADE_END = 13.0;
+    public static final double START_RADIUS = 0.5, RADIUS = 3.5, BLOOM_RADIUS = 4.6;
+    public static final double MAX_RISE = 8.0;
+
+    public enum Phase { GROW, BLOOM, HARDEN, RISE, HOLD, FADE, DONE }
+
+    public static Phase phase(double t) {
+        if (t < GROW_END) return Phase.GROW;
+        if (t < BLOOM_END) return Phase.BLOOM;
+        if (t < HARDEN_END) return Phase.HARDEN;
+        if (t < RISE_END) return Phase.RISE;
+        if (t < HOLD_END) return Phase.HOLD;
+        if (t < FADE_END) return Phase.FADE;
+        return Phase.DONE;
+    }
+
+    /** Mist radius in blocks. */
+    public static double radius(double t) {
+        if (t <= 0) return START_RADIUS;
+        if (t < GROW_END) { double u = t / GROW_END; return START_RADIUS + (RADIUS - START_RADIUS) * u * u * u; }
+        if (t < BLOOM_PEAK) return RADIUS + (BLOOM_RADIUS - RADIUS) * (t - GROW_END) / (BLOOM_PEAK - GROW_END);
+        if (t < BLOOM_END) return BLOOM_RADIUS - (BLOOM_RADIUS - RADIUS) * (t - BLOOM_PEAK) / (BLOOM_END - BLOOM_PEAK);
+        if (t < HOLD_END) return RADIUS;
+        if (t < FADE_END) return RADIUS * (1 - (t - HOLD_END) / (FADE_END - HOLD_END));
+        return 0;
+    }
+
+    /** How far the mist has grown, 0..1, for the rising pitch of the chimes. */
+    public static double growProgress(double t) {
+        return Math.max(0, Math.min(1, t / GROW_END));
+    }
+
+    /** How hard the platform is, 0 (pure mist) .. 1 (solid). Rises through the harden phase. */
+    public static double hardness(double t) {
+        if (t <= BLOOM_END) return 0;
+        if (t >= HARDEN_END) return 1;
+        return (t - BLOOM_END) / (HARDEN_END - BLOOM_END);
+    }
+
+    /** Has the cell at this distance from the centre hardened yet? It spreads from the centre outward. */
+    public static boolean cellHard(double t, double dist) {
+        double h = hardness(t);
+        return h > 0 && dist <= h * (RADIUS + 0.01);
+    }
+
+    /** Platform height above the ground in blocks, capped by {@code cap} (headroom above the cloud). */
+    public static double height(double t, double cap) {
+        double max = Math.min(MAX_RISE, cap);
+        if (t <= HARDEN_END) return 0;
+        if (t >= RISE_END) return max;
+        double u = (t - HARDEN_END) / (RISE_END - HARDEN_END);
+        return max * u * u * (3 - 2 * u);   // smoothstep: eases in and out, so riders aren't jolted
+    }
+
+    /** The invisible floor's layer (blocks above the ground) at height h: the block whose top is at or just below the surface. */
+    public static int floorLayer(double h) { return (int) Math.floor(h) - 1; }
+
+    /**
+     * Does someone whose feet are this high above the ground need lifting before the floor moves to {@code layer}?
+     * Their feet would be inside the new barrier, and Minecraft lets you drop straight through a block you overlap.
+     */
+    public static boolean feetInside(double feetAboveGround, int layer) {
+        return feetAboveGround >= layer && feetAboveGround < layer + 1;
+    }
+
+    /** Rising speed in blocks per second at time t (the derivative of {@link #height}). */
+    public static double riseSpeed(double t, double cap) {
+        if (t <= HARDEN_END || t >= RISE_END) return 0;
+        double max = Math.min(MAX_RISE, cap), span = RISE_END - HARDEN_END;
+        double u = (t - HARDEN_END) / span;
+        return max * 6 * u * (1 - u) / span;
+    }
+}

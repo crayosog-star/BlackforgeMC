@@ -1,9 +1,9 @@
-"""AlloyMC network control.
+"""BlackForgeMC network control.
 
   python tools/netctl.py start            start proxy + all servers in the background (no windows)
   python tools/netctl.py stop             save and stop everything cleanly
   python tools/netctl.py status           which servers are up
-  python tools/netctl.py restart <server>  stop it, deploy the latest AlloyCore to it, start it again
+  python tools/netctl.py restart <server>  stop it, deploy the latest BlackForgeCore to it, start it again
   python tools/netctl.py cmd <server> <command...>   run a console command (e.g. cmd hub op Steve)
 """
 import socket, struct, subprocess, sys, time

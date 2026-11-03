@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Store · BlackForgeMC</title>
-  <meta name="description" content="Support BlackForgeMC with supporter ranks and cosmetics: badges, particle trails and name colours. Cosmetic only, no pay-to-win.">
+  <meta name="description" content="Support BlackForgeMC with supporter ranks and cosmetics: badges, particle trails, name colours and Cosmetic Crate keys. Cosmetic only, no pay-to-win.">
   <meta name="theme-color" content="#0b0b0e">
   <meta property="og:title" content="BlackForgeMC Store">
   <meta property="og:description" content="Supporter ranks and cosmetics. Nothing that gives an advantage in game.">
@@ -17,6 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/premium.css">
 </head>
 <body>
 
@@ -29,6 +30,8 @@
     <button class="nav-toggle" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
     <nav class="nav-links">
       <a href="index.html#modes">Game Modes</a>
+      <a class="nav-trailer" href="index.html#watch"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>Trailer</a>
+      <a href="index.html#features">Features</a>
       <a href="index.html#ranks">Ranks</a>
       <a href="index.html#vote">Vote</a>
       <a class="active" href="store.html">Store</a>
@@ -44,10 +47,13 @@
 
 <main>
   <section class="page-hero store-hero">
+    <div class="ph-bg"><img src="assets/img/crates.png" alt=""></div>
+    <canvas class="page-embers" aria-hidden="true"></canvas>
     <div class="wrap">
+      <div class="crumbs"><a href="index.html">Home</a><span>/</span><span>Store</span></div>
       <span class="eyebrow">Store</span>
       <h1>Support <span class="grad-text">the forge</span>.</h1>
-      <p>Every purchase keeps BlackForge online. Everything here is cosmetic: badges, trails and name colours. Gear, kits and gameplay ranks are earned in game, never bought.</p>
+      <p>Every purchase keeps BlackForge online. Everything here is cosmetic: badges, trails, name colours and Cosmetic Crate keys. Gear, kits and gameplay ranks are earned in game, never bought.</p>
 
       <div class="thanks" data-thanks hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
@@ -97,7 +103,7 @@
         <h3>No pay-to-win</h3>
         <ul class="ticks">
           <li>Everything sold here is cosmetic and gives no advantage in game</li>
-          <li>Crate keys, kits and ranks with perks are earned by playing, never sold</li>
+          <li>Gameplay crate keys, kits and ranks with perks are earned by playing, never sold. Cosmetic Crates only give cosmetics</li>
           <li>Payments are handled securely by Tebex, our official store partner</li>
           <li>Tebex emails you a receipt for every purchase, so you always have your purchase history</li>
           <li>Questions about a purchase? Open a ticket in our Discord.</li>
@@ -127,7 +133,42 @@
 
 <footer>
   <div class="wrap">
-    <div class="legal" style="margin-top: 0; border-top: 0; padding-top: 0;">
+    <div class="foot">
+      <div>
+        <a class="foot-logo" href="index.html"><img src="assets/img/logo-full.png" alt="BlackForge Minecraft Network" width="330" height="69" loading="lazy"></a>
+        <span class="foot-tag">Forged by adventure</span>
+        <p>A Minecraft Java network with Skyblock, OneBlock, Survival, Factions and Arcade.</p>
+        <button class="foot-ip" data-copy-ip type="button" aria-label="Copy server address"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span data-ip>blackforgemc.com</span></button>
+      </div>
+      <div>
+        <h5>Play</h5>
+        <ul>
+          <li><a href="index.html#modes">Game modes</a></li>
+          <li><a href="index.html#colosseum">The Colosseum</a></li>
+          <li><a href="index.html#join">How to join</a></li>
+          <li><a href="index.html#vote">Vote</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Server</h5>
+        <ul>
+          <li><a href="index.html#ranks">Ranks</a></li>
+          <li><a href="stats.html">Leaderboards</a></li>
+          <li><a href="status.html">Status</a></li>
+          <li><a href="rules.html">Rules</a></li>
+          <li><a href="index.html#faq">FAQ</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Community</h5>
+        <ul>
+          <li><a data-link="discord" href="#"><span data-label>Discord</span></a></li>
+          <li><a href="store.html">Store</a></li>
+          <li><a href="index.html#watch">Watch the trailer</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">
       <span>© <span data-year>2026</span> BlackForgeMC. All rights reserved.</span>
       <span>Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</span>
     </div>
@@ -136,6 +177,7 @@
 
 <script src="assets/js/player.js"></script>
   <script src="assets/js/main.js"></script>
+  <script src="assets/js/premium.js"></script>
 <script src="assets/js/store.js"></script>
 </body>
 </html>

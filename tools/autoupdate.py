@@ -2,12 +2,12 @@
 
 When origin/main has new commits:
   1. fast-forward pull (never merges or overwrites local edits - if it can't fast-forward it logs and stops)
-  2. if the plugin or datapack changed: build AlloyCore; a failed build is logged and nothing is deployed
+  2. if the plugin or datapack changed: build BlackForgeCore; a failed build is logged and nothing is deployed
   3. restart each backend to install it - empty servers right away, servers with players after a
      5-minute in-game countdown
 Website/docs/tools-only changes are just pulled. Everything is logged to tools/autoupdate.log.
 
-Restart requests: staff type /alloy restart <server|all|this> [now] in game, which drops a file in
+Restart requests: staff type /blackforge restart <server|all|this> [now] in game, which drops a file in
 tools/restart-requests/. Each run handles those first: the servers restart the same safe way (empty right away,
 players get the countdown), or immediately with "now".
 """
@@ -22,7 +22,7 @@ LOCK = TOOLS / "autoupdate.lock"
 SERVERS = ["hub", "skyblock", "survival", "factions", "arcade"]
 NEEDS_DEPLOY = ("plugins-src/", "datapacks/", "branding/server-icon.png", "tools/deploy.py")
 COUNTDOWN = [300, 60, 30, 10]   # seconds-left warnings for servers with players
-REQUESTS = TOOLS / "restart-requests"   # written by /alloy restart in game
+REQUESTS = TOOLS / "restart-requests"   # written by /blackforge restart in game
 NO_WINDOW = 0x08000000
 
 
@@ -57,7 +57,7 @@ def say(server, text):
 def build():
     env = dict(os.environ, JAVA_HOME=str(next(TOOLS.glob("jdk-*"))))
     gradle = next(TOOLS.glob("gradle-*")) / "bin" / "gradle.bat"
-    code, out = run([str(gradle), "-q", "build", "-x", "test"], cwd=ROOT / "plugins-src" / "AlloyCore", env=env)
+    code, out = run([str(gradle), "-q", "build", "-x", "test"], cwd=ROOT / "plugins-src" / "BlackForgeCore", env=env)
     if code != 0: log("BUILD FAILED - not deploying:\n" + out[-3000:])
     return code == 0
 
@@ -84,7 +84,7 @@ def install(short, servers=SERVERS, notice=None):
 
 
 def restart_requests():
-    """Handle /alloy restart requests from the game. Returns True if any were handled."""
+    """Handle /blackforge restart requests from the game. Returns True if any were handled."""
     if not REQUESTS.is_dir(): return False
     files = sorted(REQUESTS.glob("restart-*.txt"))
     if not files: return False

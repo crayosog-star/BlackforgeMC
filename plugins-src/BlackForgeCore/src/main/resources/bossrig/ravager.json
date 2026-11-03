@@ -1,0 +1,117 @@
+{
+ "scale": 3.0,
+ "groups": [
+  {
+   "name": "body",
+   "parent": null,
+   "pivot": [
+    0,
+    3,
+    0
+   ]
+  },
+  {
+   "name": "head",
+   "parent": "body",
+   "pivot": [
+    0,
+    3.5,
+    1.8
+   ]
+  },
+  {
+   "name": "jaw",
+   "parent": "head",
+   "pivot": [
+    0,
+    3.0,
+    2.4
+   ]
+  },
+  {
+   "name": "tail",
+   "parent": "body",
+   "pivot": [
+    0,
+    3.2,
+    -2.1
+   ]
+  },
+  {
+   "name": "legFL",
+   "parent": null,
+   "pivot": [
+    1.25,
+    2,
+    1.4
+   ]
+  },
+  {
+   "name": "legBR",
+   "parent": null,
+   "pivot": [
+    -1.25,
+    2,
+    -1.4
+   ]
+  },
+  {
+   "name": "legFR",
+   "parent": null,
+   "pivot": [
+    -1.25,
+    2,
+    1.4
+   ]
+  },
+  {
+   "name": "legBL",
+   "parent": null,
+   "pivot": [
+    1.25,
+    2,
+    -1.4
+   ]
+  },
+  {
+   "name": "head_glow",
+   "parent": "head",
+   "pivot": [
+    0,
+    3.5,
+    1.8
+   ]
+  },
+  {
+   "name": "tail_glow",
+   "parent": "tail",
+   "pivot": [
+    0,
+    3.2,
+    -2.1
+   ]
+  },
+  {
+   "name": "body_glow",
+   "parent": "body",
+   "pivot": [
+    0,
+    3,
+    0
+   ]
+  }
+ ],
+ "models": [
+  "body",
+  "body_glow",
+  "head",
+  "head_glow",
+  "jaw",
+  "legBL",
+  "legBR",
+  "legFL",
+  "legFR",
+  "tail",
+  "tail_glow"
+ ]
+}

@@ -5,7 +5,7 @@ const SITE = {
   discord: "https://discord.gg/CChc5MfbD5",
   store: "",
   // Vote pages, once the server is listed: { name: "Minecraft-MP", url: "https://minecraft-mp.com/server/12345/vote/" }.
-  // Keep in step with votes.sites in survival/plugins/AlloyCore/config.yml (the in-game /vote list).
+  // Keep in step with votes.sites in survival/plugins/BlackForgeCore/config.yml (the in-game /vote list).
   votes: [],
 };
 
@@ -124,6 +124,7 @@ const SITE = {
     fetch("https://api.mcsrvstat.us/3/" + encodeURIComponent(SITE.ip), { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
+        window.dispatchEvent(new CustomEvent("bf:status", { detail: d }));
         if (d && d.online) {
           const n = d.players ? d.players.online : 0;
           render("online", `<strong>${n.toLocaleString()}</strong> ${n === 1 ? "player" : "players"} online <span class="sep">·</span> Java 1.13 – 26.3`);
@@ -131,7 +132,7 @@ const SITE = {
           render("offline", "<strong>Launching soon</strong> <span class=\"sep\">·</span> Java 1.13 – 26.3");
         }
       })
-      .catch(() => render(null, "Java Edition <span class=\"sep\">·</span> 1.13 – 26.3"));
+      .catch(() => { window.dispatchEvent(new Event("bf:status-error")); render(null, "Java Edition <span class=\"sep\">·</span> 1.13 – 26.3"); });
   }
 
   // Footer year

@@ -1,4 +1,4 @@
-// Headless end-to-end test of the AlloyMC network (proxy must be in offline mode).
+// Headless end-to-end test of the BlackForgeMC network (proxy must be in offline mode).
 const mineflayer = require('mineflayer');
 const { execSync } = require('child_process');
 const op = (server, who) => { try { console.log('rcon', server, execSync(`python ../netctl.py cmd ${server} op ${who}`).toString().trim()); } catch (e) { console.log('rcon fail', e.message); } };

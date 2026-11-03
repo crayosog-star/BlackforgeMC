@@ -13,7 +13,7 @@ A.on('message', m => console.log('>', m.toString()));
   console.log(rcon('fill 2995 99 2995 3005 99 3005 minecraft:stone'), rcon('fill 2995 100 2995 3005 104 3005 minecraft:air'));
   rcon('tp AlloyTesterA 3000.5 100 3000.5 0 30'); await sleep(2500);
   console.log('gamemode', A.game.gameMode, 'pos', A.entity.position.toString());
-  rcon('minecraft:give AlloyTesterA cobblestone 4'); console.log(rcon('alloy scrap give AlloyTesterA 2500')); await sleep(800);
+  rcon('minecraft:give AlloyTesterA cobblestone 4'); console.log(rcon('blackforge scrap give AlloyTesterA 2500')); await sleep(800);
   const w2 = once(A, 'windowOpen'); A.chat('/scrap'); await w2; await sleep(400); await A.clickWindow(5, 0, 0); await sleep(700); await A.clickWindow(9, 0, 0); await sleep(1000); if (A.currentWindow) A.closeWindow(A.currentWindow);
   for (const name of ['cobblestone', 'spawner']) {
     const it = A.inventory.items().find(i => i.name === name);

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BlackForgeMC</title>
+  <title>BlackForgeMC — Minecraft Skyblock, OneBlock, Survival, Factions &amp; Arcade</title>
   <meta name="description" content="BlackForgeMC is a Minecraft Java network with Skyblock, OneBlock, Survival, Factions and Arcade. Join at blackforgemc.com.">
   <meta name="theme-color" content="#0b0b0e">
   <meta property="og:title" content="BlackForgeMC — Minecraft Network">
@@ -13,6 +13,9 @@
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://blackforgemc.com/">
   <meta property="og:type" content="website">
+  <meta name="twitter:title" content="BlackForgeMC — Minecraft Network">
+  <meta name="twitter:image" content="https://blackforgemc.com/assets/img/og-card.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"BlackForgeMC","url":"https://blackforgemc.com/","description":"A Minecraft Java network with Skyblock, OneBlock, Survival, Factions and Arcade.","publisher":{"@type":"Organization","name":"BlackForgeMC","url":"https://blackforgemc.com/","logo":"https://blackforgemc.com/assets/img/logo-180.png"}}</script>
   <link rel="icon" href="assets/img/logo.svg" type="image/svg+xml">
   <link rel="icon" href="assets/img/logo-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="assets/img/logo-180.png">
@@ -20,6 +23,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/premium.css">
+  <link rel="preload" as="image" href="assets/img/hero-poster.jpg">
 </head>
 <body>
 
@@ -32,13 +37,14 @@
     <button class="nav-toggle" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
     <nav class="nav-links">
       <a href="#modes">Game Modes</a>
+      <a class="nav-trailer" href="#trailer" data-open-trailer><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>Trailer</a>
       <a href="#features">Features</a>
       <a href="#ranks">Ranks</a>
       <a href="#vote">Vote</a>
       <a href="store.html">Store</a>
       <a href="stats.html">Stats</a>
       <a href="rules.html">Rules</a>
-      <a class="btn btn-primary" href="#join">Play Now</a>
+      <a class="btn btn-primary" href="#join" data-play>Play Now</a>
     </nav>
   </div>
 </header>
@@ -47,9 +53,12 @@
 
   <!-- HERO -->
   <section class="hero">
-    <div class="hero-bg"><img src="assets/img/hero-hub.jpg" alt="The BlackForge hub: a floating forge island with portals to every game mode"></div>
+    <div class="hero-bg">
+      <img class="hero-poster" src="assets/img/hero-poster.jpg" alt="The BlackForge hub: a floating forge island with portals to every game mode" fetchpriority="high">
+      <video class="hero-video" muted loop playsinline preload="none" aria-hidden="true" tabindex="-1" data-hero-video data-src="assets/video/blackforge-hero.mp4" data-src-small="assets/video/blackforge-hero-720.mp4"></video>
+    </div>
     <canvas id="embers" aria-hidden="true"></canvas>
-    <div class="wrap">
+    <div class="wrap hero-grid">
       <div class="hero-inner">
         <svg class="hero-mark" viewBox="0 0 128 128" role="img" aria-label="BlackForge logo: a hammer striking an anvil">
   <defs>
@@ -111,7 +120,12 @@
 </svg>
         <span class="eyebrow">Minecraft Java Network</span>
         <h1>Forged for <span class="grad-text">players</span>.</h1>
-        <p class="hero-lead">Skyblock, OneBlock, Survival, Factions and Arcade on one network. Every game mode has its own economy, so each one is a fresh start.</p>
+        <p class="hero-lead">Skyblock, OneBlock, Survival, Factions and Arcade on one network, with a gladiator Colosseum, custom enchants and robots. Every game mode has its own economy, so each one is a fresh start.</p>
+
+        <div class="hero-cta">
+          <a class="btn btn-primary btn-xl" href="#join" data-play><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/></svg><span>Play now</span></a>
+          <button class="btn btn-glass btn-xl" type="button" data-open-trailer><span class="play-ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/></svg></span><span>Watch trailer</span></button>
+        </div>
 
         <div class="ip-card">
           <div class="ip-main">
@@ -136,6 +150,20 @@
           <a class="btn btn-ghost" href="#modes">Explore game modes</a>
         </div>
       </div>
+
+      <aside class="live-panel" data-live aria-label="Live server status">
+        <div class="live-head"><span>Live on the network</span><i class="live-dot"></i></div>
+        <div class="live-num" data-live-num>&hellip;</div>
+        <div class="live-sub" data-live-sub>Checking the forge…</div>
+        <ul class="live-list">
+          <li><a href="#modes" style="--c:#5ee0e6"><span>Skyblock</span><i>/server skyblock</i></a></li>
+          <li><a href="#modes" style="--c:#7cf08a"><span>OneBlock</span><i>NEW</i></a></li>
+          <li><a href="#modes" style="--c:#ff8a2a"><span>Survival</span><i>/server survival</i></a></li>
+          <li><a href="#colosseum" style="--c:#ff4a3a"><span>The Colosseum</span><i>1v1 ranked</i></a></li>
+          <li><a href="#modes" style="--c:#8aa4ff"><span>Factions</span><i>/server factions</i></a></li>
+          <li><a href="#modes" style="--c:#ff5c8a"><span>Arcade</span><i>/server arcade</i></a></li>
+        </ul>
+      </aside>
     </div>
     <div class="scroll-hint" aria-hidden="true">Scroll<i></i></div>
   </section>
@@ -149,10 +177,10 @@
   <!-- STATS -->
   <div class="stats">
     <div class="wrap">
-      <div class="stat"><b class="grad-text">5</b><span>Game modes, one network</span></div>
-      <div class="stat"><b class="grad-text">7</b><span>Custom enchantments</span></div>
-      <div class="stat"><b class="grad-text">1.13+</b><span>Join from 1.13 up to 26.3</span></div>
-      <div class="stat"><b class="grad-text">24/7</b><span>Anti-cheat on every server</span></div>
+      <div class="stat"><svg class="stat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><b class="grad-text" data-count="5">5</b><span>Game modes</span><em>One network, one hub</em></div>
+      <div class="stat"><svg class="stat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg><b class="grad-text" data-count="7">7</b><span>Custom enchants</span><em>Built in-house</em></div>
+      <div class="stat"><svg class="stat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M10 6H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5"/></svg><b class="grad-text">1.13+</b><span>Java versions</span><em>Join from 1.13 up to 26.3</em></div>
+      <div class="stat"><svg class="stat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><b class="grad-text">24/7</b><span>Anti-cheat</span><em>On every server</em></div>
     </div>
   </div>
 
@@ -160,14 +188,24 @@
   <section class="section trailer" id="trailer">
     <div class="wrap">
       <div class="section-head center reveal">
-        <span class="eyebrow">Trailer</span>
+        <div class="rule-line" aria-hidden="true"><i></i></div>
+        <span class="eyebrow">The premiere</span>
         <h2>See the <span class="grad-text">forge</span></h2>
-        <p>A flight through the network: the hub and its dragons, Survival, KOTH, the Scrapyard, Skyblock, Factions and the Arcade. Rendered from the live worlds.</p>
+        <p>A flight through the whole network: the Hub and its dragons, Skyblock, OneBlock, the Survival kingdom and the Wilds, KOTH, the Scrapyard, the Colosseum, Factions and the Arcade. Every frame is rendered from the live worlds.</p>
       </div>
-      <div class="spot-media trailer-media reveal">
-        <video controls playsinline preload="none" poster="assets/img/hub-castle.jpg">
-          <source src="assets/video/blackforge-trailer.mp4" type="video/mp4">
-        </video>
+      <div class="trailer-stage reveal" data-trailer-stage data-open-trailer role="button" tabindex="0" aria-label="Play the BlackForgeMC trailer"
+           data-src="assets/video/blackforge-trailer.mp4" data-src-small="assets/video/blackforge-trailer-720.mp4" data-poster="assets/img/trailer-poster.jpg">
+        <img src="assets/img/trailer-poster.jpg" alt="The BlackForge hub: a floating forge island with dragons" loading="lazy">
+        <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+        <button class="big-play" type="button" aria-label="Play trailer" tabindex="-1"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/></svg></button>
+        <div class="trailer-meta">
+          <h3><small>BlackForgeMC</small>The Network Trailer</h3>
+          <div class="trailer-tags"><span>1080p</span><span>1:33</span><span>All five worlds</span></div>
+        </div>
+      </div>
+      <div class="trailer-foot">
+        <button class="btn btn-primary" type="button" data-open-trailer><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/></svg><span>Watch the trailer</span></button>
+        <a class="btn btn-ghost" href="#join">How to join</a>
       </div>
     </div>
   </section>
@@ -182,8 +220,8 @@
       </div>
 
       <div class="modes">
-        <article class="mode wide reveal">
-          <div class="mode-img"><span class="mode-tag">/server skyblock</span><img src="assets/img/skyblock.jpg" alt="Sky Harbor, the Skyblock spawn island" loading="lazy"></div>
+        <article class="mode m-skyblock wide reveal">
+          <div class="mode-img"><span class="mode-tag" role="button" tabindex="0" data-copy-cmd="/server skyblock" title="Click to copy">/server skyblock</span><img src="assets/img/skyblock.jpg" alt="Sky Harbor, the Skyblock spawn island" loading="lazy"></div>
           <div class="mode-body">
             <h3>Skyblock</h3>
             <p>Start with a scrap of land in the void and build it into an empire. Climb island levels, finish challenges and fight for a spot in the Hall of Fame.</p>
@@ -192,10 +230,11 @@
               <li>Upgradable spawners paid in Mob Essence</li>
               <li>Copper-golem robots that farm, mine and grind for you</li>
             </ul>
+            <div class="mode-cta"><span class="play-link">Play Skyblock<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="cmd">/server skyblock</span></div>
           </div>
         </article>
 
-        <article class="mode wide reveal">
+        <article class="mode m-oneblock wide reveal">
           <div class="mode-img"><span class="mode-tag new">NEW</span><img src="assets/img/skyblock-spawn.jpg" alt="The OneBlock Gate at Sky Harbor" loading="lazy"></div>
           <div class="mode-body">
             <h3>OneBlock</h3>
@@ -205,24 +244,27 @@
               <li>Miner robots keep breaking your block for you</li>
               <li>Top OneBlock leaderboard with <code>/istop</code></li>
             </ul>
+            <div class="mode-cta"><span class="play-link">Play OneBlock<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="cmd">/server skyblock</span></div>
           </div>
         </article>
 
-        <article class="mode reveal">
-          <div class="mode-img"><span class="mode-tag">/server survival</span><img src="assets/img/survival.jpg" alt="The floating Survival spawn town" loading="lazy"></div>
+        <article class="mode m-survival reveal">
+          <div class="mode-img"><span class="mode-tag" role="button" tabindex="0" data-copy-cmd="/server survival" title="Click to copy">/server survival</span><img src="assets/img/survival.jpg" alt="The floating Survival spawn town" loading="lazy"></div>
           <div class="mode-body">
             <h3>Survival</h3>
             <p>Classic survival with a twist: a floating spawn town, chunk claims, an auction house and a 10,000-block world to explore.</p>
             <ul class="ticks">
-              <li>KOTH every two hours</li>
+              <li>KOTH every five hours</li>
+              <li>World bosses: five giant bosses, fought together</li>
               <li>The Scrapyard PvP zone with supply drops</li>
               <li>Crates, vouchers and custom enchants</li>
             </ul>
+            <div class="mode-cta"><span class="play-link">Play Survival<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="cmd">/server survival</span></div>
           </div>
         </article>
 
-        <article class="mode reveal">
-          <div class="mode-img"><span class="mode-tag">/server factions</span><img src="assets/img/factions.jpg" alt="The Factions spawn fortress under a frozen midnight sky" loading="lazy"></div>
+        <article class="mode m-factions reveal">
+          <div class="mode-img"><span class="mode-tag" role="button" tabindex="0" data-copy-cmd="/server factions" title="Click to copy">/server factions</span><img src="assets/img/factions.jpg" alt="The Factions spawn fortress under a frozen midnight sky" loading="lazy"></div>
           <div class="mode-body">
             <h3>Factions</h3>
             <p>Build a faction, claim land and raid your rivals. PvP is always on, so pick your allies carefully and don't let anyone near your base.</p>
@@ -231,11 +273,12 @@
               <li>Always-on PvP</li>
               <li>Its own money and Scrap</li>
             </ul>
+            <div class="mode-cta"><span class="play-link">Play Factions<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="cmd">/server factions</span></div>
           </div>
         </article>
 
-        <article class="mode reveal">
-          <div class="mode-img"><span class="mode-tag">/server arcade</span><img src="assets/img/arcade.jpg" alt="The Arcade lobby with three game gates" loading="lazy"></div>
+        <article class="mode m-arcade reveal">
+          <div class="mode-img"><span class="mode-tag" role="button" tabindex="0" data-copy-cmd="/server arcade" title="Click to copy">/server arcade</span><img src="assets/img/arcade.jpg" alt="The Arcade lobby with three game gates" loading="lazy"></div>
           <div class="mode-body">
             <h3>Arcade</h3>
             <p>Quick rounds when you just want to play. Jump into a queue and you're in a match in seconds.</p>
@@ -244,8 +287,34 @@
               <li>2–16 players with automatic queues</li>
               <li>Instant restarts, no waiting around</li>
             </ul>
+            <div class="mode-cta"><span class="play-link">Play Arcade<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="cmd">/server arcade</span></div>
           </div>
         </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- COLOSSEUM -->
+  <section class="section colosseum" id="colosseum">
+    <div class="wrap">
+      <div class="spot reveal">
+        <div class="spot-media"><span class="badge">New on Survival</span><img src="assets/img/colosseum.jpg" alt="The BlackForge Colosseum: a gate pavilion with the BLACKFORGEMC sign, knights and banners" loading="lazy"></div>
+        <div class="spot-copy">
+          <span class="eyebrow">Competitive</span>
+          <h3>The <span class="grad-text">Colosseum</span></h3>
+          <p>Challenge anyone to a 1v1 duel in the BlackForge arena. You fight in your own survival gear, the crowd watches from the stands, and every ranked win moves you up the Elo ladder. Your items and health are put back exactly as they were when the duel ends.</p>
+          <div class="arena-grid">
+            <div><b>1v1 duels</b><span>With your own gear</span></div>
+            <div><b>Elo ladder</b><span>Ranked ratings</span></div>
+            <div><b>Spectators</b><span>Watch from the stands</span></div>
+          </div>
+          <div class="ladder" aria-label="Gladiator ladder titles">
+            <div class="ladder-row gold"><i>#1</i><b>Grand Champion</b><span>Top of the ladder</span></div>
+            <div class="ladder-row silver"><i>#2</i><b>Elite Gladiator</b><span>Second place</span></div>
+            <div class="ladder-row bronze"><i>#3</i><b>Veteran Champion</b><span>Third place</span></div>
+          </div>
+          <div class="hero-actions"><a class="btn btn-primary" href="status.html">View the ladder</a><button class="btn btn-ghost" type="button" data-open-trailer data-src="assets/video/blackforge-colosseum.mp4" data-src-small="assets/video/blackforge-colosseum-720.mp4" data-poster="assets/img/duel.jpg"><span>Watch the Colosseum film</span></button><a class="btn btn-ghost" href="#faq">How duels work</a></div>
+        </div>
       </div>
     </div>
   </section>
@@ -258,10 +327,10 @@
         <div class="spot-copy">
           <span class="eyebrow">Survival PvP</span>
           <h3>Welcome to <span class="grad-text">the Scrapyard</span></h3>
-          <p>A 200×200 walled wasteland where anything goes. Every five hours around fifteen supply crates crash into the arena, loaded with upgraded gear, golden apples, potions and the occasional rare key. Getting in is easy: jump down a Drop Zone shaft. Getting out alive with the loot is the hard part.</p>
+          <p>A 200×200 walled wasteland where anything goes. Every three hours around fifteen supply crates crash into the arena, loaded with upgraded gear, golden apples, potions and the occasional rare key. Getting in is easy: jump down a Drop Zone shaft. Getting out alive with the loot is the hard part.</p>
           <div class="chips">
             <span class="chip"><b>~15</b> supply crates per drop</span>
-            <span class="chip"><b>5h</b> drop cycle</span>
+            <span class="chip"><b>3h</b> drop cycle</span>
             <span class="chip"><b>10s</b> escape warm-up</span>
           </div>
         </div>
@@ -272,9 +341,9 @@
         <div class="spot-copy">
           <span class="eyebrow">Events</span>
           <h3>King of <span class="grad-text">the Hill</span></h3>
-          <p>Every two hours the KOTH arena opens. Hold the hill, outlast everyone else and claim the KOTH crate, which has a small chance of dropping a rank voucher.</p>
+          <p>Every five hours the KOTH arena opens. Hold the hill, outlast everyone else and claim the KOTH crate, which has a small chance of dropping a rank voucher. On Saturday evenings one of five world bosses rises in the same arena, and the whole server fights it together.</p>
           <div class="chips">
-            <span class="chip"><b>Every 2h</b> on Survival</span>
+            <span class="chip"><b>Every 5h</b> on Survival</span>
             <span class="chip"><b>+200</b> Scrap for the winner</span>
             <span class="chip"><b>KOTH</b> crate key</span>
           </div>
@@ -315,11 +384,11 @@
         <div class="feature reveal">
           <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V10l7-6 7 6v11"/><path d="M9 21v-6h6v6"/></svg></div>
           <h4>Auction house</h4>
-          <p>List anything with <code>/ah</code> and trade with the whole server. Your money is the same on every mode.</p>
+          <p>List anything with <code>/ah</code> and trade with everyone on the server. A small tax on each sale keeps the economy healthy.</p>
         </div>
         <div class="feature reveal">
           <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2M12 16v2"/></svg></div>
-          <h4>Shared economy</h4>
+          <h4>Separate economies</h4>
           <p>Every game mode has its own money and Scrap, so nobody can carry a fortune from one world into another. Spend Scrap in the Scrap Shop on spawners, tags and more.</p>
         </div>
         <div class="feature reveal">
@@ -460,6 +529,10 @@
       </div>
       <div class="faq reveal">
         <details>
+          <summary>How do Colosseum duels work?</summary>
+          <p>Use <code>/duel</code> to challenge a player or <code>/colosseum</code> to enter the arena. You fight 1v1 in your own gear, your inventory and health are restored after the fight, and ranked results move your Elo rating. The top three get the Grand Champion, Elite Gladiator and Veteran Champion titles.</p>
+        </details>
+        <details>
           <summary>Which Minecraft versions can join?</summary>
           <p>Java Edition 1.13 up to 26.3. The latest version is recommended so you see every block and feature as intended.</p>
         </details>
@@ -491,10 +564,11 @@
   <section class="section cta">
     <div class="wrap">
       <div class="cta-box reveal">
+        <canvas class="cta-embers" aria-hidden="true"></canvas>
         <h2>The forge is <span class="grad-text">lit</span>.</h2>
         <p>Grab the IP, bring your friends and pick your world.</p>
         <div class="hero-actions">
-          <button class="btn btn-primary" data-copy-ip>
+          <button class="btn btn-primary btn-xl" data-copy-ip>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
             <span>Copy blackforgemc.com</span>
           </button>
@@ -511,12 +585,15 @@
     <div class="foot">
       <div>
         <a class="foot-logo" href="#top"><img src="assets/img/logo-full.png" alt="BlackForge Minecraft Network" width="330" height="69" loading="lazy"></a>
+        <span class="foot-tag">Forged by adventure</span>
         <p>A Minecraft Java network with Skyblock, OneBlock, Survival, Factions and Arcade.</p>
+        <button class="foot-ip" data-copy-ip type="button" aria-label="Copy server address"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span data-ip>blackforgemc.com</span></button>
       </div>
       <div>
         <h5>Play</h5>
         <ul>
           <li><a href="#modes">Game modes</a></li>
+          <li><a href="#colosseum">The Colosseum</a></li>
           <li><a href="#join">How to join</a></li>
           <li><a href="#vote">Vote</a></li>
         </ul>
@@ -525,6 +602,8 @@
         <h5>Server</h5>
         <ul>
           <li><a href="#ranks">Ranks</a></li>
+          <li><a href="stats.html">Leaderboards</a></li>
+          <li><a href="status.html">Status</a></li>
           <li><a href="rules.html">Rules</a></li>
           <li><a href="#faq">FAQ</a></li>
         </ul>
@@ -534,6 +613,7 @@
         <ul>
           <li><a data-link="discord" href="#"><span data-label>Discord</span></a></li>
           <li><a href="store.html">Store</a></li>
+          <li><a href="#trailer" data-open-trailer>Watch the trailer</a></li>
         </ul>
       </div>
     </div>
@@ -546,5 +626,6 @@
 
 <script src="assets/js/player.js"></script>
   <script src="assets/js/main.js"></script>
+  <script src="assets/js/premium.js"></script>
 </body>
 </html>

@@ -1,0 +1,87 @@
+{
+ "scale": 3.0,
+ "groups": [
+  {
+   "name": "body",
+   "parent": null,
+   "pivot": [
+    0,
+    3,
+    0
+   ]
+  },
+  {
+   "name": "head",
+   "parent": "body",
+   "pivot": [
+    0,
+    4.4,
+    0.2
+   ]
+  },
+  {
+   "name": "armL",
+   "parent": "body",
+   "pivot": [
+    1.95,
+    4.1,
+    0
+   ]
+  },
+  {
+   "name": "armR",
+   "parent": "body",
+   "pivot": [
+    -1.95,
+    4.1,
+    0
+   ]
+  },
+  {
+   "name": "legL",
+   "parent": null,
+   "pivot": [
+    0.7,
+    1.9,
+    0
+   ]
+  },
+  {
+   "name": "legR",
+   "parent": null,
+   "pivot": [
+    -0.7,
+    1.9,
+    0
+   ]
+  },
+  {
+   "name": "body_glow",
+   "parent": "body",
+   "pivot": [
+    0,
+    3,
+    0
+   ]
+  },
+  {
+   "name": "head_glow",
+   "parent": "head",
+   "pivot": [
+    0,
+    4.4,
+    0.2
+   ]
+  }
+ ],
+ "models": [
+  "armL",
+  "armR",
+  "body",
+  "body_glow",
+  "head",
+  "head_glow",
+  "legL",
+  "legR"
+ ]
+}

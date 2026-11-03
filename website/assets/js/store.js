@@ -21,6 +21,11 @@ const TEBEX_TOKEN = window.BF_TEBEX_TOKEN || "";
       { name: "Name Colour Bundle", price: 2.99, tier: "bundle", perks: ["Unlocks all 10 shop name colours on Survival and Skyblock", "Includes Molten and Oxidized gradients", "Switch any time with /tags"] },
       { name: "Trail Pack", price: 3.99, tier: "trails", perks: ["Unlocks all 9 particle trails on every server", "Pick one with /trails", "Trails hide while you're invisible or in arcade games"] },
     ]},
+    { name: "Cosmetic Crate", blurb: "Open a crate for a random trail, aura, pet, cape or effect. Cosmetic only.", packages: [
+      { name: "Cosmetic Key x1", price: 1.99, tier: "key", perks: ["One Cosmetic Crate opening", "Trails, auras, pets, capes and effects", "Open it with /cosmetics on any server"] },
+      { name: "Cosmetic Key x5", price: 7.99, tier: "key", perks: ["Five crate openings", "Epic or better guaranteed within 10 openings", "Duplicates turn into Forge Dust to craft what you're missing"] },
+      { name: "Cosmetic Key x15", price: 19.99, tier: "key", perks: ["Fifteen crate openings", "Legendary guaranteed within 50 openings", "Odds: 58% Common, 28% Rare, 11% Epic, 3% Legendary"] },
+    ]},
   ];
 
   const state = {
@@ -75,6 +80,7 @@ const TEBEX_TOKEN = window.BF_TEBEX_TOKEN || "";
     for (const t of ["forgemaster", "inferno", "blaze", "ember"]) if (k.includes(t)) return "t-" + t;
     if (k.includes("colour") || k.includes("color")) return "t-bundle";
     if (k.includes("trail")) return "t-trails";
+    if (k.includes("key") || k.includes("crate")) return "t-key";
     return "t-default";
   };
 

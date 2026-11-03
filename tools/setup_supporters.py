@@ -1,7 +1,7 @@
 """Create the store supporter LuckPerms groups (Ember/Blaze/Inferno/Forgemaster). Re-runnable.
 
-Cosmetic perks only (Mojang server rules): badge (alloy.supporter.<id>), name colour (alloy.tag.<id>),
-trails (AlloyCore, by tier) and /hat. LuckPerms data is shared, so running it on one server is enough.
+Cosmetic perks only (Mojang server rules): badge (blackforge.supporter.<id>), name colour (blackforge.tag.<id>),
+trails (BlackForgeCore, by tier) and /hat. LuckPerms data is shared, so running it on one server is enough.
 Usage: setup_supporters.py [server]   (default: hub)
 """
 import subprocess, sys
@@ -19,8 +19,8 @@ for tier, weight, parent, extra in ladder:
     g = "supporter_" + tier
     lp(f"creategroup {g}")
     lp(f"group {g} setweight {weight}")
-    lp(f"group {g} permission set alloy.supporter.{tier} true")
-    lp(f"group {g} permission set alloy.tag.{tier} true")
+    lp(f"group {g} permission set blackforge.supporter.{tier} true")
+    lp(f"group {g} permission set blackforge.tag.{tier} true")
     for p in extra:
         lp(f"group {g} permission set {p} true")
     if parent:

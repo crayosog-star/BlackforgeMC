@@ -44,7 +44,7 @@ async function place(standX, x, z) {
 
   rcon('minecraft:gamemode creative AlloyTesterA');
   console.log('== CRATE REWARD COMMANDS');
-  const cfg = require('fs').readFileSync('../../survival/plugins/AlloyCore/crates.yml', 'utf8');
+  const cfg = require('fs').readFileSync('../../survival/plugins/BlackForgeCore/crates.yml', 'utf8');
   const cmds = [...cfg.matchAll(/"(robots give \{player\} [^"]+)"/g)].map(m => m[1].replace('{player}', 'AlloyTesterA'));
   for (const c of cmds) rcon(c);
   await sleep(1000);

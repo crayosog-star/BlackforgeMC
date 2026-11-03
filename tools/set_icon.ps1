@@ -1,6 +1,6 @@
 # Makes the 64x64 server-list icon from a logo image and puts it on the proxy (what players see) and every backend.
-# Usage: powershell -File tools\set_icon.ps1 [path\to\logo.png]   (default: C:\MinecraftNetwork\branding\alloymc-logo.png)
-param([string]$Src = "C:\MinecraftNetwork\branding\alloymc-logo.png")
+# Usage: powershell -File tools\set_icon.ps1 [path\to\logo.png]   (default: C:\MinecraftNetwork\branding\blackforgemc-logo.png)
+param([string]$Src = "C:\MinecraftNetwork\branding\blackforgemc-logo.png")
 Add-Type -AssemblyName System.Drawing
 $img = [System.Drawing.Image]::FromFile($Src)
 $bmp = New-Object System.Drawing.Bitmap 64, 64

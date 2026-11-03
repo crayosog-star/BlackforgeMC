@@ -412,6 +412,7 @@ circle.hm-spark:nth-of-type(n) { --dx: 14px; --dy: -4px; }
 .pkg.t-forgemaster { --c: #ffd27a; }
 .pkg.t-bundle { --c: #5ee0e6; }
 .pkg.t-trails { --c: #b18cff; }
+.pkg.t-key { --c: #ffb347; }
 .pkg-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: var(--radius-sm); }
 .pkg-top h3 { font-size: 24px; text-transform: uppercase; color: var(--c); }
 .pkg-price { font-family: var(--font-head); font-size: 28px; font-weight: 700; margin-top: 6px; }

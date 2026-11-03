@@ -23,7 +23,7 @@ async function toS(b) { b.setQuickBarSlot(4); await sleep(400); const w = once(b
   await B.lookAt(t.position.offset(0, 1.5, 0), true); await sleep(900); B.attack(t); await sleep(2000);
   const heads = Object.values(B.entities).filter(e => e.name === 'item' && e.position.distanceTo(B.entity.position) < 8);
   console.log('items dropped near B after the kill:', heads.length, '| head on ground:', rcon('survival', 'execute if entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:player_head"}}]'));
-  rcon('survival', 'alloy buildsurvival'.replace('buildsurvival', 'nonexistent'));
+  rcon('survival', 'blackforge buildsurvival'.replace('buildsurvival', 'nonexistent'));
   await sleep(1000);
   for (const [x, z, name] of [[21, -12, 'money'], [25, -17, 'mined'], [30, -19, 'kills'], [35, -17, 'playtime'], [39, -12, 'deaths']])
     console.log('board', name, '->', /Text Display/.test(rcon('survival', `execute positioned ${x} 154 ${z} if entity @e[type=minecraft:text_display,distance=..2]`)) ? 'present' : rcon('survival', `execute positioned ${x} 154 ${z} if entity @e[type=minecraft:text_display,distance=..2]`));

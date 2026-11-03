@@ -93,7 +93,7 @@
   const start = () => {
     chip();
     paint();
-    if (!me) setTimeout(ask, 1200);   // first visit: ask once, after the page has settled
+    if (!me && /store/.test(location.pathname)) setTimeout(ask, 1200);   // ask on the store only; everywhere else the nav chip offers it, so the first impression stays clean
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 })();

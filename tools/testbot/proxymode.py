@@ -8,7 +8,7 @@ if mode == "offline":
         m = re.search(r"(\d+)\D+(?:of|out of)", re.sub("§.", "", out))
         if not m or m.group(1) != "0": sys.exit(f"refusing: {s} has players or no reply: {out.strip()[:80]}")
 flag = ROOT / "shared" / "test-mode.flag"
-# backends refuse everyone except AlloyTester bots while this flag exists (AlloyCore TestGuard)
+# backends refuse everyone except AlloyTester bots while this flag exists (BlackForgeCore TestGuard)
 if mode == "offline": flag.write_text("bot test in progress")
 t = ROOT / "proxy" / "velocity.toml"
 t.write_text(re.sub(r"(?m)^online-mode = .*$", f"online-mode = {'true' if mode == 'online' else 'false'}", t.read_text()))

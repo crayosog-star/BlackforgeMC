@@ -26,6 +26,6 @@ async function go(b, slot) { b.setQuickBarSlot(4); await sleep(300); const w = o
   A.chat('/spawn'); await sleep(7500);
   console.log('A after /spawn:', A.entity.position.floored().toString());
   A.chat('/f disband'); await sleep(1500); A.chat('/f disband confirm'); await sleep(1500);
-  console.log(rc('factions', 'alloy season standings'));
+  console.log(rc('factions', 'blackforge season standings'));
   process.exit(0);
 })();

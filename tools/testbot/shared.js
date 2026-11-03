@@ -19,14 +19,14 @@ const SURV = 12, SKY = 10;
   A.chat('/pay AlloyTesterB 250'); await sleep(1500);
   B.chat('/bal'); await sleep(1200);
   // scrap given on survival, visible on skyblock
-  rcon('survival', 'alloy scrap give AlloyTesterA 77');
+  rcon('survival', 'blackforge scrap give AlloyTesterA 77');
   // rank: Diamond voucher redeemed on survival...
-  console.log(rcon('survival', 'alloy voucher give AlloyTesterA diamond')); await sleep(800);
+  console.log(rcon('survival', 'blackforge voucher give AlloyTesterA diamond')); await sleep(800);
   const v = A.inventory.items().find(i => i.name === 'paper'); await A.equip(v, 'hand'); A.activateItem(); await sleep(3000);
   // ...then A goes to skyblock: rank, balance and scrap should all follow
   A.chat('/hub'); await sleep(5000); await go(A, SKY);
   A.chat('/bal'); await sleep(1000);
-  console.log('skyblock sees A rank perm:', rcon('skyblock', 'lp user AlloyTesterA permission checkinherits alloy.rank.diamond') || '(lp replies async)');
+  console.log('skyblock sees A rank perm:', rcon('skyblock', 'lp user AlloyTesterA permission checkinherits blackforge.rank.diamond') || '(lp replies async)');
   A.chat('/ranks'); await sleep(1200);
   // rank kits on skyblock: Diamond (own) + Copper (below) claimable, Netherite locked, Diamond again -> cooldown
   rcon('skyblock', 'minecraft:clear AlloyTesterA'); await sleep(800);

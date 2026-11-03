@@ -29,8 +29,8 @@ Outside spawn: the KOTH arena (z=-420) and the Scrapyard (z=520) float on their 
 * **Additive only.** Blocks are only ever placed where the world has **air**; no existing block is replaced.
 * Never inside a feature's working space: gate openings, shafts, the Trading Hall, crate pavilion, market,
   paths, the spawn pad, or within reach of a hologram.
-* Every placed block is logged (plugins/AlloyCore/spawn-upgrade-*.log) so each phase can be undone exactly
-  (`/alloy spawnupgrade undo <phase>`).
+* Every placed block is logged (plugins/BlackForgeCore/spawn-upgrade-*.log) so each phase can be undone exactly
+  (`/blackforge spawnupgrade undo <phase>`).
 * A full backup is taken right before each phase; each phase is previewed in a render of the live world first.
 * Anything that would need moving or rebuilding an existing feature: **ask first**.
 

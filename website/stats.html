@@ -13,6 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/premium.css">
   <style>
     .lb-tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin: 8px 0 24px; }
     .lb-tools form { display: flex; gap: 8px; flex: 1 1 260px; max-width: 420px; }
@@ -47,6 +48,7 @@
     <button class="nav-toggle" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
     <nav class="nav-links">
       <a href="index.html#modes">Game Modes</a>
+      <a class="nav-trailer" href="index.html#watch"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>Trailer</a>
       <a href="index.html#features">Features</a>
       <a href="index.html#ranks">Ranks</a>
       <a href="index.html#vote">Vote</a>
@@ -60,7 +62,10 @@
 
 <main>
   <section class="page-hero">
+    <div class="ph-bg"><img src="assets/img/arcade.jpg" alt=""></div>
+    <canvas class="page-embers" aria-hidden="true"></canvas>
     <div class="wrap">
+      <div class="crumbs"><a href="index.html">Home</a><span>/</span><span>Leaderboards</span></div>
       <span class="eyebrow">Leaderboards</span>
       <h1>The <span class="grad-text">forge</span> remembers.</h1>
       <p>Top killers, Arcade champions, the fastest hub parkour runs and ranked ratings from across the network. Look yourself up below.</p>
@@ -79,7 +84,42 @@
 
 <footer>
   <div class="wrap">
-    <div class="legal" style="margin-top: 0; border-top: 0; padding-top: 0;">
+    <div class="foot">
+      <div>
+        <a class="foot-logo" href="index.html"><img src="assets/img/logo-full.png" alt="BlackForge Minecraft Network" width="330" height="69" loading="lazy"></a>
+        <span class="foot-tag">Forged by adventure</span>
+        <p>A Minecraft Java network with Skyblock, OneBlock, Survival, Factions and Arcade.</p>
+        <button class="foot-ip" data-copy-ip type="button" aria-label="Copy server address"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span data-ip>blackforgemc.com</span></button>
+      </div>
+      <div>
+        <h5>Play</h5>
+        <ul>
+          <li><a href="index.html#modes">Game modes</a></li>
+          <li><a href="index.html#colosseum">The Colosseum</a></li>
+          <li><a href="index.html#join">How to join</a></li>
+          <li><a href="index.html#vote">Vote</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Server</h5>
+        <ul>
+          <li><a href="index.html#ranks">Ranks</a></li>
+          <li><a href="stats.html">Leaderboards</a></li>
+          <li><a href="status.html">Status</a></li>
+          <li><a href="rules.html">Rules</a></li>
+          <li><a href="index.html#faq">FAQ</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Community</h5>
+        <ul>
+          <li><a data-link="discord" href="#"><span data-label>Discord</span></a></li>
+          <li><a href="store.html">Store</a></li>
+          <li><a href="index.html#watch">Watch the trailer</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">
       <span>© <span data-year>2026</span> BlackForgeMC. All rights reserved.</span>
       <span>Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</span>
     </div>
@@ -88,6 +128,7 @@
 
 <script src="assets/js/player.js"></script>
   <script src="assets/js/main.js"></script>
+  <script src="assets/js/premium.js"></script>
 <script src="assets/js/stats.js"></script>
 </body>
 </html>

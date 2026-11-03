@@ -35,7 +35,7 @@ public final class Koth {
         this.world = world;
         this.crates = crates;
         var cfg = plugin.getConfig();
-        intervalMin = cfg.getInt("koth.interval-minutes", 120);
+        intervalMin = cfg.getInt("koth.interval-minutes", 300);
         captureSec = cfg.getInt("koth.capture-seconds", 180);
         maxMin = cfg.getInt("koth.max-minutes", 20);
         nextStart = System.currentTimeMillis() + cfg.getInt("koth.first-after-minutes", 30) * 60_000L;

@@ -62,7 +62,7 @@ public final class PvpZone implements Listener {
         this.world = world;
         this.crates = crates;
         var cfg = plugin.getConfig();
-        intervalMin = cfg.getInt("pvp.drop-interval-minutes", 300);
+        intervalMin = cfg.getInt("pvp.drop-interval-minutes", 180);
         cratesPerDrop = cfg.getInt("pvp.crates-per-drop", 15);
         nextDrop = System.currentTimeMillis() + cfg.getInt("pvp.first-drop-after-minutes", 60) * 60_000L;
         Bukkit.getPluginManager().registerEvents(this, plugin);

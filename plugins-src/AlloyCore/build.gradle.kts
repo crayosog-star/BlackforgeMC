@@ -67,3 +67,24 @@ tasks.register<JavaExec>("trailer") {
     args((project.findProperty("jar") ?: "").toString(), (project.findProperty("from") ?: "0").toString(), (project.findProperty("to") ?: "999999").toString(),
         layout.projectDirectory.dir("previews/trailer").asFile.absolutePath)
 }
+
+// Premiere trailer frames (then tools/make_premiere.py): gradle premiere -Pjar=<26.3.jar> -Pproduct=main|hero|short [-Pfrom=0 -Pto=999999 -Pevery=1 -Pss=2 -Pdir=<out> -Pw=1920 -Ph=1080]
+tasks.register<JavaExec>("premiere") {
+    classpath = sourceSets["main"].runtimeClasspath + sourceSets["main"].compileClasspath
+    mainClass.set("net.alloymc.core.build.Premiere")
+    maxHeapSize = "8g"
+    val product = (project.findProperty("product") ?: "main").toString()
+    val argv = mutableListOf((project.findProperty("jar") ?: "").toString(), product, (project.findProperty("from") ?: "0").toString(), (project.findProperty("to") ?: "999999").toString(),
+        (project.findProperty("every") ?: "1").toString(), (project.findProperty("ss") ?: "2").toString(),
+        (project.findProperty("dir") ?: layout.projectDirectory.dir("previews/premiere/" + product).asFile.absolutePath).toString())
+    if (project.hasProperty("w")) { argv.add(project.findProperty("w").toString()); argv.add(project.findProperty("h").toString()) }
+    args(argv)
+}
+
+// The five world bosses lined up in the KOTH arena (a stand-in picture): gradle bosses -Pjar=<26.3.jar> [-Pdir=out]
+tasks.register<JavaExec>("bosses") {
+    classpath = sourceSets["main"].runtimeClasspath + sourceSets["main"].compileClasspath
+    mainClass.set("net.alloymc.core.build.BossShot")
+    maxHeapSize = "6g"
+    args((project.findProperty("jar") ?: "").toString(), (project.findProperty("dir") ?: layout.projectDirectory.dir("previews/bosses").asFile.absolutePath).toString())
+}

@@ -1,0 +1,59 @@
+# BlackForgeMC AutoMod word lists. Edit, then restart the servers (or /automod reload).
+# Messages are normalised before matching: lower-cased, look-alike characters mapped back to
+# letters (0->o 1->i 3->e 4->a 5->s 7->t @->a $->s ! -> i ...), accents stripped.
+
+# Matched against the message with EVERYTHING but letters removed, so "n i g g a", "n.1.g.g.e.r"
+# and "niiiggger" are all caught. Only unambiguous slurs belong here (no short words that hide
+# inside normal ones). Regex syntax.
+severe-stream:
+  - "n+[i]+[g]{2,}[e]+r"
+  - "n+[i]+[g]{2,}(a+h?|u+h|az|uz)"
+  - "n+[i]+[g]{2,}(let|lette|ette)"
+  - "f+a+g{2,}o+t"
+  - "f+a+g{2,}i+t"
+  - "k+i+k+e+s?$"
+  - "t+r+a+n{2,}y"
+  - "t+r+a+n{2,}i+e"
+  - "w+e+t+b+a+c+k"
+  - "s+a+n+d+n+i+g"
+  - "c+h+i+n+g+c+h+o+n+g"
+  - "r+a+g+h+e+a+d"
+  - "t+o+w+e+l+h+e+a+d"
+
+# Matched against whole words only (so "spicy" or "cocoon" never trigger). Severe = auto-mute.
+severe-words:
+  - "spic"
+  - "spics"
+  - "chink"
+  - "chinks"
+  - "gook"
+  - "gooks"
+  - "coon"
+  - "coons"
+  - "beaner"
+  - "beaners"
+  - "fag"
+  - "fags"
+  - "dyke"
+  - "dykes"
+  - "kike"
+  - "kikes"
+  - "nig"
+  - "nigs"
+  - "negro"
+  - "negroes"
+
+# Whole words that are blocked with a warning (repeat offenders get a short mute).
+mild-words:
+  - "retard"
+  - "retarded"
+  - "retards"
+  - "kys"
+  - "kill yourself"
+
+# Domains that may be posted (everything else that looks like a link or server IP is blocked).
+allowed-domains:
+  - "youtube.com"
+  - "youtu.be"
+  - "twitch.tv"
+  - "imgur.com"

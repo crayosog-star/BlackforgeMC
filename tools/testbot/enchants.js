@@ -31,11 +31,11 @@ async function applyBook(b, bookName, target) {
   const gear = [['diamond_sword', 'lifesteal', 3], ['diamond_axe', 'bleed', 3], ['diamond_chestplate', 'overload', 3], ['diamond_boots', 'springs', 2], ['diamond_pickaxe', 'autosmelt', 1], ['diamond_pickaxe', 'excavator', 1]];
   for (const [item, ce, lvl] of gear) {
     if (!A.inventory.items().find(i => i.name === item)) { console.log('give', rcon(`minecraft:give AlloyTesterA ${item}`)); await sleep(900); }
-    rcon(`alloy ce give AlloyTesterA ${ce} ${lvl}`); await sleep(600);
+    rcon(`blackforge ce give AlloyTesterA ${ce} ${lvl}`); await sleep(600);
     await applyBook(A, ce, item);
   }
   // thunderstrike on the axe too (wrong item first to check validation)
-  rcon('alloy ce give AlloyTesterA thunderstrike 3'); await sleep(800);
+  rcon('blackforge ce give AlloyTesterA thunderstrike 3'); await sleep(800);
   await applyBook(A, 'thunderstrike', 'diamond_axe');
   console.log('books left:', A.inventory.items().filter(i => i.name === 'enchanted_book').length);
 

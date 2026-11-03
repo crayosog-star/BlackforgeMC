@@ -454,7 +454,7 @@ public final class WorldCam {
         for (var e : all.entrySet()) {
             long k = e.getKey();
             int x = Canvas.kx(k), y = Canvas.ky(k), z = Canvas.kz(k);
-            if (w.get(x, y, z) != 0 && !w.states.get(w.get(x, y, z)).endsWith(":air")) {
+            if (w.get(x, y, z) != 0 && !w.states.get(w.get(x, y, z)).endsWith("air")) {
                 if (System.getenv("OVERLAP") != null) System.out.println("  kept existing " + w.states.get(w.get(x, y, z)) + " @ " + x + " " + y + " " + z);
                 continue;
             }

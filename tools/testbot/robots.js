@@ -8,7 +8,7 @@ const rcon = c => { try { return execSync(`python ../netctl.py cmd skyblock "${c
 const ob = c => rcon('execute in minecraft:oneblock_world run ' + c);
 const A = mineflayer.createBot({ host: '127.0.0.1', port: 25577, username: 'AlloyTesterA', version: '1.20.4', auth: 'offline' });
 const txt = w => JSON.stringify(w.title).match(/"value":"([^"]{2,})"/g)?.map(s => s.slice(9, -1)).filter(s => !/^(string|byte|compound|list)$/.test(s)).join('') || '?';
-A.on('message', m => { const t = m.toString(); if (/upgraded|Robot|robot|Fuel|Added|need|now a|picked|Essence|spawns|blocks/.test(t) && !/Welcome|ALLOYMC/.test(t)) console.log('  chat>', t.slice(0, 150)); });
+A.on('message', m => { const t = m.toString(); if (/upgraded|Robot|robot|Fuel|Added|need|now a|picked|Essence|spawns|blocks/.test(t) && !/Welcome/.test(t)) console.log('  chat>', t.slice(0, 150)); });
 async function openWin(fn) { const w = once(A, 'windowOpen'); await fn(); const win = await Promise.race([w, sleep(4000).then(() => null)]); await sleep(500); return win; }
 const near = (p, r = 1.6) => Object.values(A.entities).find(e => e !== A.entity && e.type !== 'player' && e.name !== 'item' && e.position.distanceTo(p) < r);
 const items = win => win.slots.slice(18, 54).filter(Boolean).map(s => s.name + 'x' + s.count).join(', ') || '(empty)';

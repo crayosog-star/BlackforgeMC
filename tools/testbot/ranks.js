@@ -21,7 +21,7 @@ async function toSurvival(b) { b.setQuickBarSlot(4); await sleep(400); const w =
   rcon('minecraft:clear AlloyTesterA'); rcon('lp user AlloyTesterA parent remove copper'); rcon('lp user AlloyTesterA parent remove gold'); await sleep(1500);
 
   // voucher -> Copper
-  console.log(rcon('alloy voucher give AlloyTesterA copper')); await sleep(800);
+  console.log(rcon('blackforge voucher give AlloyTesterA copper')); await sleep(800);
   const v = A.inventory.items().find(i => i.name === 'paper');
   await A.equip(v, 'hand'); A.activateItem(); await sleep(3500);
   A.chat('hello there'); await sleep(1200);
@@ -32,7 +32,7 @@ async function toSurvival(b) { b.setQuickBarSlot(4); await sleep(400); const w =
   for (let h = 1; h <= 6; h++) { A.chat('/sethome h' + h); await sleep(500); }
   await sleep(800);
   // Gold voucher -> /fly inside own claim
-  console.log(rcon('alloy voucher give AlloyTesterA gold')); await sleep(800);
+  console.log(rcon('blackforge voucher give AlloyTesterA gold')); await sleep(800);
   const v2 = A.inventory.items().find(i => i.name === 'paper'); await A.equip(v2, 'hand'); A.activateItem(); await sleep(3000);
   rcon('tp AlloyTesterA 2500.5 140 2500.5'); await sleep(3000);
   const gy = rcon('execute positioned 2500 140 2500 run fill 2496 120 2496 2504 120 2504 minecraft:stone');

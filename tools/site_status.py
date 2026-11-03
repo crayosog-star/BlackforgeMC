@@ -37,7 +37,7 @@ def online(server):
 
 
 def gladiators():
-    f = ROOT / "survival" / "plugins" / "AlloyCore" / "gladiator" / "gladiators.yml"
+    f = ROOT / "survival" / "plugins" / "BlackForgeCore" / "gladiator" / "gladiators.yml"
     if not f.exists() or yaml is None:
         return []
     data = (yaml.safe_load(f.read_text(encoding="utf-8")) or {}).get("players", {}) or {}

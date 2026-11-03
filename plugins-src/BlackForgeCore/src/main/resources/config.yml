@@ -1,0 +1,112 @@
+# hub | arcade | backend
+mode: backend
+
+# true once the BlackForgeMC resource pack is served on this server: custom items then use their textures by default
+# (an item's own custom-model setting still wins). False = items show as their vanilla base item.
+resource-pack-live: false
+
+# Gale Bellows PvP item (survival only). Every player gets one on first join; /jbello gives another if they
+# don't carry one. Set false to stop it firing. Its custom texture needs the resource pack: leave custom-model
+# false until the pack is live (otherwise it shows as the purple/black missing model); until then it is a
+# glinting breeze rod with its name.
+gale-bellows:
+  enabled: true
+  custom-model: false
+  cooldown-seconds: 7   # seconds between blasts (and Gale jumps), Arena included; 0 = no cooldown
+
+# Potion of Gaia (survival only): a pink splash potion that grows a mist, blooms, and rises as an 8-block
+# platform. Works without the resource pack; with it (resource-pack-live) it gets its own texture. Staff: /gaia. Crates: blackforge gaia give {player}. Set false to stop it.
+gaia-potion:
+  enabled: true
+
+# Potion of Darkness (survival + hub Arena): splash potion; 5.5 s of total darkness for players where PvP is on, confuses
+# mobs anywhere. Staff: /darkness. Crates: blackforge darkness give {player}. Set false to stop it.
+darkness-potion:
+  enabled: true
+
+# Surge (survival + hub Arena): one-use ability item. 6 s of speed/jump/step-up with a health drain that never goes
+# below half health. Staff: /surge. Crates: blackforge surge give {player}. custom-model: true only once the resource pack
+# with the Surge textures is live. Set enabled false to stop it.
+# screen-darkness: once the black Darkness starts it stays on (pulsing) for the rest of the surge; false = a short pulse only.
+# darkness-start-distance: the Darkness only starts once the surger is this many blocks from where the surge began
+# (any direction, flat distance). 0 = from the start. The red screen edges, night sky and rain are not affected.
+surge:
+  enabled: true
+  custom-model: false
+  screen-darkness: true
+  darkness-start-distance: 20
+
+# EMP (hub Arena only for now): right-click to launch up; at the top a wave rolls out `radius` blocks (10 = a
+# 20-block-wide circle) and shuts down every other player's ability inside it (cages fall, surges end, chains snap...),
+# strips everyone else's potion effects and cleanses the caster's debuffs. One use. Staff: /emp. Set enabled false to stop it.
+emp:
+  enabled: true
+  radius: 10
+  cooldown-seconds: 45
+
+# Rimelock (hub Arena only for now): leap, slam, and a 16-block-tall, 6-block-radius cage holds for 10 s. Nobody
+# inside can leave, mobs included, except the caster (and their team, once teams exist); anyone can walk in; no hits
+# cross the wall either way. The caster's side sees it blue, everyone else red. Staff: /rimelock (/cage).
+# The way out: a player the cage holds can right-click an Ashen Chain at one of the 8 crystals over the rim posts to be
+# reeled up and over the wall (crystal-escape). Only where both items are wired together (the hub Arena for now).
+rimelock:
+  enabled: true
+  crystal-escape:
+    enabled: true
+    single-use: true           # a hooked crystal shatters and stays gone for the rest of that cage
+    aim-radius: 1.5            # blocks: the hit sphere round each crystal (how forgiving the aim is)
+    vault-seconds: 0.3         # the outward carry over the rim once the reel arrives
+    vault-speed: 0.4           # blocks a tick at the start of the carry, easing down
+    pass-grace-seconds: 1.0    # the wall keeps letting them through this long after they arrive
+    no-fall-max-seconds: 4     # no fall damage until they land, up to this long
+
+# Gods-eye (hub Arena only for now): marks the closest player for 10 s - halo, beam into the sky, banner with their
+# face and name; the caster gets distance + direction. Staff: /godseye (/eye). Set false to stop it.
+gods-eye:
+  enabled: true
+
+# Ashen Chain (hub Arena only for now): right-click to grapple - drag yourself to the block you aim at (24 away).
+# Left-click to strike - a skillshot (12 away, or point-blank). A hit sets a player on fire for burn-seconds (real
+# fire, no other damage), then after pull-delay-seconds yanks them 1 block closer - unless they break free first with
+# Surge, their own chain, water, cover, or by getting 16 away. Hostile mobs are still hooked for 1 heart and dragged
+# to you. Sneak to let go of a grapple. Staff: /ashenchain (/chain, /tether).
+ashen-chain:
+  enabled: true
+  cooldown-seconds: 3              # 0 = no cooldown
+  player-hit-cooldown-seconds: 5   # cooldown after chaining a player
+  burn-seconds: 3                  # how long they're on fire (vanilla fire: about half a heart a second)
+  pull-delay-seconds: 0.5          # the break-free window between the hit and the yank
+  throw-speed: 30                  # how fast the hook flies, blocks a second (was 80): 12 blocks in 0.4 s
+
+# Ashen Bonfire (hub Arena only for now): right-click the ground to kindle a bonfire that heals EVERYONE in its ring
+# (enemies too) for a while. Anyone can snuff it out with a few hits. Staff: /bonfire (/totem).
+ashen-bonfire:
+  enabled: true
+  cooldown-seconds: 20
+  duration-seconds: 10
+  radius: 4
+  heal-hearts-per-second: 1
+  hits: 5
+
+# Last Rite (Survival, Factions, hub Arena): a wave pulls the first enemy it touches into a 1v1 chamber.
+# timeout: both-die | both-weakened (leave empty for the server's default: Survival weakened, Factions/Arena die)
+last-rite:
+  enabled: true
+  charges-needed: 3        # player kills to charge a scroll
+  cooldown-seconds: 300    # after a rite (a miss: 30 s)
+  duel-seconds: 40
+  timeout: ''
+  allow-totems: true
+  chamber-slots: 8         # rites at once per server
+
+# Robots (Survival + Skyblock copper golems). NOT read by the plugin yet - a later task wires these up.
+# fish-seconds (per robot tier I..V) and fisher-burn match the built-in values in RobotRules; the rest are for the
+# upcoming chest trips (radius in blocks, store when any item reaches store-threshold, fetch fuel at 2 minutes left).
+robots:
+  chest-radius: 10
+  clock-seconds: 60
+  store-threshold: 20
+  fuel-fetch-minutes: 2
+  walk-speed: 4.0
+  fish-seconds: [180, 150, 120, 90, 60]
+  fisher-burn: 0.25

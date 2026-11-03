@@ -35,7 +35,7 @@ async function toSurvival(b) {
   await B.lookAt(ta2.position.offset(0, 1.5, 0)); B.attack(ta2); await sleep(700);
   log('PvP at spawn: A health', hp1, '->', A.health);
   // loot table sample
-  log('sample:', rcon('alloy pvp sample 40'));
+  log('sample:', rcon('blackforge pvp sample 40'));
   // lava: pour 4 blocks ahead inside the zone, step away, check it is cleaned up
   rcon('tp AlloyTesterA 30.5 170 530.5 90 45'); await sleep(2500);
   rcon('give AlloyTesterA lava_bucket 1'); await sleep(800);

@@ -34,7 +34,7 @@ async function toSurvival(b) {
   log('A health in scrapyard before/after hit:', hp0, A.health);
 
   // supply drop
-  log('drop:', rcon('alloy pvp drop'));
+  log('drop:', rcon('blackforge pvp drop'));
   await sleep(2500);
   log('op', rcon('op AlloyTesterA'));
   const looted = [];

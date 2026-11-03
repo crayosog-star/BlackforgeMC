@@ -9,7 +9,7 @@ A.on('message', m => { const t = m.toString(); if (/kit|Kit|Key|tag|Tag|Repair|r
   await once(A, 'spawn'); await sleep(4000);
   rcon('lp user AlloyTesterA permission set grim.exempt true');
   A.setQuickBarSlot(4); await sleep(300); const w = once(A, 'windowOpen'); A.activateItem(); await w; await sleep(300); await A.clickWindow(12, 0, 0); await sleep(8000);
-  rcon('minecraft:clear AlloyTesterA'); rcon('alloy voucher give AlloyTesterA diamond'); await sleep(800);
+  rcon('minecraft:clear AlloyTesterA'); rcon('blackforge voucher give AlloyTesterA diamond'); await sleep(800);
   const v = A.inventory.items().find(i => i.name === 'paper'); await A.equip(v, 'hand'); A.activateItem(); await sleep(3000);
   rcon('minecraft:clear AlloyTesterA');
   let win = once(A, 'windowOpen'); A.chat('/kit'); await win; await sleep(500);

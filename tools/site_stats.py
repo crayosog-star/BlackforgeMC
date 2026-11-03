@@ -70,7 +70,7 @@ def main():
             p[k] = s.get(k, 0)
 
     parkour = []
-    pf = ROOT / "hub" / "plugins" / "AlloyCore" / "hub-parkour.yml"
+    pf = ROOT / "hub" / "plugins" / "BlackForgeCore" / "hub-parkour.yml"
     if pf.exists():
         for uid, v in load(pf).items():
             if isinstance(v, dict) and v.get("best"):
@@ -78,14 +78,14 @@ def main():
                 player(v.get("name", "?"))["parkour_ms"] = v["best"]
 
     bounties = []
-    bf = ROOT / "survival" / "plugins" / "AlloyCore" / "bounties.yml"
+    bf = ROOT / "survival" / "plugins" / "BlackForgeCore" / "bounties.yml"
     if bf.exists():
         for uid, v in load(bf).items():
             if isinstance(v, dict) and v.get("amount"):
                 bounties.append((v.get("name", "?"), v["amount"]))
 
     ranked = {}
-    for f in (ROOT / "arcade" / "plugins" / "AlloyCore" / "arcade" / "stats").glob("*.yml"):
+    for f in (ROOT / "arcade" / "plugins" / "BlackForgeCore" / "arcade" / "stats").glob("*.yml"):
         s = load(f)
         name = s.get("name")
         duels = s.get("duels", {}) if isinstance(s.get("duels"), dict) else {}

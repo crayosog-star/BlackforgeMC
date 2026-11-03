@@ -1,4 +1,4 @@
-"""Deploy AlloyCore + per-server settings to BlackForgeMC backends. Re-runnable.
+"""Deploy BlackForgeCore + per-server settings to BlackForgeMC backends. Re-runnable.
 
 Only deploy to STOPPED servers (replacing a jar under a running server breaks it).
 Usage: deploy.py [server ...]   (default: all)  - or use `netctl.py restart <server>`.
@@ -7,15 +7,19 @@ import os, json, secrets, shutil, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-JAR = ROOT / "plugins-src" / "AlloyCore" / "build" / "libs" / "AlloyCore.jar"
+JAR = ROOT / "plugins-src" / "BlackForgeCore" / "build" / "libs" / "BlackForgeCore.jar"
 OWNER = {"uuid": "f2aef66f-fb87-4635-8c61-4b116baaa5b5", "name": "GavVFX", "level": 4, "bypassesPlayerLimit": True}
 # permanent ops: re-added on every deploy, so a rebuilt or wiped server never loses them
 PERMANENT_OPS = [OWNER, {"uuid": "8c67e820-3611-42b8-9f5f-d355d31f9ca9", "name": "Causee", "level": 4, "bypassesPlayerLimit": True}]
 ADDRESS = "blackforgemc.com"
 # served straight from GitHub (public repo, main branch): a merged pack is downloadable at once, no website re-upload.
 # The file name carries the SHA-1, so a new pack is a new file and clients never get a stale cached copy.
-PACK_URL = "https://raw.githubusercontent.com/crayosog-star/BlackforgeMC/main/website/pack/blackforge-pack-4b53675c.zip"
-PACK_SHA1 = "4b53675cfef56f532637e1dd38cab1f61898143b"
+PACK_URL = "https://raw.githubusercontent.com/crayosog-star/BlackforgeMC/main/website/pack/blackforge-pack-acec528b.zip"
+PACK_SHA1 = "acec528bf380d6d5cc81d2447ac7c6edde4b6bdb"
+# local testing only: tools/pack_override.txt (line 1 URL, line 2 SHA-1) beats the two lines above. Delete it once the pack is on GitHub.
+_override = Path(__file__).with_name("pack_override.txt")
+if _override.exists():
+    PACK_URL, PACK_SHA1 = _override.read_text().split()[:2]
 
 SERVERS = {
     "hub":      {"port": 30001, "mode": "hub", "display": "Hub", "join": ""},
@@ -42,6 +46,27 @@ def set_props(path, values):
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def migrate_legacy(plugins, cfg):
+    """The plugin used to go by its old name: move its jar and data folder across once (safe to run again)."""
+    import re
+    old_jar, old_dir = plugins / ("Alloy" + "Core.jar"), plugins / ("Alloy" + "Core")
+    if old_jar.exists():
+        old_jar.unlink()
+    if old_dir.exists():
+        if cfg.exists():
+            shutil.copytree(old_dir, cfg, dirs_exist_ok=True)
+            shutil.rmtree(old_dir)
+        else:
+            old_dir.rename(cfg)
+    # console commands inside the configs ("<old name> crate give ...") use the new command name
+    if cfg.exists():
+        for f in list(cfg.glob("*.yml")):
+            t = f.read_text(encoding="utf-8")
+            n = re.sub(r"" + "al" + "loy (?=[a-z])", "blackforge ", t)
+            if n != t:
+                f.write_text(n, encoding="utf-8")
+
+
 targets = sys.argv[1:] or list(SERVERS)
 for name, s in SERVERS.items():
     if name not in targets:
@@ -50,13 +75,14 @@ for name, s in SERVERS.items():
     plugins = d / "plugins"
     for old in plugins.glob("TAB*.jar"):
         old.unlink()
-    shutil.copy(JAR, plugins / "AlloyCore.jar")
-    cfg = plugins / "AlloyCore"
+    shutil.copy(JAR, plugins / "BlackForgeCore.jar")
+    cfg = plugins / "BlackForgeCore"
+    migrate_legacy(plugins, cfg)
     cfg.mkdir(exist_ok=True)
     koth = [
-        "koth:", "  interval-minutes: 120", "  first-after-minutes: 30",
+        "koth:", "  interval-minutes: 300", "  first-after-minutes: 30",
         "  capture-seconds: 180", "  max-minutes: 20", "  reward-money: 5000",
-        "pvp:", "  drop-interval-minutes: 300", "  first-drop-after-minutes: 60", "  crates-per-drop: 15",
+        "pvp:", "  drop-interval-minutes: 180", "  first-drop-after-minutes: 60", "  crates-per-drop: 15",
         "rtp:", "  border-size: 100000", "  range: 100000   # wild teleports land anywhere inside the border",
         "votes:", "  party-every: 50", "  money: 250", "  sites: []",
         "store-url: 'Store coming soon!'",

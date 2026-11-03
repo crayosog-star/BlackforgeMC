@@ -1,6 +1,6 @@
 # BlackForge Arcade
 
-The Arcade server (`arcade`, Paper 26.3, port 30005 behind the Velocity proxy) runs 17 minigames, each with its own pool of maps. All of it lives in the existing **AlloyCore** plugin (`plugins-src/AlloyCore`, package `net.alloymc.core.arcade`). It uses the network's shared money and Scrap for rewards.
+The Arcade server (`arcade`, Paper 26.3, port 30005 behind the Velocity proxy) runs 17 minigames, each with its own pool of maps. All of it lives in the existing **BlackForgeCore** plugin (`plugins-src/BlackForgeCore`, package `net.alloymc.core.arcade`). It uses the network's shared money and Scrap for rewards.
 
 ## How it works
 
@@ -69,12 +69,12 @@ Players never pick or vote on maps. Staff can force one map for the next match w
 | Speed Builders (`speedbuilders`) | Solo | Island Ring, Grid Plaza |
 | Infected (`infected`) | Classic | Old Town, Deep Mine |
 
-That's 47 maps in total. Every map has its own spawns, bounds, void level, spectator spawn and game structures (beds, generators, chests, goals, plots, checkpoints, gold spots and so on). Run `gradle arcadePreview` (optionally with `-Pgame=<id>`) to render isometric PNGs of every built-in map into `plugins-src/AlloyCore/previews/arcade/`.
+That's 47 maps in total. Every map has its own spawns, bounds, void level, spectator spawn and game structures (beds, generators, chests, goals, plots, checkpoints, gold spots and so on). Run `gradle arcadePreview` (optionally with `-Pgame=<id>`) to render isometric PNGs of every built-in map into `plugins-src/BlackForgeCore/previews/arcade/`.
 
 ## Files
 
 ```
-arcade/plugins/AlloyCore/arcade/
+arcade/plugins/BlackForgeCore/arcade/
   config.yml               limits, map rotation, rewards
   games/<game>.yml         settings for one mode (any key can be overridden per map)
   maps/<game>/<map>.yml    one file per map
@@ -166,9 +166,9 @@ After editing a template, `/arcade refresh-template <g> <m>` makes new matches u
 ## Build, test, deploy
 
 ```
-cd plugins-src/AlloyCore
+cd plugins-src/BlackForgeCore
 gradle test           # unit tests (23)
-gradle jar            # build/libs/AlloyCore.jar
+gradle jar            # build/libs/BlackForgeCore.jar
 gradle arcadePreview  # render every built-in map
 python ../../tools/netctl.py restart arcade   # deploy safely (never copy a jar into a running server)
 ```

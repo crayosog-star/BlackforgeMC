@@ -31,10 +31,10 @@ Optional: make it a **Tiered category** so players can upgrade and only pay the 
 
 | Package | Price | Purchase commands | Expiry / refund / chargeback commands |
 |---|---|---|---|
-| Ember | $4.99 | `lp user {username} parent add supporter_ember`<br>`alloy thanks {username} Ember Supporter` | `lp user {username} parent remove supporter_ember`<br>`lp networksync` |
-| Blaze | $9.99 | `lp user {username} parent add supporter_blaze`<br>`alloy thanks {username} Blaze Supporter` | `lp user {username} parent remove supporter_blaze`<br>`lp networksync` |
-| Inferno | $19.99 | `lp user {username} parent add supporter_inferno`<br>`alloy thanks {username} Inferno Supporter` | `lp user {username} parent remove supporter_inferno`<br>`lp networksync` |
-| Forgemaster | $39.99 | `lp user {username} parent add supporter_forgemaster`<br>`alloy thanks {username} Forgemaster Supporter` | `lp user {username} parent remove supporter_forgemaster`<br>`lp networksync` |
+| Ember | $4.99 | `lp user {username} parent add supporter_ember`<br>`blackforge thanks {username} Ember Supporter` | `lp user {username} parent remove supporter_ember`<br>`lp networksync` |
+| Blaze | $9.99 | `lp user {username} parent add supporter_blaze`<br>`blackforge thanks {username} Blaze Supporter` | `lp user {username} parent remove supporter_blaze`<br>`lp networksync` |
+| Inferno | $19.99 | `lp user {username} parent add supporter_inferno`<br>`blackforge thanks {username} Inferno Supporter` | `lp user {username} parent remove supporter_inferno`<br>`lp networksync` |
+| Forgemaster | $39.99 | `lp user {username} parent add supporter_forgemaster`<br>`blackforge thanks {username} Forgemaster Supporter` | `lp user {username} parent remove supporter_forgemaster`<br>`lp networksync` |
 
 Each tier includes the ones below it, so only add the one group.
 
@@ -47,8 +47,17 @@ Suggested descriptions, which the website shows:
 ### Category: Cosmetics
 | Package | Price | Purchase commands | Refund / chargeback commands |
 |---|---|---|---|
-| Name Colour Bundle | $2.99 | `lp user {username} permission set alloy.tag.bundle true`<br>`alloy thanks {username} the Name Colour Bundle` | `lp user {username} permission unset alloy.tag.bundle`<br>`lp networksync` |
-| Trail Pack | $3.99 | `lp user {username} permission set alloy.trails.all true`<br>`alloy thanks {username} the Trail Pack` | `lp user {username} permission unset alloy.trails.all`<br>`lp networksync` |
+| Name Colour Bundle | $2.99 | `lp user {username} permission set blackforge.tag.bundle true`<br>`blackforge thanks {username} the Name Colour Bundle` | `lp user {username} permission unset blackforge.tag.bundle`<br>`lp networksync` |
+| Trail Pack | $3.99 | `lp user {username} permission set blackforge.trails.all true`<br>`blackforge thanks {username} the Trail Pack` | `lp user {username} permission unset blackforge.trails.all`<br>`lp networksync` |
+| Cosmetic Key (x1) | $1.99 | `blackforge cosmetickey give {username} 1`<br>`blackforge thanks {username} a Cosmetic Key` | `blackforge cosmetickey take {username} 1` |
+| Cosmetic Key (x5) | $7.99 | `blackforge cosmetickey give {username} 5`<br>`blackforge thanks {username} 5 Cosmetic Keys` | `blackforge cosmetickey take {username} 5` |
+| Cosmetic Key (x15) | $19.99 | `blackforge cosmetickey give {username} 15`<br>`blackforge thanks {username} 15 Cosmetic Keys` | `blackforge cosmetickey take {username} 15` |
+
+**Cosmetic Crate.** Keys are a balance kept in `shared/cosmetics/<uuid>.yml` (not an item), so they work on every server and can't be lost or dropped. Players open crates in `/cosmetics` (or `/cosmeticcrate`) and get a random trail, aura, pet, cape, kill effect or victory effect: 58% Common, 28% Rare, 11% Epic, 3% Legendary, with an Epic or better guaranteed within 10 openings and a Legendary within 50. A duplicate becomes Forge Dust, which crafts any crate cosmetic the player is missing (30 / 90 / 240 / 600 dust by rarity). Pulls are cosmetic only. Staff: `/blackforge cosmetickey give|take|check <player> [n]`, `/blackforge cosmetic give|take <player> <id>`. Disclose the odds on the store page (Mojang's rules and several regions require it).
+
+**Limited-time cosmetics.** Each event (Hallowforge, Frostforge) has its own cosmetics. While the event is on, about 20% of crate openings turn into one of them (`cosmetics.limited-chance` in the plugin config), and `/cosmetics` shows a Limited Time page with a countdown. When the event ends they can't be obtained any more, but everyone who has one keeps it. The season dates are the event dates (`event.hallowforge.*`, `event.frostforge.*`), so change them in one place. New events are added in `Cosmetics.java` (a season entry plus `limited(...)` cosmetics).
+
+**Event calendar, Founders and champions.** Seasons: Hallowforge, Frostforge, Emberheart (7-16 Feb 2027), Bloomforge (Mar-Apr), Sunforge (Jun-Aug) and Anniversary (a placeholder week in December: set the real date). Each has five limited cosmetics plus a name icon, a leaderboard of Season Points (KOTH, bosses, Colosseum, arcade wins, kills, event trades) and a Champion cape and icon for the top 3, awarded automatically when the season ends. Everyone who first joins on or before `founders-until` gets the Founders set, once, and it never returns. Past seasons can be brought back as a "Throwback" window; people who got an item the first time keep a gold border on it. All of this is set in `shared/cosmetics/config.yml` (created on first start, read by every server).
 
 ## 3. Game servers + the Tebex plugin
 1. Tebex panel → **Game Servers** → add three servers: **Hub**, **Survival**, **Skyblock** (type: Minecraft / Bukkit-Paper).
@@ -62,7 +71,7 @@ Suggested descriptions, which the website shows:
 ## 4. Community goal (Key All)
 Tebex panel → **Engagement → Community Goals** → new goal, e.g. **$100, repeatable**, named "Key All".
 When it completes, run on **Survival** and **Skyblock**:
-`alloy keyall molten 1 Community goal reached`
+`blackforge keyall molten 1 Community goal reached`
 Crates: cinder, molten, forgeheart, conqueror, spark (the old ids iron, gold, netherite, koth, vote still work). Every player online on that server gets the key, and the server announces it.
 
 ## 5. Connect the website
@@ -80,4 +89,20 @@ Tebex has a sandbox/test mode (and 100% coupons). Buy Ember for your own account
 - refunding it in the panel removes the badge (on other servers it disappears once you switch server or rejoin)
 
 ## In-game commands players see
-`/store` (link), `/supporter` (tiers), `/trails` (particle menu), `/tags` (name colours, Survival/Skyblock), `/ranks`
+`/settings` (one menu for name colour, name icon, trails, auras, capes, pets, effects and a few switches), `/store` (link), `/supporter` (tiers), `/cosmetics` (effects, trails, auras, pets, capes, the Cosmetic Crate), `/trails` (supporter particle menu), `/tags` (name colours, Survival/Skyblock), `/ranks`
+
+## Premium Season Pass
+
+Package: **Premium Season Pass** (one-time, covers the season that is running when it is bought).
+Command to run on purchase: `passgrant {username}`  (refund: `passgrant {username} take`)
+
+Any Supporter rank includes the Premium pass automatically. The pass follows the limited-time seasons (Hallowforge, Frostforge,
+Emberheart, Bloomforge, Sunforge). Tune it in `shared/cosmetics/config.yml`:
+
+    pass:
+      points-per-tier: 25     # Season Points per tier (30 tiers)
+
+## Quests, Trading Post, Crews, Build Showcase
+
+Nothing to set up in Tebex. Players use `/quests`, `/market` (Trading Post, Forge Dust, 5% fee), `/crew`, `/showcase`, `/pass`.
+Quest rewards and pools are the constants at the top of `Quests.java`; Showcase prizes are `PRIZE_KEYS`/`PRIZE_DUST` in `Showcase.java`.

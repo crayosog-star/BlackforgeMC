@@ -10,13 +10,13 @@ ladder = [
     ("diamond", 40, "gold", []),
     ("netherite", 50, "diamond", []),
 ]
-# /repair is replaced by AlloyCore's /repairhand (Gold+, every 2 hours)
+# /repair is replaced by BlackForgeCore's /repairhand (Gold+, every 2 hours)
 lp("group diamond permission unset essentials.repair")
 lp("group netherite permission unset essentials.repair.all")
 for name, weight, parent, perms in ladder:
     lp(f"creategroup {name}")
     lp(f"group {name} setweight {weight}")
-    lp(f"group {name} permission set alloy.rank.{name} true")
+    lp(f"group {name} permission set blackforge.rank.{name} true")
     lp(f"group {name} permission set essentials.sethome.multiple.{name} true")
     for p in perms:
         lp(f"group {name} permission set {p} true")

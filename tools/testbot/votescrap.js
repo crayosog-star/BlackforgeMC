@@ -33,7 +33,7 @@ async function toSurvival(b) { b.setQuickBarSlot(4); await sleep(400); const w =
   await A.lookAt(vault.position.offset(0.5, 0.5, 0.5)); await A.activateBlock(vault); await sleep(9000);
   if (A.currentWindow) A.closeWindow(A.currentWindow);
   // scrap shop: buy a zombie spawner
-  console.log(rcon('alloy scrap give AlloyTesterA 3000'));
+  console.log(rcon('blackforge scrap give AlloyTesterA 3000'));
   A.chat('/scrap bal'); await sleep(1000);
   const w = once(A, 'windowOpen'); A.chat('/scrap'); const win = await w; await sleep(400);
   console.log('shop categories:', [2, 3, 4, 5, 6].map(i => win.slots[i] && win.slots[i].name).join(','));
