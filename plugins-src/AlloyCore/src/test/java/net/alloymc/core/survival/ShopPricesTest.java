@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -45,7 +46,9 @@ class ShopPricesTest {
         assertEquals(3000, shop.dailyLimit("bone"));
         assertEquals(1000, shop.dailyLimit("cod"));
         assertEquals(3000, shop.dailyLimit("oak_log"));
-        assertEquals(2000, shop.dailyLimit("diamond"));
+        assertEquals(50, shop.dailyLimit("diamond"));        // per-item cap, not the mining default
+        assertEquals(50, shop.itemLimit("diamond"));
+        assertEquals(2000, shop.dailyLimit("raw_iron"));     // other mining items keep the category limit
         assertEquals(0, shop.itemLimit("wheat"));
         assertEquals(3000, shop.categoryLimit("mob_drops"));
     }
@@ -120,6 +123,37 @@ class ShopPricesTest {
         assertEquals(0.05, AuctionHouse.listingFee(1), EPS);
         assertEquals(0.51, AuctionHouse.listingFee(10.01), EPS);   // 0.5005 rounds up
         assertEquals(75.00, AuctionHouse.listingFee(1500), EPS);
+    }
+
+    @Test void diamondCapHoldsInsideMiningLimit() {
+        assertEquals(10, ShopPrices.allowed(64, 40, shop.itemLimit("diamond"), 40, shop.categoryLimit("mining")));
+        assertEquals(0, ShopPrices.allowed(64, 50, shop.itemLimit("diamond"), 50, shop.categoryLimit("mining")));
+    }
+
+    // ---------------------------------------------------------------- sell_limits.yml
+
+    @Test void sellLimitsRoundTripThroughYaml() {
+        UUID a = UUID.fromString("00000000-0000-0000-0000-00000000000a"), b = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+        Map<UUID, Map<String, Integer>> counts = Map.of(a, Map.of("diamond", 12, "blaze_rod", 300), b, Map.of("wheat", 64));
+        String today = SellShop.utcDate(20_000);
+        assertEquals("2024-10-04", today);
+        Yaml yaml = new Yaml();
+        Map<String, Object> back = yaml.load(yaml.dump(SellShop.limitsDoc(counts, today)));
+        assertEquals(counts, SellShop.readLimits(back, today));
+    }
+
+    @Test void staleAndBadEntriesAreSkipped() {
+        Map<String, Object> root = new Yaml().load("""
+                limits:
+                  00000000-0000-0000-0000-00000000000a: {date: '2024-10-03', diamond: 50}
+                  00000000-0000-0000-0000-00000000000b: {date: '2024-10-04', diamond: 7, wheat: 0}
+                  00000000-0000-0000-0000-00000000000c: {date: 2024-10-04, bone: 3}
+                  not-a-uuid: {date: '2024-10-04', diamond: 1}
+                """);
+        Map<UUID, Map<String, Integer>> got = SellShop.readLimits(root, "2024-10-04");
+        assertEquals(Map.of(UUID.fromString("00000000-0000-0000-0000-00000000000b"), Map.of("diamond", 7),
+                UUID.fromString("00000000-0000-0000-0000-00000000000c"), Map.of("bone", 3)), got);   // unquoted date still read as UTC
+        assertTrue(SellShop.readLimits(Map.of(), "2024-10-04").isEmpty());
     }
 
     @Test void auctionGroupForEachServer() {

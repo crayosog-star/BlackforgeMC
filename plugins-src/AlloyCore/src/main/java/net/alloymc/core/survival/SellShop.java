@@ -15,11 +15,16 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDate;
 import java.util.*;
 
 /**
  * The Survival Trader: sell farmed goods for money with /shop. Prices and daily limits come from shop.yml
- * ({@link ShopPrices}); limits count per player per UTC day (in memory, so a restart starts the day's counts over).
+ * ({@link ShopPrices}); limits count per player per UTC day. The counts live in memory and are saved to
+ * sell_limits.yml after every sale (written off the main thread), so a restart doesn't reset the day.
  * Only plain vanilla items are bought - anything with a custom name, lore, enchantments or plugin data is skipped,
  * so Fuel Cells (coal), Mob Essence and other custom items can never be sold here.
  *
@@ -33,6 +38,10 @@ public final class SellShop {
     private long day = ShopPrices.utcDay(System.currentTimeMillis());
     /** player -> item -> sold today */
     private final Map<UUID, Map<String, Integer>> sold = new HashMap<>();
+    /** plugins/AlloyCore/sell_limits.yml: today's counts, so they survive a restart. */
+    private File limitsFile;
+    private final Object writeLock = new Object();
+    private long saveSeq, writtenSeq;   // newest snapshot handed to a writer / newest one on disk
 
     public SellShop(AlloyCore plugin) {
         this.plugin = plugin;
@@ -41,6 +50,8 @@ public final class SellShop {
             return;
         }
         load();
+        limitsFile = new File(plugin.getDataFolder(), "sell_limits.yml");
+        loadLimits();
         Bukkit.getScheduler().runTaskTimer(plugin, this::rollDay, 1200L, 1200L);
         register();
     }
@@ -63,10 +74,93 @@ public final class SellShop {
         return m;
     }
 
-    /** Clear the counts when the UTC day changes (checked every minute and before every sale). */
+    /** Clear the counts when the UTC day changes (checked every minute and before every sale); the file follows. */
     private void rollDay() {
         long today = ShopPrices.utcDay(System.currentTimeMillis());
-        if (today != day) { day = today; sold.clear(); }
+        if (today != day) { day = today; sold.clear(); saveLimitsAsync(); }
+    }
+
+    // ------------------------------------------------------------------ sell_limits.yml
+
+    /** yyyy-MM-dd of a UTC day number. */
+    static String utcDate(long utcDay) { return LocalDate.ofEpochDay(utcDay).toString(); }
+
+    /**
+     * Today's counts from a parsed sell_limits.yml ({@code limits: <uuid>: {date: yyyy-MM-dd, <item>: n}}). Players whose
+     * date isn't {@code today} are stale and skipped, as are bad UUIDs and non-positive counts.
+     */
+    static Map<UUID, Map<String, Integer>> readLimits(Map<String, ?> root, String today) {
+        Map<UUID, Map<String, Integer>> out = new HashMap<>();
+        if (!(root.get("limits") instanceof Map<?, ?> players)) return out;
+        for (var pe : players.entrySet()) {
+            if (!(pe.getValue() instanceof Map<?, ?> m) || !today.equals(dateOf(m.get("date")))) continue;
+            UUID id;
+            try { id = UUID.fromString(String.valueOf(pe.getKey())); } catch (IllegalArgumentException e) { continue; }
+            Map<String, Integer> items = new HashMap<>();
+            for (var ie : m.entrySet())
+                if (!"date".equals(ie.getKey()) && ie.getValue() instanceof Number n && n.intValue() > 0) items.put(String.valueOf(ie.getKey()), n.intValue());
+            if (!items.isEmpty()) out.put(id, items);
+        }
+        return out;
+    }
+
+    /** The date as yyyy-MM-dd; an unquoted date in hand-edited YAML loads as a java.util.Date, so read that as UTC too. */
+    private static String dateOf(Object o) {
+        if (o instanceof Date d) return d.toInstant().atZone(java.time.ZoneOffset.UTC).toLocalDate().toString();
+        return String.valueOf(o);
+    }
+
+    /** The sell_limits.yml content for these counts, all dated {@code date}. */
+    static Map<String, Object> limitsDoc(Map<UUID, Map<String, Integer>> counts, String date) {
+        Map<String, Object> players = new LinkedHashMap<>();
+        for (var e : counts.entrySet()) {
+            if (e.getValue().isEmpty()) continue;
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("date", date);
+            m.putAll(new TreeMap<>(e.getValue()));
+            players.put(e.getKey().toString(), m);
+        }
+        Map<String, Object> root = new LinkedHashMap<>();
+        root.put("limits", players);
+        return root;
+    }
+
+    private void loadLimits() {
+        if (!limitsFile.exists()) return;
+        Map<UUID, Map<String, Integer>> today = readLimits(toMap(YamlConfiguration.loadConfiguration(limitsFile)), utcDate(day));
+        today.forEach((id, m) -> sold.put(id, new HashMap<>(m)));
+        plugin.getLogger().info("Trader: restored today's sell limits for " + today.size() + " player" + (today.size() == 1 ? "" : "s"));
+    }
+
+    /**
+     * Snapshot the counts on the main thread and write them off it. Each write replaces the whole file (stale days
+     * drop out), goes through a temp file + rename, and an older snapshot never overwrites a newer one.
+     */
+    private void saveLimitsAsync() {
+        YamlConfiguration y = new YamlConfiguration();
+        limitsDoc(sold, utcDate(day)).forEach((k, v) -> set(y, k, v));
+        String text = y.saveToString();
+        long seq = ++saveSeq;
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> writeLimits(seq, text));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void set(ConfigurationSection s, String key, Object v) {
+        if (v instanceof Map<?, ?> m) { ConfigurationSection c = s.createSection(key); ((Map<String, Object>) m).forEach((k, x) -> set(c, k, x)); }
+        else s.set(key, v);
+    }
+
+    private void writeLimits(long seq, String text) {
+        synchronized (writeLock) {
+            if (seq <= writtenSeq) return;   // a newer snapshot is already on disk
+            try {
+                File tmp = new File(limitsFile.getParentFile(), limitsFile.getName() + ".tmp");
+                Files.writeString(tmp.toPath(), text, StandardCharsets.UTF_8);
+                try { Files.move(tmp.toPath(), limitsFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE); }
+                catch (java.nio.file.AtomicMoveNotSupportedException e) { Files.move(tmp.toPath(), limitsFile.toPath(), StandardCopyOption.REPLACE_EXISTING); }
+                writtenSeq = seq;
+            } catch (Exception e) { plugin.getLogger().warning("Trader: could not save sell_limits.yml: " + e.getMessage()); }
+        }
     }
 
     private int soldItem(UUID id, String item) { return sold.getOrDefault(id, Map.of()).getOrDefault(item, 0); }
@@ -168,6 +262,7 @@ public final class SellShop {
             if (have == 0) { p.sendMessage(Ui.mm(PREFIX + "<red>You have no plain <white>" + nice(item) + "<red> to sell.")); return; }
             sales.add(sell(p, item, wanted, slots));
         }
+        if (sales.stream().anyMatch(s -> s.sold() > 0)) saveLimitsAsync();
         report(p, sales);
     }
 
