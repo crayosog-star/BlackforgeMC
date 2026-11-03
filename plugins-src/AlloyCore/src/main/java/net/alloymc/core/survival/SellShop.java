@@ -11,6 +11,10 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.Listener;
+import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 
@@ -24,13 +28,14 @@ import java.util.*;
 /**
  * The Survival Trader: sell farmed goods for money with /shop. Prices and daily limits come from shop.yml
  * ({@link ShopPrices}); limits count per player per UTC day. The counts live in memory and are saved to
- * sell_limits.yml after every sale (written off the main thread), so a restart doesn't reset the day.
+ * sell-limits.yml (at most once a minute, off the main thread, and once more on shutdown), so a restart doesn't
+ * reset the day.
  * Only plain vanilla items are bought - anything with a custom name, lore, enchantments or plugin data is skipped,
  * so Fuel Cells (coal), Mob Essence and other custom items can never be sold here.
  *
  * <p>/shop - today's sales and limits; /shop prices [category]; /shop sell &lt;item|hand|all&gt; [amount].
  */
-public final class SellShop {
+public final class SellShop implements Listener {
     private static final String PREFIX = "<dark_gray>[<gold>Trader<dark_gray>] ";
 
     private final AlloyCore plugin;
@@ -38,10 +43,12 @@ public final class SellShop {
     private long day = ShopPrices.utcDay(System.currentTimeMillis());
     /** player -> item -> sold today */
     private final Map<UUID, Map<String, Integer>> sold = new HashMap<>();
-    /** plugins/AlloyCore/sell_limits.yml: today's counts, so they survive a restart. */
+    /** plugins/AlloyCore/sell-limits.yml: today's counts, so they survive a restart. */
     private File limitsFile;
+    /** Counts changed since the last write (set on the main thread; cleared when a snapshot is taken). */
+    private volatile boolean dirty;
     private final Object writeLock = new Object();
-    private long saveSeq, writtenSeq;   // newest snapshot handed to a writer / newest one on disk
+    private long saveSeq, writtenSeq;   // newest snapshot taken / newest one on disk
 
     public SellShop(AlloyCore plugin) {
         this.plugin = plugin;
@@ -50,9 +57,11 @@ public final class SellShop {
             return;
         }
         load();
-        limitsFile = new File(plugin.getDataFolder(), "sell_limits.yml");
+        limitsFile = new File(plugin.getDataFolder(), "sell-limits.yml");
         loadLimits();
-        Bukkit.getScheduler().runTaskTimer(plugin, this::rollDay, 1200L, 1200L);
+        // every minute: midnight-UTC reset, then write the counts if they changed (debounced: at most once a minute)
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> { rollDay(); flushLimits(true); }, 1200L, 1200L);
+        Bukkit.getPluginManager().registerEvents(this, plugin);   // shutdown flush
         register();
     }
 
@@ -77,28 +86,29 @@ public final class SellShop {
     /** Clear the counts when the UTC day changes (checked every minute and before every sale); the file follows. */
     private void rollDay() {
         long today = ShopPrices.utcDay(System.currentTimeMillis());
-        if (today != day) { day = today; sold.clear(); saveLimitsAsync(); }
+        if (today != day) { day = today; sold.clear(); dirty = true; flushLimits(true); }   // also empties the file
     }
 
-    // ------------------------------------------------------------------ sell_limits.yml
+    // ------------------------------------------------------------------ sell-limits.yml
 
     /** yyyy-MM-dd of a UTC day number. */
     static String utcDate(long utcDay) { return LocalDate.ofEpochDay(utcDay).toString(); }
 
     /**
-     * Today's counts from a parsed sell_limits.yml ({@code limits: <uuid>: {date: yyyy-MM-dd, <item>: n}}). Players whose
-     * date isn't {@code today} are stale and skipped, as are bad UUIDs and non-positive counts.
+     * Today's counts from a parsed sell-limits.yml ({@code day: yyyy-MM-dd} + {@code limits: <uuid>: {WHEAT: n}}).
+     * A file from another UTC day is stale: nothing is kept (that's the midnight reset across a restart). Bad UUIDs and
+     * non-positive counts are skipped. Item keys come back lower-case, as used in memory.
      */
     static Map<UUID, Map<String, Integer>> readLimits(Map<String, ?> root, String today) {
         Map<UUID, Map<String, Integer>> out = new HashMap<>();
-        if (!(root.get("limits") instanceof Map<?, ?> players)) return out;
+        if (!today.equals(dateOf(root.get("day"))) || !(root.get("limits") instanceof Map<?, ?> players)) return out;
         for (var pe : players.entrySet()) {
-            if (!(pe.getValue() instanceof Map<?, ?> m) || !today.equals(dateOf(m.get("date")))) continue;
+            if (!(pe.getValue() instanceof Map<?, ?> m)) continue;
             UUID id;
             try { id = UUID.fromString(String.valueOf(pe.getKey())); } catch (IllegalArgumentException e) { continue; }
             Map<String, Integer> items = new HashMap<>();
             for (var ie : m.entrySet())
-                if (!"date".equals(ie.getKey()) && ie.getValue() instanceof Number n && n.intValue() > 0) items.put(String.valueOf(ie.getKey()), n.intValue());
+                if (ie.getValue() instanceof Number n && n.intValue() > 0) items.put(String.valueOf(ie.getKey()).toLowerCase(Locale.ROOT), n.intValue());
             if (!items.isEmpty()) out.put(id, items);
         }
         return out;
@@ -110,17 +120,16 @@ public final class SellShop {
         return String.valueOf(o);
     }
 
-    /** The sell_limits.yml content for these counts, all dated {@code date}. */
-    static Map<String, Object> limitsDoc(Map<UUID, Map<String, Integer>> counts, String date) {
+    /** The sell-limits.yml content: {@code day}, then every player's counts with upper-case item keys (WHEAT). */
+    static Map<String, Object> limitsDoc(Map<UUID, Map<String, Integer>> counts, String day) {
         Map<String, Object> players = new LinkedHashMap<>();
         for (var e : counts.entrySet()) {
-            if (e.getValue().isEmpty()) continue;
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("date", date);
-            m.putAll(new TreeMap<>(e.getValue()));
-            players.put(e.getKey().toString(), m);
+            Map<String, Object> m = new TreeMap<>();
+            e.getValue().forEach((item, n) -> { if (n > 0) m.put(item.toUpperCase(Locale.ROOT), n); });
+            if (!m.isEmpty()) players.put(e.getKey().toString(), m);
         }
         Map<String, Object> root = new LinkedHashMap<>();
+        root.put("day", day);
         root.put("limits", players);
         return root;
     }
@@ -133,16 +142,23 @@ public final class SellShop {
     }
 
     /**
-     * Snapshot the counts on the main thread and write them off it. Each write replaces the whole file (stale days
-     * drop out), goes through a temp file + rename, and an older snapshot never overwrites a newer one.
+     * Write the counts if they changed: snapshot on the main thread, then write off it (async) or right here (shutdown).
+     * Each write replaces the whole file through a temp file + rename, and an older snapshot never overwrites a newer one.
      */
-    private void saveLimitsAsync() {
+    private void flushLimits(boolean async) {
+        if (!dirty) return;
+        dirty = false;
         YamlConfiguration y = new YamlConfiguration();
         limitsDoc(sold, utcDate(day)).forEach((k, v) -> set(y, k, v));
         String text = y.saveToString();
         long seq = ++saveSeq;
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> writeLimits(seq, text));
+        if (async) Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> writeLimits(seq, text));
+        else writeLimits(seq, text);
     }
+
+    /** Shutdown: write synchronously so the last minute of sales isn't lost. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPluginDisable(PluginDisableEvent e) { if (e.getPlugin() == plugin) flushLimits(false); }
 
     @SuppressWarnings("unchecked")
     private static void set(ConfigurationSection s, String key, Object v) {
@@ -159,7 +175,7 @@ public final class SellShop {
                 try { Files.move(tmp.toPath(), limitsFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE); }
                 catch (java.nio.file.AtomicMoveNotSupportedException e) { Files.move(tmp.toPath(), limitsFile.toPath(), StandardCopyOption.REPLACE_EXISTING); }
                 writtenSeq = seq;
-            } catch (Exception e) { plugin.getLogger().warning("Trader: could not save sell_limits.yml: " + e.getMessage()); }
+            } catch (Exception e) { dirty = true; plugin.getLogger().warning("Trader: could not save sell-limits.yml (will retry): " + e.getMessage()); }
         }
     }
 
@@ -206,6 +222,11 @@ public final class SellShop {
             left -= take;
             if (take == s.getAmount()) inv.setItem(slot, null);
             else { s.setAmount(s.getAmount() - take); inv.setItem(slot, s); }
+        }
+        if (left > 0) {   // fewer items were there than paid for (not expected on the main thread): take that money back
+            double back = ShopPrices.payout(price.getAsDouble(), left);
+            plugin.economy().withdraw(p, back);
+            ok -= left; money = Math.round((money - back) * 100) / 100.0;
         }
         sold.computeIfAbsent(id, k -> new HashMap<>()).merge(item, ok, Integer::sum);
         return new Sale(item, ok, wanted - ok, money);
@@ -262,7 +283,7 @@ public final class SellShop {
             if (have == 0) { p.sendMessage(Ui.mm(PREFIX + "<red>You have no plain <white>" + nice(item) + "<red> to sell.")); return; }
             sales.add(sell(p, item, wanted, slots));
         }
-        if (sales.stream().anyMatch(s -> s.sold() > 0)) saveLimitsAsync();
+        if (sales.stream().anyMatch(s -> s.sold() > 0)) dirty = true;   // written by the next minute's flush
         report(p, sales);
     }
 

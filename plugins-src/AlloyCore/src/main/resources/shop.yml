@@ -66,4 +66,4 @@ shop:
   redstone:       { price: 0.25, category: mining }
   lapis_lazuli:   { price: 0.30, category: mining }
   quartz:         { price: 0.40, category: mining }
-  diamond:        { price: 10.00, category: mining, daily_limit: 50 }
+  diamond:        { price: 10.00, category: mining, daily_limit: 64 }

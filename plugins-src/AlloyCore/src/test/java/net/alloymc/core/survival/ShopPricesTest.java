@@ -46,8 +46,8 @@ class ShopPricesTest {
         assertEquals(3000, shop.dailyLimit("bone"));
         assertEquals(1000, shop.dailyLimit("cod"));
         assertEquals(3000, shop.dailyLimit("oak_log"));
-        assertEquals(50, shop.dailyLimit("diamond"));        // per-item cap, not the mining default
-        assertEquals(50, shop.itemLimit("diamond"));
+        assertEquals(64, shop.dailyLimit("DIAMOND"));        // per-item cap, not the mining default
+        assertEquals(64, shop.itemLimit("diamond"));
         assertEquals(2000, shop.dailyLimit("raw_iron"));     // other mining items keep the category limit
         assertEquals(0, shop.itemLimit("wheat"));
         assertEquals(3000, shop.categoryLimit("mob_drops"));
@@ -126,33 +126,46 @@ class ShopPricesTest {
     }
 
     @Test void diamondCapHoldsInsideMiningLimit() {
-        assertEquals(10, ShopPrices.allowed(64, 40, shop.itemLimit("diamond"), 40, shop.categoryLimit("mining")));
-        assertEquals(0, ShopPrices.allowed(64, 50, shop.itemLimit("diamond"), 50, shop.categoryLimit("mining")));
+        assertEquals(24, ShopPrices.allowed(64, 40, shop.itemLimit("diamond"), 40, shop.categoryLimit("mining")));
+        assertEquals(0, ShopPrices.allowed(64, 64, shop.itemLimit("diamond"), 64, shop.categoryLimit("mining")));
     }
 
-    // ---------------------------------------------------------------- sell_limits.yml
+    // ---------------------------------------------------------------- sell-limits.yml
 
     @Test void sellLimitsRoundTripThroughYaml() {
         UUID a = UUID.fromString("00000000-0000-0000-0000-00000000000a"), b = UUID.fromString("00000000-0000-0000-0000-00000000000b");
         Map<UUID, Map<String, Integer>> counts = Map.of(a, Map.of("diamond", 12, "blaze_rod", 300), b, Map.of("wheat", 64));
         String today = SellShop.utcDate(20_000);
         assertEquals("2024-10-04", today);
+        Map<String, Object> doc = SellShop.limitsDoc(counts, today);
+        assertEquals(today, doc.get("day"));
+        assertEquals(Map.of("BLAZE_ROD", 300, "DIAMOND", 12), ((Map<?, ?>) doc.get("limits")).get(a.toString()));   // upper-case keys on disk
         Yaml yaml = new Yaml();
-        Map<String, Object> back = yaml.load(yaml.dump(SellShop.limitsDoc(counts, today)));
+        Map<String, Object> back = yaml.load(yaml.dump(doc));
         assertEquals(counts, SellShop.readLimits(back, today));
     }
 
-    @Test void staleAndBadEntriesAreSkipped() {
-        Map<String, Object> root = new Yaml().load("""
+    @Test void fileFromAnotherDayIsDiscarded() {
+        String file = """
+                day: '2024-10-03'
                 limits:
-                  00000000-0000-0000-0000-00000000000a: {date: '2024-10-03', diamond: 50}
-                  00000000-0000-0000-0000-00000000000b: {date: '2024-10-04', diamond: 7, wheat: 0}
-                  00000000-0000-0000-0000-00000000000c: {date: 2024-10-04, bone: 3}
-                  not-a-uuid: {date: '2024-10-04', diamond: 1}
+                  00000000-0000-0000-0000-00000000000a: {DIAMOND: 64}
+                """;
+        assertTrue(SellShop.readLimits(new Yaml().load(file), "2024-10-04").isEmpty());   // midnight reset across a restart
+        assertEquals(1, SellShop.readLimits(new Yaml().load(file), "2024-10-03").size());
+    }
+
+    @Test void badLimitEntriesAreSkipped() {
+        Map<String, Object> root = new Yaml().load("""
+                day: 2024-10-04
+                limits:
+                  00000000-0000-0000-0000-00000000000b: {DIAMOND: 7, WHEAT: 0}
+                  00000000-0000-0000-0000-00000000000c: {BONE: 3}
+                  not-a-uuid: {DIAMOND: 1}
                 """);
-        Map<UUID, Map<String, Integer>> got = SellShop.readLimits(root, "2024-10-04");
+        Map<UUID, Map<String, Integer>> got = SellShop.readLimits(root, "2024-10-04");   // unquoted day still read as a UTC date
         assertEquals(Map.of(UUID.fromString("00000000-0000-0000-0000-00000000000b"), Map.of("diamond", 7),
-                UUID.fromString("00000000-0000-0000-0000-00000000000c"), Map.of("bone", 3)), got);   // unquoted date still read as UTC
+                UUID.fromString("00000000-0000-0000-0000-00000000000c"), Map.of("bone", 3)), got);
         assertTrue(SellShop.readLimits(Map.of(), "2024-10-04").isEmpty());
     }
 
