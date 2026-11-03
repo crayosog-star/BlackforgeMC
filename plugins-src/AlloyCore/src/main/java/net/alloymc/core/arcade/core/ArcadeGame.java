@@ -57,4 +57,7 @@ public abstract class ArcadeGame {
 
     /** Fewest players /arcade test can start this game with (2 when it can't work without an opponent). */
     public int minTestPlayers() { return 1; }
+
+    /** The mode /arcade test uses for this many players when the command doesn't name one. */
+    public Variant testVariant(int players) { return variants().getFirst(); }
 }

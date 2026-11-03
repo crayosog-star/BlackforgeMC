@@ -61,6 +61,12 @@ public final class ForgeWars extends ArcadeGame {
                 "When diamond generators reach level II, the Golem wakes in the Undercroft: the team that hurts it most wins the Golem's Heart.");
     }
 
+    /** Players named together are teammates, so with no mode named take the smallest team that holds them all. */
+    @Override public Variant testVariant(int players) {
+        for (Variant v : variants()) if (v.teamSize() >= players) return v;
+        return variants().getLast();
+    }
+
     @Override public Match newMatch(MatchContext c) { return new BedWarsMatch(c, true); }
 
     @Override public List<BuiltMap> builtInMaps() {

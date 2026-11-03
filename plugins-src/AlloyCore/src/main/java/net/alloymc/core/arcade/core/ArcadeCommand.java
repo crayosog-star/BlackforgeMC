@@ -182,13 +182,13 @@ public final class ArcadeCommand {
         ArcadeGame g = a.length > 1 ? arcade.game(a[1]) : null;
         if (g == null) { msg(s, P + "<gray>/arcade test <game> [mode] [player...] <dark_gray>- <gray>starts now, no stats or rewards. <white>/arcade games"); return; }
         Variant asked = a.length > 2 ? g.variant(a[2]) : null;
-        Variant v = asked != null ? asked : g.variants().getFirst();
         LinkedHashSet<Player> who = new LinkedHashSet<>(List.of(p));
         for (int i = asked != null ? 3 : 2; i < a.length; i++) {
             Player o = Bukkit.getPlayerExact(a[i]);
             if (o == null) { msg(s, P + "<red>'" + a[i] + "' isn't a " + g.name + " mode or an online player here. <gray>Modes: " + String.join(", ", g.variants().stream().map(Variant::id).toList())); return; }
             who.add(o);
         }
+        Variant v = asked != null ? asked : g.testVariant(who.size());
         for (Player o : who) if (arcade.matches().inMatch(o)) { msg(s, P + "<red>" + o.getName() + " is already in a match. <white>/arcade leave <red>first."); return; }
         if (who.size() < g.minTestPlayers()) { msg(s, P + "<red>" + g.name + " needs at least " + g.minTestPlayers() + " players: <white>/arcade test " + g.id + " " + v.id() + " <player>"); return; }
         if (who.size() > v.maxPlayers()) { msg(s, P + "<red>" + g.name + " " + v.label() + " fits " + v.maxPlayers() + " at most."); return; }
