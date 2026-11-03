@@ -49,6 +49,7 @@ public final class SurvivalModule implements Listener {
     private final Surge surge;
     private final PlayerVaults vaults;
     private final DistrictLife districts;
+    private final Gladiators gladiators;
     private final LastRite rite;
     private final net.alloymc.core.VoidOut voidOut;
     private final SpawnUpgrade upgrade;
@@ -177,6 +178,7 @@ public final class SurvivalModule implements Listener {
         new TradingHall(plugin, world, ranks);
         districts = new DistrictLife(plugin, world);
         new SpawnLife(plugin, world, crates, this::spawn);
+        gladiators = new Gladiators(plugin, world, this::spawn);
         registerCommands();
         if (!new File(plugin.getDataFolder(), "survival-built").exists()) build(Bukkit.getConsoleSender());
         else if (!new File(plugin.getDataFolder(), "spawn-v2").exists()) rebuildSpawn(Bukkit.getConsoleSender());
@@ -205,6 +207,7 @@ public final class SurvivalModule implements Listener {
     public void shutdown() {
         boss.stop(null);
         districts.shutdown();
+        gladiators.shutdown();
         jobs.save();
         gaia.shutdown();   // first: removes every cloud's barrier blocks
         surge.shutdown();

@@ -1,0 +1,48 @@
+# BlackForgeMC Colosseum (Gladiator duels). Edit and run /colosseum reload (or restart) to apply.
+# Locations default to the built Colosseum; staff can move them in game with /colosseum setspawn|setarena|setexit|setlobby|setspectator.
+
+duel:
+  challenge-expire-seconds: 60     # how long an unanswered challenge lasts
+  countdown-seconds: 5             # fighters are frozen while it counts down
+  match-timeout-seconds: 300       # no winner by then = a draw, no rating change
+  arena-radius: 16.5               # leaving the pit by more than this forfeits
+  full-health-at-start: true       # fighters start at full health and food (their own gear, not a kit)
+  allowed-commands: [duel, colosseum, gladiator, msg, tell, r]   # everything else is blocked mid-duel
+
+rules:                             # staff-configurable arena rules
+  natural-regeneration: true
+  golden-apples: true
+  consumables: true                # food and potions you drink
+  potions: true                    # splash / lingering potions
+  ender-pearls: true
+  building: false                  # placing or breaking blocks in the arena
+  environmental-damage: true       # lava, fire, falling
+  totems: false                    # the fight ends at lethal damage, so totems are never spent; false also bans holding them
+
+rating:
+  start: 1000
+  k-factor: 32
+  k-factor-new: 48                 # the first `new-player-games` duels move rating faster
+  new-player-games: 10
+  floor: 100
+  min-games-for-rank: 3            # fewer duels than this = UNRANKED
+  upset-rating-gap: 100            # a win over someone this much higher is announced as an upset
+  # anti-boosting: the same two players meeting again and again inside the window count for less
+  pair-window-hours: 24
+  pair-full-value-duels: 2         # these many duels in the window pay in full...
+  pair-factors: [0.5, 0.25, 0.1]   # ...then these multipliers; after that 0.05
+  forfeit-keeps-rating-change: true
+
+announcements:
+  duel-start: true
+  duel-end: true
+  upset: true
+  new-champion: true
+
+display:
+  chat-prefix: true                # players who turn their rank on get a chat prefix
+  allow-toggle: true
+
+rewards:                           # console commands, {player} is replaced. Nothing here sells a PvP advantage.
+  win: ["eco give {player} 150"]
+  champion-claimed: ["eco give {player} 2500", "alloy crate give {player} netherite 1"]
