@@ -85,3 +85,15 @@ last-rite:
   timeout: ''
   allow-totems: true
   chamber-slots: 8         # rites at once per server
+
+# Robots (Survival + Skyblock copper golems). NOT read by the plugin yet - a later task wires these up.
+# fish-seconds (per robot tier I..V) and fisher-burn match the built-in values in RobotRules; the rest are for the
+# upcoming chest trips (radius in blocks, store when any item reaches store-threshold, fetch fuel at 2 minutes left).
+robots:
+  chest-radius: 10
+  clock-seconds: 60
+  store-threshold: 20
+  fuel-fetch-minutes: 2
+  walk-speed: 4.0
+  fish-seconds: [180, 150, 120, 90, 60]
+  fisher-burn: 0.25
