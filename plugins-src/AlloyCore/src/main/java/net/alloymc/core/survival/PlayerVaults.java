@@ -99,6 +99,19 @@ public final class PlayerVaults implements Listener {
             p.sendMessage(Ui.mm("<#ffb52e>You don't have a Player Vault yet. <gray>Win one from the <white>crates <gray>(low chance) or buy one in the <white>/store<gray>."));
             return;
         }
+        if (a.length >= 3 && a[0].equalsIgnoreCase("rename")) {
+            int n;
+            try { n = Integer.parseInt(a[1]); } catch (NumberFormatException e) { n = 0; }
+            if (n < 1 || n > have) { p.sendMessage(Ui.mm("<red>You have vaults <white>1-" + have + "<red>.")); return; }
+            String name = String.join(" ", java.util.Arrays.copyOfRange(a, 2, a.length)).replaceAll("[<>]", "").trim();
+            if (name.length() > 24) name = name.substring(0, 24);
+            File f = file("owned", p.getUniqueId());
+            YamlConfiguration y = YamlConfiguration.loadConfiguration(f);
+            y.set("name" + n, name.isEmpty() ? null : name);
+            try { y.save(f); } catch (Exception e) { plugin.getLogger().warning("vault save: " + e); }
+            p.sendMessage(Ui.mm("<#ffb52e>Vault #" + n + " is now <white>" + (name.isEmpty() ? "unnamed" : name) + "<#ffb52e>."));
+            return;
+        }
         if (a.length > 0) {
             int n;
             try { n = Integer.parseInt(a[0]); } catch (NumberFormatException e) { n = 0; }
@@ -111,13 +124,18 @@ public final class PlayerVaults implements Listener {
         Inventory inv = Bukkit.createInventory(h, 9, Ui.mm("<dark_gray>Your Player Vaults"));
         h.inv = inv;
         for (int i = 1; i <= have; i++)
-            inv.setItem(i - 1, Ui.item(Material.ENDER_CHEST, "<#ffb52e><bold>Vault #" + i, "<gray>54 slots, kept safe", "<yellow>» Click to open"));
+            inv.setItem(i - 1, Ui.item(Material.ENDER_CHEST, "<#ffb52e><bold>" + vaultName(p.getUniqueId(), i), "<gray>54 slots, kept safe", "<gray>Rename: <white>/pv rename " + i + " <name>", "<yellow>» Click to open"));
         p.openInventory(inv);
+    }
+
+    private String vaultName(UUID id, int n) {
+        String name = YamlConfiguration.loadConfiguration(file("owned", id)).getString("name" + n);
+        return name == null || name.isBlank() ? "Vault #" + n : name;
     }
 
     private void open(Player p, String group, int n) {
         Holder h = new Holder(p.getUniqueId(), group, n);
-        Inventory inv = Bukkit.createInventory(h, 54, Ui.mm("<dark_gray>Vault #" + n));
+        Inventory inv = Bukkit.createInventory(h, 54, Ui.mm("<dark_gray>" + vaultName(p.getUniqueId(), n)));
         h.inv = inv;
         String raw = YamlConfiguration.loadConfiguration(file(group, p.getUniqueId())).getString("v" + n);
         if (raw != null) {

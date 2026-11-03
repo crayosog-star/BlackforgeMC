@@ -91,6 +91,8 @@ public final class SkyblockModule implements Listener {
         tags = new NameTags(plugin);
         enchants = new CustomEnchants(plugin);
         scrap = new Scrap(plugin, crates, tags, enchants);
+        new OneBlockMilestones(plugin, id -> { OneBlockStat s = oneblockStat(id); return s == null ? null : s.lifetime(); },
+                p -> SkyHub.ONEBLOCK.equals(skyHub.groupOf(p.getLocation())));
         vaults = new PlayerVaults(plugin, p -> { String g = skyHub.groupOf(p.getLocation()); return g.equals(SkyHub.LOBBY) ? null : g; });
         new SilkSpawners(plugin);
         ranks = new Ranks(plugin, crates);

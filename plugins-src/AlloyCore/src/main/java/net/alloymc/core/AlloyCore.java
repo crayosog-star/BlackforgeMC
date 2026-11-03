@@ -123,8 +123,21 @@ public final class AlloyCore extends JavaPlugin implements Listener {
     @Override
     public java.util.List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
         if (!command.getName().equalsIgnoreCase("alloy") || args.length != 1) return null;
-        return java.util.stream.Stream.of("buildhub", "buildarena", "buildarcade", "spawn", "welcomeshow", "thanks")
+        return java.util.stream.Stream.of("status", "buildhub", "buildarena", "buildarcade", "spawn", "welcomeshow", "thanks")
                 .filter(s -> s.startsWith(args[0].toLowerCase())).toList();
+    }
+
+    /** /blackforge status: how this server and the network are doing, at a glance. */
+    private void status(CommandSender sender) {
+        double[] tps = Bukkit.getTPS();
+        Runtime rt = Runtime.getRuntime();
+        long usedMb = (rt.totalMemory() - rt.freeMemory()) >> 20, maxMb = rt.maxMemory() >> 20;
+        long up = java.lang.management.ManagementFactory.getRuntimeMXBean().getUptime() / 60000;
+        sender.sendMessage(Component.text("BlackForge status (" + mode + "): TPS " + String.format("%.1f", Math.min(20, tps[0])) + ", " + Bukkit.getOnlinePlayers().size()
+                + " online, memory " + usedMb + "/" + maxMb + " MB, up " + up / 60 + "h " + up % 60 + "m"));
+        StringBuilder sb = new StringBuilder("Network:");
+        for (String s : new String[]{"hub", "skyblock", "survival", "factions", "arcade"}) sb.append(' ').append(s).append(' ').append(net.count(s));
+        sender.sendMessage(Component.text(sb.toString()));
     }
 
     @Override
@@ -144,6 +157,7 @@ public final class AlloyCore extends JavaPlugin implements Listener {
                 else if (sender instanceof Player p) net.send(p, "arcade");
             }
             case "alloy" -> {
+                if (args.length == 1 && args[0].equalsIgnoreCase("status") && sender.hasPermission("alloy.staff")) { status(sender); return true; }
                 if (supporters.admin(sender, args)) return true;
                 if (survival != null && survival.admin(sender, args)) return true;
                 if (skyblock != null && skyblock.admin(sender, args)) return true;
