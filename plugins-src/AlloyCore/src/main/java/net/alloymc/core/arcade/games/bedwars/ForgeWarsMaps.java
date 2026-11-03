@@ -12,15 +12,24 @@ import net.alloymc.core.arcade.core.*;
 final class ForgeWarsMaps {
     private ForgeWarsMaps() {}
 
-    /** Blocks one map is built from. {@code arsenal} and {@code core} are the Arsenal stall and the Core plaza. */
-    record Theme(String top, String mid, String bottom, String accent, String path, String light, String arsenal, String core, String coreRim) {}
+    /**
+     * Blocks one map is built from. {@code arsenal} and {@code core} are the Arsenal stall and the Core plaza.
+     * {@code roof} is a bottom slab that trims the forge hall, the gate pillars and the back terrace, {@code hang} is what
+     * hangs under the islands as "body|tip" (a chain ending in a light, or vines), and {@code spire} caps the bastions,
+     * the gate pillars and the beacon tower.
+     */
+    record Theme(String top, String mid, String bottom, String accent, String path, String light, String arsenal, String core, String coreRim,
+                 String roof, String hang, String spire) {}
 
     static final Theme MOLTEN = new Theme("polished_blackstone_bricks", "blackstone", "basalt[axis=y]", "gilded_blackstone",
-            "polished_blackstone", "shroomlight", "crying_obsidian", "chiseled_polished_blackstone", "orange_concrete");
+            "polished_blackstone", "shroomlight", "crying_obsidian", "chiseled_polished_blackstone", "orange_concrete",
+            "polished_blackstone_brick_slab[type=bottom]", "chain[axis=y]|shroomlight", "gilded_blackstone");
     static final Theme SKYFORGE = new Theme("tuff_bricks", "polished_tuff", "tuff", "waxed_cut_copper",
-            "polished_deepslate", "copper_lantern", "waxed_oxidized_cut_copper", "chiseled_tuff_bricks", "waxed_copper_block");
+            "polished_deepslate", "copper_lantern", "waxed_oxidized_cut_copper", "chiseled_tuff_bricks", "waxed_copper_block",
+            "waxed_cut_copper_slab[type=bottom]", "copper_chain[axis=y]|copper_lantern[hanging=true]", "end_rod[facing=up]");
     static final Theme EMBER = new Theme("red_nether_bricks", "nether_bricks", "netherrack", "quartz_pillar[axis=y]",
-            "polished_basalt[axis=y]", "glowstone", "crimson_planks", "chiseled_quartz_block", "red_concrete");
+            "polished_basalt[axis=y]", "glowstone", "crimson_planks", "chiseled_quartz_block", "red_concrete",
+            "nether_brick_slab[type=bottom]", "weeping_vines_plant|weeping_vines[age=25]", "nether_brick_fence");
 
     /**
      * The Core and the Undercroft are drawn at the size they were designed at (every constant below, and the Ruin and
@@ -38,6 +47,9 @@ final class ForgeWarsMaps {
 
     static final int CORE_R = 28;        // centre island radius, as drawn (it ends up out(28) = 44 wide)
     static final int PLAZA_R = 5;        // the plaza in the middle of the Core (the launch shaft comes up through it)
+    static final int TEAM_R = 21;        // team island radius (the coast never goes past it): 1.5x the old 14
+    static final int TEAM_R_OLD = 14;
+    static final double INLAY_R = 15.75; // the floor inlay on a team island: 1.5x the old 10.5
 
     // the Undercroft: the cave under the Core
     static final int CAVE_FLOOR = -28;   // floor blocks; players stand at y = -27
@@ -52,13 +64,14 @@ final class ForgeWarsMaps {
 
     static BuiltMap build(String id, String name, String desc, int teams, int ringR, Theme t, String... variants) {
         ringR += out(CORE_R) - CORE_R;   // the Core is bigger now, so the bases move out with it and the gaps between islands stay the same
+        ringR += TEAM_R - TEAM_R_OLD;    // the same for the bigger team islands: each base keeps its gap to the Core
         MapKit k = new MapKit(id.hashCode());
         MapDef d = new MapDef(ForgeWars.ID, id);
         d.display = name; d.description = desc; d.teams = teams;
         d.minPlayers = 2; d.maxPlayers = teams * 4;
         d.variants.addAll(java.util.List.of(variants));
-        d.builderVersion = 7;   // v7: the Core and Undercroft stretched to 2.5x the ground (v6: the Golem's breach point, v5: easter eggs, v4: Black Market grotto, v3: the Undercroft); a bump makes servers rebuild the template
-        int ext = ringR + 26;
+        d.builderVersion = 8;   // v8: team islands 1.5x with shaped coasts and new bases (v7: the Core and Undercroft stretched to 2.5x the ground, v6: the Golem's breach point, v5: easter eggs, v4: Black Market grotto, v3: the Undercroft); a bump makes servers rebuild the template
+        int ext = ringR + 34;
         d.bounds = Box.of(-ext, -56, -ext, ext, 40, ext);
         d.voidY = -50;           // below the bottom of the Core's rock: the cave floor (-27) must be well above the void
         d.spectator = new Pt(0.5, 32, 0.5, 0, 60);
@@ -67,7 +80,7 @@ final class ForgeWarsMaps {
         MapDef drawnDef = new MapDef(ForgeWars.ID, id);
         core(drawn, drawnDef, teams, t, id.hashCode());
         stretchCore(drawn, k, drawnDef, d);
-        for (int i = 0; i < teams; i++) base(k, d, i, teams, ringR, t);
+        for (int i = 0; i < teams; i++) base(k, d, i, teams, ringR, t, id.hashCode());
         diamondVein(k, d, teams, ringR);
         d.waiting = d.spectator;
         return new BuiltMap(d, k.c);
@@ -172,10 +185,16 @@ final class ForgeWarsMaps {
         c.vault(d);
     }
 
+    /** Centre of the diamond island that follows team {@code i}: between it and the next team, a little further out than the ring. */
+    static int[] diamondAt(int i, int teams, int ringR) {
+        double a = Math.PI * 2 * i / teams - Math.PI / 2 + Math.PI / teams;
+        return new int[]{(int) Math.round(Math.cos(a) * (ringR + 10)), (int) Math.round(Math.sin(a) * (ringR + 10))};
+    }
+
     /** The last vein: a glowing pink tip hanging under the diamond island between the first two teams. */
     private static void diamondVein(MapKit k, MapDef d, int teams, int ringR) {
-        double b2 = -Math.PI / 2 + Math.PI / teams;
-        int dx = (int) Math.round(Math.cos(b2) * (ringR + 10)), dz = (int) Math.round(Math.sin(b2) * (ringR + 10));
+        int[] at = diamondAt(0, teams, ringR);
+        int dx = at[0], dz = at[1];
         int low = 0;
         while (low > -40 && !air(k, dx, low - 1, dz) && k.get(dx, low - 1, dz) != null) low--;
         k.set(dx, low - 1, dz, VEIN);
@@ -861,7 +880,7 @@ final class ForgeWarsMaps {
 
     // ------------------------------------------------------------------ one team
 
-    private static void base(MapKit k, MapDef d, int i, int teams, int ringR, Theme t) {
+    private static void base(MapKit k, MapDef d, int i, int teams, int ringR, Theme t, long seed) {
         double a = Math.PI * 2 * i / teams - Math.PI / 2;
         double ca = Math.cos(a), sa = Math.sin(a);
         int cx = (int) Math.round(ca * ringR), cz = (int) Math.round(sa * ringR);
@@ -873,13 +892,11 @@ final class ForgeWarsMaps {
         Base b = new Base(k, cx, cz, ox, oz, sx, sz);
         String facing = ox > 0 ? "east" : ox < 0 ? "west" : oz > 0 ? "south" : "north";
 
-        // island + round platform with a team-coloured rim
-        k.island(cx, 0, cz, 14, t.top(), t.mid(), t.bottom());
-        for (int u = -10; u <= 10; u++) for (int v = -10; v <= 10; v++) {
-            double r = Math.sqrt(u * u + v * v);
-            if (r > 10.5) continue;
-            b.set(u, 0, v, r > 9.5 ? col.block("concrete") : Math.floorMod(u - v, 5) == 0 ? t.accent() : t.path());
-        }
+        // island: shaped coast with a flat dock edge facing the Core, a ragged underside with hanging dressing, and the floor inlay
+        shapedIsland(k, cx, 0, cz, TEAM_R, t, seed, ox, oz, true, true);
+        hangings(k, cx, cz, 0, TEAM_R, t, ox, oz, 10);
+        inlay(b, col, t);
+        if (t == MOLTEN) slagRuns(b);
 
         // bed dais: accent floor round the bed with a clear 2-block margin (room for a full defence), braziers at v=±4
         for (int u = 1; u <= 6; u++) for (int v = -2; v <= 2; v++) b.set(u, 0, v, t.accent());
@@ -887,6 +904,11 @@ final class ForgeWarsMaps {
         k.late(cx + ox * 3, 1, cz + oz * 3, col.dye + "_bed[part=foot,facing=" + facing + "]");
         k.late(cx + ox * 4, 1, cz + oz * 4, col.dye + "_bed[part=head,facing=" + facing + "]");
         d.point("team." + i + ".bed", new Pt(cx + ox * 3 + 0.5, 1, cz + oz * 3 + 0.5, yawFor(facing), 0));
+        // standards: a team banner on a pillar at each back corner of the dais, outside the 2-block margin
+        for (int v : new int[]{-4, 4}) {
+            for (int y = 1; y <= 3; y++) b.set(6, y, v, t.accent());
+            b.late(6, 4, v, col.dye + "_banner[rotation=" + bannerRotation(facing) + "]");
+        }
 
         // the forge: iron/gold pad at u=8 under a roofed arch, blast furnaces either side
         for (int v = -1; v <= 1; v++) b.set(8, 0, v, "iron_block");
@@ -895,6 +917,7 @@ final class ForgeWarsMaps {
         for (int v = -3; v <= 3; v++) b.set(8, 5, v, col.block("concrete"));
         for (int v = -2; v <= 2; v += 4) b.set(9, 1, v, "blast_furnace[facing=" + opposite(facing) + "]");
         d.point("team." + i + ".generator", Pt.of(cx + ox * 8 + 0.5, 1, cz + oz * 8 + 0.5));
+        forgeHall(b, t, col);
 
         // spawn in front of the bed, facing the Core
         d.point("team." + i + ".spawn", Pt.of(cx - ox * 4 + 0.5, 1, cz - oz * 4 + 0.5).facing(0.5, 0.5));
@@ -903,28 +926,175 @@ final class ForgeWarsMaps {
         stall(b, d, i, cx, cz, ox, oz, sx, sz, -1, 6, "shop", col.block("wool"), t.accent(), t.light());
         stall(b, d, i, cx, cz, ox, oz, sx, sz, -1, -6, "upgrades", col.block("wool"), t.accent(), t.light());
         stall(b, d, i, cx, cz, ox, oz, sx, sz, 5, 7, "arsenal", t.arsenal(), t.arsenal(), "soul_lantern[hanging=false]");
+        // crates behind each stall (two blocks from the villager, so the no-build ring round it stays clear)
+        for (int[] s : new int[][]{{-1, 6}, {-1, -6}, {5, 7}})
+            for (int du : new int[]{-1, 1}) b.set(s[0] + du, 1, s[1] + 2 * Integer.signum(s[1]), "barrel[facing=up]");
 
-        // team beacon: a glass column on the far side from the Arsenal, readable from the Core
-        for (int y = 1; y <= 6; y++) b.set(5, y, -7, y == 6 ? t.light() : col.block("stained_glass"));
+        // team beacon: a glass tower on the far side from the Arsenal, readable from the Core
+        for (int du = -1; du <= 1; du++) for (int dv = -1; dv <= 1; dv++) b.set(5 + du, 0, -7 + dv, t.accent());
+        for (int y = 1; y <= 9; y++) b.set(5, y, -7, col.block("stained_glass"));
+        b.set(5, 10, -7, t.light());
+        b.set(5, 11, -7, t.spire());
 
-        // a stepping islet halfway to the Core, a little to one side
-        double mid = (out(CORE_R) + ringR - 14) / 2.0;   // halfway between the Core's edge and this island's
+        gateCourt(b, t);
+        bastion(b, t, -5, -14);
+        bastion(b, t, -5, 14);
+        backTerrace(b, t);
+
+        // a stepping islet halfway to the Core, a little to one side, with a banner post and a lantern post
+        double mid = (out(CORE_R) + ringR - TEAM_R) / 2.0;   // halfway between the Core's edge and this island's
         int hx = (int) Math.round(ca * mid - sa * 4), hz = (int) Math.round(sa * mid + ca * 4);
-        k.island(hx, -1, hz, 3.2, t.top(), t.mid(), t.bottom());
+        shapedIsland(k, hx, -1, hz, 5, t, seed + 100 + i, 1, 0, false, true);
         k.set(hx, 0, hz, t.light());
+        k.set(hx + 2, 0, hz, t.accent());
+        k.set(hx + 2, 1, hz, t.accent());
+        k.late(hx + 2, 2, hz, col.dye + "_banner[rotation=0]");
+        k.set(hx - 2, 0, hz, t.accent());
+        k.set(hx - 2, 1, hz, "lantern[hanging=false]");
 
         // diamond island between this team and the next, further out, with a crystal shrine
-        double b2 = a + Math.PI / teams;
-        int dx = (int) Math.round(Math.cos(b2) * (ringR + 10)), dz = (int) Math.round(Math.sin(b2) * (ringR + 10));
-        k.island(dx, 0, dz, 6.5, t.top(), t.mid(), t.bottom());
-        k.disc(dx, 0, dz, 3.5, t.path());
+        int[] at = diamondAt(i, teams, ringR);
+        int dx = at[0], dz = at[1];
+        shapedIsland(k, dx, 0, dz, 8, t, seed + 200 + i, 1, 0, false, false);   // no fangs: the vein hangs under the middle
+        hangings(k, dx, dz, 0, 8, t, 1, 0, 6);
+        k.disc(dx, 0, dz, 4.5, t.path());
+        k.ring(dx, 0, dz, 1.5, 2.5, t.accent());
+        k.ring(dx, 1, dz, 1.5, 2.5, t.roof());   // a low step up round the diamond block
         k.set(dx, 0, dz, "diamond_block");
         for (int[] c : new int[][]{{-3, 0}, {3, 0}, {0, -3}, {0, 3}}) {
             k.set(dx + c[0], 1, dz + c[1], t.accent());
-            k.set(dx + c[0], 2, dz + c[1], "amethyst_block");
-            k.set(dx + c[0], 3, dz + c[1], "amethyst_cluster[facing=up]");
+            for (int y = 2; y <= 4; y++) k.set(dx + c[0], y, dz + c[1], "amethyst_block");
+            k.set(dx + c[0], 5, dz + c[1], "amethyst_cluster[facing=up]");
+        }
+        for (int[] c : new int[][]{{-4, -4}, {4, -4}, {-4, 4}, {4, 4}}) {   // ruined stubs: cover from every side
+            k.set(dx + c[0], 1, dz + c[1], t.top());
+            if (c[0] == c[1]) k.set(dx + c[0], 2, dz + c[1], t.top());
         }
         d.add("diamond_generators", Pt.of(dx + 0.5, 1, dz + 0.5));
+    }
+
+    // ------------------------------------------------------------------ the island kit
+
+    /**
+     * An island with a shaped coast and a ragged underside. It is worked out in base-local coordinates (u outward along
+     * (ox, oz), v sideways) from noise alone, so every team's island is the same shape turned to face its own way. The
+     * coast wobbles between 90% and 100% of {@code r} (never past it). {@code dock} cuts a flat 9-wide landing into the
+     * Core-facing tip; {@code fangs} hangs rock spikes under the rim (not on diamond islands: the vein hangs under the
+     * middle of one, so their underside gets steadily shallower away from the centre).
+     */
+    private static void shapedIsland(MapKit k, int cx, int y, int cz, double r, Theme t, long seed, int ox, int oz, boolean dock, boolean fangs) {
+        int ri = (int) Math.ceil(r) + 1;
+        int sx = -oz, sz = ox;
+        for (int x = -ri; x <= ri; x++) for (int z = -ri; z <= ri; z++) {
+            double u = x * ox + z * oz, v = x * sx + z * sz;
+            double d = Math.sqrt(u * u + v * v), th = Math.atan2(v, u);
+            double edge = r * (1 - 0.10 * MapKit.noise(Math.cos(th) * 1.6 + 40, Math.sin(th) * 1.6 + 40, seed));
+            if (d > edge) continue;
+            if (dock && u < -(r - 2) && Math.abs(v) <= 4.5) continue;
+            k.set(cx + x, y, cz + z, t.top());
+            double depth = (edge - d) * 1.15 + 1;
+            if (fangs && d > r * 0.55) depth += (int) (MapKit.noise(u * 0.8, v * 0.8, seed + 5) * 3) + (MapKit.noise(u * 1.7, v * 1.7, seed + 9) > 0.82 ? 3 : 0);
+            for (int dy = 1; dy <= Math.round(depth); dy++) k.set(cx + x, y - dy, cz + z, dy <= 2 ? t.mid() : t.bottom());
+        }
+    }
+
+    /** Chains ending in a light, or vines, hanging under the rim of an island at fixed angles (so every team gets the same). */
+    private static void hangings(MapKit k, int cx, int cz, int y, double r, Theme t, int ox, int oz, int count) {
+        String[] h = t.hang().split("\\|");
+        int sx = -oz, sz = ox;
+        for (int n = 0; n < count; n++) {
+            double ang = Math.PI * 2 * n / count + 0.3, u = Math.cos(ang) * r * 0.78, v = Math.sin(ang) * r * 0.78;
+            int x = cx + (int) Math.round(ox * u + sx * v), z = cz + (int) Math.round(oz * u + sz * v);
+            int low = y;
+            while (low > -40 && k.isSet(x, low - 1, z)) low--;
+            int len = 3 + n % 3;
+            if (low == y || low - len - 1 < -45) continue;
+            for (int j = 1; j <= len; j++) k.set(x, low - j, z, h[0]);
+            k.set(x, low - len - 1, z, h[1]);
+        }
+    }
+
+    /** The team island's floor: a team-colour rim, a path ring, and an eight-point accent star (long points at 0, 45, 90... degrees, one aimed at the Core). */
+    private static void inlay(Base b, TeamColor col, Theme t) {
+        int n = (int) Math.ceil(INLAY_R);
+        for (int u = -n; u <= n; u++) for (int v = -n; v <= n; v++) {
+            double r = Math.sqrt(u * u + v * v);
+            if (r > INLAY_R) continue;
+            double phi = Math.atan2(v, -u);   // 0 = straight at the Core
+            double arm = 7.5 + 4.5 * Math.pow(Math.abs(Math.cos(4 * phi)), 8);
+            b.set(u, 0, v, r > INLAY_R - 1 ? col.block("concrete") : r > INLAY_R - 2.3 ? t.path() : r <= arm ? t.accent() : t.path());
+        }
+    }
+
+    /** Molten Crown's signature: two channels of poured metal (orange glass over shroomlight, flush with the floor) from the forge to the dock. */
+    private static void slagRuns(Base b) {
+        for (int v : new int[]{-3, 3}) for (int u = -18; u <= 6; u++) {
+            b.set(u, -1, v, "shroomlight");
+            b.set(u, 0, v, "orange_stained_glass");
+        }
+    }
+
+    /** The forge hall round the generator pad: side walls with window gaps, a back wall, a roof with trim, a stove and a chimney. The front (toward the Core) is open. */
+    private static void forgeHall(Base b, Theme t, TeamColor col) {
+        for (int u = 7; u <= 13; u++) for (int y = 1; y <= 4; y++) {
+            boolean window = (y == 2 || y == 3) && u % 2 == 0 && u > 7 && u < 13;
+            if (window) continue;
+            for (int v : new int[]{-4, 4}) b.set(u, y, v, y == 4 ? t.accent() : t.top());
+        }
+        for (int v = -3; v <= 3; v++) for (int y = 1; y <= 4; y++) b.set(13, y, v, y == 4 ? t.accent() : t.top());
+        for (int u = 7; u <= 13; u++) for (int v = -4; v <= 4; v++) b.set(u, 5, v, col.block("concrete"));
+        for (int u = 7; u <= 13; u++) for (int v = -4; v <= 4; v++) if (u == 7 || u == 13 || v == -4 || v == 4) b.set(u, 6, v, t.roof());
+        for (int v = -1; v <= 1; v++) for (int y = 1; y <= 4; y++) b.set(12, y, v, t.mid());   // the stove
+        b.set(12, 2, 0, t.light());
+        for (int y = 5; y <= 11; y++) b.set(13, y, 0, t.top());                                // the chimney
+        b.set(13, 12, 0, t.light());
+        b.set(13, 13, 0, "campfire[lit=true,signal_fire=false]");
+    }
+
+    /** The landing at the Core-facing tip: two 7-high pillars with a clear 9-wide, 6-high opening between them (never closed), and a low cover wall each side for raiders. */
+    private static void gateCourt(Base b, Theme t) {
+        for (int sv : new int[]{-1, 1}) {
+            for (int u = -16; u <= -15; u++) for (int v = 5; v <= 6; v++) {
+                for (int y = 1; y <= 7; y++) b.set(u, y, sv * v, y == 4 || y == 7 ? t.accent() : t.top());
+                b.set(u, 8, sv * v, t.roof());
+            }
+            b.set(-16, 9, sv * 6, t.spire());
+            for (int v = 7; v <= 9; v++) for (int y = 1; y <= 2; y++) b.set(-11, y, sv * v, t.top());
+            for (int y = 1; y <= 2; y++) b.set(-18, y, sv * 5, t.accent());   // lantern posts at the dock
+            b.set(-18, 3, sv * 5, t.light());
+        }
+    }
+
+    /**
+     * A round tower (a 5-wide octagon) 8 high: a door in the side facing the island's middle line, a ladder inside, a deck
+     * at the top and a crenellated parapet. Placed in mirrored pairs, so both flanks get the same high ground.
+     */
+    private static void bastion(Base b, Theme t, int u0, int v0) {
+        int sg = Integer.signum(v0);
+        for (int du = -2; du <= 2; du++) for (int dv = -2; dv <= 2; dv++) {
+            double r = Math.sqrt(du * du + dv * dv);
+            if (r > 2.5) continue;
+            int u = u0 + du, v = v0 + dv;
+            if (r <= 1.5) {
+                if (!(du == 0 && dv == sg)) b.set(u, 8, v, t.top());   // the deck, with a hole over the ladder
+                continue;
+            }
+            boolean door = du == 0 && dv == -2 * sg;
+            for (int y = door ? 3 : 1; y <= 8; y++) b.set(u, y, v, y == 4 ? t.accent() : y == 6 && (du == 0 || dv == 0) ? t.light() : t.top());
+            if ((du + dv) % 2 == 0) b.set(u, 9, v, t.top());                      // merlons: every other cell of the parapet
+            if (du == 0 || dv == 0) b.set(u, 10, v, t.spire());
+        }
+        for (int y = 1; y <= 9; y++) b.late(u0, y, v0 + sg, "ladder[facing=" + b.face(0, -sg) + "]");
+    }
+
+    /** The quiet side: two steps (a slab, then a block) rising toward the back rim, with a few crates and a lantern. */
+    private static void backTerrace(Base b, Theme t) {
+        for (int v = -5; v <= 5; v++) {
+            for (int u = 14; u <= 15; u++) b.set(u, 1, v, t.roof());
+            for (int u = 16; u <= 17; u++) b.set(u, 1, v, t.top());
+        }
+        for (int v : new int[]{-4, 4}) b.set(17, 2, v, "barrel[facing=up]");
+        b.set(16, 2, 0, "lantern[hanging=false]");
     }
 
     /** A villager stall at (u, v): the villager stands on a pad, posts at the corners, an awning two above head height. */
@@ -943,6 +1113,15 @@ final class ForgeWarsMaps {
     /** Base-local coordinates: u = outward from the centre, v = sideways. */
     private record Base(MapKit k, int cx, int cz, int ox, int oz, int sx, int sz) {
         void set(int u, int y, int v, String block) { k.set(cx + ox * u + sx * v, y, cz + oz * u + sz * v, block); }
+        /** For blocks that need something to hang on to, placed after everything else. */
+        void late(int u, int y, int v, String block) { k.late(cx + ox * u + sx * v, y, cz + oz * u + sz * v, block); }
+        /** The compass facing of a step of (du, dv) in base-local terms. */
+        String face(int du, int dv) { int x = ox * du + sx * dv, z = oz * du + sz * dv; return x > 0 ? "east" : x < 0 ? "west" : z > 0 ? "south" : "north"; }
+    }
+
+    /** Banner rotation that faces the Core, for a base whose outward direction is {@code facing}. */
+    private static int bannerRotation(String facing) {
+        return switch (facing) { case "east" -> 4; case "west" -> 12; case "south" -> 8; default -> 0; };
     }
 
     private static String opposite(String facing) {
