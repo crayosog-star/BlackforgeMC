@@ -45,6 +45,12 @@ public final class PreviewMain {
         System.out.println("last rite chamber blocks: " + rc.size());
         pov(rc, new File(out, "rite_chamber_caster_view.png"), 3.5, 102.62, 5.5, -90, 4, 1280, 720);
         pov(rc, new File(out, "rite_chamber_corner.png"), 0.5, 106.5, 0.5, -60, 28, 1280, 720);
+        Canvas ob = net.alloymc.core.survival.OneBlockSpawnBuilder.build();
+        System.out.println("oneblock spawn blocks: " + ob.size());
+        render(ob, new File(out, "oneblock_spawn.png"), 0, 8);
+        pov(ob, new File(out, "oneblock_spawn_view.png"), 0.5, 101.62, 14.5, 180, -4, 1280, 720);
+        pov(ob, new File(out, "oneblock_crates_view.png"), -9.5, 101.62, 0.5, 90, -4, 1280, 720);
+        pov(ob, new File(out, "oneblock_aerial.png"), 0.5, 150, 70.5, 180, 30, 1600, 900);
         Canvas sv = net.alloymc.core.survival.SpawnBuilder.spawn();
         System.out.println("survival spawn blocks: " + sv.size());
         render(sv, new File(out, "survival_spawn.png"), 0, 9);

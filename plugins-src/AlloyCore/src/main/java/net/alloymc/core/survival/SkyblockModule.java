@@ -42,6 +42,7 @@ public final class SkyblockModule implements Listener {
     private final NameTags tags;
     private final CustomEnchants enchants;
     private final Scrap scrap;
+    private final PlayerVaults vaults;
     private final Ranks ranks;
     private final HallOfFame hall;
     private final DailyRewards daily;
@@ -90,6 +91,7 @@ public final class SkyblockModule implements Listener {
         tags = new NameTags(plugin);
         enchants = new CustomEnchants(plugin);
         scrap = new Scrap(plugin, crates, tags, enchants);
+        vaults = new PlayerVaults(plugin, p -> { String g = skyHub.groupOf(p.getLocation()); return g.equals(SkyHub.LOBBY) ? null : g; });
         new SilkSpawners(plugin);
         ranks = new Ranks(plugin, crates);
         ranks.setFlyRule(this::onOwnIsland);
@@ -341,6 +343,7 @@ public final class SkyblockModule implements Listener {
 
     /** Console/admin: /alloy crate give, voucher give, ce give, tag give, scrap give, buildskyblock. */
     public boolean admin(CommandSender s, String[] a) {
+        if (vaults.admin(s, a)) return true;   // /alloy vault give <player> [amount]
         if (a.length >= 1 && a[0].equalsIgnoreCase("buildskyblock")) { build(s); return true; }
         if (a.length >= 1 && a[0].equalsIgnoreCase("voidout")) { voidOut.start(s); return true; }
         if (a.length >= 2 && a[0].equalsIgnoreCase("keyall")) {

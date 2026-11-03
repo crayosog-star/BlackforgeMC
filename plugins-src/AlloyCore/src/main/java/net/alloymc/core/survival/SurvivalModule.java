@@ -47,6 +47,7 @@ public final class SurvivalModule implements Listener {
     private final GaiaPotion gaia;
     private final DarknessPotion darkness;
     private final Surge surge;
+    private final PlayerVaults vaults;
     private final LastRite rite;
     private final net.alloymc.core.VoidOut voidOut;
     private final SpawnUpgrade upgrade;
@@ -98,6 +99,7 @@ public final class SurvivalModule implements Listener {
         // its floor is temporary, only fills air, and always cleans itself up)
         gaia = new GaiaPotion(plugin, (p, l) -> (l.getWorld() != world || !inSpawn(l.getX(), l.getY(), l.getZ())) && claims.canUse(p, l));
         // Potion of Darkness: darkens players only where PvP is on (KOTH + Scrapyard); confuses mobs anywhere
+        vaults = new PlayerVaults(plugin, p -> "survival");
         surge = new Surge(plugin, l -> l.getWorld() != world || !inSpawn(l.getX(), l.getY(), l.getZ()));   // anywhere but spawn
         darkness = new DarknessPotion(plugin, l -> l.getWorld() == world && (inArena(l.getX(), l.getY(), l.getZ()) || inPvp(l.getX(), l.getY(), l.getZ())));
         // Last Rite: read anywhere but spawn; who it can catch follows the PvP rules (KOTH + Scrapyard). A draw leaves both on 2 hearts here.
@@ -355,6 +357,7 @@ public final class SurvivalModule implements Listener {
 
     /** Console/admin: /alloy crate give <player> <crate> [amount], /alloy koth start|stop, /alloy buildsurvival */
     public boolean admin(CommandSender s, String[] a) {
+        if (vaults.admin(s, a)) return true;   // /alloy vault give <player> [amount]: crates and the store
         if (rite.admin(s, a)) return true;   // /alloy rite give <player> (for crates)
         if (upgrade.command(s, a)) return true;   // /alloy spawnupgrade apply|undo|status 1: the volcanic kingdom (additive only)
         if (a.length >= 1 && a[0].equalsIgnoreCase("voidout")) {   // clear the land around spawn

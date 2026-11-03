@@ -34,9 +34,7 @@ public final class SkyHub implements Listener {
     /** Gate openings: x from gx-1 to gx+1, y from Y+1 to Y+4, z = gz. */
     private static final int HUB_GATE_Z = -9, OB_GATE_Z = -18, LEFT_X = -7, RIGHT_X = 7;
     /** The OneBlock spawn's own crates, on the west side of its island. */
-    static final List<SurvivalLayout.CrateSpot> OB_CRATES = List.of(
-            new SurvivalLayout.CrateSpot("iron", -16, -6), new SurvivalLayout.CrateSpot("vote", -16, -2),
-            new SurvivalLayout.CrateSpot("gold", -16, 2), new SurvivalLayout.CrateSpot("netherite", -16, 6));
+    static final List<SurvivalLayout.CrateSpot> OB_CRATES = OneBlockSpawnBuilder.CRATES;
 
     private final AlloyCore plugin;
     private final World mainWorld, hub, obSpawn;
@@ -124,9 +122,81 @@ public final class SkyHub implements Listener {
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!p.isOnline()) return;
             p.teleport(hubSpawn());
-            p.sendMessage(Ui.mm("<#4fd1c5>Welcome to the <bold>Skyblock Hub</bold>! <gray>Walk through a portal to pick your game: "
+            p.sendMessage(Ui.mm("<#4fd1c5>Welcome to the <bold>Skyblock Hub</bold>! <gray>Use your <gold>compass <gray>or walk through a portal to pick your game: "
                     + "<#4fd1c5>Skyblock <gray>or <#b06bff>OneBlock<gray>. Each keeps its own items."));
+            giveCompass(p);
         }, 5L);
+    }
+
+    // ------------------------------------------------------------------ the game-picker compass
+
+    private static final int COMPASS_SLOT = 4, MENU_SKYBLOCK = 11, MENU_ONEBLOCK = 15;
+
+    private static final class PickerHolder implements org.bukkit.inventory.InventoryHolder {
+        org.bukkit.inventory.Inventory inv;
+        public org.bukkit.inventory.Inventory getInventory() { return inv; }
+    }
+
+    private boolean isCompass(org.bukkit.inventory.ItemStack it) {
+        return it != null && it.getType() == Material.COMPASS && it.hasItemMeta() && it.getItemMeta().hasDisplayName();
+    }
+
+    /** The hub keeps its own inventory (InventoryGroups), so the compass lives in the middle of the hotbar. */
+    private void giveCompass(Player p) {
+        if (p.getWorld() != hub) return;
+        for (var it : p.getInventory().getContents()) if (isCompass(it)) return;
+        p.getInventory().setItem(COMPASS_SLOT, Ui.item(Material.COMPASS, "<gold><bold>Game Picker</bold> <gray>(right-click)",
+                "<gray>Choose <#4fd1c5>Skyblock <gray>or <#b06bff>OneBlock"));
+        p.getInventory().setHeldItemSlot(COMPASS_SLOT);
+    }
+
+    @EventHandler
+    public void onWorldChange(org.bukkit.event.player.PlayerChangedWorldEvent e) {
+        Player p = e.getPlayer();
+        Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) giveCompass(p); }, 10L);   // after InventoryGroups swaps the inventory
+    }
+
+    @EventHandler
+    public void onCompassUse(org.bukkit.event.player.PlayerInteractEvent e) {
+        if (e.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_AIR && e.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK) return;
+        if (e.getHand() != org.bukkit.inventory.EquipmentSlot.HAND || e.getPlayer().getWorld() != hub || !isCompass(e.getItem())) return;
+        e.setCancelled(true);
+        PickerHolder h = new PickerHolder();
+        var inv = Bukkit.createInventory(h, 27, Ui.mm("<dark_gray>Pick your game"));
+        h.inv = inv;
+        var pane = Ui.item(Material.BLACK_STAINED_GLASS_PANE, " ");
+        for (int i = 0; i < 27; i++) inv.setItem(i, pane);
+        inv.setItem(MENU_SKYBLOCK, Ui.item(Material.GRASS_BLOCK, "<#4fd1c5><bold>Skyblock", "<gray>The classic islands.", "<gray>Spawn: Sky Harbor", "", "<yellow>» Click to play"));
+        inv.setItem(MENU_ONEBLOCK, Ui.item(Material.CRYING_OBSIDIAN, "<#b06bff><bold>OneBlock", "<gray>One block, endless phases.", "<gray>Your own OneBlock island", "", "<yellow>» Click to play"));
+        e.getPlayer().openInventory(inv);
+        e.getPlayer().playSound(e.getPlayer().getLocation(), Sound.BLOCK_ENDER_CHEST_OPEN, 0.5f, 1.4f);
+    }
+
+    @EventHandler
+    public void onPickerClick(org.bukkit.event.inventory.InventoryClickEvent e) {
+        if (e.getInventory().getHolder() instanceof PickerHolder) {
+            e.setCancelled(true);
+            if (!(e.getWhoClicked() instanceof Player p)) return;
+            boolean sky = e.getRawSlot() == MENU_SKYBLOCK, ob = e.getRawSlot() == MENU_ONEBLOCK;
+            if (!sky && !ob) return;
+            p.closeInventory();
+            p.playSound(p.getLocation(), Sound.BLOCK_PORTAL_TRAVEL, 0.3f, 1.6f);
+            if (sky) { p.teleport(harborSpawn); p.sendMessage(Ui.mm("<#4fd1c5>Welcome to <bold>Sky Harbor</bold>! <gray>Your island: <white>/is <gray>or the Island Gate")); arrived(p, SKYBLOCK); }
+            else { p.teleport(oneblockSpawn()); p.sendMessage(Ui.mm("<#b06bff>Welcome to <bold>OneBlock</bold>! <gray>Your island: <white>/ob <gray>or the portal ahead")); arrived(p, ONEBLOCK); }
+        } else if (e.getWhoClicked().getWorld() == hub && (isCompass(e.getCurrentItem()) || isCompass(e.getCursor())
+                || (e.getClick() == org.bukkit.event.inventory.ClickType.NUMBER_KEY && e.getHotbarButton() == COMPASS_SLOT))) {
+            e.setCancelled(true);   // keep the picker in its slot
+        }
+    }
+
+    @EventHandler
+    public void onCompassDrop(org.bukkit.event.player.PlayerDropItemEvent e) {
+        if (e.getPlayer().getWorld() == hub && isCompass(e.getItemDrop().getItemStack())) e.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onCompassSwap(org.bukkit.event.player.PlayerSwapHandItemsEvent e) {
+        if (e.getPlayer().getWorld() == hub) e.setCancelled(true);
     }
 
     @EventHandler
@@ -189,8 +259,18 @@ public final class SkyHub implements Listener {
                 }
             Paster.paste(plugin, hub, SkyHubBuilder.build(), 6000, () -> mark("skyhub-v4-built"));   // v3: a step ledge in the pool; v4: real chains (26.x: iron_chain)
         }
-        if (!new File(plugin.getDataFolder(), "oneblock-spawn-built").exists())
-            Paster.paste(plugin, obSpawn, oneblockIsland(), 4000, () -> mark("oneblock-spawn-built"));
+        if (!new File(plugin.getDataFolder(), "oneblock-spawn-v2-built").exists()) {
+            // v2: the dark gothic keep. The old grass island is cleared one slice per tick (it is bigger than a single tick can take), then the new one pasted
+            int[] x = {-36};
+            Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+                if (x[0] > 36) { task.cancel(); Paster.paste(plugin, obSpawn, oneblockIsland(), 4000, () -> mark("oneblock-spawn-v2-built")); return; }
+                for (int z = -36; z <= 36; z++) for (int y = Y - 34; y <= Y + 30; y++) {
+                    var b = obSpawn.getBlockAt(x[0], y, z);
+                    if (!b.getType().isAir()) b.setType(Material.AIR, false);
+                }
+                x[0]++;
+            }, 40L, 1L);
+        }
     }
 
     private void mark(String f) {
@@ -245,25 +325,7 @@ public final class SkyHub implements Listener {
         return c;
     }
 
-    static Canvas oneblockIsland() {
-        Canvas c = new Canvas();
-        island(c, 24, "grass_block", "moss_block", 11);
-        path(c, 0, 16, 0, -5);
-        path(c, 0, -5, LEFT_X, OB_GATE_Z + 1);
-        path(c, 0, -5, RIGHT_X, OB_GATE_Z + 1);
-        path(c, 0, 4, -13, 0);
-        gate(c, LEFT_X, OB_GATE_Z, "purpur_block", "purpur_pillar");
-        gate(c, RIGHT_X, OB_GATE_Z, "prismarine_bricks", "dark_prismarine");
-        // the giant one block
-        for (int x = -1; x <= 1; x++) for (int y = 1; y <= 3; y++) for (int z = -1; z <= 1; z++) c.set(x, Y + y, z, "minecraft:" + (y == 3 ? "grass_block" : "dirt"));
-        // crates: vaults on a stone dais
-        for (SurvivalLayout.CrateSpot s : OB_CRATES) {
-            c.set(s.x(), Y + 1, s.z(), "minecraft:vault[facing=east]");
-            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) c.set(s.x() + dx, Y, s.z() + dz, "minecraft:polished_deepslate");
-        }
-        for (int[] l : new int[][]{{-5, 17}, {5, 17}, {-20, 0}, {20, 0}}) { c.set(l[0], Y + 1, l[1], "minecraft:birch_fence"); c.setLate(l[0], Y + 2, l[1], "minecraft:lantern"); }
-        return c;
-    }
+    static Canvas oneblockIsland() { return OneBlockSpawnBuilder.build(); }
 
     private void holograms() {
         holos.forEach(TextDisplay::remove);

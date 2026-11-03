@@ -26,6 +26,7 @@ gold:
   color: "<#ffb52e>"
   key: TRIPWIRE_HOOK
   rewards:
+    - {name: "<#ffb52e><bold>Player Vault</bold> <gray>(/pv)", item: ENDER_CHEST, weight: 1.5, give-item: false, commands: ["alloy vault give {player} 1"], announce: true}
     - {name: "<white>8 Diamonds", item: DIAMOND, amount: 8, weight: 18}
     - {name: "<white>16 Golden Carrots", item: GOLDEN_CARROT, amount: 16, weight: 16}
     - {name: "<green>$1,000", item: SUNFLOWER, weight: 16, give-item: false, commands: ["eco give {player} 1000"]}
@@ -52,6 +53,7 @@ netherite:
   color: "<#ff4422>"
   key: TRIPWIRE_HOOK
   rewards:
+    - {name: "<#ffb52e><bold>Player Vault</bold> <gray>(/pv)", item: ENDER_CHEST, weight: 3, give-item: false, commands: ["alloy vault give {player} 1"], announce: true}
     - {name: "<white>2 Netherite Ingots", item: NETHERITE_INGOT, amount: 2, weight: 18}
     - {name: "<green>$5,000", item: SUNFLOWER, weight: 18, give-item: false, commands: ["eco give {player} 5000"]}
     - {name: "<white>Enchanted Golden Apple", item: ENCHANTED_GOLDEN_APPLE, weight: 14}
