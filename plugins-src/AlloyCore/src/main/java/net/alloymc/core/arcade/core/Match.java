@@ -62,6 +62,9 @@ public abstract class Match {
     boolean test;
     public boolean isTest() { return test; }
 
+    /** Staff test commands inside a test match (/arcade undercroft, /arcade golem): a game that supports one overrides this and returns what to tell the player. */
+    public String testAction(Player p, String action) { return null; }
+
     protected Match(MatchContext c) {
         this.id = c.id(); this.game = c.game(); this.variant = c.variant(); this.map = c.map(); this.slot = c.slot();
         this.arcade = c.arcade(); this.world = c.world(); this.ox = c.ox(); this.oy = c.oy(); this.oz = c.oz(); this.settings = c.settings();

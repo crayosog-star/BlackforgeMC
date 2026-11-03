@@ -354,6 +354,7 @@ final class BedWarsMatch extends Match {
         if (e.getAction() == Action.RIGHT_CLICK_BLOCK && e.getClickedBlock() != null && e.getClickedBlock().getBlockData() instanceof Bed) {
             e.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY);
             if (it == null || !it.getType().isBlock()) e.setCancelled(true);
+            else if (plainSolid(it.getType()) && e.getHand() != null) { e.setCancelled(true); placeOnBed(p, e); }   // do it ourselves: the vanilla placement on a bed wasn't happening
         }
         if (it != null && it.getType() == Material.FIRE_CHARGE && (e.getAction() == Action.RIGHT_CLICK_AIR || e.getAction() == Action.RIGHT_CLICK_BLOCK)) {
             e.setCancelled(true);
@@ -363,6 +364,32 @@ final class BedWarsMatch extends Match {
             f.setIsIncendiary(false);
             f.setVelocity(p.getLocation().getDirection().multiply(1.4));
         }
+    }
+
+    /** A plain full block (wool, wood, stone, glass...) that we can place by hand without losing behaviour: not TNT, a bed, a container or anything you can use. */
+    private static boolean plainSolid(Material m) {
+        return m.isBlock() && m.isSolid() && !m.isInteractable() && m != Material.TNT && !Tag.BEDS.isTagged(m);
+    }
+
+    /** Right-click on a bed with a block: put the block on the face you clicked, with the same rules as any other placement. */
+    private void placeOnBed(Player p, PlayerInteractEvent e) {
+        EquipmentSlot hand = e.getHand();
+        ItemStack held = p.getInventory().getItem(hand);
+        if (held == null || !plainSolid(held.getType())) return;
+        Block target = e.getClickedBlock().getRelative(e.getBlockFace());
+        if (!target.isReplaceable() || !inBounds(target.getLocation().add(0.5, 0.5, 0.5)) || target.getY() >= oy + map.bounds.y2() || !allowPlace(p, target)) return;
+        org.bukkit.util.BoundingBox box = org.bukkit.util.BoundingBox.of(target);
+        for (Entity en : world.getNearbyEntities(box))
+            if (en instanceof LivingEntity && !(en instanceof Player o && o.getGameMode() == GameMode.SPECTATOR)) return;   // someone is standing there
+        target.setType(held.getType());
+        placed.add(key(target));
+        if (p.getGameMode() != GameMode.CREATIVE) {
+            if (held.getAmount() <= 1) p.getInventory().setItem(hand, null);
+            else { ItemStack rest = held.clone(); rest.setAmount(held.getAmount() - 1); p.getInventory().setItem(hand, rest); }
+        }
+        var sg = target.getBlockData().getSoundGroup();
+        world.playSound(target.getLocation().add(0.5, 0.5, 0.5), sg.getPlaceSound(), SoundCategory.BLOCKS, (sg.getVolume() + 1f) / 2f, sg.getPitch() * 0.8f);
+        p.swingHand(hand);
     }
 
     @Override protected void onInteractEntity(Player p, PlayerInteractEntityEvent e) {
@@ -463,6 +490,44 @@ final class BedWarsMatch extends Match {
         return out;
     }
 
+    private void wakeGolem() {
+        golemWakeAt = -1;
+        golem = new Golem(this, world, pad.clone(), point("golem_breach"), undercroftPlayers(pad).size());
+        broadcast(prefix() + "<#ff3fa4><bold>THE GOLEM IS BREAKING OUT</bold> <gray>of the Undercroft wall. The team that hurts it most wins the <#6cff7a>Golem's Heart<gray>.");
+    }
+
+    /** /arcade undercroft and /arcade golem, for staff in a test match. */
+    @Override public String testAction(Player p, String action) {
+        if (!arsenal || pad == null) return "<red>This map has no Undercroft.";
+        switch (action) {
+            case "undercroft" -> {
+                Location to = null;
+                search:
+                for (int[] d : new int[][]{{6, 0}, {-6, 0}, {0, 6}, {0, -6}, {4, 4}, {-4, -4}, {4, -4}, {-4, 4}})
+                    for (int dy : new int[]{0, 1, 2, -1}) {
+                        Location c = pad.clone().add(d[0] + 0.0, dy, d[1] + 0.0);
+                        Block feet = c.getBlock();
+                        if (feet.isPassable() && !feet.isLiquid() && feet.getRelative(0, 1, 0).isPassable() && !feet.getRelative(0, -1, 0).isPassable()) { to = c; break search; }
+                    }
+                if (to == null) to = pad.clone().add(6, 1, 0);
+                to.add(0.5, 0, 0.5);
+                double dx = pad.getX() - to.getX(), dz = pad.getZ() - to.getZ();
+                to.setYaw((float) Math.toDegrees(Math.atan2(-dx, dz)));
+                to.setPitch(10f);
+                p.setFallDistance(0);
+                p.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
+                p.teleport(to);
+                return "<green>You're in the Undercroft.";
+            }
+            case "golem" -> {
+                if (golem != null) return "<red>The Golem is already awake.";
+                wakeGolem();
+                return "<green>The Golem is waking.";
+            }
+            default -> { return null; }
+        }
+    }
+
     /** Once a second: warn 30 s before the Golem wakes, wake it, keep the Golem's Heart's Haste on its team. */
     private void golemSecond() {
         if (golemWakeAt > 0 && golem == null) {
@@ -471,11 +536,7 @@ final class BedWarsMatch extends Match {
                 world.playSound(pad, Sound.ENTITY_WARDEN_HEARTBEAT, SoundCategory.HOSTILE, 4f, 0.5f);
             }
             if (golemWakeAt - elapsed > 0 && golemWakeAt - elapsed < GolemFinale.STIR_SECONDS) stir(golemWakeAt - elapsed);
-            if (elapsed >= golemWakeAt) {
-                golemWakeAt = -1;
-                golem = new Golem(this, world, pad.clone(), point("golem_breach"), undercroftPlayers(pad).size());
-                broadcast(prefix() + "<#ff3fa4><bold>THE GOLEM IS BREAKING OUT</bold> <gray>of the Undercroft wall. The team that hurts it most wins the <#6cff7a>Golem's Heart<gray>.");
-            }
+            if (elapsed >= golemWakeAt) wakeGolem();
         }
         for (var e : heartUntil.entrySet()) {
             if (e.getValue() <= elapsed) continue;

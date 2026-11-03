@@ -75,11 +75,14 @@ final class GolemProjectile {
 
     /**
      * Where shard {@code i} of {@code n} hovers, relative to the Golem (x sideways, y up, z forward; negative z is behind
-     * it): a crescent over its shoulders, higher in the middle.
+     * it): a wide fan over and behind it. Neighbours alternate between a near and a far arc and step up and down, so the
+     * shards spread out in all three directions instead of bunching up on its back. Mirror-symmetric left to right.
      */
     static double[] hoverSlot(int i, int n) {
-        double f = n <= 1 ? 0.5 : i / (double) (n - 1), a = Math.toRadians(-68 + 136 * f);
-        return new double[]{Math.sin(a) * 3.8, 8.2 + Math.cos(a) * 1.2, -2.6 - (1 - Math.cos(a)) * 0.6};
+        double f = n <= 1 ? 0.5 : i / (double) (n - 1), a = Math.toRadians(-82 + 164 * f);
+        int k = Math.min(i, n - 1 - i);   // the same for a shard and its mirror image
+        double r = k % 2 == 0 ? 5.0 : 6.6, lift = (k % 3) * 0.9;
+        return new double[]{Math.sin(a) * r, 7.0 + 1.8 * Math.cos(a) + lift, -2.4 - Math.cos(a) * r * 0.55};
     }
 
     /** How far a falling rock has dropped (0..1) {@code u} of the way down: a slow start, a savage finish. */

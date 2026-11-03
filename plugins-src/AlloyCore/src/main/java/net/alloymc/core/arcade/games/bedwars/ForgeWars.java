@@ -41,6 +41,11 @@ public final class ForgeWars extends ArcadeGame {
         m.put("golem-health-base", 300);
         m.put("golem-health-per-player", 60);
         m.put("golem-damage-percent", 100);
+        // multipliers on top of the base numbers above (200 = double health, 150 = 1.5x damage / 1.5x attack speed).
+        // Separate keys so servers that already stored the old ones still get the change.
+        m.put("golem-health-percent", 200);
+        m.put("golem-damage-boost-percent", 150);
+        m.put("golem-attack-speed-percent", 150);
         m.put("golem-respawn-seconds", 240);
         m.put("golem-heart-seconds", 180);
         // easter eggs: the Smith's hammers and song, the pink ore veins, the secret rooms (no gameplay effect)

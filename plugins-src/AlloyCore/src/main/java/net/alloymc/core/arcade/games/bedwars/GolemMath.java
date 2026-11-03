@@ -144,6 +144,18 @@ final class GolemMath {
         return (r << 16) | (g << 8) | bl;
     }
 
+    /** {@code ticks} sped up by {@code speed} (1 = unchanged, above 1 = quicker, below 1 = slower), never under {@code min}. */
+    static int paced(int ticks, double speed, int min) { return Math.max(min, (int) Math.round(ticks / Math.max(0.1, speed))); }
+
+    /** Turn from yaw {@code from} towards {@code to} (degrees) by at most {@code maxStep}, the short way round. */
+    static float turnToward(float from, float to, float maxStep) {
+        float d = to - from;
+        while (d > 180) d -= 360;
+        while (d <= -180) d += 360;
+        if (Math.abs(d) <= maxStep) return from + d;
+        return from + Math.signum(d) * maxStep;
+    }
+
     /** Ticks between special moves: about 4 s in phase 1, 3 s in phase 2, 2.2 s enraged. */
     static int moveGap(int phase) { return phase == 1 ? 80 : phase == 2 ? 60 : 44; }
 
