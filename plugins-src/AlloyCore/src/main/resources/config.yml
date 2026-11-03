@@ -47,8 +47,18 @@ emp:
 # Rimelock (hub Arena only for now): leap, slam, and a 16-block-tall, 6-block-radius cage holds for 10 s. Nobody
 # inside can leave, mobs included, except the caster (and their team, once teams exist); anyone can walk in; no hits
 # cross the wall either way. The caster's side sees it blue, everyone else red. Staff: /rimelock (/cage).
+# The way out: a player the cage holds can right-click an Ashen Chain at one of the 8 crystals over the rim posts to be
+# reeled up and over the wall (crystal-escape). Only where both items are wired together (the hub Arena for now).
 rimelock:
   enabled: true
+  crystal-escape:
+    enabled: true
+    single-use: true           # a hooked crystal shatters and stays gone for the rest of that cage
+    aim-radius: 1.5            # blocks: the hit sphere round each crystal (how forgiving the aim is)
+    vault-seconds: 0.3         # the outward carry over the rim once the reel arrives
+    vault-speed: 0.4           # blocks a tick at the start of the carry, easing down
+    pass-grace-seconds: 1.0    # the wall keeps letting them through this long after they arrive
+    no-fall-max-seconds: 4     # no fall damage until they land, up to this long
 
 # Gods-eye (hub Arena only for now): marks the closest player for 10 s - halo, beam into the sky, banner with their
 # face and name; the caster gets distance + direction. Staff: /godseye (/eye). Set false to stop it.
