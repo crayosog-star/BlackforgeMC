@@ -47,6 +47,16 @@ public final class SurgeCurve {
 
     public static boolean warning(double t) { return t >= MAX_SECONDS - WARNING_SECONDS; }
 
+    // ------------------------------------------------------------------ the black Darkness pulse
+
+    /** The black Darkness only starts once the surger is this many blocks from where the surge began (any direction). */
+    public static final double DARKNESS_START_DISTANCE = 20.0;
+
+    /** True once the flat (x/z) distance from the start is at least {@code startDistance}; height doesn't count. */
+    public static boolean darknessReached(double dx, double dz, double startDistance) {
+        return dx * dx + dz * dz >= startDistance * startDistance;
+    }
+
     // ------------------------------------------------------------------ the red screen edges
 
     public static final double EDGE_BASE = 0.55, EDGE_BASE_WARN = 0.3;   // edge strength between heartbeats

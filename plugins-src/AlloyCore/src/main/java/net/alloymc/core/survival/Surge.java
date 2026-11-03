@@ -63,6 +63,8 @@ public final class Surge implements Listener, Hackable {
         double drainedTo;          // seconds of drain already charged
         boolean wasOnGround = true;
         Location last;
+        Location origin;           // where the surge began: the black Darkness starts once you're far enough from here
+        boolean darkApplied;       // the Darkness effect has been added (it only starts once you're far enough out)
         // the player's own sky before the surge, put back exactly afterwards (Factions sets its own night sky)
         long timeOffset;
         boolean timeRelative;
@@ -72,7 +74,8 @@ public final class Surge implements Listener, Hackable {
 
     private final AlloyCore plugin;
     private final boolean enabled, customModel, screenDarkness;
-    private final Predicate<Location> allowedAt;   // where it can be used (supplied by each server)
+    private final double darknessStart;            // blocks from where the surge began before the black Darkness starts
+    private final Predicate<Location> allowedAt;  // where it can be used (supplied by each server)
     private final boolean staffSkipCooldown;       // the hub Arena: staff can test it again and again
     public static final double LAUNCH_SPEED = 1.8; // the one-off dash in the look direction at the strike
     private final NamespacedKey tagKey, modelKey;
@@ -92,6 +95,7 @@ public final class Surge implements Listener, Hackable {
         this.enabled = plugin.getConfig().getBoolean("surge.enabled", true);
         this.customModel = plugin.getConfig().getBoolean("surge.custom-model", plugin.getConfig().getBoolean("resource-pack-live", false));   // only once the resource pack is live
         this.screenDarkness = plugin.getConfig().getBoolean("surge.screen-darkness", true);
+        this.darknessStart = Math.max(0, plugin.getConfig().getDouble("surge.darkness-start-distance", SurgeCurve.DARKNESS_START_DISTANCE));
         this.tagKey = new NamespacedKey(plugin, "surge_item");
         this.modelKey = new NamespacedKey("blackforge", "surge");
         this.boosts = List.of(
@@ -264,6 +268,7 @@ public final class Surge implements Listener, Hackable {
         World w = p.getWorld();
         Active s = new Active();
         s.last = p.getLocation();
+        s.origin = s.last.clone();
         active.put(p.getUniqueId(), s);
 
         w.strikeLightningEffect(p.getLocation());   // visual only: no damage, no fire
@@ -392,6 +397,12 @@ public final class Surge implements Listener, Hackable {
         if (t >= SurgeCurve.MAX_SECONDS) { end(p, "time"); return; }
         boolean warn = SurgeCurve.warning(t);
         pulseEdges(p, s, warn);
+        if (!s.darkApplied) {   // the black Darkness only starts once you're far enough from where you surged
+            Location at = p.getLocation();
+            if (at.getWorld() == s.origin.getWorld()
+                    && SurgeCurve.darknessReached(at.getX() - s.origin.getX(), at.getZ() - s.origin.getZ(), darknessStart))
+                addDarkness(p, s);
+        }
 
         if (s.ticks % 10 == 0 && drain(p, s, t)) { end(p, "drained"); return; }
         if (s.ticks % 2 == 0)
@@ -443,10 +454,11 @@ public final class Surge implements Listener, Hackable {
     private static final int SURGE_TICKS = (int) (SurgeCurve.MAX_SECONDS * 20);
 
     /**
-     * The surger's own world goes dark for the surge: frozen midnight, rain, and Darkness for the whole surge (it pulses
-     * on its own and fades out as the surge ends). With surge.screen-darkness off it is only a 1.5 s pulse at the start.
-     * Only they see it. {@code on = false} puts their sky back exactly as it was, and takes the Darkness off if the surge
-     * ended early, but only if it is ours (a longer real Potion of Darkness hit is left alone).
+     * The surger's own world goes dark for the surge: frozen midnight and rain from the start. The black Darkness does
+     * not start with it: it comes on once the surger is {@code surge.darkness-start-distance} blocks (default 20) from
+     * where the surge began, in any direction ({@link #addDarkness}). Only they see it. {@code on = false} puts their
+     * sky back exactly as it was, and takes the Darkness off if the surge ended early, but only if it is ours (a
+     * longer real Potion of Darkness hit is left alone).
      */
     private void darkWorld(Player p, Active s, boolean on) {
         if (on) {
@@ -455,16 +467,27 @@ public final class Surge implements Listener, Hackable {
             s.weather = p.getPlayerWeather();
             p.setPlayerTime(18000, false);
             p.setPlayerWeather(WeatherType.DOWNFALL);
-            p.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, screenDarkness ? SURGE_TICKS : 30, 0, false, false, false));
             return;
         }
         PotionEffect dark = p.getPotionEffect(PotionEffectType.DARKNESS);
-        if (screenDarkness && dark != null && !dark.isInfinite() && dark.getAmplifier() == 0 && dark.getDuration() <= SURGE_TICKS - s.ticks + 2)
+        if (screenDarkness && s.darkApplied && dark != null && !dark.isInfinite() && dark.getAmplifier() == 0 && dark.getDuration() <= SURGE_TICKS - s.ticks + 2)
             p.removePotionEffect(PotionEffectType.DARKNESS);
         if (s.timeRelative && s.timeOffset == 0) p.resetPlayerTime();
         else p.setPlayerTime(s.timeOffset, s.timeRelative);
         if (s.weather == null) p.resetPlayerWeather();
         else p.setPlayerWeather(s.weather);
+    }
+
+    /**
+     * Start the black Darkness the first time the surger is far enough from where the surge began. It lasts the rest
+     * of the surge (it pulses on its own and fades out as the surge ends), or a 1.5 s pulse with
+     * surge.screen-darkness off. It stays on if they come back inside the distance.
+     */
+    private void addDarkness(Player p, Active s) {
+        s.darkApplied = true;
+        int left = SURGE_TICKS - s.ticks;
+        if (left <= 0) return;
+        p.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, screenDarkness ? left : Math.min(30, left), 0, false, false, false));
     }
 
     /**

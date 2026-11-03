@@ -64,6 +64,20 @@ class SurgeCurveTest {
         }
     }
 
+    @Test void darknessOnlyStartsTwentyBlocksOut() {
+        double d = SurgeCurve.DARKNESS_START_DISTANCE;
+        assertEquals(20.0, d, EPS);
+        assertFalse(SurgeCurve.darknessReached(0, 0, d));                 // where the surge began
+        assertFalse(SurgeCurve.darknessReached(19.9, 0, d));
+        assertFalse(SurgeCurve.darknessReached(0, -19.9, d));
+        assertTrue(SurgeCurve.darknessReached(20, 0, d));                 // 20 away in any direction
+        assertTrue(SurgeCurve.darknessReached(-20, 0, d));
+        assertTrue(SurgeCurve.darknessReached(0, 20, d));
+        assertTrue(SurgeCurve.darknessReached(0, -20, d));
+        assertTrue(SurgeCurve.darknessReached(14.2, 14.2, d));            // diagonal: 20.08 flat
+        assertFalse(SurgeCurve.darknessReached(14.0, 14.0, d));           // diagonal: 19.8 flat
+    }
+
     @Test void warningDistanceGivesTheWantedStrength() {
         for (double s : new double[]{0.3, 0.55, 0.9}) {
             int w = SurgeCurve.warningDistance(200, s);
