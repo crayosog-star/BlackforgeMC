@@ -61,6 +61,28 @@ final class BedWarsMatch extends Match {
     @Override protected boolean supportsRejoin() { return true; }
     @Override protected boolean allowRejoin(Player p) { Team t = team(p); return t != null && bedAlive(t); }
 
+    /** Forge Wars: everyone named in /arcade test plays together, and so does a party. */
+    @Override protected List<List<Player>> splitTeams(List<Player> ps, int teamCount) {
+        if (!arsenal) return super.splitTeams(ps, teamCount);
+        List<List<Player>> groups = new ArrayList<>();
+        if (isTest()) groups.add(ps);
+        else {
+            Map<String, List<Player>> byParty = new LinkedHashMap<>();
+            for (Player p : ps) {
+                String leader = arcade.plugin().social().partyOf(p.getUniqueId());
+                byParty.computeIfAbsent(leader != null ? leader : p.getUniqueId().toString(), k -> new ArrayList<>()).add(p);
+            }
+            groups.addAll(byParty.values());
+        }
+        return TeamBalancer.together(groups, teamCount, variant.teamSize(), isTest() || isForced());
+    }
+
+    /** A Forge Wars match started with one team has nobody to beat: it runs until that team is out. */
+    @Override protected List<UUID> checkWinners() {
+        if (arsenal && teams.size() == 1 && teams.getFirst().members.stream().anyMatch(alive::contains)) return null;
+        return super.checkWinners();
+    }
+
     List<Integer> costs(String key, List<Integer> def) {
         List<String> l = settings.list(key, null);
         if (l == null) { Object o = settings.raw(key); return o instanceof Number n ? List.of(n.intValue()) : def; }

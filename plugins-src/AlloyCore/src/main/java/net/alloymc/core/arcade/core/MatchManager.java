@@ -23,6 +23,7 @@ public final class MatchManager {
         int countdown = -1;
         boolean loading;
         boolean test;
+        boolean forced;
         Queue(ArcadeGame g, Variant v) { game = g; variant = v; }
         public int size() { return waiting.size(); }
         public int countdown() { return countdown; }
@@ -116,7 +117,7 @@ public final class MatchManager {
         m.addSpectator(p);
     }
 
-    public void forceStart(Queue q) { if (!q.loading && q.size() > 0) start(q); }
+    public void forceStart(Queue q) { if (!q.loading && q.size() > 0) { q.forced = true; start(q); } }
 
     // ------------------------------------------------------------------ rematches / private matches
 
@@ -310,6 +311,8 @@ public final class MatchManager {
         Settings s = new Settings(arcade.gameSettings(q.game), map.settings);
         Match m = q.game.newMatch(new MatchContext(arcade, id, q.game, q.variant, map, slot, arcade.worlds().matches(), SlotAllocator.originX(slot), map.templateY, 0, s));
         m.test = q.test;
+        m.forced = q.forced;
+        q.forced = false;
         active.put(id, m);
         for (Player p : ps) playerMatch.put(p.getUniqueId(), m);
         if (q.test) for (Player p : ps) { arcade.stats().mute(p.getUniqueId()); p.sendMessage(Ui.mm(TAG + "<gold>Test match: <gray>no stats or rewards. <white>/arcade leave <gray>to stop.")); }

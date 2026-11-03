@@ -191,6 +191,33 @@ class ArcadeCoreTest {
         assertThrows(IllegalArgumentException.class, () -> TeamBalancer.split(List.of(1, 2, 3), 1, 2));
     }
 
+    @Test void aDuoSharesATeam() {
+        // named together in a test match: same team, even alone
+        assertEquals(List.of(List.of(1, 2)), TeamBalancer.together(List.of(List.of(1, 2)), 8, 2, true));
+        assertEquals(List.of(List.of(1, 2)), TeamBalancer.together(List.of(List.of(1, 2)), 4, 4, true));
+        // too many for one team: fills in order
+        assertEquals(List.of(List.of(1, 2), List.of(3)), TeamBalancer.together(List.of(List.of(1, 2, 3)), 8, 2, true));
+        // solo mode is teams of one, so they stay opponents
+        assertEquals(List.of(List.of(1), List.of(2)), TeamBalancer.together(List.of(List.of(1, 2)), 8, 1, true));
+    }
+
+    @Test void partiesStayTogetherInPublicMatches() {
+        // a duo and a stranger: the stranger is the other team, whatever the queue order
+        assertEquals(List.of(List.of(2, 3), List.of(1)), TeamBalancer.together(List.of(List.of(1), List.of(2, 3)), 8, 2, false));
+        // singles even out around the party
+        List<List<Integer>> t = TeamBalancer.together(List.of(List.of(1, 2), List.of(3), List.of(4), List.of(5), List.of(6)), 8, 2, false);
+        assertEquals(3, t.size());
+        assertTrue(t.contains(List.of(1, 2)));
+        assertTrue(t.stream().allMatch(x -> x.size() == 2));
+        // a public match always has two sides, even if one party is the whole lobby
+        List<List<Integer>> alone = TeamBalancer.together(List.of(List.of(1, 2, 3, 4)), 4, 4, false);
+        assertEquals(2, alone.size());
+        assertTrue(alone.stream().noneMatch(List::isEmpty));
+        // forcestart with two strangers: they still fight
+        assertEquals(2, TeamBalancer.together(List.of(List.of(1), List.of(2)), 8, 2, true).size());
+        assertThrows(IllegalArgumentException.class, () -> TeamBalancer.together(List.of(List.of(1, 2, 3)), 1, 2, true));
+    }
+
     @Test void lifecycleTransitionsAreChecked() {
         MatchState.Machine m = new MatchState.Machine(MatchState.MAP_LOADING);
         m.go(MatchState.TELEPORTING_PLAYERS);

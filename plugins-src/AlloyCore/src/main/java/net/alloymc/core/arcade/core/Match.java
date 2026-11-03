@@ -61,6 +61,9 @@ public abstract class Match {
     /** Started with /arcade test: private, no stats or rewards, and one player alone isn't an instant win. */
     boolean test;
     public boolean isTest() { return test; }
+    /** Started early by staff with /arcade forcestart. */
+    boolean forced;
+    public boolean isForced() { return forced; }
 
     /** Staff test commands inside a test match (/arcade undercroft, /arcade golem): a game that supports one overrides this and returns what to tell the player. */
     public String testAction(Player p, String action) { return null; }
@@ -202,7 +205,7 @@ public abstract class Match {
 
     protected void assignTeams(List<Player> ps) {
         if (variant.isTeams()) {
-            List<List<Player>> split = TeamBalancer.split(ps, map.teams > 0 ? Math.min(variant.teams(), map.teams) : variant.teams(), variant.teamSize());
+            List<List<Player>> split = splitTeams(ps, map.teams > 0 ? Math.min(variant.teams(), map.teams) : variant.teams());
             for (int i = 0; i < split.size(); i++) {
                 Team t = new Team(i);
                 for (Player p : split.get(i)) { t.members.add(p.getUniqueId()); teamOf.put(p.getUniqueId(), t); }
@@ -217,6 +220,9 @@ public abstract class Match {
             }
         }
     }
+
+    /** Who plays with whom. Default: an even split in queue order. */
+    protected List<List<Player>> splitTeams(List<Player> ps, int teamCount) { return TeamBalancer.split(ps, teamCount, variant.teamSize()); }
 
     private void goLive() {
         state.go(MatchState.IN_PROGRESS);
