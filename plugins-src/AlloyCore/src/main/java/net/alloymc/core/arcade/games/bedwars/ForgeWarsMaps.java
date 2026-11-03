@@ -102,8 +102,9 @@ final class ForgeWarsMaps {
                     // both cracked walls face north or south: a copy along z would plug the way in, so it opens up; a copy along x is just more wall
                     if (b.contains("cracked_stone_bricks") && y < 0) b = copyX ? "minecraft:stone_bricks" : "minecraft:air";
                     else if (b.contains("jukebox") || b.contains("anvil")) b = "minecraft:air";
-                    // the froglight rings round the launch pad and the shaft are floor and must stay; a vein's copy goes back to plain ground or rock
-                    else if (b.contains("pearlescent_froglight") && Math.max(Math.abs(sx), Math.abs(sz)) != 2) b = y >= 0 ? "minecraft:podzol" : "minecraft:tuff";
+                    // the froglight rings round the launch pad and the shaft are floor and must stay. A vein's copy goes back to ground on the surface;
+                    // underground it opens up, because a solid copy on the room side would bury the real vein
+                    else if (b.contains("pearlescent_froglight") && Math.max(Math.abs(sx), Math.abs(sz)) != 2) b = y >= 0 ? "minecraft:podzol" : "minecraft:air";
                 }
                 if (late) to.late(x, y, z, b); else to.set(x, y, z, b);
             }
