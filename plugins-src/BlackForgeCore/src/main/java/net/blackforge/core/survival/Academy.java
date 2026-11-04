@@ -22,7 +22,7 @@ import java.util.function.BooleanSupplier;
 public final class Academy implements Listener {
     static final String BRASS = "<#C9A227>";
     private static final String VERDIGRIS = "<#4FA08B>";
-    private static final int SIZE = 54, RANK = 4, PROGRESS = 20, LIFETIME = 22, TODAY = 24, BACK = 49;
+    private static final int SIZE = 54, RANK = 4, PROGRESS = 20, LIFETIME = 22, TODAY = 24, ADD_LEVELS = 40, BACK = 49;
     private static final int[] JOB_SLOTS = {28, 30, 32, 34};
     private static final int LIST_START = 9, LIST_END = 44;
     private static final int BAR_SEGMENTS = 20;
@@ -98,6 +98,7 @@ public final class Academy implements Listener {
             if (j == b.job) icon.editMeta(m -> m.setEnchantmentGlintOverride(true));
             v.inv.setItem(JOB_SLOTS[i], icon);
         }
+        if (robots.isSandbox() && !maxed) v.inv.setItem(ADD_LEVELS, Ui.item(Material.ANVIL, BRASS + "<bold>Add 10 Levels", "<gray>Foundry only: raises this job's level for free.", "", "<yellow>Click to add"));
         p.openInventory(v.inv);
     }
 
@@ -135,10 +136,19 @@ public final class Academy implements Listener {
         if (!v.stillAllowed.getAsBoolean() || (v.agentId != null && robots.agent(v.agentId) == null)) { closeLater(p, v); return; }
         int slot = e.getRawSlot();
         if (slot == BACK) { v.back.run(); return; }
+        if (slot == ADD_LEVELS && v.agentId != null && robots.isSandbox()) {
+            Robots.Bot b = robots.agent(v.agentId);
+            robots.addLevels(b, 10);
+            openAgent(p, b, v.back, v.stillAllowed);
+            return;
+        }
         String picked = v.agents.get(slot);
-        Robots.Bot b = picked == null ? null : robots.agent(picked);
-        if (b != null) openAgent(p, b, () -> openList(p, v.back, v.stillAllowed), v.stillAllowed);
+        Robots.Bot chosen = picked == null ? null : robots.agent(picked);
+        if (chosen != null) openAgent(p, chosen, () -> openList(p, v.back, v.stillAllowed), v.stillAllowed);
     }
+
+    /** For the Foundry's first-use tip. */
+    public static boolean isMenu(InventoryHolder holder) { return holder instanceof View; }
 
     private void closeLater(Player p, View v) {
         Bukkit.getScheduler().runTask(plugin, () -> { if (p.getOpenInventory().getTopInventory().equals(v.inv)) p.closeInventory(); });

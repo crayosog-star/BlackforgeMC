@@ -38,6 +38,7 @@ final class FoundryTips implements Listener {
             Map.entry("pen", "Place a Grinder agent close to the fence. Higher tiers reach further into the pen."),
             Map.entry("agent", "Agents face the way you're looking when you place them. They need Fuel Cells before they'll work."),
             Map.entry("agent_menu", "Click the fuel slot with Fuel Cells in your inventory. From here you can also switch its job or pick it up."),
+            Map.entry("academy", "Agents earn Mastery by working, and more while you're close by. Add 10 Levels is only here, so you can try every rank right away."),
             Map.entry("station", "Agents in this chunk deliver to this Base Station. Only one fits per chunk, and that includes the Forge's."),
             Map.entry("upgrade", "Sneak and right-click a hopper to raise its tier. One upgrade is enough for each tier here."));
 
@@ -71,6 +72,11 @@ final class FoundryTips implements Listener {
             String bench = FoundryZone.benchAt(e.getClickedBlock().getX(), e.getClickedBlock().getY(), e.getClickedBlock().getZ());
             if (bench != null) show(p, bench);
         }
+    }
+
+    @EventHandler
+    public void onOpen(org.bukkit.event.inventory.InventoryOpenEvent e) {
+        if (e.getPlayer() instanceof Player p && net.blackforge.core.survival.Academy.isMenu(e.getInventory().getHolder()) && zone.test(p.getLocation())) show(p, "academy");
     }
 
     @EventHandler(priority = EventPriority.LOWEST)

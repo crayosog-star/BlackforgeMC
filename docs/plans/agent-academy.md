@@ -256,7 +256,9 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Edge cases:** max level, a tip already seen, and the button never appearing outside the sandbox.
 - **Done when:** a tester reaches level 30 in the Foundry using only the button, sees the tip once, and confirms the button doesn't exist on Survival, including via `/agents academy` staff menus.
 - **Leaves ready:** fast testing of perks and specializations.
-- **Evidence:**
+- **Evidence:** not ticked; prepared on a branch with no PR, because the Phase 1 gate isn't confirmed.
+  - Verified: reading the code, the button only appears when `isSandbox()`, and `addLevels` also returns early outside the sandbox. There are no `/agents academy` staff menus.
+  - Untested: the Paper compile, and everything in the Foundry.
 
 ---
 

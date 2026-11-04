@@ -546,6 +546,17 @@ public final class Robots implements Listener {
 
     Bot agent(String id) { return bots.get(id); }
 
+    boolean isSandbox() { return sandbox; }
+
+    /** The Foundry's fast-level button. It refuses outside the sandbox, whatever calls it. */
+    void addLevels(Bot b, int levels) {
+        if (!sandbox) return;
+        AgentRecord.JobTrack track = b.record.jobs.computeIfAbsent(jobKey(b), k -> new AgentRecord.JobTrack());
+        int before = academy.levelFor(track.points);
+        track.points = Math.max(track.points, academy.pointsFor(before + levels));
+        celebrate(b, before, academy.levelFor(track.points));
+    }
+
     /** The Forge's way in: a list of this player's Agents. Does nothing if the Academy is off. */
     void openAcademyList(Player p, Runnable back, java.util.function.BooleanSupplier stillAllowed) {
         if (academyOn()) academyMenu.openList(p, back, stillAllowed);
