@@ -115,7 +115,7 @@ public final class TestArena implements Listener {
      * hotbar in registration order, and never run out in the Arena.
      */
     private record TestItem(java.util.function.Supplier<ItemStack> make, java.util.function.Predicate<ItemStack> is,
-                            java.util.function.Predicate<ItemStack> worn) {}
+                            java.util.function.Predicate<ItemStack> worn, boolean offHand) {}
     private final List<TestItem> testItems = new ArrayList<>();
     // hotbar slots 0-7 first (slot 8 is the leave bed), then the top row of the inventory; one per wall frame
     private static final int MAX_TEST_ITEMS = SLOTS;
@@ -125,10 +125,14 @@ public final class TestArena implements Listener {
 
     /** Every new item calls this once (HubModule): it goes on the wall, into every Arena kit, and refills itself there. */
     public void addTestItem(java.util.function.Supplier<ItemStack> make, java.util.function.Predicate<ItemStack> is,
-                            java.util.function.Predicate<ItemStack> worn) {
+                            java.util.function.Predicate<ItemStack> worn) { addTestItem(make, is, worn, false); }
+
+    /** {@code offHand}: the kit puts this one in the off hand (the second of a dual-wielded pair) instead of a kit slot. */
+    public void addTestItem(java.util.function.Supplier<ItemStack> make, java.util.function.Predicate<ItemStack> is,
+                            java.util.function.Predicate<ItemStack> worn, boolean offHand) {
         if (testItems.size() >= MAX_TEST_ITEMS) { plugin.getLogger().warning("Arena wall is full - a test item was not added to the kit"); return; }
-        testItems.add(new TestItem(make, is, worn));
-        ensureOnWall(make.get(), is);
+        testItems.add(new TestItem(make, is, worn, offHand));
+        if (!offHand) ensureOnWall(make.get(), is);   // the second blade of a pair shares its twin's frame
     }
 
     public void addTestItem(java.util.function.Supplier<ItemStack> make, java.util.function.Predicate<ItemStack> is) { addTestItem(make, is, it -> false); }
@@ -397,7 +401,7 @@ public final class TestArena implements Listener {
         kit(p);
         p.sendMessage(Ui.mm("<#7bd88f><bold>Arena test items</bold> <dark_gray>· <gray>they never run out here"));
         if (p.hasPermission("blackforge.admin"))
-            p.sendMessage(Ui.mm("<gray>Staff: <white>/jbello /gaia /darkness /surge /lastrite /rimelock /godseye /chain /bonfire /emp <gray>give one each · Surge has no cooldown here"));
+            p.sendMessage(Ui.mm("<gray>Staff: <white>/jbello /gaia /darkness /surge /lastrite /rimelock /godseye /chain /bonfire /emp /nightrend <gray>give one each · Surge has no cooldown here"));
         p.showTitle(Title.title(Ui.mm("<gradient:#7bd88f:#2e9e5b><bold>THE ARENA</bold></gradient>"), Ui.mm("<gray>Break things. Responsibly."),
                 Title.Times.times(Duration.ofMillis(250), Duration.ofSeconds(2), Duration.ofMillis(600))));
         p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.2f);
@@ -408,7 +412,11 @@ public final class TestArena implements Listener {
         inv.clear();
         // only the BlackForgeMC test items, in the order they were added: the hotbar first, then the top inventory row
         // once the hotbar's full; refill() keeps them topped up
-        for (int i = 0; i < testItems.size(); i++) inv.setItem(kitSlot(i), testItems.get(i).make().get());
+        for (int i = 0; i < testItems.size(); i++) {
+            TestItem t = testItems.get(i);
+            if (t.offHand()) inv.setItemInOffHand(t.make().get());
+            else inv.setItem(kitSlot(i), t.make().get());
+        }
         ItemStack leave = Ui.item(Material.RED_BED, "<red><bold>Back to the Hub</bold> <gray>(right-click)");
         leave.editMeta(m -> m.getPersistentDataContainer().set(leaveKey, PersistentDataType.BYTE, (byte) 1));
         inv.setItem(8, leave);
@@ -840,6 +848,7 @@ public final class TestArena implements Listener {
                 if (at >= 0 && !t.worn().test(inv.getItem(at))) continue;      // still there and fresh
                 ItemStack fresh = t.make().get();
                 if (at >= 0) inv.setItem(at, fresh);                          // worn: swap for a fresh one in place
+                else if (t.offHand() && inv.getItemInOffHand().getType().isAir()) inv.setItemInOffHand(fresh);
                 else if (inv.getItem(kitSlot(i)) == null || inv.getItem(kitSlot(i)).getType().isAir()) inv.setItem(kitSlot(i), fresh);
                 else inv.addItem(fresh);
                 if (at < 0) p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_STEP, 0.35f, 1.8f);

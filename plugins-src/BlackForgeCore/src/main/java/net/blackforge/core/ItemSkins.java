@@ -48,6 +48,7 @@ public final class ItemSkins implements Listener {
             WHERE.put(id, "Survival PvP zones (KOTH, Scrapyard) · hub Arena");
         for (String id : new String[]{"base_station", "hopper_upgrade"}) WHERE.put(id, "Survival and Skyblock");
         WHERE.put("last_rite", "Survival outside spawn · only catches where PvP is on");
+        WHERE.put("nightrend", "hub Arena (for now)");
     }
     static final String WHERE_PREFIX = "Works in: ";
 
