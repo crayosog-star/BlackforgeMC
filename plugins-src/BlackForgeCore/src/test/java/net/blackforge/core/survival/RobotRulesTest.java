@@ -134,6 +134,12 @@ class RobotRulesTest {
         assertThrows(IllegalArgumentException.class, () -> RobotRules.grindHitsPerSwing(0));
     }
 
+    @Test void grinderTagSaysWhatItsDoing() {
+        assertEquals("<#ff5e5e>Grinding 3", RobotRules.grindStatus(4, 3));
+        assertEquals("<gray>Mobs here are protected", RobotRules.grindStatus(2, 0));
+        assertEquals("<gray>No mobs in range", RobotRules.grindStatus(0, 0));
+    }
+
     @Test void grindSummaryReadsTheSameEveryTime() {
         assertEquals("mobs=0 hits=0 noEffect=0 kills=0", RobotRules.grindSummary(0, Map.of(), 0, 0, 0));
         Map<GrindSkip, Integer> skipped = new EnumMap<>(GrindSkip.class);

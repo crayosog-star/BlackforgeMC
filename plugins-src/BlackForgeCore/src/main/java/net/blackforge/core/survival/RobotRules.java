@@ -126,6 +126,12 @@ final class RobotRules {
     /** How many mobs one swing can hit: tier + 1. */
     static int grindHitsPerSwing(int tier) { return checkTier(tier) + 1; }
 
+    /** The Grinder's name tag after a cycle: what it's doing, or why it isn't doing anything. */
+    static String grindStatus(int mobs, int hits) {
+        if (hits > 0) return "<#ff5e5e>Grinding " + hits;
+        return mobs > 0 ? "<gray>Mobs here are protected" : "<gray>No mobs in range";
+    }
+
     /** One Grinder cycle for the log. Skip reasons are in a fixed order, so the same result always reads the same. */
     static String grindSummary(int mobs, Map<GrindSkip, Integer> skipped, int hits, int noEffect, int kills) {
         StringBuilder sb = new StringBuilder("mobs=" + mobs + " hits=" + hits + " noEffect=" + noEffect + " kills=" + kills);
