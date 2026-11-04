@@ -289,7 +289,7 @@ public final class FactionsModule implements Listener {
 
     private void tryWild(Player p, Random r, int attempt) {
         if (attempt >= 12 || !p.isOnline()) { p.sendMessage(Ui.mm("<red>Couldn't find a safe spot - try again.")); return; }
-        int half = border / 2 - 50, x, z;
+        int half = Math.min(border, plugin.getConfig().getInt("rtp.range", 12000)) / 2 - 50, x, z;
         do { x = r.nextInt(half * 2) - half; z = r.nextInt(half * 2) - half; } while (Math.hypot(x, z) < 400);
         int fx = x, fz = z;
         world.getChunkAtAsync(fx >> 4, fz >> 4).thenAccept(ch -> {
