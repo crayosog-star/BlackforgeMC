@@ -2,11 +2,11 @@
 
 **Status**
 
-Design approved November 4, 2026. P1.T1 passed local review and staging. P1.T1 is verified for the merge gate. Live deployment and later tasks remain pending.
+Phase 1 tasks passed local staging. Phase 2 awaits the phase gate. Live deployment remains unverified.
 
 **Next task**
 
-Start **P1.T2 — Reuse claim eligibility and report save outcomes** after verifying that P1.T1 has merged into upstream main.
+After Colin confirms the Phase 1 gate, start **P2.T1 — Preview, confirm, and manage land in the existing commands** from fresh upstream main. Implement the approved claim guide and first eligible RTP tip as part of that task.
 
 ## Rules of engagement
 
@@ -133,7 +133,7 @@ Approve after stale delivery is blocked, baseline trust and transfer checks pass
 
   Two connected headless clients exercised the command and inventory gestures. A local fixture supplied a counted stack through the production Agent delivery path. Agent job scheduling and a rendered client were outside this check. All three local runners exited 0. After integrating upstream Forge Allays changes from main a9a9013, candidate a3d8026 compiled all 276 production sources and passed the same Survival ownership and trust-revocation checks, Skyblock delivery, and Foundry delivery on isolated Paper. All three runners exited 0. Integrated jar SHA-256 was A2B9147AA5B1F4CE26BD0C50AE9EAC04079A068ADA14567C8B6C36BDBE721CEC.
 
-#### [ ] P1.T2 — Reuse claim eligibility and report save outcomes
+#### [x] P1.T2 — Reuse claim eligibility and report save outcomes
 
 - **Needs** — P1.T1 merged.
 - **Files** — `Claims.java#command,nearProtectedArea,allowance,save`, narrowly scoped claim-rule and persistence tests.
@@ -141,7 +141,7 @@ Approve after stale delivery is blocked, baseline trust and transfer checks pass
 - **Edge cases** — Negative coordinates, exact protected thresholds, Grove/Scrapyard/KOTH, allowance reached and admin bypass, owner-wide trust across worlds, save unavailable, two players contending for one chunk.
 - **Done when** — Compare baseline and candidate at protected boundaries, including inside/outside the End cutoff. At allowance, a regular player is refused while an admin retains the existing exception. A and B attempt the same free chunk in the same tick and exactly one succeeds. Inject a pre-replace write failure for claim, unclaim and trust. Verify no success message, no permission or count change, and identical reload from disk. Restore writes and verify one successful retry survives a restart.
 - **Leaves ready** — One eligibility and mutation path shared by preview, confirm, and feedback.
-- **Evidence** — Boundary cases, race result, failure-injection outcome, and before/after fixture YAML comparison.
+- **Evidence** — November 4, 2026, on isolated Paper 26.3 build 222. Java 25 compiled all 280 production sources. The staged jar SHA-256 was 08C9ECA97DD8A499A85F4099BE4B53C3636E2E2D6572B843B122429EB1583CF1. In one server tick, A and B tried to claim the same free chunk. A succeeded once and B was refused. An injected atomic-replace failure blocked claim, unclaim, trust and bulk unclaim. All four attempts returned a retry message, preserved ownership and trust, and left the original YAML bytes intact. No temporary save files remained. Once writes were restored, a single claim retry and a trust grant succeeded and reloaded after restart. The fixture matched the prior protected-zone rules at 1,764 positions around spawn, the Grove, KOTH and the Scrapyard. It also checked the exact End cutoff, negative chunk coordinates, trusted land and the allowance rule for regular players and admins. The two successful staging runners exited 0.
 
 ### Phase 2 — Claim and border experience
 
@@ -322,6 +322,7 @@ Colin approves the candidate, activation method and window after seeing the evid
 - 2026-11-04 — Resolved the P1.T1 wiring overlap with upstream Forge Allays and repeated the local staging checks before opening the PR.
 
 - 2026-11-04 — Colin authorized the direct main push for P1.T1. Integrated candidate 22ae1c4 on main dbe03d1 compiled all 280 production Java sources and passed the isolated Survival, Skyblock and Foundry staging matrix again.
+- 2026-11-04 — P1.T1 landed at e38c01f. P1.T2 passed the save failure, race, boundary and restart checks. Phase 2 stays at the approval gate.
 
 ## Later ideas
 
