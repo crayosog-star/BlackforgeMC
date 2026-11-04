@@ -63,6 +63,14 @@ class AllayFlightTest {
         assertTrue(Math.hypot(a[0] - b[0], a[2] - b[2]) > 2);
     }
 
+    @Test void rainbowGoesAround() {
+        assertEquals(0xFF0000, AllayFlight.rainbow(0));
+        assertEquals(0x00FF00, AllayFlight.rainbow(1.0 / 3));
+        assertEquals(0x0000FF, AllayFlight.rainbow(2.0 / 3));
+        assertEquals(AllayFlight.rainbow(0.25), AllayFlight.rainbow(5.25));
+        assertEquals(AllayFlight.rainbow(0.25), AllayFlight.rainbow(-0.75));
+    }
+
     @Test void liftsInTheMiddleOnly() {
         assertEquals(0, AllayFlight.lift(0, 12), EPS);
         assertEquals(0, AllayFlight.lift(1, 12), EPS);

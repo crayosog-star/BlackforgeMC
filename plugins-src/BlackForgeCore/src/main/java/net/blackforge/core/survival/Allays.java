@@ -6,6 +6,7 @@ import net.blackforge.core.Ui;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -21,8 +22,10 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Allay;
+import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
+import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.ItemFrame;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
@@ -43,7 +46,10 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
+import org.joml.AxisAngle4f;
+import org.joml.Vector3f;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -84,7 +90,9 @@ public final class Allays implements Listener {
     private static final double TAG_HEIGHT = 0.9;
     private static final int SAVE_TICKS = 1200, GRAB_HOLD_TICKS = 6;
     private static final float TAG_VIEW_RANGE = 0.2f;
-    private static final org.bukkit.Color COPPER = org.bukkit.Color.fromRGB(0xC8743A), VERDIGRIS = org.bukkit.Color.fromRGB(0x4FD1B5);
+    private static final Color COPPER = Color.fromRGB(0xC8743A), VERDIGRIS = Color.fromRGB(0x4FD1B5), ORANGE = Color.fromRGB(0xF28C2C), GOLD = Color.fromRGB(0xFFE096);
+    private static final double SKIN_HEIGHT = 0.35, RAINBOW_SPEED = 0.01;
+    private static final int FLAP_TICKS = 3, SPARKLE_TICKS = 12;
 
     /** A test allay flying back and forth between two points. */
     private static final class Flyer {
@@ -106,6 +114,10 @@ public final class Allays implements Listener {
         /** What it's fetching, and what it's holding. Holding is kept in memory, because the item has left the world. */
         UUID job; ItemStack carried;
         int rest, hold; String label; float trail = 0.8f;
+        int tier = 1;
+        /** The Tier II or III look: the real allay goes invisible and this flies with it. */
+        ItemDisplay skin;
+        int skinTier; boolean skinFlipped, wingsUp;
         /** Where a load is going, other than the Station: a chest or an Agent. */
         Block dest; Robots.Bot agent;
         /** Set when a load is from the sell chest, so the Station end of the trip is a sale. */
@@ -163,7 +175,8 @@ public final class Allays implements Listener {
     private GroveTrader trader;
     private Function<String, UUID> ownerOf;
     private final double sellFee;
-    private final boolean enabled, previewStaff;
+    private final boolean enabled, previewStaff, customSkins;
+    private final ItemStack[][] skinItems = buildSkinItems();
     private final File file;
 
     /** {@code zone}: where staff may test flight. {@code sandbox}: the Arena's Foundry, where everything is free and nothing is saved. */
@@ -182,6 +195,7 @@ public final class Allays implements Listener {
         this.scanTicks = Math.max(20, c.getInt("allays.scan-seconds", 5) * 20);
         this.maxScans = Math.max(1, c.getInt("allays.max-scans-per-tick", 4));
         this.sellFee = c.getDouble("allays.sell-fee", 0.10);
+        this.customSkins = c.getBoolean("resource-pack-live", false) && c.getBoolean("allays.custom-skins", true);
         this.pathMaxNodes = Math.max(100, c.getInt("allays.path-max-nodes", 2000));
         this.maxSearches = Math.max(1, c.getInt("allays.max-path-searches-per-tick", 2));
         this.enabled = c.getBoolean("allays.enabled", false);
@@ -302,6 +316,7 @@ public final class Allays implements Listener {
         for (Base b : bases.values()) for (Worker w : b.workers) {
             if (w.entity != null) w.entity.remove();
             removeTag(w);
+            removeSkin(w);
         }
     }
 
@@ -557,10 +572,12 @@ public final class Allays implements Listener {
         for (Worker w : b.workers) {
             if (w.entity == null || !w.entity.isValid()) wake(w, at, flock);
             w.trail = 0.6f + 0.2f * b.tier;   // a higher tier burns brighter
+            w.tier = b.tier;
             w.tight = b.tight;
             work(b, w, at, flock, taken);
             label(w, b.tier, w.state == State.WAIT ? "<red>Station full" : null);
             moveTag(w);
+            dress(w);
         }
     }
 
@@ -702,8 +719,11 @@ public final class Allays implements Listener {
         }
         double[] here = xyz(w.entity.getLocation());
         moveTo(w.entity, p, p[0] - here[0], p[2] - here[2]);   // faces the way it's moving, including round a corner
-        if (w.tick % 2 == 0 && w.tick < w.ticks)
-            world.spawnParticle(Particle.DUST_COLOR_TRANSITION, p[0], p[1] + 0.3, p[2], 1, 0.08, 0.08, 0.08, 0, new Particle.DustTransition(COPPER, VERDIGRIS, w.trail));
+        if (w.tick % 2 == 0 && w.tick < w.ticks) {
+            Color start = w.tier >= 3 ? Color.fromRGB(AllayFlight.rainbow(now * RAINBOW_SPEED)) : w.tier == 2 ? ORANGE : COPPER;
+            Color end = w.tier >= 3 ? Color.fromRGB(AllayFlight.rainbow(now * RAINBOW_SPEED + 0.15)) : w.tier == 2 ? GOLD : VERDIGRIS;
+            world.spawnParticle(Particle.DUST_COLOR_TRANSITION, p[0], p[1] + 0.3, p[2], 1, 0.08, 0.08, 0.08, 0, new Particle.DustTransition(start, end, w.trail));
+        }
         return w.tick >= w.ticks;
     }
 
@@ -942,6 +962,76 @@ public final class Allays implements Listener {
         }
     }
 
+    /**
+     * Tier II and III wear a skin, since vanilla can't colour one allay and not another. The real allay stays, invisible, for
+     * its hitbox and name, and a display of the pack's model follows it and flaps by swapping between two models. Tier I
+     * keeps the plain allay. With no pack on this server, they all do, because the models would show purple.
+     */
+    private void dress(Worker w) {
+        if (!customSkins || w.tier < 2) {
+            removeSkin(w);
+            if (w.entity.isInvisible()) w.entity.setInvisible(false);
+            return;
+        }
+        if (!w.entity.isInvisible()) w.entity.setInvisible(true);
+        Location at = w.entity.getLocation().add(0, SKIN_HEIGHT, 0);
+        at.setPitch(0);
+        if (w.skin == null || !w.skin.isValid() || w.skinTier != w.tier) {
+            removeSkin(w);
+            w.skinTier = w.tier;
+            w.skin = at.getWorld().spawn(at, ItemDisplay.class, d -> {
+                d.setPersistent(false);
+                d.setTeleportDuration(1);
+                d.setInterpolationDuration(0);
+                d.setBrightness(new Display.Brightness(15, 15));   // the skin is the light here: it glows even in a dark base
+                d.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
+                d.setItemStack(skinItem(w.tier, 0));
+            });
+            w.skinFlipped = false;
+        } else w.skin.teleport(at);
+        boolean flip = sausageFlip && AllayRules.flipsUpsideDown(w.name);
+        if (flip != w.skinFlipped) {
+            w.skinFlipped = flip;
+            // the game's own upside-down rule only touches the real allay, so a skin turns itself over to match
+            w.skin.setTransformation(new Transformation(new Vector3f(), flip ? new AxisAngle4f((float) Math.PI, 0, 0, 1) : new AxisAngle4f(),
+                    new Vector3f(1, 1, 1), new AxisAngle4f()));
+        }
+        if ((now + w.index) % FLAP_TICKS == 0) {
+            w.wingsUp = !w.wingsUp;
+            w.skin.setItemStack(skinItem(w.tier, w.wingsUp ? 1 : 0));
+        }
+        // idle or not, the upgraded ones shimmer a little
+        if ((now + w.index * 7) % SPARKLE_TICKS == 0) {
+            if (w.tier == 2) at.getWorld().spawnParticle(Particle.WAX_ON, at, 1, 0.3, 0.3, 0.3, 0);
+            else at.getWorld().spawnParticle(Particle.DUST, at, 2, 0.35, 0.35, 0.35, 0, new Particle.DustOptions(Color.fromRGB(AllayFlight.rainbow(now * RAINBOW_SPEED + w.index * 0.3)), 0.7f));
+        }
+    }
+
+    /** One of a tier's two wing positions. Both tiers carry the enchantment shine. */
+    private ItemStack skinItem(int tier, int frame) {
+        return skinItems[tier - 2][frame];
+    }
+
+    private ItemStack[][] buildSkinItems() {
+        String[] names = {"courier", "steward"}, frames = {"a", "b"};
+        ItemStack[][] out = new ItemStack[names.length][frames.length];
+        for (int t = 0; t < names.length; t++) for (int f = 0; f < frames.length; f++) {
+            NamespacedKey model = new NamespacedKey("blackforge", "allay/" + names[t] + "_" + frames[f]);
+            ItemStack it = new ItemStack(Material.PAPER);
+            it.editMeta(m -> {
+                m.setItemModel(model);
+                m.setEnchantmentGlintOverride(true);
+            });
+            out[t][f] = it;
+        }
+        return out;
+    }
+
+    private static void removeSkin(Worker w) {
+        if (w.skin != null) w.skin.remove();
+        w.skin = null;
+    }
+
     private void moveTag(Worker w) {
         if (w.tag == null) return;
         if (!w.tag.isValid()) { w.tag = null; w.label = null; return; }   // it went with its chunk: the next label makes a new one
@@ -1054,6 +1144,7 @@ public final class Allays implements Listener {
                 w.entity.remove();
             }
             removeTag(w);
+            removeSkin(w);
             // an entity that's already gone went with its chunk, so a load stays held until it's back
             w.entity = null;
             w.job = null;

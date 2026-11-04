@@ -96,10 +96,11 @@ Checked against `origin/main` at `236f7d0`. `S` means `plugins-src/BlackForgeCor
 | Lag | At most 3 per base, a 5-second scan, a server-wide scan budget | P2.T2, P5.T2 |
 
 **Theme**
+- **Tier looks:** Tier I is the plain allay with a copper trail, Tier II is glimmering orange, and Tier III is a flowing rainbow.
 - **Palette:** molten copper to verdigris (`#c8743a` to `#4fd1b5`). It's unused, it ties to copper Agents, and it's distinct from the Spark Allay pet's `#6bd6ff`.
 - **Name:** Forge Allay, with tier names Gatherer, Courier and Steward.
 - **Look and sound:** a copper and verdigris particle trail. Pickup has a short anticipation hover and a soft amethyst chime, then the allay accelerates away. Each delivery gives a small spark at the Station. A sale gives a gold burst and a coin-like sound.
-- **Texture:** none. There's no item, and the vanilla allay model stays, because overriding it in the pack would also change the Spark Allay pet.
+- **Texture:** Tier II and III use `tools/gen_allay_skins.py`. Vanilla's allay texture isn't touched, so the Spark Allay pet stays the same.
 
 ## Phases and tasks
 Every phase ends with a gate. New config keys all live under `allays:` in `plugins-src/BlackForgeCore/src/main/resources/config.yml`.
@@ -316,6 +317,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | Added tier looks: Tier II glimmering orange and Tier III a flowing rainbow, from pack models on a display that follows an invisible allay | Colin, in chat |
 | 2026-11-04 | Added after launch: allays route around walls, and hover low when there's no room to circle. Colin said "keep building" | Colin, in chat |
 | 2026-11-04 | Launch flag turned on with the gates unrecorded, because Colin said "finish up and push everything" | Colin, in chat |
 | 2026-11-04 | Colin said "finish up and push everything". P5.T1-T3 ship together to save restarts. Allay menu art needs a resource pack update, so it moves to Later ideas and the menu stays plain. The P5.T2 measurements need a live server, so they're recorded as not measured | Colin, in chat |
