@@ -12,7 +12,9 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
@@ -27,13 +29,22 @@ final class OrangeCompanion {
     private static final double GAG_CHANCE = .4;
     private static final PetAnim.Gag[] IDLE_GAGS = {PetAnim.Gag.WIGGLE, PetAnim.Gag.BACKFLIP, PetAnim.Gag.SPIN, PetAnim.Gag.FACEPLANT, PetAnim.Gag.FLAIL};
 
-    private record VoiceCue(long delayNanos, String sound) {}
-    private static final List<VoiceCue> VOICE_CUES = List.of(
-            new VoiceCue(Duration.ofSeconds(10).toNanos(), INTRO),
-            new VoiceCue(Duration.ofSeconds(30).toNanos(), "blackforge:pet.vickie"),
-            new VoiceCue(Duration.ofSeconds(40).toNanos(), "blackforge:pet.hesitant_gulp"),
-            new VoiceCue(Duration.ofSeconds(50).toNanos(), "blackforge:pet.in_the_smoke"),
-            new VoiceCue(Duration.ofSeconds(60).toNanos(), "blackforge:pet.you_good_gang")
+    private static final long INTRO_DELAY = Duration.ofSeconds(10).toNanos();
+    private static final long MIN_GAP = Duration.ofSeconds(30).toNanos(), MAX_GAP = Duration.ofSeconds(100).toNanos();
+    static final List<String> LINES = List.of(
+            INTRO,
+            "blackforge:pet.in_the_smoke",
+            "blackforge:pet.you_good_gang",
+            "blackforge:pet.cooked",
+            "blackforge:pet.on_my_mama",
+            "blackforge:pet.run_it_back",
+            "blackforge:pet.let_bro_cook",
+            "blackforge:pet.lock_in",
+            "blackforge:pet.got_your_back",
+            "blackforge:pet.thats_crazy",
+            "blackforge:pet.we_outside",
+            "blackforge:pet.say_less",
+            "blackforge:pet.check_the_corner"
     );
 
     enum Toggle {
@@ -77,31 +88,42 @@ final class OrangeCompanion {
     private PetAnim.Pose current = PetAnim.Pose.REST;
     private int frame, restLeft, idleClock, blockedFrames;
     private boolean chasing, leaping, flailNext, facingChanged;
-    private final Random rng = new Random();
-    private Long firstSpawnAt;
-    private int nextVoiceCue;
+    private final Random rng;
+    private Long nextVoiceAt;
+    private String lastLine;
+    private final ArrayDeque<String> bag = new ArrayDeque<>();
 
     List<BlockDisplay> displays() { return displays; }
 
+    OrangeCompanion() { this(new Random()); }
+
+    OrangeCompanion(Random rng) { this.rng = rng; }
+
     void startVoiceClock(long now) {
-        if (firstSpawnAt == null) firstSpawnAt = now;
+        if (nextVoiceAt == null) nextVoiceAt = now + INTRO_DELAY;
     }
 
+    /** The intro first, then a random line every 30-100 seconds. A hidden pet catches up with just one line. */
     String voiceDue(long now) {
-        if (firstSpawnAt == null || nextVoiceCue == VOICE_CUES.size()) return null;
-        long elapsed = now - firstSpawnAt;
-        if (elapsed < VOICE_CUES.get(nextVoiceCue).delayNanos()) return null;
+        if (nextVoiceAt == null || now < nextVoiceAt) return null;
+        nextVoiceAt = now + MIN_GAP + rng.nextLong(MAX_GAP - MIN_GAP + 1);
+        lastLine = lastLine == null ? INTRO : nextLine();
+        return lastLine;
+    }
 
-        // If the pet was hidden across multiple cues, only play the latest one.
-        while (nextVoiceCue + 1 < VOICE_CUES.size()
-                && elapsed >= VOICE_CUES.get(nextVoiceCue + 1).delayNanos()) {
-            nextVoiceCue++;
+    /** Works through every line before repeating, and never says the same one twice in a row. */
+    private String nextLine() {
+        if (bag.isEmpty()) {
+            List<String> shuffled = new ArrayList<>(LINES);
+            Collections.shuffle(shuffled, rng);
+            if (shuffled.getFirst().equals(lastLine)) Collections.swap(shuffled, 0, shuffled.size() - 1);
+            bag.addAll(shuffled);
         }
-        return VOICE_CUES.get(nextVoiceCue++).sound();
+        return bag.poll();
     }
 
     /** Called by the cosmetics loop every two ticks while the owner is eligible to show a pet. */
-    void follow(Location ownerAt, Consumer<BlockDisplay> hideFromOptedOut, BiConsumer<Location, String> playVoice) {
+    void follow(Location ownerAt, Consumer<BlockDisplay> hideFromOptedOut, BiConsumer<Entity, String> playVoice) {
         boolean rebuild = anchor == null || anchor.getWorld() != ownerAt.getWorld()
                 || displays.size() != MODEL.size() || displays.stream().anyMatch(d -> !d.isValid());
         if (rebuild || anchor.distanceSquared(ownerAt) > PetAnim.LEASH * PetAnim.LEASH
@@ -115,7 +137,7 @@ final class OrangeCompanion {
 
         String voice = voiceDue(System.nanoTime());
         if (voice != null) {
-            playVoice.accept(anchor.clone().add(0, .5, 0), voice);
+            playVoice.accept(displays.getFirst(), voice);
             flailNext = true;
         }
 
