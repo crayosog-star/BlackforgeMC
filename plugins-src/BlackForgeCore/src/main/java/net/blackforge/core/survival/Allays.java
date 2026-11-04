@@ -97,7 +97,10 @@ public final class Allays implements Listener {
     private static final int FLAP_TICKS = 2, SPARKLE_TICKS = 12;
     /** Closed, half, swept, half: it steps through each one, because a jump between two far-apart poses looks like two pairs of wings. */
     private static final int[] FLAP_ORDER = {0, 1, 2, 1};
-    private static final double TIGHT_SPACING = 0.7;
+    private static final double TIGHT_SPACING = 0.7, ARRIVAL_SPREAD = 0.4;
+    private static final double TRAIL_MIN_MOVE = 0.04, TRAIL_MAX_MOVE = 2, RIBBON_WIDTH = 0.4, HALO_RADIUS = 0.6;
+    private static final float STEWARD_SCALE = 1.15f;
+    private static final int BURST_POINTS = 18;
 
     /** A test allay flying back and forth between two points. */
     private static final class Flyer {
@@ -123,6 +126,8 @@ public final class Allays implements Listener {
         /** The Tier II or III look: the real allay goes invisible and this flies with it. */
         ItemDisplay skin;
         int skinTier, flap; boolean skinFlipped;
+        /** Where it was last tick, so its trail can go behind it. */
+        double[] lastPos;
         /** Where a load is going, other than the Station: a chest or an Agent. */
         Block dest; Robots.Bot agent;
         /** Set when a load is from the sell chest, so the Station end of the trip is a sale. */
@@ -210,10 +215,13 @@ public final class Allays implements Listener {
         this.enabled = c.getBoolean("allays.enabled", false);
         this.previewStaff = c.getBoolean("allays.preview-staff", false);
         this.file = new File(plugin.getDataFolder(), "allays.yml");
-        if (!sandbox) load();
         this.linkScanTicks = Math.max(20, (sandbox ? c.getInt("foundry.allay-link-scan-seconds", 5) : c.getInt("allays.link-scan-seconds", 30)) * 20);
         this.speed = Math.max(0.5, c.getDouble("allays.speed", 6.0));
         this.pauseTicks = (int) Math.max(0, Math.round(c.getDouble("allays.pause-seconds", 1.0) * 20));
+        if (!sandbox) {
+            load();
+            save(false);   // the loads are now only in memory, so a crash from here on can lose one but can't bring it back as well
+        }
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
         if (sandbox) registerCommand();
@@ -363,7 +371,9 @@ public final class Allays implements Listener {
             String region = s.getString("region"), buyer = s.getString("buyer");
             int tier = s.getInt("tier");
             if (region == null || buyer == null || tier < 1 || tier > AllayRules.MAX_TIER) continue;
-            Base b = new Base(region, UUID.fromString(buyer));
+            Base b;
+            try { b = new Base(region, UUID.fromString(buyer)); }
+            catch (IllegalArgumentException ex) { plugin.getLogger().warning("allays.yml: skipped a base with a bad buyer: " + buyer); continue; }
             b.tier = tier;
             for (int n = 0; n < table.flock(tier); n++) {
                 Worker w = new Worker(n);
@@ -554,6 +564,8 @@ public final class Allays implements Listener {
 
     private void buy(Player p, Location at, int t) {
         String region = station.regionAt(at);
+        // a Station left behind after its claim went belongs to no base, so nothing would ever fly: don't take money for it
+        if (region == null) { p.sendActionBar(Ui.mm("<red>This Station isn't on a claim, so it can't have allays.")); return; }
         Base b = bases.get(region);
         // read from the base, not the card: two members can have this menu open at once
         if ((b == null ? 0 : b.tier) != t - 1 || t > BUILT_TIER) return;
@@ -609,6 +621,7 @@ public final class Allays implements Listener {
 
     private static void moveTo(Allay a, double[] p, double headX, double headZ) {
         Location now = a.getLocation(), next = new Location(now.getWorld(), p[0], p[1], p[2]);
+        if (!now.getWorld().isChunkLoaded(next.getBlockX() >> 4, next.getBlockZ() >> 4)) return;   // never load a chunk just to hover in it
         Vector dir = new Vector(headX, 0, headZ);
         next.setDirection(dir.lengthSquared() < 1e-4 ? now.getDirection() : dir);
         next.setPitch(0);
@@ -625,15 +638,23 @@ public final class Allays implements Listener {
         Set<UUID> taken = new HashSet<>();
         for (Worker w : b.workers) if (w.job != null) taken.add(w.job);
         for (Worker w : b.workers) {
-            if (w.entity == null || !w.entity.isValid()) wake(w, at, flock);
-            w.trail = 0.6f + 0.2f * b.tier;   // a higher tier burns brighter
             w.tier = b.tier;
             w.tight = b.tight;
+            if (w.entity == null || !w.entity.isValid()) wake(w, at, flock);
+            w.trail = 0.6f + 0.2f * b.tier;   // a higher tier burns brighter
             work(b, w, at, flock, taken);
-            label(w, b.tier, w.state == State.WAIT ? "<red>Station full" : null);
+            label(w, b.tier, w.state == State.WAIT || stationFull(b) ? "<red>Station full" : null);
             moveTag(w);
             dress(w);
+            effects(w);
         }
+    }
+
+    /** Drops are waiting but there's no room for them. Without this it just circles with no explanation. */
+    private boolean stationFull(Base b) {
+        if (b.jobs.isEmpty()) return false;
+        Inventory store = station.storageIn(b.region);
+        return store != null && store.firstEmpty() < 0;
     }
 
     /** A new entity for this allay. If it was carrying something when its last one went, it takes that home first. */
@@ -645,6 +666,7 @@ public final class Allays implements Listener {
         w.dest = null;
         w.agent = null;
         w.route = null;
+        w.hold = 0;
         if (w.carried != null) goHome(w, at, flock);   // a load from the sell chest stays one, so it's still sold
         else w.state = State.IDLE;
     }
@@ -659,6 +681,8 @@ public final class Allays implements Listener {
                 if (AllayRules.canRefuel(b.tier) && startRefuel(b, w, store)) return;
                 if (AllayRules.canSort(b.tier) && startSort(b, w, store)) return;
                 if (AllayRules.canSell(b.tier) && startSell(b, w)) return;
+                // a drop can be picked up or despawn between scans, so don't fly to where one used to be
+                b.jobs.removeIf(j -> !(Bukkit.getEntity(j.id()) instanceof Item d) || !d.isValid());
                 var job = store.firstEmpty() < 0 ? Optional.<AllayJobs.Job>empty()
                         : AllayJobs.nearest(xyz(w.entity.getLocation()), b.jobs, taken);
                 if (job.isPresent()) {
@@ -709,7 +733,9 @@ public final class Allays implements Listener {
     private void fly(Worker w, double[] to) {
         w.from = xyz(w.entity.getLocation());
         World world = w.entity.getWorld();
-        w.to = AllayPath.nudge(to, (x, y, z) -> free(world, x, y, z));
+        // a little apart at the far end too, so a flock doesn't pile into one spot over a chest
+        double[] spot = w.state == State.DELIVER || w.state == State.COLLECT ? new double[]{to[0] + (w.index - 1) * ARRIVAL_SPREAD, to[1], to[2]} : to;
+        w.to = AllayPath.nudge(spot, (x, y, z) -> free(world, x, y, z));
         w.tick = 0;
         w.route = null;
         plan(w);
@@ -727,7 +753,7 @@ public final class Allays implements Listener {
             searchesThisTick++;
             AllayPath.Route found = AllayPath.route(w.from, w.to, open, pathMaxNodes);
             w.route = found != null ? found : new AllayPath.Route(List.of(w.from, w.to));
-        } else w.route = new AllayPath.Route(List.of(w.from, w.to));
+        } else w.route = AllayPath.bowed(w.from, w.to, w.index, open);   // each goes its own way, not in single file
         w.ticks = AllayFlight.ticks(w.route.length, speed);
         return true;
     }
@@ -735,6 +761,7 @@ public final class Allays implements Listener {
     /** Back to its place in the circle. The trip is timed first, so it can aim for where that place will be when it lands and not snap. */
     private void goHome(Worker w, Location at, int flock) {
         w.job = null;
+        w.hold = 0;
         w.dest = null;
         w.agent = null;   // a trip that gave up mustn't keep its claim on an Agent
         w.state = State.RETURN;
@@ -748,7 +775,8 @@ public final class Allays implements Listener {
         double[] landing = hover(at, w, flock, now + w.ticks);
         double[][] p = w.route.points;
         if (p.length == 2) w.route = new AllayPath.Route(List.of(w.from, landing));
-        else {
+        else {   // a curve's last leg just bends a little to meet the spot
+
             List<double[]> pts = new ArrayList<>(List.of(p));
             pts.set(pts.size() - 1, landing);
             w.route = new AllayPath.Route(pts);
@@ -774,11 +802,8 @@ public final class Allays implements Listener {
         }
         double[] here = xyz(w.entity.getLocation());
         moveTo(w.entity, p, p[0] - here[0], p[2] - here[2]);   // faces the way it's moving, including round a corner
-        if (w.tick % 2 == 0 && w.tick < w.ticks) {
-            Color start = w.tier >= 3 ? Color.fromRGB(AllayFlight.rainbow(now * RAINBOW_SPEED)) : w.tier == 2 ? ORANGE : COPPER;
-            Color end = w.tier >= 3 ? Color.fromRGB(AllayFlight.rainbow(now * RAINBOW_SPEED + 0.15)) : w.tier == 2 ? GOLD : VERDIGRIS;
-            world.spawnParticle(Particle.DUST_COLOR_TRANSITION, p[0], p[1] + 0.3, p[2], 1, 0.08, 0.08, 0.08, 0, new Particle.DustTransition(start, end, w.trail));
-        }
+        if (w.tier == 1 && w.tick % 2 == 0 && w.tick < w.ticks)
+            world.spawnParticle(Particle.DUST_COLOR_TRANSITION, p[0], p[1] + 0.3, p[2], 1, 0.08, 0.08, 0.08, 0, new Particle.DustTransition(COPPER, VERDIGRIS, w.trail));
         return w.tick >= w.ticks;
     }
 
@@ -959,6 +984,7 @@ public final class Allays implements Listener {
         w.carried = null;
         at.getWorld().playSound(at, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.6f, 1.2f);
         at.getWorld().spawnParticle(Particle.WAX_ON, at.clone().add(0.5, 1.4, 0.5), 12, 0.4, 0.3, 0.4, 0.02);
+        if (w.tier >= 3) prismBurst(at.clone().add(0.5, 1.4, 0.5));
         owner.sendActionBar(Ui.mm("<#ffd27a>Your allay sold " + load.getAmount() + " for <gold>" + NetEconomy.money(net) + (sandbox ? " <gray>(not really: Foundry)" : "")));
         rest(w);
     }
@@ -986,6 +1012,7 @@ public final class Allays implements Listener {
             w.carried = null;
             at.getWorld().playSound(at, Sound.BLOCK_AMETHYST_CLUSTER_PLACE, 0.4f, 1.6f);
             at.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, at.clone().add(0.5, 1.2, 0.5), 6, 0.25, 0.2, 0.25, 0.01);
+            if (w.tier >= 3) prismBurst(at.clone().add(0.5, 1.2, 0.5));
             rest(w);
         } else {
             w.carried = left.values().iterator().next();
@@ -1022,7 +1049,7 @@ public final class Allays implements Listener {
 
     /**
      * Tier II and III wear a skin, since vanilla can't colour one allay and not another. The real allay stays, invisible, for
-     * its hitbox and name, and a display of the pack's model follows it and flaps by swapping between two models. Tier I
+     * its hitbox and name, and a display of the pack's model follows it and flaps by stepping through its models. Tier I
      * keeps the plain allay. With no pack on this server, they all do, because the models would show purple.
      */
     private void dress(Worker w) {
@@ -1044,6 +1071,7 @@ public final class Allays implements Listener {
                 d.setBrightness(new Display.Brightness(15, 15));   // the skin is the light here: it glows even in a dark base
                 d.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
                 d.setItemStack(skinItem(w.tier, 0));
+                d.setTransformation(skinTransform(w.tier, false));
             });
             w.skinFlipped = false;
         } else w.skin.teleport(at);
@@ -1051,18 +1079,70 @@ public final class Allays implements Listener {
         if (flip != w.skinFlipped) {
             w.skinFlipped = flip;
             // the game's own upside-down rule only touches the real allay, so a skin turns itself over to match
-            w.skin.setTransformation(new Transformation(new Vector3f(), flip ? new AxisAngle4f((float) Math.PI, 0, 0, 1) : new AxisAngle4f(),
-                    new Vector3f(1, 1, 1), new AxisAngle4f()));
+            w.skin.setTransformation(skinTransform(w.tier, flip));
         }
         if ((now + w.index) % FLAP_TICKS == 0) {
             w.flap = (w.flap + 1) % FLAP_ORDER.length;
             w.skin.setItemStack(skinItem(w.tier, FLAP_ORDER[w.flap]));
         }
-        // idle or not, the upgraded ones shimmer a little
-        if ((now + w.index * 7) % SPARKLE_TICKS == 0) {
-            if (w.tier == 2) at.getWorld().spawnParticle(Particle.WAX_ON, at, 1, 0.3, 0.3, 0.3, 0);
-            else at.getWorld().spawnParticle(Particle.DUST, at, 2, 0.35, 0.35, 0.35, 0, new Particle.DustOptions(Color.fromRGB(AllayFlight.rainbow(now * RAINBOW_SPEED + w.index * 0.3)), 0.7f));
+    }
+
+    /**
+     * What an upgraded allay leaves behind. Tier II drags a glowing orange trail. Tier III draws two rainbow ribbons off its
+     * wingtips, with sparks in its wake and motes circling it, even when it's hovering.
+     */
+    private void effects(Worker w) {
+        if (w.tier < 2) return;
+        Location at = w.entity.getLocation().add(0, SKIN_HEIGHT, 0);
+        World world = at.getWorld();
+        double[] was = w.lastPos;
+        w.lastPos = new double[]{at.getX(), at.getY(), at.getZ()};
+        if (was != null) {
+            double dx = at.getX() - was[0], dy = at.getY() - was[1], dz = at.getZ() - was[2], moved = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (moved > TRAIL_MIN_MOVE && moved < TRAIL_MAX_MOVE) {
+                double bx = -dx / moved, by = -dy / moved, bz = -dz / moved;   // behind it, whichever way it's going
+                Location tail = at.clone().add(bx * 0.4, by * 0.4, bz * 0.4);
+                if (w.tier == 2) {
+                    world.spawnParticle(Particle.DUST_COLOR_TRANSITION, tail, 2, 0.06, 0.06, 0.06, 0, new Particle.DustTransition(ORANGE, GOLD, 1.3f));
+                    if ((now + w.index) % 3 == 0) world.spawnParticle(Particle.FLAME, tail, 1, 0.05, 0.05, 0.05, 0.002);
+                } else {
+                    double flat = Math.hypot(dx, dz), sx = flat < 1e-6 ? 1 : -dz / flat, sz = flat < 1e-6 ? 0 : dx / flat;
+                    double hue = now * RAINBOW_SPEED + w.index * 0.33;
+                    ribbon(world, tail.clone().add(sx * RIBBON_WIDTH, 0.1, sz * RIBBON_WIDTH), hue);
+                    ribbon(world, tail.clone().add(-sx * RIBBON_WIDTH, 0.1, -sz * RIBBON_WIDTH), hue + 0.2);
+                    if ((now + w.index) % 4 == 0) world.spawnParticle(Particle.END_ROD, tail, 1, 0.1, 0.1, 0.1, 0.005);
+                }
+            }
         }
+        if (w.tier == 2) {
+            if ((now + w.index * 7) % SPARKLE_TICKS == 0) world.spawnParticle(Particle.WAX_ON, at, 1, 0.3, 0.3, 0.3, 0);
+        } else if ((now + w.index) % 2 == 0) {
+            double angle = now * 0.3 + w.index * 2.1;
+            for (int i = 0; i < 2; i++) {
+                double a = angle + i * Math.PI;
+                Location mote = at.clone().add(Math.cos(a) * HALO_RADIUS, 0.3 + Math.sin(now * 0.1 + i) * 0.15, Math.sin(a) * HALO_RADIUS);
+                world.spawnParticle(Particle.DUST, mote, 1, 0, 0, 0, 0, new Particle.DustOptions(Color.fromRGB(AllayFlight.rainbow(now * RAINBOW_SPEED * 3 + i * 0.5)), 0.7f));
+            }
+        }
+    }
+
+    private static void ribbon(World world, Location at, double hue) {
+        world.spawnParticle(Particle.DUST_COLOR_TRANSITION, at, 1, 0.02, 0.02, 0.02, 0,
+                new Particle.DustTransition(Color.fromRGB(AllayFlight.rainbow(hue)), Color.fromRGB(AllayFlight.rainbow(hue + 0.15)), 1.2f));
+    }
+
+    /** A ring of every colour, when a Steward finishes a job. */
+    private static void prismBurst(Location at) {
+        for (int i = 0; i < BURST_POINTS; i++) {
+            double a = 2 * Math.PI * i / BURST_POINTS;
+            at.getWorld().spawnParticle(Particle.DUST, at.clone().add(Math.cos(a) * 0.8, 0, Math.sin(a) * 0.8), 1, 0, 0, 0, 0,
+                    new Particle.DustOptions(Color.fromRGB(AllayFlight.rainbow((double) i / BURST_POINTS)), 1.1f));
+        }
+    }
+
+    private static Transformation skinTransform(int tier, boolean flip) {
+        float scale = tier >= 3 ? STEWARD_SCALE : 1f;   // the top tier is a little bigger
+        return new Transformation(new Vector3f(), flip ? new AxisAngle4f((float) Math.PI, 0, 0, 1) : new AxisAngle4f(), new Vector3f(scale, scale, scale), new AxisAngle4f());
     }
 
     /** One of a tier's three wing positions. Both tiers carry the enchantment shine. */
@@ -1148,11 +1228,15 @@ public final class Allays implements Listener {
     }
 
     private boolean collectable(Item drop, Location at) {
-        if (!drop.canMobPickup() || !drop.canPlayerPickup() || drop.getPickupDelay() >= NEVER_PICKED_UP) return false;   // displays, not loot
-        UUID thrower = drop.getThrower();
-        Player who = thrower == null ? null : Bukkit.getPlayer(thrower);
-        boolean visitor = thrower != null && (who == null || !station.usable(who, at));
+        if (!drop.canMobPickup() || !drop.canPlayerPickup() || drop.getPickupDelay() >= NEVER_PICKED_UP || drop.isUnlimitedLifetime()) return false;   // displays, not loot
+        boolean visitor = notMember(drop.getThrower(), at) || notMember(drop.getOwner(), at);   // a drop reserved for someone stays theirs
         return AllayRules.skipDrop(drop.getTicksLived(), minDropAge, drop.getPersistentDataContainer().has(deathDrop), visitor).isEmpty();
+    }
+
+    private boolean notMember(UUID id, Location at) {
+        if (id == null) return false;
+        Player who = Bukkit.getPlayer(id);
+        return who == null || !station.usable(who, at);
     }
 
     /** Remembers where a player just died, so {@link #onItemSpawn} can mark what falls. It marks the drop, not the stack, so the items stay normal. */

@@ -21,7 +21,9 @@ final class AllayPath {
     @FunctionalInterface interface Free { boolean at(int x, int y, int z); }
 
     private static final double SAMPLE_STEP = 0.25;
-    private static final int ROUND_PASSES = 2;
+    private static final int ROUND_PASSES = 2, BOW_SEGMENTS = 12;
+    private static final double MIN_BOW_LENGTH = 3, MAX_BOW = 2.5;
+    private static final double[] BOW_SIDE = {1, -1, 0.45}, BOW_UP = {0.4, 0.8, 1.0};
     private static final int[][] STEPS = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
 
     /** A flight along points, measured so it can be followed at any speed. */
@@ -74,6 +76,27 @@ final class AllayPath {
             if (free.at(x + s[0], y + s[1], z + s[2])) return new double[]{x + s[0] + 0.5, y + s[1] + 0.5, z + s[2] + 0.5};
         }
         return to;
+    }
+
+    /**
+     * A clear flight that curves its own way, so a flock doesn't fly in single file: each allay bows out to a different side
+     * and height. If the curve would hit anything, or the trip is too short to bother, it's the straight line.
+     */
+    static Route bowed(double[] from, double[] to, int index, Free free) {
+        double length = dist(from, to);
+        if (length < MIN_BOW_LENGTH) return new Route(List.of(from, to));
+        double side = BOW_SIDE[index % BOW_SIDE.length] * Math.min(length * 0.2, MAX_BOW), up = BOW_UP[index % BOW_UP.length] * Math.min(length * 0.12, MAX_BOW);
+        double flat = Math.hypot(to[0] - from[0], to[2] - from[2]);
+        double sx = flat < 1e-6 ? 1 : -(to[2] - from[2]) / flat, sz = flat < 1e-6 ? 0 : (to[0] - from[0]) / flat;
+        List<double[]> pts = new ArrayList<>();
+        pts.add(from);
+        for (int i = 1; i < BOW_SEGMENTS; i++) {
+            double t = (double) i / BOW_SEGMENTS, s = Math.sin(Math.PI * t);
+            pts.add(new double[]{from[0] + (to[0] - from[0]) * t + sx * side * s, from[1] + (to[1] - from[1]) * t + up * s, from[2] + (to[2] - from[2]) * t + sz * side * s});
+        }
+        pts.add(to);
+        for (int i = 1; i < pts.size(); i++) if (!clear(pts.get(i - 1), pts.get(i), free)) return new Route(List.of(from, to));
+        return new Route(pts);
     }
 
     /** Whether a search is worth starting: true when the straight line is clear and no search is needed. */
