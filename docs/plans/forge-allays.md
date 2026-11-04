@@ -245,7 +245,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Needs:** P4.T1; `S/BaseStation.java:403-423` as the save pattern; `S/SurvivalModule.java:162`.
 - **Files:** change `S/Allays.java`, `S/SurvivalModule.java`, `plugins-src/BlackForgeCore/src/main/resources/config.yml`.
 - **Steps:**
-  1. Save region, tier and any carried items to `allays.yml` every minute and on shutdown, with no save in the sandbox. Load on start. Unknown keys are ignored, so future versions can add fields.
+  1. Save region, tier, each allay's name and any carried items to `allays.yml` every minute and on shutdown, with no save in the sandbox. Load on start. Unknown keys are ignored, so future versions can add fields.
   2. Construct `Allays` on Survival, calling `setTrader` with the instance built at `S/SurvivalModule.java:202` and `BaseStation.setAllays`. Add `allays.preview-staff: false`. Slot 34 shows only when `enabled`, or when `preview-staff` is on and the player has `blackforge.admin`.
   3. On Survival, charge real money and Essence through the shared pay method.
   4. Respawn entities from saved state, using the entity-load pattern at `S/Robots.java:382`, and go dormant when no Station stands in the region.
@@ -316,6 +316,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | Added allay naming with Name Tags, and an easter egg: an allay named Smoked Sausage flies upside down. P4.T2 must also save each allay's name | Colin, in chat |
 | 2026-11-04 | P2.T3 drops bench items from a spot on the open floor instead of a dispenser, so the Arena doesn't need rebuilding | Same test, less risk; flagged to Colin in the PR |
 | 2026-11-04 | P2.T2 marks death drops on the item entity, not the stack, so a player's recovered items don't keep a hidden tag and still stack | Same check, safer method; flagged to Colin in the PR |
 | 2026-11-04 | Phase 2 started before the Phase 1 in-game gate was played | Colin, in chat |

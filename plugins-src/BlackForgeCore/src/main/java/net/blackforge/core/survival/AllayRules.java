@@ -37,6 +37,16 @@ final class AllayRules {
         return tier;
     }
 
+    /** An allay's name: 1-16 letters, digits or single spaces, so it's safe inside MiniMessage text. */
+    static boolean validName(String name) {
+        return name != null && name.length() <= 16 && name.matches("[A-Za-z0-9]+( [A-Za-z0-9]+)*");
+    }
+
+    /** The easter egg: "Smoked Sausage" flies upside down, however it's capitalised and spaced. */
+    static boolean flipsUpsideDown(String name) {
+        return name != null && name.replaceAll("\\s+", "").equalsIgnoreCase("smokedsausage");
+    }
+
     /** Courier and up: sorts the Station into framed chests. */
     static boolean canSort(int tier) { return checkTier(tier) >= 2; }
 
