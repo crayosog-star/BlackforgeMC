@@ -1,6 +1,6 @@
 # Forge Allays
 **Status:** In progress. Approved by Colin on 2026-11-04 with the recommended defaults
-**Next task:** P3.T1, once the Phase 2 gate is confirmed (rule 9)
+**Next task:** P3.T2
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -209,7 +209,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** a chest broken mid-trip (return the load to the Station); two frames with one material (the nearest with room wins); double chests; a frame on the Station itself (ignored); Agent items, Fuel Cells and items with custom data move as whole stacks with their data intact; the Base Station barrel is never a destination.
 - **Done when:** a unit test covers map building and picking. In the Foundry, the gate's sorting checks pass, and the same item count exists before and after a run with custom-named items.
 - **Leaves ready:** the courier job pattern for fuel and sales.
-- **Evidence:**
+- **Evidence:** Verified: `AllayJobsTest` passes when run alone, and the build runs before merge. Untested in game: all sorting checks, and the Courier Bench's frames and spot.
 
 ### [ ] P3.T2: Add Agent refuelling
 - **Needs:** P3.T1; `Robots.fuelFromItem`, `agentsNear` from P1.T2; `RobotRules.shouldFetchFuel` (`S/RobotRules.java:63`), `lowestTierCell`.
@@ -316,6 +316,8 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | Phase 3 started with the Phase 1 and 2 in-game gates still unplayed; those checks carry forward | Colin, in chat |
+| 2026-11-04 | Added a Courier Bench to P3.T1, so sorting can be tested with no setup. Fuel Cells are never sorted, so they stay for refuelling | Testing rule; flagged to Colin in the PR |
 | 2026-11-04 | Added allay naming with Name Tags, and an easter egg: an allay named Smoked Sausage flies upside down. P4.T2 must also save each allay's name | Colin, in chat |
 | 2026-11-04 | P2.T3 drops bench items from a spot on the open floor instead of a dispenser, so the Arena doesn't need rebuilding | Same test, less risk; flagged to Colin in the PR |
 | 2026-11-04 | P2.T2 marks death drops on the item entity, not the stack, so a player's recovered items don't keep a hidden tag and still stack | Same check, safer method; flagged to Colin in the PR |

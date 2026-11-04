@@ -46,6 +46,10 @@ final class FoundryLab {
     private static final int BENCH_MAX = 6, BENCH_SECONDS = 5;
     private final List<org.bukkit.entity.Item> benchDrops = new ArrayList<>();
     private int benchTimer;
+    /** The Courier Bench's chests, each with what its frame holds: the Allay Bench's own drops, so the whole chain can be watched. */
+    private static final Material[] COURIER_ITEMS = {Material.COBBLESTONE, Material.WHEAT, Material.RAW_IRON};
+    private static final int COURIER_Z_OFFSET = -5, COURIER_SPACING = 2;
+    private final org.bukkit.entity.ItemFrame[] courierFrames = new org.bukkit.entity.ItemFrame[COURIER_ITEMS.length];
 
     FoundryLab(BlackForgeCore plugin, World world, HopperUpgrades hoppers, BaseStation station, Predicate<Location> zone, Layout layout) {
         this.world = world; this.hoppers = hoppers; this.station = station; this.zone = zone; this.layout = layout;
@@ -65,6 +69,7 @@ final class FoundryLab {
         if (!occupied && layout.forge().getBlock().getState(false) instanceof Barrel b) b.getInventory().clear();   // shared storage, so it resets too
         for (Lane l : lanes) runLane(l);
         runAllayBench(occupied);
+        runCourierBench(occupied);
         mobs.removeIf(m -> !m.isValid());
         // spread out and standing still, so they stay in the pen and an agent placed beside one always reaches it
         while (mobs.size() < layout.mobs()) mobs.add(world.spawn(layout.penMobs().clone().add(rnd.nextInt(7) - 3, 0, rnd.nextInt(7) - 3), Husk.class,
@@ -83,6 +88,27 @@ final class FoundryLab {
         benchTimer = 0;
         Location at = layout.allayBench().clone().add(rnd.nextDouble() * 3 - 1.5, 1, rnd.nextDouble() * 3 - 1.5);
         benchDrops.add(world.dropItem(at, new ItemStack(BENCH_ITEMS[rnd.nextInt(BENCH_ITEMS.length)], 1 + rnd.nextInt(32)), i -> i.setPersistent(false)));
+    }
+
+    /** Three chests on the open floor with framed items. Set up here, not in the Arena's build, so the Arena needn't rebuild. They reset when nobody's here. */
+    private void runCourierBench(boolean occupied) {
+        for (int i = 0; i < COURIER_ITEMS.length; i++) {
+            Block chest = layout.allayBench().getBlock().getRelative(i * COURIER_SPACING, 0, COURIER_Z_OFFSET);
+            if (chest.getType().isAir() && chest.getRelative(org.bukkit.block.BlockFace.DOWN).getType().isSolid()) chest.setType(Material.CHEST);
+            if (chest.getType() != Material.CHEST || !(chest.getState(false) instanceof Container c)) continue;
+            if (!occupied) c.getInventory().clear();
+            if (courierFrames[i] != null && courierFrames[i].isValid()) continue;
+            ItemStack shown = new ItemStack(COURIER_ITEMS[i]);
+            try {
+                courierFrames[i] = world.spawn(chest.getRelative(org.bukkit.block.BlockFace.SOUTH).getLocation(), org.bukkit.entity.ItemFrame.class, f -> {
+                    f.setFacingDirection(org.bukkit.block.BlockFace.SOUTH, true);
+                    f.setItem(shown, false);
+                    f.setPersistent(false);
+                });
+            } catch (IllegalArgumentException ex) {
+                return;   // no room for a frame here: the check on the plan's gate shows it
+            }
+        }
     }
 
     /** Fills the source chest, empties the sink and shows what really came through over the last 5 seconds. */
@@ -107,6 +133,7 @@ final class FoundryLab {
     private void spawnLabels() {
         label(layout.title(), "<gradient:#ffb347:#ff5a1a><bold>THE FOUNDRY</bold></gradient><newline><gray>Build and test anything<newline><dark_gray>It all goes when you leave", 1.3f);
         label(layout.forge().clone().add(0.5, 2.3, 0.5), "<gold><bold>The Forge</bold><newline><gray>Upgrades are free here", 1f);
+        label(layout.allayBench().clone().add(COURIER_SPACING, 1.6, COURIER_Z_OFFSET), "<#4fd1b5><bold>Courier Bench</bold><newline><gray>A Tier II allay sorts the Forge's<newline><gray>storage into these framed chests", 1f);
         label(layout.allayBench().clone().add(0, 1.8, 0), "<#4fd1b5><bold>Allay Bench</bold><newline><gray>Summon a Forge Allay from slot 34<newline><gray>of the Forge to clear these drops", 1f);
         for (int i = 0; i < layout.supply().length; i++)
             label(layout.supply()[i].clone().add(0.5, 1.5, 0.5), "<#ffb347><bold>" + FoundrySupply.NAMES[i] + "</bold><newline><gray>Never runs out", 0.9f);
