@@ -72,6 +72,7 @@ public final class SurvivalModule implements Listener {
     private final HopperUpgrades hoppers;
     private final BaseStation station;
     private final Allays allays;
+    private final ThiefAmbush thieves;
     private final Set<UUID> dropping = new HashSet<>(), landed = new HashSet<>();
     private final Set<UUID> warmupApproved = new HashSet<>();
     private final Map<UUID, Integer> warmups = new HashMap<>();
@@ -138,6 +139,11 @@ public final class SurvivalModule implements Listener {
         jobs = new Jobs(plugin);
         new ChestShops(plugin, claims);
         new AfkZone(plugin, world, new Location(world, 1500.5, 200, 1500.5), 6, crates, "afkzone-built");
+        // Night Thieves: outside your own claim at night, 5% a minute. Never at spawn, KOTH, the Scrapyard or the AFK zone,
+        // and they never appear inside any claim.
+        thieves = new ThiefAmbush(plugin, crates,
+                (p, l) -> l.getWorld() == world && !protectedArea(l) && !nearAfk(l) && !(claims.ownerAt(l) != null && claims.canUse(p, l)),
+                l -> l.getWorld() == world && !protectedArea(l) && !nearAfk(l) && claims.ownerAt(l) == null);
         new ResourceWorld(plugin);
         votes.setScrap(scrap);
         ranks = new Ranks(plugin, crates);
@@ -189,6 +195,7 @@ public final class SurvivalModule implements Listener {
             votes.setEconomy(eco);
             hall.setEconomy(eco);
             daily.setEconomy(eco);
+            thieves.setEconomy(eco);
             ah = new AuctionHouse(plugin, eco);
             refreshLeaderboard();
         });
@@ -250,6 +257,7 @@ public final class SurvivalModule implements Listener {
         surge.shutdown();
         rite.shutdown();   // undoes any running rite: both duellists go home as they were
         cage.shutdown(); eye.shutdown(); chain.shutdown(); bonfire.shutdown(); emp.shutdown();
+        thieves.shutdown();   // hands back anything a thief is carrying
         holos.forEach(TextDisplay::remove);
         if (koth.active()) koth.stop(null);
         pvp.shutdown();
@@ -406,6 +414,7 @@ public final class SurvivalModule implements Listener {
     /** Console/admin: /blackforge crate give <player> <crate> [amount], /blackforge koth start|stop, /blackforge buildsurvival */
     public boolean admin(CommandSender s, String[] a) {
         if (vaults.admin(s, a)) return true;   // /blackforge vault give <player> [amount]: crates and the store
+        if (thieves.admin(s, a)) return true;   // /blackforge thieves spawn <player> | clear | status: the Night Thieves
         if (rite.admin(s, a)) return true;   // /blackforge rite give <player> (for crates)
         if (abyss.command(s, a)) return true;   // /blackforge abyss stage|tp|serpent|kill: the Abyssal Sea
         if (staging.command(s, a)) return true;   // /blackforge kingdom stage|tp: the Infernal Kingdom in its own staging world
@@ -725,6 +734,11 @@ public final class SurvivalModule implements Listener {
     @EventHandler
     public void onRespawn(PlayerRespawnEvent e) {
         if (!e.isBedSpawn() && !e.isAnchorSpawn()) e.setRespawnLocation(spawn());
+    }
+
+    /** The AFK platform high above (1500, 1500): never a place for thieves. */
+    private boolean nearAfk(Location l) {
+        return l.getWorld() == world && Math.abs(l.getY() - 200) < 12 && Math.hypot(l.getX() - 1500.5, l.getZ() - 1500.5) < 14;
     }
 
     private boolean protectedArea(Location l) {

@@ -82,7 +82,9 @@ public final class Allays implements Listener {
     private static final int DRAIN_REACH = 20;
     private static final long DRAIN_TO_MS = 60_000L;
     private static final double TAG_HEIGHT = 0.9;
-    private static final int SAVE_TICKS = 1200;
+    private static final int SAVE_TICKS = 1200, GRAB_HOLD_TICKS = 6;
+    private static final float TAG_VIEW_RANGE = 0.2f;
+    private static final org.bukkit.Color COPPER = org.bukkit.Color.fromRGB(0xC8743A), VERDIGRIS = org.bukkit.Color.fromRGB(0x4FD1B5);
 
     /** A test allay flying back and forth between two points. */
     private static final class Flyer {
@@ -97,9 +99,13 @@ public final class Allays implements Listener {
         State state = State.IDLE;
         /** The trip under way. */
         double[] from, to; int tick, ticks;
+        /** Its way there, or null while it waits its turn for a search. */
+        AllayPath.Route route;
+        /** No room for the circle round this Station, so it hovers just above it. */
+        boolean tight;
         /** What it's fetching, and what it's holding. Holding is kept in memory, because the item has left the world. */
         UUID job; ItemStack carried;
-        int rest; String label;
+        int rest, hold; String label; float trail = 0.8f;
         /** Where a load is going, other than the Station: a chest or an Agent. */
         Block dest; Robots.Bot agent;
         /** Set when a load is from the sell chest, so the Station end of the trip is a sale. */
@@ -125,6 +131,7 @@ public final class Allays implements Listener {
         final List<Block> sellChests = new ArrayList<>();
         final List<Robots.Bot> thirsty = new ArrayList<>();
         long lastScan = Long.MIN_VALUE / 2, lastLinkScan = Long.MIN_VALUE / 2;
+        boolean tight;
         Base(String region, UUID buyer) { this.region = region; this.buyer = buyer; }
     }
 
@@ -145,7 +152,8 @@ public final class Allays implements Listener {
     private final NamespacedKey deathDrop;
     private org.bukkit.World deathWorld;
     private double deathX, deathY, deathZ;
-    private int deathTick = -1, scansThisTick;
+    private int deathTick = -1, scansThisTick, searchesThisTick;
+    private final int pathMaxNodes, maxSearches;
     private final List<Flyer> flyers = new ArrayList<>();
     private final Map<String, Base> bases = new HashMap<>();
     private long now;
@@ -174,6 +182,8 @@ public final class Allays implements Listener {
         this.scanTicks = Math.max(20, c.getInt("allays.scan-seconds", 5) * 20);
         this.maxScans = Math.max(1, c.getInt("allays.max-scans-per-tick", 4));
         this.sellFee = c.getDouble("allays.sell-fee", 0.10);
+        this.pathMaxNodes = Math.max(100, c.getInt("allays.path-max-nodes", 2000));
+        this.maxSearches = Math.max(1, c.getInt("allays.max-path-searches-per-tick", 2));
         this.enabled = c.getBoolean("allays.enabled", false);
         this.previewStaff = c.getBoolean("allays.preview-staff", false);
         this.file = new File(plugin.getDataFolder(), "allays.yml");
@@ -364,7 +374,6 @@ public final class Allays implements Listener {
             x.setPersistent(false);      // a crash or restart can't leave one behind
             x.setRemoveWhenFarAway(false);
             x.customName(Ui.mm(NAME));
-            x.setCustomNameVisible(true);
             x.getPersistentDataContainer().set(marker, PersistentDataType.BYTE, (byte) 1);
         });
     }
@@ -490,6 +499,11 @@ public final class Allays implements Listener {
         save(false);
         p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_RESONATE, 1f, 1.2f);
         p.sendMessage(Ui.mm("<#4fd1b5>Your base now has a Tier " + Spawners.roman(t) + " " + TIER_NAME[t - 1] + ". <gray>" + TIER_JOB[t - 1] + "."));
+        p.sendMessage(Ui.mm(switch (t) {
+            case 1 -> "<gray>It works while the base is loaded, within <white>" + table.leash(t) + "<gray> blocks of your Station and inside your claim.";
+            case 2 -> "<gray>Hang an item frame on a chest and put an item in it. Couriers bring that item there, and keep Agents fuelled from Fuel Cells in the Station.";
+            default -> "<gray>Hang a frame on a chest and put an <white>emerald<gray> in it. Stewards sell plain goods from that chest at Trader prices, less <white>" + Math.round(sellFee * 100) + "%<gray>, while the owner's online. It shares the Trader's daily limit.";
+        }));
         openMenu(p, at);
     }
 
@@ -498,6 +512,7 @@ public final class Allays implements Listener {
     private void tick() {
         now++;
         scansThisTick = 0;
+        searchesThisTick = 0;
         flyers.removeIf(f -> {
             if (!f.entity.isValid()) return true;
             if (++f.life > TEST_LIFE_TICKS) { f.entity.remove(); return true; }   // nobody has to remember to clean up
@@ -541,6 +556,8 @@ public final class Allays implements Listener {
         for (Worker w : b.workers) if (w.job != null) taken.add(w.job);
         for (Worker w : b.workers) {
             if (w.entity == null || !w.entity.isValid()) wake(w, at, flock);
+            w.trail = 0.6f + 0.2f * b.tier;   // a higher tier burns brighter
+            w.tight = b.tight;
             work(b, w, at, flock, taken);
             label(w, b.tier, w.state == State.WAIT ? "<red>Station full" : null);
             moveTag(w);
@@ -549,12 +566,13 @@ public final class Allays implements Listener {
 
     /** A new entity for this allay. If it was carrying something when its last one went, it takes that home first. */
     private void wake(Worker w, Location at, int flock) {
-        double[] spot = hover(at, w.index, flock, now);
+        double[] spot = hover(at, w, flock, now);
         w.entity = spawn(new Location(at.getWorld(), spot[0], spot[1], spot[2]));
         w.label = null;
         w.job = null;
         w.dest = null;
         w.agent = null;
+        w.route = null;
         if (w.carried != null) goHome(w, at, flock);   // a load from the sell chest stays one, so it's still sold
         else w.state = State.IDLE;
     }
@@ -591,6 +609,8 @@ public final class Allays implements Listener {
             }
             case FETCH -> {
                 if (!advance(w, at, flock)) return;
+                if (++w.hold < GRAB_HOLD_TICKS) return;   // a short pause over the drop, so the pickup reads
+                w.hold = 0;
                 grab(b, w);
                 goHome(w, at, flock);
             }
@@ -611,14 +631,80 @@ public final class Allays implements Listener {
         }
     }
 
-    private void idle(Worker w, Location at, int flock) { moveTo(w.entity, hover(at, w.index, flock, now), 0, 0); }
+    private void idle(Worker w, Location at, int flock) { moveTo(w.entity, hover(at, w, flock, now), 0, 0); }
 
+    /** Sets off for a spot. A trip needing a search may wait a tick or two for its turn: see {@link #plan}. */
     private void fly(Worker w, double[] to) {
         w.from = xyz(w.entity.getLocation());
-        w.to = to;
+        World world = w.entity.getWorld();
+        w.to = AllayPath.nudge(to, (x, y, z) -> free(world, x, y, z));
         w.tick = 0;
-        double dx = to[0] - w.from[0], dy = to[1] - w.from[1], dz = to[2] - w.from[2];
-        w.ticks = AllayFlight.ticks(Math.sqrt(dx * dx + dy * dy + dz * dz), speed);
+        w.route = null;
+        plan(w);
+    }
+
+    /**
+     * Works out the way there. A clear line costs almost nothing. A search is limited per tick across the server, so a busy
+     * moment means a short wait. If there's no way at all, it flies straight: a sealed room still gets its goods.
+     */
+    private boolean plan(Worker w) {
+        World world = w.entity.getWorld();
+        AllayPath.Free open = (x, y, z) -> free(world, x, y, z);
+        if (AllayPath.needsSearch(w.from, w.to, open)) {
+            if (searchesThisTick >= maxSearches) return false;
+            searchesThisTick++;
+            AllayPath.Route found = AllayPath.route(w.from, w.to, open, pathMaxNodes);
+            w.route = found != null ? found : new AllayPath.Route(List.of(w.from, w.to));
+        } else w.route = new AllayPath.Route(List.of(w.from, w.to));
+        w.ticks = AllayFlight.ticks(w.route.length, speed);
+        return true;
+    }
+
+    /** Back to its place in the circle. The trip is timed first, so it can aim for where that place will be when it lands and not snap. */
+    private void goHome(Worker w, Location at, int flock) {
+        w.job = null;
+        w.dest = null;
+        w.agent = null;   // a trip that gave up mustn't keep its claim on an Agent
+        w.state = State.RETURN;
+        double[] spot = hover(at, w, flock, now);
+        fly(w, spot);
+        if (w.route != null) landOnTime(w, at, flock);
+    }
+
+    private void landOnTime(Worker w, Location at, int flock) {
+        if (w.state != State.RETURN) return;
+        double[] landing = hover(at, w, flock, now + w.ticks);
+        double[][] p = w.route.points;
+        if (p.length == 2) w.route = new AllayPath.Route(List.of(w.from, landing));
+        else {
+            List<double[]> pts = new ArrayList<>(List.of(p));
+            pts.set(pts.size() - 1, landing);
+            w.route = new AllayPath.Route(pts);
+        }
+        w.to = landing;
+    }
+
+    /** One tick of the trip. True on arrival. If the way ahead isn't loaded, it gives up and turns for home, so it never loads a chunk. */
+    private boolean advance(Worker w, Location at, int flock) {
+        if (w.route == null) {
+            if (!plan(w)) return false;   // still waiting its turn
+            landOnTime(w, at, flock);
+        }
+        w.tick++;
+        double along = AllayFlight.ease((double) w.tick / w.ticks) * w.route.length;
+        double[] p = w.route.at(along);
+        if (w.route.straight()) p[1] += AllayFlight.lift((double) w.tick / w.ticks, w.route.length);
+        World world = w.entity.getWorld();
+        if (!world.isChunkLoaded((int) Math.floor(p[0]) >> 4, (int) Math.floor(p[2]) >> 4)) {
+            if (w.state == State.FETCH || w.state == State.DELIVER || w.state == State.COLLECT) goHome(w, at, flock);
+            else { w.tick = w.ticks; return true; }   // home is the Station's own area: being unloaded here means we're about to sleep anyway
+            return false;
+        }
+        double[] here = xyz(w.entity.getLocation());
+        moveTo(w.entity, p, p[0] - here[0], p[2] - here[2]);   // faces the way it's moving, including round a corner
+        if (w.tick % 2 == 0 && w.tick < w.ticks)
+            world.spawnParticle(Particle.DUST_COLOR_TRANSITION, p[0], p[1] + 0.3, p[2], 1, 0.08, 0.08, 0.08, 0, new Particle.DustTransition(COPPER, VERDIGRIS, w.trail));
+        return w.tick >= w.ticks;
     }
 
     /** Takes the cheapest Fuel Cell in the Station to an Agent that's running low and that no other allay is already going to. */
@@ -799,31 +885,6 @@ public final class Allays implements Listener {
         rest(w);
     }
 
-    /** Back to its place in the circle, aiming for where that will be when it arrives so it doesn't snap. */
-    private void goHome(Worker w, Location at, int flock) {
-        w.job = null;
-        w.dest = null;
-        w.agent = null;   // a trip that gave up mustn't keep its claim on an Agent
-        w.state = State.RETURN;
-        double[] here = xyz(w.entity.getLocation()), spot = hover(at, w.index, flock, now);
-        int eta = AllayFlight.ticks(Math.sqrt(Math.pow(spot[0] - here[0], 2) + Math.pow(spot[1] - here[1], 2) + Math.pow(spot[2] - here[2], 2)), speed);
-        fly(w, hover(at, w.index, flock, now + eta));
-    }
-
-    /** One tick of the trip. True on arrival. If the way ahead isn't loaded, it gives up and turns for home, so it never loads a chunk. */
-    private boolean advance(Worker w, Location at, int flock) {
-        w.tick++;
-        double[] p = AllayFlight.at(w.from, w.to, w.tick, w.ticks);
-        World world = w.entity.getWorld();
-        if (!world.isChunkLoaded((int) Math.floor(p[0]) >> 4, (int) Math.floor(p[2]) >> 4)) {
-            if (w.state == State.FETCH || w.state == State.DELIVER || w.state == State.COLLECT) goHome(w, at, flock);
-            else { w.tick = w.ticks; return true; }   // home is the Station's own area: being unloaded here means we're about to sleep anyway
-            return false;
-        }
-        moveTo(w.entity, p, w.to[0] - w.from[0], w.to[2] - w.from[2]);
-        return w.tick >= w.ticks;
-    }
-
     /** Takes up to a load from the drop, if it's still about where it was. The items leave the world here, so a crash can lose them but can't double them. */
     private void grab(Base b, Worker w) {
         UUID id = w.job;
@@ -846,6 +907,7 @@ public final class Allays implements Listener {
         if (left.isEmpty()) {
             w.carried = null;
             at.getWorld().playSound(at, Sound.BLOCK_AMETHYST_CLUSTER_PLACE, 0.4f, 1.6f);
+            at.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, at.clone().add(0.5, 1.2, 0.5), 6, 0.25, 0.2, 0.25, 0.01);
             rest(w);
         } else {
             w.carried = left.values().iterator().next();
@@ -871,11 +933,12 @@ public final class Allays implements Listener {
             if (w.tag == null || !w.tag.isValid()) {
                 w.tag = Ui.hologram(w.entity.getLocation().add(0, TAG_HEIGHT, 0), text, 1f);
                 w.tag.setTeleportDuration(1);
+                w.tag.setViewRange(TAG_VIEW_RANGE);
             } else w.tag.text(Ui.mm(text));
         } else {
             removeTag(w);
             w.entity.customName(Ui.mm(text));
-            w.entity.setCustomNameVisible(true);
+            w.entity.setCustomNameVisible(status != null);   // otherwise it shows only when you look right at it, so a base isn't covered in tags
         }
     }
 
@@ -897,6 +960,7 @@ public final class Allays implements Listener {
         if (scansThisTick >= maxScans || !AllayJobs.due(b.lastScan, now, scanTicks)) return;
         scansThisTick++;
         b.lastScan = now;
+        b.tight = !roomToCircle(at);
         b.jobs.clear();
         int leash = table.leash(b.tier);
         for (Entity e : at.getWorld().getNearbyEntities(at, leash, leash, leash, x -> x instanceof Item)) {
@@ -959,9 +1023,25 @@ public final class Allays implements Listener {
             e.getEntity().getPersistentDataContainer().set(deathDrop, PersistentDataType.BYTE, (byte) 1);
     }
 
-    private static double[] hover(Location station, int index, int flock, long tick) {
-        double[] h = AllayFlight.hover(index, flock, tick);
+    private static double[] hover(Location station, Worker w, int flock, long tick) {
+        if (w.tight) return new double[]{station.getX() + 0.5, station.getY() + 1.3, station.getZ() + 0.5};
+        double[] h = AllayFlight.hover(w.index, flock, tick);
         return new double[]{station.getX() + 0.5 + h[0], station.getY() + 2.2 + h[1], station.getZ() + 0.5 + h[2]};
+    }
+
+    /** Can an allay fly through this block? Never into an unloaded chunk, which would load it, and never lava. */
+    private static boolean free(World world, int x, int y, int z) {
+        if (!world.isChunkLoaded(x >> 4, z >> 4)) return false;
+        Block b = world.getBlockAt(x, y, z);
+        return b.isPassable() && b.getType() != Material.LAVA;
+    }
+
+    /** Is there room for the flock's circle above the Station? Checked now and then, since building nearby changes it. */
+    private static boolean roomToCircle(Location at) {
+        World world = at.getWorld();
+        for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) for (int dy = 1; dy <= 3; dy++)
+            if (!free(world, at.getBlockX() + dx, at.getBlockY() + dy, at.getBlockZ() + dz)) return false;
+        return true;
     }
 
     /** No Station, or it's unloaded: the flock goes away until it's back, dropping what it holds. The tier stays. */

@@ -1,0 +1,11 @@
+{
+  "pet.orange_companion": {
+    "sounds": ["blackforge:pet/orange_companion"]
+  },
+  "pet.vickie": {
+    "sounds": ["blackforge:pet/vickie"]
+  },
+  "pet.hesitant_gulp": {
+    "sounds": ["blackforge:pet/hesitant_gulp"]
+  }
+}

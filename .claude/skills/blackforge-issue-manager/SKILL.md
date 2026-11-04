@@ -109,5 +109,7 @@ The dashboard page is `https://claude.ai/artifact/TuL1LvATUt2TnHKDZ1b5c1`. Write
 - `state/meta`: `{lastRunAt, workers: [{name: "Worker 1", points, issues: [N, ...]}]}` from this run's split (an empty list if no workers ran).
 - `runs/<UTC timestamp, e.g. 2026-11-04T12-00-00Z>`: `{at, summary, prs: [PR numbers opened], needsHuman: <count>}`. Keep the newest 20; delete older ones.
 
+Then sync the Pull requests view: follow "5. Syncing pull requests" in `.claude/skills/blackforge-task-agent/SKILL.md`.
+
 ## 8. Report
 End with a short run summary (and nothing else), listing: PRs opened with links, issues asked/planned/closed, anything now `agent:needs-human` and why. If there was nothing to do, say so in one line.
