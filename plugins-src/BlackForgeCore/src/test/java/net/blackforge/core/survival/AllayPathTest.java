@@ -36,6 +36,30 @@ class AllayPathTest {
         }
     }
 
+    @Test void flockTakesDifferentPaths() {
+        double[][] middles = new double[3][];
+        for (int i = 0; i < 3; i++) {
+            Route r = AllayPath.bowed(A, B, i, OPEN);
+            assertFalse(r.straight());
+            assertArrayEquals(A, r.at(0), 1e-9);
+            assertArrayEquals(B, r.at(r.length), 1e-9);
+            middles[i] = r.at(r.length / 2);
+        }
+        assertTrue(AllayPath.dist(middles[0], middles[1]) > 1);
+        assertTrue(AllayPath.dist(middles[1], middles[2]) > 1);
+        assertTrue(AllayPath.dist(middles[0], middles[2]) > 1);
+    }
+
+    @Test void bowGivesUpRatherThanHitAnything() {
+        Free post = (x, y, z) -> !(x == 5 && y >= 60 && y <= 70 && z >= 1 && z <= 4);
+        assertTrue(AllayPath.clear(A, B, post));
+        assertTrue(AllayPath.bowed(A, B, 0, post).straight());
+    }
+
+    @Test void shortTripsStayStraight() {
+        assertTrue(AllayPath.bowed(A, new double[]{2.5, 64.5, 0.5}, 0, OPEN).straight());
+    }
+
     @Test void negativeCoordinatesWork() {
         double[] a = {-20.5, 64.5, -60.5}, b = {-10.5, 64.5, -60.5};
         Free wall = (x, y, z) -> !(x == -15 && y >= 60 && y <= 70 && z >= -63 && z <= -57);
