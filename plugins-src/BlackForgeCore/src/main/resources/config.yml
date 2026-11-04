@@ -262,6 +262,9 @@ foundry:
   max-allays-total: 12
   agent-radius: 40                # blocks an agent can deliver to the Forge from, enough for every bench on the island
   leave-grace-seconds: 15         # time to step back in before your Foundry test is cleared
+  fisherman-seconds: 10           # a Fisherman's catch time here, so it can be seen working
+  allay-scan-seconds: 2           # how often allays look for drops here
+  allay-link-scan-seconds: 5      # how often allays look for framed chests and low Agents here
 
 # Black Forge hub (hub server only). Commands: /blackforge setspawn | reload | dragons | effects | portals | info
 hub:

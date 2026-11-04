@@ -53,9 +53,10 @@ public final class Foundry implements Listener {
         for (int i = 0; i < supply.length; i++) supply[i] = new Location(w, FoundryZone.SUPPLY_X[i], y + 1, FoundryZone.SUPPLY_Z);
         this.systems = new FoundrySystems(plugin, w, new FoundrySystems.Layout(FoundryZone.LANE_Z, FoundryZone.LANE_X, y + 1,
                 new Location(w, FoundryZone.FORGE_X, y + 1, FoundryZone.FORGE_Z),
-                new Location(w, (FoundryZone.PEN_X1 + FoundryZone.PEN_X2) / 2 + 0.5, y + 1, (FoundryZone.PEN_Z1 + FoundryZone.PEN_Z2) / 2 + 0.5), FoundryZone.PEN_MOBS,
+                new Location(w, (FoundryZone.PEN_X1 + FoundryZone.PEN_X2) / 2 + 0.5, y + 1, (FoundryZone.PEN_Z1 + FoundryZone.PEN_Z2) / 2 + 0.5), FoundryZone.PEN_SPOTS,
                 new Location(w, 0.5, y + 7.5, FoundryZone.GATE_Z + 0.5), supply,
-                new Location(w, FoundryZone.ALLAY_BENCH_X + 0.5, y + 1, FoundryZone.ALLAY_BENCH_Z + 0.5), demoSpots(w)),
+                new Location(w, FoundryZone.ALLAY_BENCH_X + 0.5, y + 1, FoundryZone.ALLAY_BENCH_Z + 0.5), demoSpots(w),
+                new int[]{FoundryZone.FARM_X1, FoundryZone.FARM_X2, FoundryZone.FARM_Z1, FoundryZone.FARM_Z2}, signs(w)),
                 l -> l.getWorld() == w ? FoundryZone.supplyAt(l.getBlockX(), l.getBlockY(), l.getBlockZ()) : -1, this::inZone,
                 l -> FoundryZone.regionAt(l.getBlockX(), l.getBlockZ()), FoundryZone.SHARED_REGION,
                 (p, l) -> inZone(l) && (placed.owner(pos(l.getBlock())) == null || p.getUniqueId().equals(placed.owner(pos(l.getBlock())))));
@@ -69,6 +70,23 @@ public final class Foundry implements Listener {
             Location entry = new Location(arena.world(), FoundryZone.ENTRY_X, FoundryZone.ENTRY_Y, FoundryZone.ENTRY_Z, 180f, 0f);
             return inside.contains(p.getUniqueId()) && entry.clone().subtract(0, 1, 0).getBlock().getType().isSolid() ? entry : arena.spawn();
         });
+    }
+
+    /** One sign per bench: what to do there and how to get going. */
+    private static FoundrySystems.Sign[] signs(org.bukkit.World w) {
+        double y = TestArenaBuilder.Y + 1;
+        return new FoundrySystems.Sign[]{
+                sign(w, (FoundryZone.FARM_X1 + FoundryZone.FARM_X2) / 2.0 + 0.5, y + 2.2, (FoundryZone.FARM_Z1 + FoundryZone.FARM_Z2) / 2.0 + 0.5, "#7ed957", "Farm Bench", "Put a Farmer beside the wheat. It regrows here", "/foundry tp farm"),
+                sign(w, (FoundryZone.POND_X1 + FoundryZone.POND_X2) / 2.0 + 0.5, y + 1.6, (FoundryZone.POND_Z1 + FoundryZone.POND_Z2) / 2.0 + 0.5, "#5ec8ff", "Pond Bench", "Put a Fisherman within 2 blocks of the water", "/foundry tp pond"),
+                sign(w, (FoundryZone.MINE_X1 + FoundryZone.MINE_X2) / 2.0 + 0.5, y + FoundryZone.MINE_HEIGHT + 0.6, FoundryZone.MINE_Z + 0.5, "#c6a15b", "Mine Bench", "Face a Miner at this wall. The ore grows back", "/foundry tp mine"),
+                sign(w, 0.5, y + 2.2, FoundryZone.PEN_Z2 + 1.5, "#ff5e5e", "Grinder Pen", "Put a Grinder right against any fence", "/foundry tp pen"),
+                sign(w, FoundryZone.LANE_X - 2.5, y + 2.0, FoundryZone.LANE_Z[1] + 2.5, "#ffb347", "Hopper Lanes", "Live speed against rated speed, Tier I to III", "/foundry status"),
+                sign(w, (FoundryZone.PLOT_X1 + FoundryZone.PLOT_X2) / 2.0 + 0.5, y + 1.6, (FoundryZone.PLOT_Z1 + FoundryZone.PLOT_Z2) / 2.0 + 0.5, "#ffb347", "Build Plot", "Your own Base Station goes here, one per square", "/foundry tp plot"),
+        };
+    }
+
+    private static FoundrySystems.Sign sign(org.bukkit.World w, double x, double y, double z, String color, String title, String how, String command) {
+        return new FoundrySystems.Sign(new Location(w, x, y, z), "<" + color + "><bold>" + title + "</bold><newline><gray>" + how + "<newline><white>" + command);
     }
 
     private static Location[] demoSpots(org.bukkit.World w) {

@@ -34,7 +34,7 @@ public final class FoundryZone {
     /** Miner bench: an ore wall on z = MINE_Z that grows back. */
     public static final int MINE_X1 = 8, MINE_X2 = 18, MINE_Z = -82, MINE_HEIGHT = 3;
     /** Grinder bench: a fenced pen of mobs. */
-    public static final int PEN_X1 = -5, PEN_X2 = 5, PEN_Z1 = -90, PEN_Z2 = -80, PEN_MOBS = 4;
+    public static final int PEN_X1 = -5, PEN_X2 = 5, PEN_Z1 = -90, PEN_Z2 = -80;
 
     /** The Build Plot: open floor for your own Base Station, in squares of 8 so each square is its own little base. */
     public static final int PLOT_X1 = 3, PLOT_X2 = 15, PLOT_Z1 = -79, PLOT_Z2 = -68;
@@ -47,6 +47,12 @@ public final class FoundryZone {
             "farm", new int[]{-8, -62}, "pond", new int[]{-11, -75}, "mine", new int[]{13, -80}, "pen", new int[]{0, -78}, "plot", new int[]{9, -74});
     /** Where /foundry demo puts its agents, in the order FoundrySystems.demo places them: Miner, Farmer, Fisherman, Grinder. */
     public static final int[][] DEMO = {{13, -81}, {-9, -62}, {-12, -75}, {0, -79}};
+
+    /**
+     * Where the Grinder pen's mobs stand, offset from its middle: the inside edge, every 4 blocks. An agent right outside any
+     * fence always has one in reach, even at Tier I (reach 2).
+     */
+    public static final int[][] PEN_SPOTS = {{-4, -4}, {0, -4}, {4, -4}, {-4, 0}, {4, 0}, {-4, 4}, {0, 4}, {4, 4}};
 
     public static boolean inPlot(int x, int z) { return x >= PLOT_X1 && x <= PLOT_X2 && z >= PLOT_Z1 && z <= PLOT_Z2; }
 
