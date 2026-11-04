@@ -83,6 +83,27 @@ final class FoundryLab {
                 h -> { h.setPersistent(false); h.setRemoveWhenFarAway(false); h.setSilent(true); h.setAware(false); }));
     }
 
+    /** Back to how it started: the Forge's storage, the courier chests, the drops, the counters and the pen. */
+    void reset() {
+        if (layout.forge().getBlock().getState(false) instanceof Barrel b) b.getInventory().clear();
+        for (int i = 0; i < COURIER_ITEMS.length; i++)
+            if (layout.allayBench().getBlock().getRelative(i * COURIER_SPACING, 0, COURIER_Z_OFFSET).getState(false) instanceof Container c) c.getInventory().clear();
+        benchDrops.forEach(org.bukkit.entity.Item::remove);
+        benchDrops.clear();
+        for (Lane l : lanes) l.counts.clear();
+        mobs.forEach(Husk::remove);
+        mobs.clear();
+    }
+
+    /** What each lane is really moving, for /foundry status. */
+    List<String> laneStatus() {
+        List<String> out = new ArrayList<>();
+        for (Lane l : lanes) out.add("<gray>Hopper Tier " + Spawners.roman(l.tier) + ": rated <white>" + hoppers.rate(l.tier) + "<gray>/s, now <white>" + String.format(java.util.Locale.ROOT, "%.1f", rate(l)) + "<gray>/s");
+        return out;
+    }
+
+    private static double rate(Lane l) { return l.counts.stream().mapToInt(Integer::intValue).average().orElse(0); }
+
     /** Keeps a few loose items landing while someone's here, and clears them when nobody is. They're never saved. */
     private void runAllayBench(boolean occupied) {
         benchDrops.removeIf(i -> !i.isValid());
@@ -133,7 +154,7 @@ final class FoundryLab {
         sink.getInventory().clear();
         l.counts.addLast(through);
         if (l.counts.size() > 5) l.counts.removeFirst();
-        double rate = l.counts.stream().mapToInt(Integer::intValue).average().orElse(0);
+        double rate = rate(l);
         if (l.holo == null || !l.holo.isValid()) {
             l.holo = Ui.hologram(l.hopper.getLocation().add(0.5, 3.1, 0.5), "", 1f);
             l.holo.setPersistent(false);

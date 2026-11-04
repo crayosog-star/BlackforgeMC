@@ -41,6 +41,13 @@ public final class FoundryZone {
     /** Everywhere else on the island is one base: the shared Forge's. */
     public static final String SHARED_REGION = "foundry";
 
+    /** Where /foundry tp takes you: x, z, on open floor beside each bench. */
+    public static final java.util.Map<String, int[]> SPOTS = java.util.Map.of(
+            "forge", new int[]{0, -57}, "supply", new int[]{0, -50}, "allays", new int[]{7, -57}, "courier", new int[]{10, -62}, "lanes", new int[]{11, -59},
+            "farm", new int[]{-8, -62}, "pond", new int[]{-11, -75}, "mine", new int[]{13, -80}, "pen", new int[]{0, -78}, "plot", new int[]{9, -74});
+    /** Where /foundry demo puts its agents, in the order FoundrySystems.demo places them: Miner, Farmer, Fisherman, Grinder. */
+    public static final int[][] DEMO = {{13, -81}, {-9, -62}, {-12, -75}, {0, -79}};
+
     public static boolean inPlot(int x, int z) { return x >= PLOT_X1 && x <= PLOT_X2 && z >= PLOT_Z1 && z <= PLOT_Z2; }
 
     /** Which base this spot counts as part of, or null outside the Foundry. */

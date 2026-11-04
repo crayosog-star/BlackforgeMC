@@ -261,15 +261,20 @@ public final class Robots implements Listener {
         Block at = e.getClickedBlock().getRelative(e.getBlockFace());
         if (!at.isPassable() || !at.getRelative(BlockFace.UP).isPassable()) { p.sendMessage(Ui.mm("<red>Not enough room there.")); return; }
         if (!canUse.test(p, at.getLocation())) { p.sendMessage(Ui.mm("<red>Agents can only go on your own island or claimed land.")); return; }
-        if (sandbox && bots.size() >= sandboxTotal) { p.sendMessage(Ui.mm("<red>The Foundry is at its limit of " + sandboxTotal + " agents right now.")); return; }
-        if (owned(p.getUniqueId()) >= limit(p)) { p.sendMessage(Ui.mm("<red>You have " + owned(p.getUniqueId()) + "/" + limit(p) + " agents placed. Ranks raise the limit.")); return; }
-        PersistentDataContainer pdc = e.getItem().getItemMeta().getPersistentDataContainer();
+        place(p, e.getItem(), at, p.getYaw());
+    }
+
+    /** Places an agent from this item, facing {@code look}. False, with a message, if it was refused. */
+    boolean place(Player p, ItemStack item, Block at, float look) {
+        if (sandbox && bots.size() >= sandboxTotal) { p.sendMessage(Ui.mm("<red>The Foundry is at its limit of " + sandboxTotal + " agents right now.")); return false; }
+        if (owned(p.getUniqueId()) >= limit(p)) { p.sendMessage(Ui.mm("<red>You have " + owned(p.getUniqueId()) + "/" + limit(p) + " agents placed. Ranks raise the limit.")); return false; }
+        PersistentDataContainer pdc = item.getItemMeta().getPersistentDataContainer();
         AgentRecord record = withUid(AgentRecord.decode(pdc.get(RECORD, PersistentDataType.STRING)));
         // e.g. a crash restored an Agent item whose Agent is still placed: a second copy would dupe a trained Agent
         if (uidInUse(record.uid)) {
             p.sendMessage(Ui.mm("<red>This Agent is already placed."));
             plugin.getLogger().warning("Refused duplicate Agent " + record.uid + " placed by " + p.getName());
-            return;
+            return false;
         }
         String[] d = pdc.get(ITEM, PersistentDataType.STRING).split(";");
         Bot b = new Bot(UUID.randomUUID().toString());
@@ -284,16 +289,17 @@ public final class Robots implements Listener {
         b.fixRate();   // the item has no rate: derive it from fuelTier (see itemFuelTier)
         if (sandbox && b.fuel <= 0) b.fuel = SANDBOX_START_FUEL;   // the Foundry's chest agents are empty: placed ones work straight away
         // face the way the player is looking, snapped to N/E/S/W, so a Miner mines what you clicked toward
-        float yaw = Math.round(p.getYaw() / 90f) * 90f;
+        float yaw = Math.round(look / 90f) * 90f;
         b.loc = at.getLocation().add(0.5, 0, 0.5);
         b.loc.setYaw(yaw);
         b.storage = Bukkit.createInventory(null, STORAGE[b.tier - 1]);
         bots.put(b.id, b);
         spawn(b);
-        e.getItem().setAmount(e.getItem().getAmount() - 1);
+        item.setAmount(item.getAmount() - 1);
         p.playSound(b.loc, Sound.ENTITY_COPPER_GOLEM_SPAWN, 1f, 1f);
         p.sendMessage(Ui.mm("<green>Agent placed! Right-click it to add fuel, switch its job or collect its loot."));
         save();
+        return true;
     }
 
     @EventHandler

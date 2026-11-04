@@ -45,7 +45,7 @@ final class FoundrySupply implements Listener {
                 Material.OAK_FENCE, Material.OAK_DOOR, Material.LADDER, Material.WHITE_WOOL));
         stock.add(stacks(Material.DIAMOND_PICKAXE, Material.DIAMOND_AXE, Material.DIAMOND_SHOVEL, Material.DIAMOND_HOE, Material.WATER_BUCKET,
                 Material.COAL, Material.IRON_INGOT, Material.GOLD_INGOT, Material.DIAMOND, Material.EMERALD, Material.NETHERITE_INGOT, Material.LAPIS_LAZULI,
-                Material.COPPER_INGOT, Material.WHEAT_SEEDS, Material.CARROT, Material.POTATO, Material.BEETROOT_SEEDS, Material.NETHER_WART,
+                Material.COPPER_INGOT, Material.ITEM_FRAME, Material.NAME_TAG, Material.WHEAT_SEEDS, Material.CARROT, Material.POTATO, Material.BEETROOT_SEEDS, Material.NETHER_WART,
                 Material.SUGAR_CANE, Material.BONE_MEAL, Material.ROTTEN_FLESH, Material.STRING, Material.BONE, Material.COD));
         List<ItemStack> agents = new ArrayList<>();
         for (Robots.Job job : Robots.Job.values())
