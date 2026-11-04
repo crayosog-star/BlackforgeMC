@@ -13,6 +13,7 @@ Join: **play.blackforgemc.com**
 | `datapacks/blackforge` | The hub's custom "Inferno" biome (red sky, ash, embers). |
 | `website/` | The blackforgemc.com site. |
 | `branding/` | Logo, server icon and social card. |
+| `.claude/skills/` | Claude skills shared by the team: project-specific instructions Claude loads when working here. Plain Markdown, readable on GitHub. |
 | `docs/`, `*.md`, `README.txt` | How the network fits together, store and vote setup. |
 
 Not included: worlds, player data, logs, third-party plugin jars, and every secret (RCON password, proxy forwarding key, vote token, store keys).
