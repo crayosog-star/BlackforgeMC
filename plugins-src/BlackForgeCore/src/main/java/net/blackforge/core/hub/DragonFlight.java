@@ -13,7 +13,10 @@ import static net.blackforge.core.hub.HubLayout.Y;
  * the neck and tail curve through every turn. Breath, roars, fireballs and blinks come at random, never on a timer.
  */
 public final class DragonFlight {
-    public enum Kind { BLACK, SERPENT }
+    public enum Kind { BLACK, CRIMSON, VIOLET, SERPENT }
+
+    /** Scales how long a dragon waits between fire breaths (config hub.dragons.fire-interval-scale; 1 = normal, 2 = half as often). */
+    public static volatile double fireScale = 1.0;
 
     /** A box drawn by one block display: its corner, its three unit axes (right, up, forward) and its size along each. */
     public record Piece(String block, int light, double[] corner, double[] r, double[] u, double[] f, double sx, double sy, double sz) {}
@@ -174,7 +177,7 @@ public final class DragonFlight {
             fold += ((diving ? 1 : 0) - fold) * 0.04;
         }
         if (breathLeft > 0) {
-            if (--breathLeft == 0) breathCooldown = 140 + rnd.nextInt(420);
+            if (--breathLeft == 0) breathCooldown = (int) ((140 + rnd.nextInt(420)) * fireScale);
         } else if (--breathCooldown <= 0) {
             breathTotal = breathLeft = 25 + rnd.nextInt(65);
             sweepAmp = 0.15 + rnd.nextDouble() * 0.5;
@@ -245,6 +248,10 @@ public final class DragonFlight {
 
     private static final Look BLACK = new Look("minecraft:polished_blackstone", "minecraft:blackstone", "minecraft:gilded_blackstone",
             "minecraft:polished_blackstone_bricks", "minecraft:red_nether_bricks", "minecraft:gold_block", "minecraft:magma_block", "minecraft:shroomlight");
+    private static final Look CRIMSON = new Look("minecraft:red_nether_bricks", "minecraft:nether_bricks", "minecraft:crimson_planks",
+            "minecraft:blackstone", "minecraft:red_nether_bricks", "minecraft:polished_blackstone", "minecraft:magma_block", "minecraft:red_concrete");
+    private static final Look VIOLET = new Look("minecraft:obsidian", "minecraft:crying_obsidian", "minecraft:purple_terracotta",
+            "minecraft:amethyst_block", "minecraft:purple_concrete", "minecraft:amethyst_block", "minecraft:purpur_block", "minecraft:magenta_concrete");
     private static final int BODY_LIGHT = 9;
 
     /** Head shared by every dragon: skull, snout, hinged jaw, glowing eyes that blink, and fire in the mouth. */
@@ -275,7 +282,7 @@ public final class DragonFlight {
     }
 
     private void winged(List<Piece> out, double[][] sp) {
-        Look k = BLACK;
+        Look k = kind == Kind.CRIMSON ? CRIMSON : kind == Kind.VIOLET ? VIOLET : BLACK;
         double[][] h = head(out, sp, k.hide, k.belly, k.eye, "minecraft:shroomlight", 1);
         for (int side : new int[]{-1, 1}) {                                                       // horns
             double[] base = at(h[0], h[1], h[2], h[3], side * 0.75, 0.9, -1.0);

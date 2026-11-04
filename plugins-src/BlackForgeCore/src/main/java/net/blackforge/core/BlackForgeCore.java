@@ -144,8 +144,12 @@ public final class BlackForgeCore extends JavaPlugin implements Listener {
             java.util.List<String> t = cosmetics.adminTabs(args);
             if (t != null) return t.stream().filter(x -> x.startsWith(args[args.length - 1].toLowerCase())).toList();
         }
+        if (hub != null && sender.hasPermission("blackforge.admin") && args.length > 1 && HubModule.isAdminSub(args[0])) {
+            String last = args[args.length - 1].toLowerCase();
+            return hub.adminTabs(args).stream().filter(x -> x.toLowerCase().startsWith(last)).toList();
+        }
         if (args.length != 1) return null;
-        return java.util.stream.Stream.of("status", "buildhub", "buildarena", "buildarcade", "spawn", "welcomeshow", "thanks", "cosmetickey", "cosmetic")
+        return java.util.stream.Stream.of("setspawn", "reload", "dragons", "effects", "portals", "info", "status", "buildhub", "buildarena", "buildarcade", "spawn", "welcomeshow", "thanks", "cosmetickey", "cosmetic")
                 .filter(s -> s.startsWith(args[0].toLowerCase())).toList();
     }
 
@@ -180,6 +184,7 @@ public final class BlackForgeCore extends JavaPlugin implements Listener {
             }
             case "blackforge" -> {
                 if (args.length == 1 && args[0].equalsIgnoreCase("status") && sender.hasPermission("blackforge.staff")) { status(sender); return true; }
+                if (hub != null && hub.admin(sender, args)) return true;
                 if (supporters.admin(sender, args)) return true;
                 if (cosmetics.admin(sender, args)) return true;
                 if (survival != null && survival.admin(sender, args)) return true;

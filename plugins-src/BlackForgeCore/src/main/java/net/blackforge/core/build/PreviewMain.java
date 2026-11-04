@@ -27,6 +27,8 @@ public final class PreviewMain {
         pov(hub, new File(out, "hub_view_from_arcade_gate.png"), 0.5, 103.6, 40.5, 180, -4, 1280, 720);
         pov(hub, new File(out, "hub_view_side.png"), 44.5, 112, 30.5, 125, -14, 1280, 720);
         topDown(hub, new File(out, "hub_top.png"), 6);
+        pov(hub, new File(out, "hub_keep_front.png"), 0.5, 110, 20.5, 180, 8, 1600, 900);
+        pov(hub, new File(out, "hub_keep_aerial.png"), 0.5, 200, 60.5, 180, 28, 1600, 900);
         pov(hub, new File(out, "hub_castle_aerial.png"), 0.5, 240, 300.5, 180, 32, 1600, 900);
         // the island on its own (no castle ring), for the website's hero image
         Canvas island = new Canvas();

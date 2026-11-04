@@ -29,6 +29,7 @@ public final class HubBuilder {
         b.goldInlay();
         b.lettering();
         CastleBuilder.addTo(b.c);
+        KeepBuilder.addTo(b.c);
         return b.c;
     }
 

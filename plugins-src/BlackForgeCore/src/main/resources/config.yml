@@ -202,3 +202,21 @@ foundry:
   max-agents-per-player: 20
   max-agents-total: 60
   max-upgraded-hoppers-per-chunk: 64
+
+# Black Forge hub (hub server only). Commands: /blackforge setspawn | reload | dragons | effects | portals | info
+hub:
+  # portal -> proxy server name (change if a backend is registered under another name in the proxy)
+  portals:
+    survival: survival
+    arcade: arcade
+    factions: factions
+    skyblock: skyblock
+  # spawn: set in-game with /blackforge setspawn (until set, the built-in spawn is used)
+  join:
+    enabled: true                     # false = no arrival effects at all
+    full-show-cooldown-minutes: 360   # a returning player sees the full "Forge Awakens" show only after this long away (first join always does)
+    short-effects: true               # the quick ring of fire + embers for everyone else
+    roar-chance: 0.2                  # chance of a soft dragon roar on the short arrival
+  dragons:
+    enabled: true                     # takes effect on hub restart
+    fire-interval-scale: 1.0          # 2 = dragons breathe fire half as often, 0.5 = twice as often
