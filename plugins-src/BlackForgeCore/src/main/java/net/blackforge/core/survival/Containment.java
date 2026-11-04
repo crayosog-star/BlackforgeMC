@@ -36,6 +36,39 @@ final class Containment {
 
     private static boolean isIce(Material m) { return m == Material.ICE || m == Material.PACKED_ICE || m == Material.BLUE_ICE; }
 
+    /** The blocks that make up each boss's prison: magma crust, ribcage, void shards, iceberg, storm cage. */
+    private static boolean mine(int pit, Material m) {
+        return switch (pit) {
+            case 0 -> m == Material.MAGMA_BLOCK || m == Material.BASALT || m == Material.BLACKSTONE;
+            case 1 -> m == Material.BONE_BLOCK || m == Material.CALCITE;
+            case 2 -> m == Material.OBSIDIAN || m == Material.CRYING_OBSIDIAN || m == Material.PURPLE_STAINED_GLASS_PANE;
+            case 3 -> isIce(m);
+            default -> m == Material.IRON_BARS || m == Material.LIGHTNING_ROD || m == Material.COPPER_BLOCK;
+        };
+    }
+
+    private void themeFx(int pit, Location l, boolean big) {
+        int n = big ? 12 : 2;
+        switch (pit) {
+            case 0 -> { world.spawnParticle(Particle.FLAME, l, n, 0.4, 0.4, 0.4, 0.03); world.spawnParticle(Particle.LAVA, l, big ? 4 : 1, 0.3, 0.3, 0.3, 0); }
+            case 1 -> world.spawnParticle(Particle.WHITE_ASH, l, n * 3, 0.5, 0.5, 0.5, 0.02);
+            case 2 -> world.spawnParticle(Particle.REVERSE_PORTAL, l, n * 3, 0.5, 0.5, 0.5, 0.1);
+            case 3 -> world.spawnParticle(Particle.SNOWFLAKE, l, n, 0.4, 0.4, 0.4, 0.03);
+            default -> world.spawnParticle(Particle.ELECTRIC_SPARK, l, n * 2, 0.4, 0.4, 0.4, 0.2);
+        }
+    }
+
+    private void themeSound(int pit, Location l, boolean big) {
+        float v = big ? 8f : 6f;
+        switch (pit) {
+            case 0 -> { world.playSound(l, Sound.BLOCK_STONE_BREAK, v, 0.5f); world.playSound(l, Sound.BLOCK_LAVA_EXTINGUISH, v, 0.6f); }
+            case 1 -> { world.playSound(l, Sound.BLOCK_BONE_BLOCK_BREAK, v, 0.5f); world.playSound(l, Sound.ENTITY_SKELETON_DEATH, v, 0.5f); }
+            case 2 -> { world.playSound(l, Sound.BLOCK_END_PORTAL_FRAME_FILL, v, 0.5f); world.playSound(l, Sound.ENTITY_ENDERMAN_SCREAM, v * 0.5f, 0.5f); }
+            case 3 -> world.playSound(l, Sound.BLOCK_GLASS_BREAK, v, 0.5f);
+            default -> { world.strikeLightningEffect(l); world.playSound(l, Sound.ITEM_TRIDENT_THUNDER, v, 0.8f); }
+        }
+    }
+
     void load() {
         if (loaded) return;
         loaded = true;
@@ -52,12 +85,12 @@ final class Containment {
             StringBuilder out = new StringBuilder();
             for (int i = 0; i < PITS; i++) {
                 int[] c = pit(i);
-                for (int x = c[0] - 14; x <= c[0] + 14; x++) for (int z = c[1] - 14; z <= c[1] + 14; z++) {
-                    if (Math.hypot(x - c[0], z - c[1]) > 14) continue;
-                    for (int y = Y; y <= Y + 22; y++) {
+                for (int x = c[0] - 13; x <= c[0] + 13; x++) for (int z = c[1] - 13; z <= c[1] + 13; z++) {
+                    if (Math.hypot(x - c[0], z - c[1]) > 12.9) continue;
+                    for (int y = Y + 1; y <= Y + 22; y++) {
                         Block b = world.getBlockAt(x, y, z);
                         Material m = b.getType();
-                        if (i == ICE_PIT ? isIce(m) : m == Material.IRON_BARS) {
+                        if (mine(i, m)) {
                             byPit.get(i).add(new Snap(x, y, z, b.getBlockData()));
                             out.append(i).append(';').append(x).append(';').append(y).append(';').append(z).append(';').append(b.getBlockData().getAsString()).append('\n');
                         }
@@ -76,16 +109,28 @@ final class Containment {
     void restore(int pit) {
         load();
         melted[pit] = 0;
+        if (pit == ICE_PIT) puddle(pit, false);
         for (Snap s : byPit.get(pit)) {
             Block b = world.getBlockAt(s.x, s.y, s.z);
             if (!b.getBlockData().equals(s.data)) b.setBlockData(s.data, false);
         }
     }
 
-    private void remove(Snap s, boolean fx) {
+    /** The melted Frost Titan leaves a puddle in his pit; it is drained again when the iceberg re-forms. */
+    private void puddle(int pit, boolean on) {
+        int[] c = pit(pit);
+        for (int x = c[0] - 6; x <= c[0] + 6; x++) for (int z = c[1] - 6; z <= c[1] + 6; z++) {
+            if (Math.hypot(x - c[0], z - c[1]) > 6.1) continue;
+            Block b = world.getBlockAt(x, Y, z);
+            if (on && b.getType() == Material.AIR) b.setType(Material.WATER, false);
+            else if (!on && b.getType() == Material.WATER) b.setType(Material.AIR, false);
+        }
+    }
+
+    private void remove(int pit, Snap s, boolean fx) {
         Block b = world.getBlockAt(s.x, s.y, s.z);
         if (b.getType() == Material.AIR) return;
-        if (fx) world.spawnParticle(Particle.BLOCK, b.getLocation().add(0.5, 0.5, 0.5), 5, 0.3, 0.3, 0.3, s.data);
+        if (fx) { Location at = b.getLocation().add(0.5, 0.5, 0.5); world.spawnParticle(Particle.BLOCK, at, 5, 0.3, 0.3, 0.3, s.data); themeFx(pit, at, false); }
         b.setType(Material.AIR, false);
     }
 
@@ -95,7 +140,7 @@ final class Containment {
         int[] c = pit(pit);
         Location l = new Location(world, c[0] + 0.5, Y + 6, c[1] + 0.5);
         if (pit == ICE_PIT) {   // the iceberg only cracks here; the real work is the melt
-            world.playSound(l, Sound.BLOCK_GLASS_BREAK, 6f, 0.5f);
+            themeSound(pit, l, false);
             world.spawnParticle(Particle.SNOWFLAKE, l, 60, 5, 5, 5, 0.05);
             return;
         }
@@ -105,17 +150,19 @@ final class Containment {
             if (a < 0) a += 360;
             if ((int) (a / 90) % 4 == sector) out.add(s);
         }
-        stagger(out, 12, true);
-        world.playSound(l, Sound.BLOCK_IRON_TRAPDOOR_OPEN, 6f, 0.5f);
+        stagger(pit, out, 12, true);
+        themeSound(pit, l, false);
     }
 
     /** The boss bursts out: whatever is left of the cage / iceberg goes at once. */
     void breakOut(int pit) {
         load();
-        stagger(new ArrayList<>(byPit.get(pit)), 6, true);
+        stagger(pit, new ArrayList<>(byPit.get(pit)), 6, true);
         int[] c = pit(pit);
         Location l = new Location(world, c[0] + 0.5, Y + 6, c[1] + 0.5);
-        world.playSound(l, pit == ICE_PIT ? Sound.BLOCK_GLASS_BREAK : Sound.ENTITY_IRON_GOLEM_DEATH, 8f, 0.6f);
+        themeSound(pit, l, true);
+        themeFx(pit, l, true);
+        if (pit == ICE_PIT) Bukkit.getScheduler().runTaskLater(plugin, () -> puddle(pit, true), 10L);
     }
 
     /** The Frost Titan's iceberg melts from the top down as the wake-up runs (f = 0..1). */
@@ -132,7 +179,7 @@ final class Containment {
         int done = melted[pit] - 1;
         for (int i = done; i < target; i++) {
             Snap s = all.get(i);
-            remove(s, false);
+            remove(pit, s, false);
             if (i % 7 == 0) {
                 Location l = new Location(world, s.x + 0.5, s.y + 0.5, s.z + 0.5);
                 world.spawnParticle(Particle.FALLING_WATER, l, 3, 0.3, 0.1, 0.3, 0);
@@ -146,13 +193,13 @@ final class Containment {
         }
     }
 
-    private void stagger(List<Snap> list, int ticks, boolean fx) {
+    private void stagger(int pit, List<Snap> list, int ticks, boolean fx) {
         Collections.shuffle(list, rnd);
         list.sort(Comparator.comparingInt(s -> s.y));
         int per = Math.max(1, (list.size() + ticks - 1) / ticks);
         int[] i = {0};
         Bukkit.getScheduler().runTaskTimer(plugin, task -> {
-            for (int n = 0; n < per && i[0] < list.size(); n++, i[0]++) remove(list.get(i[0]), fx && i[0] % 3 == 0);
+            for (int n = 0; n < per && i[0] < list.size(); n++, i[0]++) remove(pit, list.get(i[0]), fx && i[0] % 3 == 0);
             if (i[0] >= list.size()) task.cancel();
         }, 0L, 1L);
     }
