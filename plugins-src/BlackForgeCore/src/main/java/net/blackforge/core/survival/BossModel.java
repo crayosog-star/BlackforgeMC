@@ -264,6 +264,17 @@ private static float s(double v) { return (float) v; }
     }
 
     private Float fixedYaw;
+    private float size = 1f;
+    private double slump;
+
+    /** Draw the whole model this many times bigger. Set before {@link #attach}. */
+    void setSize(float f) { size = f; }
+
+    /** How far it hangs forward in its chains: 0 upright, 1 fully slumped. */
+    void setSlump(double s) { slump = s; }
+
+    /** Back to following the host's heading. */
+    void releaseYaw() { fixedYaw = null; }
 
     /** Hold the model at one heading instead of following the host (display bosses). */
     void fixYaw(float yaw) { fixedYaw = yaw; }
@@ -296,7 +307,7 @@ private static float s(double v) { return (float) v; }
         t += 0.1;
         State st = new State(t, walk, spd, pulse);
         Map<String, Matrix4f> cache = new HashMap<>();
-        Matrix4f yaw = new Matrix4f().rotateY((float) -Math.toRadians(yaw()));
+        Matrix4f yaw = new Matrix4f().rotateY((float) -Math.toRadians(yaw())).rotateX((float) (slump * 0.45));
         Location base = new Location(now.getWorld(), now.getX(), now.getY(), now.getZ());
         int i = 0;
         for (Part p : parts) {
@@ -305,24 +316,24 @@ private static float s(double v) { return (float) v; }
             Matrix4f w = new Matrix4f(yaw).mul(matrix(p.group, st, cache));
             if (p.model != null) {
                 Group g = groups.get(p.group.endsWith("_glow") ? p.group.substring(0, p.group.length() - 5) : p.group);
-                Vector3f pv = w.transformPosition(new Vector3f(g.px, g.py, g.pz));
+                Vector3f pv = w.transformPosition(new Vector3f(g.px, g.py, g.pz)).mul(size);
                 d.teleport(base);
                 d.setInterpolationDelay(0);
-                d.setTransformation(new Transformation(pv, w.getUnnormalizedRotation(new Quaternionf()).rotateY((float) Math.PI), new Vector3f(scale), new Quaternionf()));   // item models face the other way round
+                d.setTransformation(new Transformation(pv, w.getUnnormalizedRotation(new Quaternionf()).rotateY((float) Math.PI), new Vector3f(scale * size), new Quaternionf()));   // item models face the other way round
                 continue;
             }
-            Vector3f c = w.transformPosition(new Vector3f(p.cx, p.cy, p.cz));
+            Vector3f c = w.transformPosition(new Vector3f(p.cx, p.cy, p.cz)).mul(size);
             Quaternionf q = w.getUnnormalizedRotation(new Quaternionf()).mul(new Quaternionf().rotateXYZ(p.rx, p.ry, p.rz));
-            Vector3f size = new Vector3f(p.sx, p.sy, p.sz);
-            Vector3f tr = p.block != null ? new Vector3f(c).sub(q.transform(new Vector3f(size).mul(0.5f))) : c;
+            Vector3f dims = new Vector3f(p.sx, p.sy, p.sz).mul(size);
+            Vector3f tr = p.block != null ? new Vector3f(c).sub(q.transform(new Vector3f(dims).mul(0.5f))) : c;
             d.teleport(base);
             d.setInterpolationDelay(0);
-            d.setTransformation(new Transformation(tr, q, size, new Quaternionf()));
+            d.setTransformation(new Transformation(tr, q, dims, new Quaternionf()));
         }
         Matrix4f body = new Matrix4f(yaw).mul(matrix("body", st, cache));
         for (Fx f : fx) {
             if (rnd.nextDouble() > f.chance) continue;
-            Vector3f v = body.transformPosition(new Vector3f(s(f.x + rnd.nextGaussian() * f.spread * 0.5), s(f.y + rnd.nextGaussian() * f.spread * 0.3), s(f.z + rnd.nextGaussian() * f.spread * 0.5)));
+            Vector3f v = body.transformPosition(new Vector3f(s(f.x + rnd.nextGaussian() * f.spread * 0.5), s(f.y + rnd.nextGaussian() * f.spread * 0.3), s(f.z + rnd.nextGaussian() * f.spread * 0.5))).mul(size);
             now.getWorld().spawnParticle(f.p, now.getX() + v.x, now.getY() + v.y, now.getZ() + v.z, f.n, 0.1, 0.1, 0.1, 0.01);
         }
     }
