@@ -313,7 +313,9 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Edge cases:** Mob Essence and other custom drops must never copy; animals protected by the Grinder's existing skip rules stay protected; a mob killed by something else; total treasure and junk chance staying below 100%.
 - **Done when:** unit tests cover the stats, including the chance cap at Tier V. In the Foundry, a tester confirms Reaper kills husks faster, and a Butcher kill never copies custom items, using the Grinder bench.
 - **Leaves ready:** all 8 paths for P3.T4.
-- **Evidence:**
+- **Evidence:** not ticked; prepared on a branch with no PR, because earlier phase gates aren't confirmed.
+  - Verified: stats and the Tier V chance limit passed unit tests with `javac` 21 and a local stand-in for JUnit.
+  - Untested: the Paper compile, Reaper kill speed, and that a Butcher never copies custom items at the Grinder bench.
 
 ### [ ] P3.T4: Add capstones
 - **Needs:** P3.T3.

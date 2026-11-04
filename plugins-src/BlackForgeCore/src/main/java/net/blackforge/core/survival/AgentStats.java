@@ -76,6 +76,10 @@ record AgentStats(int intervalSeconds, double speedMult, int radius, double dama
                     case AcademyRules.EXCAVATOR -> mineHeight = tune.excavatorHeight();
                     case AcademyRules.HARVESTER -> harvests += tune.harvesterExtra();
                     case AcademyRules.BOTANIST -> grow = tune.botanistCrops();
+                    case AcademyRules.REAPER -> { damage *= tune.reaperDamage(); hits += tune.reaperHits(); }
+                    case AcademyRules.BUTCHER -> copyDrop = tune.butcherChance();
+                    case AcademyRules.ANGLER -> speed *= tune.anglerSpeed();
+                    case AcademyRules.DIVER -> treasure *= tune.diverMult();
                     default -> { }
                 }
             }

@@ -762,7 +762,14 @@ public final class Robots implements Listener {
         String id = killedBy.remove(e.getEntity().getUniqueId());
         Bot b = id == null ? null : bots.get(id);
         if (b == null) return;
-        store(b, new ArrayList<>(e.getDrops()));
+        List<ItemStack> drops = new ArrayList<>(e.getDrops());
+        double copy = b.stats().copyDropChance();
+        if (copy > 0 && rnd.nextDouble() < copy) {
+            // the Butcher: one random normal drop, never Mob Essence or anything else with custom data
+            List<ItemStack> plain = drops.stream().filter(d -> d != null && !d.getType().isAir() && isPlainDrop(d)).toList();
+            if (!plain.isEmpty()) drops.add(plain.get(rnd.nextInt(plain.size())).clone());
+        }
+        store(b, drops);
         e.getDrops().clear();
         b.xp += e.getDroppedExp();
         e.setDroppedExp(0);

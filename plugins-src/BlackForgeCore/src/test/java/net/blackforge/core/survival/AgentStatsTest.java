@@ -149,4 +149,24 @@ class AgentStatsTest {
         assertEquals(1, spec("farmer", LEVEL_30, "prospector").harvests());
         assertEquals(0, spec("farmer", LEVEL_30, "prospector").fortune());
     }
+
+    @Test
+    void grinderAndFisherPathsApplyFromLevelTen() {
+        assertEquals(8.0, spec("grinder", LEVEL_9, "reaper").damage());
+        assertEquals(10.0, spec("grinder", LEVEL_10, "reaper").damage());
+        assertEquals(3, spec("grinder", LEVEL_10, "reaper").hits());
+        assertEquals(0.0, spec("grinder", LEVEL_9, "butcher").copyDropChance());
+        assertEquals(0.20, spec("grinder", LEVEL_10, "butcher").copyDropChance());
+        assertEquals(1.0, spec("fisherman", LEVEL_9, "angler").speedMult());
+        assertEquals(1.20, spec("fisherman", LEVEL_10, "angler").speedMult());
+        assertEquals(1.0, spec("fisherman", LEVEL_9, "diver").treasureMult());
+        assertEquals(1.5, spec("fisherman", LEVEL_10, "diver").treasureMult());
+    }
+
+    @Test
+    void treasureAndJunkStayBelowCertaintyAtTierFive() {
+        // Tier V at the highest multiplier: the same sum the Fisherman's catch roll uses
+        double treasure = 0.02 * 5 * TUNE.troveMult();
+        assertEquals(true, treasure + 0.05 < 1.0);
+    }
 }
