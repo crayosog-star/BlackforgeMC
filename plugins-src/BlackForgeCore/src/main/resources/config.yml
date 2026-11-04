@@ -152,6 +152,28 @@ robots:
   # If this key is missing, it's on for the Arena's Foundry and off everywhere else.
   # grinder-debug-log: true
 
+# The Academy: Agents earn Mastery by working (Survival, once live). live-modes lists the server modes it's on for; the
+# Arena's Foundry always has it, for testing. Nothing reads these yet except the startup log line for live-modes.
+# level-base and level-exponent: total points for a level = base x level^exponent. Per job, per UTC day: full points up
+# to daily-soft-cap, then over-cap-rate of them. coach-mult applies while the owner is within coach-radius blocks.
+academy:
+  live-modes: []
+  points-per-work:
+    miner: 1
+    farmer: 1
+    grinder: 2
+    fisherman: 12
+  level-base: 20
+  level-exponent: 2.0
+  max-level: 30
+  daily-soft-cap: 1500
+  over-cap-rate: 0.25
+  coach-radius: 16
+  coach-mult: 1.25
+  perks: {}
+  specs: {}
+  traits: {}
+
 # The Trader in the Gilded Grove (Survival): sells raw farmed goods for the player's balance.
 # Per player, per item, per UTC day: full price up to daily-soft-cap, then over-cap-rate of the price.
 # Override any default price under prices, for example:  wheat: 1.5
