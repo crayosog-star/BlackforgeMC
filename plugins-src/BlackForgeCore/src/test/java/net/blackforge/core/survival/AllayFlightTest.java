@@ -50,6 +50,19 @@ class AllayFlightTest {
         assertTrue(AllayFlight.at(A, B, 20, 40)[0] - AllayFlight.at(A, B, 19, 40)[0] > 0.4);
     }
 
+    @Test void hoverDriftsSlowly() {
+        for (long t = 1; t < 2_000; t++) {
+            double[] a = AllayFlight.hover(1, 3, t - 1), b = AllayFlight.hover(1, 3, t);
+            double d = Math.sqrt(Math.pow(b[0] - a[0], 2) + Math.pow(b[1] - a[1], 2) + Math.pow(b[2] - a[2], 2));
+            assertTrue(d < 0.05, "jumped " + d + " at tick " + t);
+        }
+    }
+
+    @Test void flockSpreadsOut() {
+        double[] a = AllayFlight.hover(0, 3, 0), b = AllayFlight.hover(1, 3, 0);
+        assertTrue(Math.hypot(a[0] - b[0], a[2] - b[2]) > 2);
+    }
+
     @Test void liftsInTheMiddleOnly() {
         assertEquals(0, AllayFlight.lift(0, 12), EPS);
         assertEquals(0, AllayFlight.lift(1, 12), EPS);

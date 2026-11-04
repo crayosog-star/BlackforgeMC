@@ -1,6 +1,6 @@
 # Forge Allays
 **Status:** In progress. Approved by Colin on 2026-11-04 with the recommended defaults
-**Next task:** P2.T1, which can't start until the Phase 1 gate is confirmed (rule 9; see Blockers log)
+**Next task:** P2.T2
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -165,7 +165,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** a Station broken while the menu's open, and access lost while it's open (re-check as at `S/BaseStation.java:365`); buying with too little money or Essence takes nothing; two trusted members buying at once.
 - **Done when:** in the Foundry, the icon shows in slot 34 at GUI scales 2, 3 and 4 without overlapping the art; buying Tier I spawns one allay by the Station; a failed purchase takes nothing.
 - **Leaves ready:** base tier state and a working flock of idle allays.
-- **Evidence:**
+- **Evidence:** Untested in game; the build and tests are checked before merge. Tier II and III cards say "Not ready yet" until their jobs are built, so nobody can buy an upgrade that does nothing.
 
 ### [ ] P2.T2: Add loose-drop collection
 - **Needs:** P2.T1; `AllayRules.skipDrop`; `BaseStation.stationIn`, `regionAt`, `deliver` (`S/BaseStation.java:166`).
@@ -311,11 +311,12 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Blockers log
 | Date | Task | Problem | Decision |
 |---|---|---|---|
-| 2026-11-04 | Phase 1 gate | The in-game checks for P1.T2 and P1.T3 need a tester, so Phase 2 can't start (rule 9) | Waiting on Colin or a tester |
+| 2026-11-04 | Phase 1 gate | The in-game checks for P1.T2 and P1.T3 need a tester, so Phase 2 can't start (rule 9) | Colin told me to start Phase 2 at 10:38 on 2026-11-04, before P1.T3 was live. The flight checks are still unplayed, so they're carried into the Phase 2 gate |
 
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | Phase 2 started before the Phase 1 in-game gate was played | Colin, in chat |
 | 2026-11-04 | P1.T3 registers `/allay` from `Allays`, as `Robots` does, instead of changing `HubModule` | Small wiring change, no check weakened; flagged to Colin in the PR |
 
 ## Later ideas
