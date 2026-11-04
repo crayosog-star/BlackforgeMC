@@ -618,7 +618,9 @@ public final class SurvivalModule implements Listener {
     /** Refused until the island exists, so nobody lands in the void. */
     private void warpSell(Player p) {
         if (!DistrictLife.groveBuilt(plugin)) { p.sendMessage(Ui.mm("<gold>The Gilded Grove opens soon.")); return; }
+        if (inCombat(p)) return;
         teleportSafe(p, DistrictLife.groveWarp(world), "the Gilded Grove");
+        p.sendMessage(Ui.mm("<gold>Follow the arrows: <white>the Trader <gold>buys your items, straight ahead."));
     }
 
     private void warp(Player p, String[] a) {

@@ -67,7 +67,7 @@ public final class GildedGrove {
             double d = dist(x, z), e = edge(Math.atan2(z - CZ, x - CX));
             if (d > e) continue;
             boolean rim = d > e - 1.4;
-            boolean lamp = !rim && Math.floorMod(x + 3 * z, 17) == 0;            // soft light from under the moss
+            boolean lamp = !rim && Math.floorMod(x + 3 * z, 17) == 0 && inside(x, z, 3) && !reserved(x, z, 1);   // soft light from under the moss, always carpeted over
             set(c, x, G, z, rim ? BRICK : lamp ? "verdant_froglight[axis=y]" : "moss_block");
             int depth = (int) Math.round(3 + Math.pow(1 - d / e, 0.65) * 15 + rnd.nextInt(2));
             for (int i = 1; i <= depth; i++) {
@@ -120,7 +120,7 @@ public final class GildedGrove {
     // ------------------------------------------------------------------ the formal parts
 
     private static void paving(Canvas c, int x, int z, boolean trim) {
-        set(c, x, G, z, trim ? GOLD : BRICK);
+        set(c, x, G, z, trim ? GOLD : "quartz_bricks");
     }
 
     /** The gold-edged avenue from the bridge to the pavilion, its arch and lamps. */
@@ -128,7 +128,7 @@ public final class GildedGrove {
         int from = CZ - R + 1, to = CZ - PAV_R;
         for (int z = from; z <= to; z++) {
             for (int x = CX - 2; x <= CX + 2; x++) paving(c, x, z, Math.abs(x - CX) == 2);
-            if (z < to - 1) for (int x : new int[]{CX - 4, CX + 4}) {     // clipped hedges along both sides
+            if (z < CZ - 16) for (int x : new int[]{CX - 4, CX + 4}) {     // clipped hedges, stopping early so the left and right NPCs stay in view
                 set(c, x, G + 1, z, LEAF);
                 if ((z - from) % 6 != 0) set(c, x, G + 2, z, (z % 2 == 0) ? BLOOM : LEAF);
             }
@@ -139,6 +139,12 @@ public final class GildedGrove {
                 set(c, x, G + 3, z, GOLD);
                 late(c, x, G + 4, z, "lantern");
             }
+        }
+        // gold arrows set into the avenue, pointing at the Trader
+        for (int z = KingdomLayout.GROVE_WARP_Z + 2; z <= to - 2; z += 4) {
+            set(c, CX, G, z, "emerald_block");
+            set(c, CX - 1, G, z - 1, GOLD);
+            set(c, CX + 1, G, z - 1, GOLD);
         }
         // the entrance arch over the warp point
         int az = KingdomLayout.GROVE_WARP_Z - 3;
@@ -197,6 +203,9 @@ public final class GildedGrove {
         }
         set(c, CX, G + 7, CZ, "emerald_block");
         late(c, CX, G + 8, CZ, "lantern");
+        // gold stages for the three NPCs, in a row facing the avenue: left, straight ahead, right
+        for (int nx : new int[]{CX - 6, CX, CX + 6}) for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++)
+            set(c, nx + dx, G, CZ - 6 + dz, nx == CX ? "emerald_block" : GOLD);
         // the stands: a gold plinth either side of each NPC
         for (int[] s : new int[][]{{CX - 7, CZ - 3}, {CX - 7, CZ + 3}, {CX + 7, CZ - 3}, {CX + 7, CZ + 3}, {CX - 3, CZ + 7}, {CX + 3, CZ + 7}}) {
             set(c, s[0], G + 1, s[1], "chiseled_quartz_block");
@@ -241,12 +250,28 @@ public final class GildedGrove {
             boolean ring = x == x1 || x == x2 || z == z1 || z == z2;
             boolean door = x == x2 && Math.abs(z - CZ) <= 1;
             if (ring && !door) for (int y = 1; y <= 3; y++) set(c, x, G + y, z, y == 3 && (x + z) % 3 == 0 ? BLOOM : LEAF);
-            else if (!ring && (Math.abs(x - GARDEN_X) <= 1 || Math.abs(z - CZ) <= 1)) set(c, x, G, z, "polished_blackstone");
+            else if (!ring && (Math.abs(x - GARDEN_X) <= 1 || Math.abs(z - CZ) <= 1)) set(c, x, G, z, Math.abs(x - GARDEN_X) + Math.abs(z - CZ) <= 2 ? GOLD : "quartz_bricks");
         }
         set(c, GARDEN_X, G, CZ, GOLD);
         set(c, GARDEN_X, G + 1, CZ, "chiseled_quartz_block");
         set(c, GARDEN_X, G + 2, CZ, GOLD);
         late(c, GARDEN_X, G + 3, CZ, "lantern");
+        // gold-capped posts at the hedge corners, and flower beds filling the four quarters
+        for (int x : new int[]{x1, x2}) for (int z : new int[]{z1, z2}) {
+            for (int y = 1; y <= 4; y++) set(c, x, G + y, z, QUARTZ);
+            set(c, x, G + 5, z, GOLD);
+            late(c, x, G + 6, z, "lantern");
+        }
+        Random rnd = new Random(4105);
+        String[] tall = {"rose_bush", "peony", "lilac"};
+        for (int x = x1 + 1; x < x2; x++) for (int z = z1 + 1; z < z2; z++) {
+            if (Math.abs(x - GARDEN_X) <= 2 || Math.abs(z - CZ) <= 2) continue;
+            if (c.isSet(x, G + 1, z)) continue;
+            int roll = rnd.nextInt(10);
+            if (roll < 3) { String t = tall[rnd.nextInt(3)]; late(c, x, G + 1, z, t + "[half=lower]"); late(c, x, G + 2, z, t + "[half=upper]"); }
+            else if (roll < 6) late(c, x, G + 1, z, "wildflowers");
+            else if (roll < 8) late(c, x, G + 1, z, "pink_petals");
+        }
         // benches in the four corners, each with a little hedge nook
         for (int sx : new int[]{-1, 1}) for (int sz : new int[]{-1, 1}) {
             int bx = GARDEN_X + sx * 5, bz = CZ + sz * 5;
