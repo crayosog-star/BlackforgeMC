@@ -180,7 +180,7 @@ public void onCatch(org.bukkit.event.player.PlayerFishEvent e) {
         OrangeCompanion companion = orangeCompanions.get(u);
         if (companion != null) {
             if (p.isInvisible() || p.getMetadata("vanished").stream().anyMatch(MetadataValue::asBoolean)) companion.removeModel();
-            else companion.follow(now, display -> hideFromOptedOut(display, u), (at, voice) -> playOrangeCompanionVoice(p, at, voice));
+            else companion.follow(now, display -> hideFromOptedOut(display, u), (from, voice) -> playOrangeCompanionVoice(p, from, voice));
         }
         if (trail != null && speed > 0.02 && !p.isFlying() && !p.isGliding()) trail(trail, p, now);
         if (aura != null) aura(aura, p, now);
@@ -188,13 +188,15 @@ public void onCatch(org.bukkit.event.player.PlayerFishEvent e) {
         else cape(p, cape, speed);
     }
 
-    private void playOrangeCompanionVoice(Player owner, Location at, String voice) {
-        owner.playSound(at, voice, SoundCategory.PLAYERS, 1f, 1f);
+    /** Played from the entity, so the voice moves with the pet instead of staying where the line began. */
+    private void playOrangeCompanionVoice(Player owner, Entity from, String voice) {
+        Location at = from.getLocation();
+        owner.playSound(from, voice, SoundCategory.PLAYERS, 1f, 1f);
         double range = 16;
         for (Player listener : at.getWorld().getNearbyPlayers(at, range)) {
             if (listener.equals(owner) || cos.hidesOthers(listener) || !listener.canSee(owner)) continue;
             if (listener.getLocation().distanceSquared(at) > range * range) continue;
-            listener.playSound(at, voice, SoundCategory.PLAYERS, 1f, 1f);
+            listener.playSound(from, voice, SoundCategory.PLAYERS, 1f, 1f);
         }
     }
 
