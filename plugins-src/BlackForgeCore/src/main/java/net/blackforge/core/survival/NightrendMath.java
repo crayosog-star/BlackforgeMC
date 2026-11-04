@@ -70,9 +70,6 @@ final class NightrendMath {
         return 0.55 + 0.65 * Math.sin(Math.PI * x);
     }
 
-    /** With a pair, every second hit (2nd, 4th, ...) is the off-hand blade's slash. */
-    static boolean offHandHit(int hitNumber) { return hitNumber > 0 && hitNumber % 2 == 0; }
-
     /** Eased progress of the slash at tick {@code t} (0..SLASH_TICKS): fast out of the swing, slowing at the end. */
     static double slashProgress(int t) {
         double x = Math.max(0, Math.min(1, t / (double) SLASH_TICKS));
