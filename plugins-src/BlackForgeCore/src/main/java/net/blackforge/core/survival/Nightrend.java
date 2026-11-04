@@ -45,10 +45,10 @@ import java.util.function.Predicate;
  * <ul>
  *   <li>One dagger in your main hand hits for {@code damage} (5) at {@code attack-speed} (2.0 a second) with
  *   {@code reach-change} (-0.5) blocks of reach. It isn't a sword, so there's no sweep: one target per hit.</li>
- *   <li>With a Nightrend in <b>each</b> hand you attack at {@code pair-attack-speed} (2.6), and every second hit
- *   swings alternate arms, right then left, with a {@code repeat-side-chance} (3%) of the same arm twice, when that
- *   blade's glow swells and an aura wraps it for a second (a "blood surge"); a hit
- *   slashes a red arc off that arm's blade (cosmetic; same damage). Drop either and the bonus is gone.</li>
+ *   <li>With a Nightrend in <b>each</b> hand you attack at {@code pair-attack-speed} (2.6), and swings alternate
+ *   arms, right then left. A {@code repeat-side-chance} (3%) of swings use the same arm twice, and that blade's glow
+ *   swells for a second (a "blood surge"). A hit slashes a red arc off the blade that swung (cosmetic; same damage).
+ *   Drop either dagger and the bonus is gone.</li>
  *   <li>A different sword in the off hand gives a smaller boost, {@code mixed-attack-speed} (2.3); speed only.</li>
  *   <li>Hits from the arc behind the target ({@code behind-arc-degrees}, 120) only do {@code behind-damage} (60%),
  *   with a duller sound. Players and mobs alike. "Behind" is where the target is facing, not where it's walking.</li>
@@ -89,7 +89,6 @@ public final class Nightrend implements Listener, Hackable {
     private final Map<UUID, Integer> swingTick = new HashMap<>();
     private final Map<UUID, Boolean> swingWasOff = new HashMap<>();
     private final Random rnd = new Random();
-    private final Map<UUID, Integer> hits = new HashMap<>();
     private final Map<UUID, Long> hackedUntil = new HashMap<>(), lastFlip = new HashMap<>();
     private final Set<ItemDisplay> live = new HashSet<>();
     private final Set<UUID> flipping = new HashSet<>();   // a flip is playing for them
@@ -192,7 +191,6 @@ public final class Nightrend implements Listener, Hackable {
         boolean hacked = hackedUntil.getOrDefault(p.getUniqueId(), 0L) > now;
         setPair(p, here && main && off && !hacked && !p.isDead());
         setMixed(p, here && main && !off && isOtherSword(inv.getItemInOffHand()) && !hacked && !p.isDead());
-        if (!main) hits.remove(p.getUniqueId());
         if (auraNow && here && (main || off) && !flipping.contains(p.getUniqueId()) && visible(p)) aura(p, main, off);
     }
 
@@ -242,10 +240,7 @@ public final class Nightrend implements Listener, Hackable {
             pairOn.add(id);
             long now = System.currentTimeMillis();
             if (now - lastFlip.getOrDefault(id, 0L) >= flipCooldownMillis && visible(p)) { lastFlip.put(id, now); flipUp(p); }
-        } else {
-            pairOn.remove(id);
-            hits.remove(id);
-        }
+        } else pairOn.remove(id);
     }
 
     /** Any sword that isn't a Nightrend. */
@@ -274,17 +269,13 @@ public final class Nightrend implements Listener, Hackable {
         return true;
     }
 
-    /** A couple of dark-red embers off each held blade, drifting up and fading to black. */
+    /** A couple of dark-red embers off each held blade, drifting up and fading to black. At the hands by body facing. */
     private void aura(Player p, boolean main, boolean off) {
-        Location base = p.getLocation();
-        double yaw = Math.toRadians(base.getYaw());
-        Vector fwd = new Vector(-Math.sin(yaw), 0, Math.cos(yaw)), right = new Vector(-Math.cos(yaw), 0, -Math.sin(yaw));
-        double y = p.isSneaking() ? 0.55 : 0.75;
         World w = p.getWorld();
         // right hand is the main hand unless the player has set left-handed
         double side = p.getMainHand() == org.bukkit.inventory.MainHand.LEFT ? -1 : 1;
-        if (main) puff(w, base.clone().add(0, y, 0).add(right.clone().multiply(0.38 * side)).add(fwd.clone().multiply(0.22)));
-        if (off) puff(w, base.clone().add(0, y, 0).add(right.clone().multiply(-0.38 * side)).add(fwd.clone().multiply(0.22)));
+        if (main) puff(w, hand(p, side, 0));
+        if (off) puff(w, hand(p, -side, 0));
     }
 
     private static void puff(World w, Location at) {
@@ -485,7 +476,7 @@ public final class Nightrend implements Listener, Hackable {
 
     // ------------------------------------------------------------------ EMP
 
-    /** The EMP shuts off the pair speed bonus of everyone it reaches (never the caster's) for {@code emp-seconds}. */
+    /** The EMP shuts off the pair and mixed speed bonuses of everyone it reaches (never the caster's) for {@code emp-seconds}. */
     @Override
     public int hack(Location center, double radius, Player caster) {
         int n = 0;
@@ -500,7 +491,7 @@ public final class Nightrend implements Listener, Hackable {
             setMixed(p, false);
             p.getWorld().spawnParticle(Particle.SMOKE, p.getLocation().add(0, 0.8, 0), 10, 0.35, 0.3, 0.35, 0.01);
             p.playSound(p.getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 0.5f, 1.4f);
-            p.sendActionBar(Ui.mm("<#B6FF3B>⚡ <gray>Your " + NAME + " <gray>pair bonus was <white>shut down <gray>by an EMP"));
+            p.sendActionBar(Ui.mm("<#B6FF3B>⚡ <gray>Your " + NAME + " <gray>speed bonus was <white>shut down <gray>by an EMP"));
             n++;
         }
         return n;
@@ -514,19 +505,18 @@ public final class Nightrend implements Listener, Hackable {
         for (ItemStack it : e.getInventory().getMatrix()) if (isNightrend(it)) { e.getInventory().setResult(null); return; }
     }
 
-    @EventHandler public void onQuit(PlayerQuitEvent e) { forget(e.getPlayer()); }
-    @EventHandler public void onDeath(PlayerDeathEvent e) { forget(e.getPlayer()); }
-    @EventHandler public void onWorld(PlayerChangedWorldEvent e) { forget(e.getPlayer()); }
+    @EventHandler public void onQuit(PlayerQuitEvent e) { forget(e.getPlayer(), true); }
+    @EventHandler public void onDeath(PlayerDeathEvent e) { forget(e.getPlayer(), false); }
+    @EventHandler public void onWorld(PlayerChangedWorldEvent e) { forget(e.getPlayer(), false); }
 
-    private void forget(Player p) {
+    /** {@code leaving}: they're quitting, so drop everything kept about them (isOnline() is still true in the quit event). */
+    private void forget(Player p, boolean leaving) {
         setPair(p, false);
         setMixed(p, false);
         AttributeInstance ai = p.getAttribute(Attribute.ATTACK_SPEED);
         if (ai != null) { ai.removeModifier(pairKey); ai.removeModifier(mixedKey); }   // belt and braces: never leave a bonus behind
         nextOff.remove(p.getUniqueId()); swingTick.remove(p.getUniqueId()); swingWasOff.remove(p.getUniqueId());
-        hits.remove(p.getUniqueId());
-        if (!p.isOnline()) lastFlip.remove(p.getUniqueId());
-        if (!p.isOnline() || p.isDead()) hackedUntil.remove(p.getUniqueId());
+        if (leaving) { lastFlip.remove(p.getUniqueId()); hackedUntil.remove(p.getUniqueId()); }
     }
 
     /** On plugin disable: take the pair bonus off everyone. */
@@ -535,6 +525,6 @@ public final class Nightrend implements Listener, Hackable {
         for (ItemDisplay x : live) if (x.isValid()) x.remove();
         live.clear();
         flipping.clear();
-        for (Player p : Bukkit.getOnlinePlayers()) forget(p);
+        for (Player p : Bukkit.getOnlinePlayers()) forget(p, true);
     }
 }

@@ -536,8 +536,12 @@ public final class TestArena implements Listener {
         for (int slot = 0; slot < SLOTS; slot++) {
             ItemStack s = showcase[slot];
             if (s == null || !same.test(s)) continue;
-            if (!s.isSimilar(item)) {   // a newer version (new texture, new lore): the frame shows that, not an old saved copy
-                showcase[slot] = item.asOne();
+            ItemStack fresh = item.asOne();
+            // keep a texture the saved copy already wears (staff-placed items are skinned; fresh ones may not be yet)
+            if (!fresh.getItemMeta().hasItemModel() && s.hasItemMeta() && s.getItemMeta().hasItemModel())
+                fresh.editMeta(m -> m.setItemModel(s.getItemMeta().getItemModel()));
+            if (!s.isSimilar(fresh)) {   // a newer version (new lore, new texture): the frame shows that, not an old saved copy
+                showcase[slot] = fresh;
                 if (frames[slot] != null && frames[slot].isValid()) frames[slot].setItem(showcase[slot].clone(), false);
                 saveShowcase();
             }

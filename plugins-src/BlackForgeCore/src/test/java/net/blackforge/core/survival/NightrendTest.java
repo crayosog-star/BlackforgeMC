@@ -73,14 +73,6 @@ class NightrendTest {
         assertEquals(0.2, repeats / (double) n, 0.01);
     }
 
-    @Test void everySecondHitIsTheOffHand() {
-        assertFalse(NightrendMath.offHandHit(0));
-        assertFalse(NightrendMath.offHandHit(1));
-        assertTrue(NightrendMath.offHandHit(2));
-        assertFalse(NightrendMath.offHandHit(3));
-        assertTrue(NightrendMath.offHandHit(4));
-    }
-
     @Test void slashSweepsLeftToRightAndEasesOut() {
         assertEquals(-NightrendMath.SLASH_ARC_DEGREES / 2, NightrendMath.slashAngle(0), EPS);
         assertEquals(NightrendMath.SLASH_ARC_DEGREES / 2, NightrendMath.slashAngle(NightrendMath.SLASH_TICKS), EPS);

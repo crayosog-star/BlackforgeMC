@@ -47,9 +47,9 @@ emp:
 # Nightrend (hub Arena only for now): dual-wielded daggers, left-click melee only, no sweep. One in your main hand hits
 # for `damage` at `attack-speed` a second, with `reach-change` blocks of reach (normal reach is 3). A Nightrend in each
 # hand raises that to `pair-attack-speed`; swings alternate arms, with a `repeat-side-chance` of the same arm twice,
-# when that blade's glow swells for a second (cosmetic). A different sword in the off hand gives `mixed-attack-speed` instead (speed only). Hits from the
-# `behind-arc-degrees` arc behind the target (centred on its back) do `behind-damage` of normal damage (0.6 = 60%).
-# An EMP turns the pair bonus off for `emp-seconds`. Equipping the pair flips both blades up into your hands, at most
+# when that blade's glow swells for a second (cosmetic). A different sword in the off hand gives `mixed-attack-speed`
+# instead (speed only). Hits from the `behind-arc-degrees` arc behind the target (centred on its back) do
+# `behind-damage` of normal damage (0.6 = 60%). An EMP turns both speed bonuses off for `emp-seconds`. Equipping the pair flips both blades up into your hands, at most
 # once per `flip-cooldown-seconds`. Staff: /nightrend (/daggers). Set enabled false to stop it.
 nightrend:
   enabled: true
