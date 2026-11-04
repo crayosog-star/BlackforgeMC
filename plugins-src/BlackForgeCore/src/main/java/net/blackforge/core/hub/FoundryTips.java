@@ -39,7 +39,7 @@ final class FoundryTips implements Listener {
             Map.entry("pen", "Place a Grinder agent close to the fence. Higher tiers reach further into the pen."),
             Map.entry("agent", "Agents face the way you're looking when you place them. They need Fuel Cells before they'll work."),
             Map.entry("agent_menu", "Click the fuel slot with Fuel Cells in your inventory. From here you can also switch its job or pick it up."),
-            Map.entry("station", "Agents in this chunk deliver to this Base Station. Only one fits per chunk, and that includes the Forge's."),
+            Map.entry("station", "On the Build Plot, agents in the same marked square deliver to this Base Station. One fits per square. Everywhere else on the island delivers to the Forge."),
             Map.entry("upgrade", "Sneak and right-click a hopper to raise its tier. One upgrade is enough for each tier here."));
 
     private final BlackForgeCore plugin;

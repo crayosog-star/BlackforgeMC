@@ -42,6 +42,8 @@ final class FoundryLab {
     private final List<TextDisplay> labels = new ArrayList<>();
     private final List<Husk> mobs = new ArrayList<>();
     private final java.util.Random rnd = new java.util.Random();
+    private final Runnable onEmpty;
+    private boolean wasOccupied;
     private static final Material[] BENCH_ITEMS = {Material.COBBLESTONE, Material.WHEAT, Material.BONE, Material.ROTTEN_FLESH, Material.OAK_LOG, Material.RAW_IRON};
     private static final int BENCH_MAX = 6, BENCH_SECONDS = 5;
     private final List<org.bukkit.entity.Item> benchDrops = new ArrayList<>();
@@ -53,7 +55,8 @@ final class FoundryLab {
     private static final int COURIER_Z_OFFSET = -5, COURIER_SPACING = 2;
     private final org.bukkit.entity.ItemFrame[] courierFrames = new org.bukkit.entity.ItemFrame[COURIER_ITEMS.length];
 
-    FoundryLab(BlackForgeCore plugin, World world, HopperUpgrades hoppers, BaseStation station, Predicate<Location> zone, Layout layout) {
+    FoundryLab(BlackForgeCore plugin, World world, HopperUpgrades hoppers, BaseStation station, Predicate<Location> zone, Layout layout, Runnable onEmpty) {
+        this.onEmpty = onEmpty;
         this.world = world; this.hoppers = hoppers; this.station = station; this.zone = zone; this.layout = layout;
         for (int i = 0; i < layout.laneZ().length; i++) {
             int z = layout.laneZ()[i], x = layout.laneX(), y = layout.y();
@@ -69,6 +72,8 @@ final class FoundryLab {
         boolean occupied = false;
         for (Player p : world.getPlayers()) if (zone.test(p.getLocation())) occupied = true;
         if (!occupied && layout.forge().getBlock().getState(false) instanceof Barrel b) b.getInventory().clear();   // shared storage, so it resets too
+        if (wasOccupied && !occupied) onEmpty.run();
+        wasOccupied = occupied;
         for (Lane l : lanes) runLane(l);
         runAllayBench(occupied);
         runCourierBench(occupied);

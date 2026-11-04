@@ -52,7 +52,7 @@ import java.util.*;
  */
 public final class TestArena implements Listener {
     public static final String WORLD = "arena";
-    private static final String MARKER = "arena-built-v4";   // v2: armour lever post; v3: the Foundry; v4: Grinder pen gate
+    private static final String MARKER = "arena-built-v5";   // v2: armour lever post; v3: the Foundry; v4: Grinder pen gate; v5: Build Plot
     private static final int SLOTS = TestArenaBuilder.GRID * TestArenaBuilder.GRID;
     private static final double DUMMY_HEALTH = 1000;
 

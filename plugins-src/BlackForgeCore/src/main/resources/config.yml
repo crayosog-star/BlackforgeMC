@@ -260,6 +260,8 @@ foundry:
   max-agents-total: 60
   max-upgraded-hoppers-per-chunk: 64
   max-allays-total: 12
+  agent-radius: 40                # blocks an agent can deliver to the Forge from, enough for every bench on the island
+  leave-grace-seconds: 15         # time to step back in before your Foundry test is cleared
 
 # Black Forge hub (hub server only). Commands: /blackforge setspawn | reload | dragons | effects | portals | info
 hub:

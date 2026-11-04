@@ -8,6 +8,7 @@ import org.bukkit.entity.Player;
 
 import java.util.UUID;
 import java.util.function.BiPredicate;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -22,7 +23,9 @@ public final class FoundrySystems {
     /** Where the fixed benches are, from the hub's layout. */
     public record Layout(int[] laneZ, int laneX, int y, Location forge, Location penMobs, int mobs, Location title, Location[] supply, Location allayBench) {}
 
-    public FoundrySystems(BlackForgeCore plugin, World world, Layout at, java.util.function.ToIntFunction<Location> supplyAt, Predicate<Location> zone, BiPredicate<Player, Location> access) {
+    /** {@code region}: which base a spot counts as part of. {@code sharedRegion}: the Forge's, which belongs to nobody. */
+    public FoundrySystems(BlackForgeCore plugin, World world, Layout at, java.util.function.ToIntFunction<Location> supplyAt, Predicate<Location> zone,
+                          Function<Location, String> region, String sharedRegion, BiPredicate<Player, Location> access) {
         var c = plugin.getConfig();
         HopperUpgrades hoppers = new HopperUpgrades(plugin);
         hoppers.setSandbox(c.getInt("foundry.max-upgraded-hoppers-per-chunk", 64));
@@ -33,14 +36,19 @@ public final class FoundrySystems {
         robots.setWorkArea((owner, l) -> zone.test(l));
         BaseStation station = new BaseStation(plugin, robots, hoppers, true);
         station.setAccess(access);
-        // one station per chunk: the island is shared, so a region can't be one player's
-        station.setRegion(l -> zone.test(l) ? "foundry:" + (l.getBlockX() >> 4) + ":" + (l.getBlockZ() >> 4) : null);
+        // the island is one base around the shared Forge, so every bench's agents can deliver to it; the Build Plot is for your own
+        station.setRegion(l -> zone.test(l) ? region.apply(l) : null);
+        station.setRadius(c.getInt("foundry.agent-radius", 40));
         allays = new Allays(plugin, station, zone, true);
         station.setAllays(allays);
         allays.setRobots(robots);
         allays.setSandboxLimit(c.getInt("foundry.max-allays-total", 12));
+        allays.setShared(sharedRegion, () -> {
+            for (Player p : world.getPlayers()) if (zone.test(p.getLocation())) return p.getUniqueId();
+            return null;
+        });
         Bukkit.getPluginManager().registerEvents(new FoundrySupply(supplyAt, hoppers), plugin);
-        lab = new FoundryLab(plugin, world, hoppers, station, zone, new FoundryLab.Layout(at.laneZ(), at.laneX(), at.y(), at.forge(), at.penMobs(), at.mobs(), at.title(), at.supply(), at.allayBench()));
+        lab = new FoundryLab(plugin, world, hoppers, station, zone, new FoundryLab.Layout(at.laneZ(), at.laneX(), at.y(), at.forge(), at.penMobs(), at.mobs(), at.title(), at.supply(), at.allayBench()), allays::resetShared);
     }
 
     /** Removes this player's agents and allays, and everything in them. */

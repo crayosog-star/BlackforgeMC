@@ -58,6 +58,32 @@ class FoundryRulesTest {
         assertNull(FoundryZone.benchAt(0, y, -70));
     }
 
+    @Test void everyBenchDeliversToTheSharedForge() {
+        String shared = FoundryZone.regionAt(FoundryZone.FORGE_X, FoundryZone.FORGE_Z);
+        assertEquals(FoundryZone.SHARED_REGION, shared);
+        for (int[] at : new int[][]{{FoundryZone.FARM_X1, FoundryZone.FARM_Z1}, {FoundryZone.POND_X1, FoundryZone.POND_Z1}, {FoundryZone.MINE_X2, FoundryZone.MINE_Z},
+                {FoundryZone.PEN_X1, FoundryZone.PEN_Z1}, {FoundryZone.LANE_X, FoundryZone.LANE_Z[0]}}) {
+            assertEquals(shared, FoundryZone.regionAt(at[0], at[1]), at[0] + "," + at[1]);
+            assertTrue(Math.hypot(at[0] - FoundryZone.FORGE_X, at[1] - FoundryZone.FORGE_Z) < 40, "out of delivery range");
+        }
+        assertNull(FoundryZone.regionAt(0, 0));
+    }
+
+    @Test void theBuildPlotIsOnTheIslandAndClearOfEveryBench() {
+        assertTrue(FoundryZone.PLOT_X1 > 1, "clear of the gold path");
+        for (int x = FoundryZone.PLOT_X1; x <= FoundryZone.PLOT_X2; x++)
+            for (int z = FoundryZone.PLOT_Z1; z <= FoundryZone.PLOT_Z2; z++) {
+                assertTrue(Math.hypot(x - FoundryZone.ISLAND_X, z - FoundryZone.ISLAND_Z) < FoundryZone.ISLAND_R - 1, x + "," + z);
+                for (int y = TestArenaBuilder.Y; y <= TestArenaBuilder.Y + 2; y++) assertNull(FoundryZone.benchAt(x, y, z), x + "," + z);
+                assertNotEquals(FoundryZone.SHARED_REGION, FoundryZone.regionAt(x, z));
+            }
+    }
+
+    @Test void theBuildPlotHasRoomForSeveralBases() {
+        assertNotEquals(FoundryZone.regionAt(FoundryZone.PLOT_X1, FoundryZone.PLOT_Z1), FoundryZone.regionAt(FoundryZone.PLOT_X2, FoundryZone.PLOT_Z2));
+        assertEquals(FoundryZone.regionAt(FoundryZone.PLOT_X1, FoundryZone.PLOT_Z1), FoundryZone.regionAt(FoundryZone.PLOT_X1 + 1, FoundryZone.PLOT_Z1 + 1));
+    }
+
     @Test void onlyTheOwnerMayBreakAndTheIslandIsNobodys() {
         PlacedBlocks p = new PlacedBlocks();
         UUID a = UUID.randomUUID(), b = UUID.randomUUID();

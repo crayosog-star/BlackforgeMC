@@ -1,0 +1,16 @@
+-proc:none
+-Xmaxerrs
+100000
+-d
+/tmp/claude-0/-home-claude/192ceba0-2abe-5bbb-89f9-81dd63fc4457/scratchpad/out
+net/blackforge/core/hub/Foundry.java
+net/blackforge/core/hub/FoundryTips.java
+net/blackforge/core/hub/FoundryZone.java
+net/blackforge/core/hub/TestArena.java
+net/blackforge/core/hub/TestArenaBuilder.java
+net/blackforge/core/survival/FoundryLab.java
+net/blackforge/core/survival/FoundrySupply.java
+net/blackforge/core/survival/FoundrySystems.java
+net/blackforge/core/survival/Allays.java
+net/blackforge/core/survival/BaseStation.java
+net/blackforge/core/survival/Robots.java
