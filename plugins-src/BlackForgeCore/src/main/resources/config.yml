@@ -99,7 +99,24 @@ last-rite:
   allow-totems: true
   chamber-slots: 8         # rites at once per server
 
-# Robots (Survival + Skyblock copper golems). NOT read by the plugin yet - a later task wires these up.
+# Base Station (Survival + Skyblock): one per claim or island. Sells Hopper Upgrades, upgrades Agents, collects their output.
+base-station:
+  enabled: true
+  price: 25000
+  essence: 128
+  agent-radius: 16
+  custom-ui: true          # false = plain menus
+
+# Hopper tiers I, II, III. delays = ticks between moves (vanilla is 8). upgrades-needed = I to II, then II to III.
+hopper-upgrades:
+  enabled: true            # false = hoppers run at vanilla speed; tiers are kept
+  delays: [8, 4, 1]
+  upgrades-needed: [1, 10]
+  price: 20000             # per Hopper Upgrade
+  essence: 128             # per Hopper Upgrade
+  max-per-chunk: 16
+
+# Agents, called robots in the code and saves (Survival + Skyblock copper golems). NOT read by the plugin yet - a later task wires these up.
 # fish-seconds (per robot tier I..V) and fisher-burn match the built-in values in RobotRules; the rest are for the
 # upcoming chest trips (radius in blocks, store when any item reaches store-threshold, fetch fuel at 2 minutes left).
 robots:

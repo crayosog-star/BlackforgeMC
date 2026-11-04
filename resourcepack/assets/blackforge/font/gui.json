@@ -1,0 +1,97 @@
+{
+  "providers": [
+    {
+      "type": "space",
+      "advances": {
+        "\uf100": 1,
+        "\uf101": 2,
+        "\uf102": 4,
+        "\uf103": 8,
+        "\uf104": 16,
+        "\uf105": 32,
+        "\uf106": 64,
+        "\uf107": 128,
+        "\uf110": -1,
+        "\uf111": -2,
+        "\uf112": -4,
+        "\uf113": -8,
+        "\uf114": -16,
+        "\uf115": -32,
+        "\uf116": -64,
+        "\uf117": -128
+      }
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/forge.png",
+      "height": 89,
+      "ascent": 13,
+      "chars": [
+        "\ue000"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/storage.png",
+      "height": 71,
+      "ascent": 13,
+      "chars": [
+        "\ue001"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/agent.png",
+      "height": 125,
+      "ascent": 13,
+      "chars": [
+        "\ue004"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/workshop.png",
+      "height": 89,
+      "ascent": 13,
+      "chars": [
+        "\ue005"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/pip_on.png",
+      "height": 3,
+      "ascent": -54,
+      "chars": [
+        "\ue010"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/pip_off.png",
+      "height": 3,
+      "ascent": -54,
+      "chars": [
+        "\ue011"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/count_on.png",
+      "height": 7,
+      "ascent": 8,
+      "chars": [
+        "\ue012"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/count_off.png",
+      "height": 7,
+      "ascent": 8,
+      "chars": [
+        "\ue013"
+      ]
+    }
+  ]
+}

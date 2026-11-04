@@ -113,6 +113,9 @@ public final class HubModule implements Listener {
         emp.hackable(surge, cage, eye, chain, bonfire, gaia, rite, darkness);   // everything the EMP shuts down
         arena.addTestItem(emp::item, emp::isEmp);
         // staff test commands, Arena only: one item each
+        // Display only: they work in Survival and Skyblock, where hoppers, claims and Essence exist.
+        arena.addTestItem(net.blackforge.core.survival.BaseStation::item, net.blackforge.core.survival.BaseStation::isStationItem);
+        arena.addTestItem(net.blackforge.core.survival.HopperUpgrades::upgradeItem, net.blackforge.core.survival.HopperUpgrades::isUpgrade);
         testCommand("jbello", List.of("bellows", "galebellows"), () -> bellows.item());
         testCommand("gaia", List.of("gaiapotion"), () -> gaia.item());
         testCommand("darkness", List.of("darknesspotion"), () -> darkness.item());
@@ -123,6 +126,8 @@ public final class HubModule implements Listener {
         testCommand("ashenchain", List.of("chain", "tether"), () -> chain.item());
         testCommand("bonfire", List.of("ashenbonfire", "totem"), () -> bonfire.item());
         testCommand("emp", List.of(), () -> emp.item());
+        testCommand("basestation", List.of("station"), net.blackforge.core.survival.BaseStation::item);
+        testCommand("hopperupgrade", List.of(), net.blackforge.core.survival.HopperUpgrades::upgradeItem);
     }
 
     public TestArena arena() { return arena; }

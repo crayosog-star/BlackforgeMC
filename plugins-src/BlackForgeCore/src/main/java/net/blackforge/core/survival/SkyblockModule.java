@@ -49,6 +49,8 @@ public final class SkyblockModule implements Listener {
     private final RankKits rankKits;
     private final Spawners spawners;
     private final Robots robots;
+    private final HopperUpgrades hoppers;
+    private final BaseStation station;
     private final OneBlockExtras oneblockExtras;
     private final List<TextDisplay> holos = new ArrayList<>();
     private final Map<UUID, Long> gateCooldown = new HashMap<>();
@@ -111,6 +113,11 @@ public final class SkyblockModule implements Listener {
         robots = new Robots(plugin);
         robots.setAccess(this::islandMember);
         robots.setRanks(ranks);
+        hoppers = new HopperUpgrades(plugin);
+        hoppers.setAccess(this::islandMember);
+        station = new BaseStation(plugin, robots, hoppers);
+        station.setAccess(this::islandMember);
+        station.setRegion(this::islandId);
         scrap.addRobotOffers();
         world.setSpawnLocation(spawn());
         for (int cx = -4; cx <= 3; cx++) for (int cz = -4; cz <= 3; cz++) world.addPluginChunkTicket(cx, cz, plugin);
@@ -123,6 +130,7 @@ public final class SkyblockModule implements Listener {
             eco = reg.getProvider();
             spawners.setEconomy(eco);
             robots.setEconomy(eco);
+            station.setEconomy(eco);
             ah = new AuctionHouse(plugin, eco);
             ahOneBlock = new AuctionHouse(plugin, eco, "auctions-oneblock.yml");
             tags.setEconomy(eco);
@@ -187,6 +195,16 @@ public final class SkyblockModule implements Listener {
             @SuppressWarnings("unchecked") Set<UUID> members = (Set<UUID>) island.get().getClass().getMethod("getMemberSet").invoke(island.get());
             return members.contains(p.getUniqueId());
         } catch (Exception e) { return false; }
+    }
+
+    /** Which island this spot is on, or null. */
+    private String islandId(Location l) {
+        try {
+            Object im = islands();
+            if (im == null) return null;
+            Optional<?> island = (Optional<?>) im.getClass().getMethod("getIslandAt", Location.class).invoke(im, l);
+            return island.isEmpty() ? null : "island:" + island.get().getClass().getMethod("getUniqueId").invoke(island.get());
+        } catch (Exception e) { return null; }
     }
 
     /** Is the player standing on an island they belong to? */

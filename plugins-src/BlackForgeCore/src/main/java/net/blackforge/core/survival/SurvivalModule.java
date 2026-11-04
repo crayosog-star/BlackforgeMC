@@ -66,6 +66,8 @@ public final class SurvivalModule implements Listener {
     private final RankKits rankKits;
     private final Spawners spawners;
     private final Robots robots;
+    private final HopperUpgrades hoppers;
+    private final BaseStation station;
     private final Set<UUID> dropping = new HashSet<>(), landed = new HashSet<>();
     private final Set<UUID> warmupApproved = new HashSet<>();
     private final Map<UUID, Integer> warmups = new HashMap<>();
@@ -149,6 +151,11 @@ public final class SurvivalModule implements Listener {
         robots.setWorkArea((owner, l) -> owner.equals(claims.ownerAt(l)));
         robots.setRanks(ranks);
         robots.setCrateOnly("<#ffb52e>Molten<gray>, <#ff4422>Forgeheart<gray> and <#e5484d>KOTH");
+        hoppers = new HopperUpgrades(plugin);
+        hoppers.setAccess((p, l) -> p.hasPermission("blackforge.admin") || claims.ownerAt(l) != null && claims.canUse(p, l));
+        station = new BaseStation(plugin, robots, hoppers);
+        station.setAccess((p, l) -> p.hasPermission("blackforge.admin") || claims.ownerAt(l) != null && claims.canUse(p, l));
+        station.setRegion(l -> { UUID stationOwner = claims.ownerAt(l); return stationOwner == null ? null : "claim:" + stationOwner; });
         koth.setScrap(scrap);
         pvp.setScrap(scrap);
         borderSize = plugin.getConfig().getInt("rtp.border-size", 10000);
@@ -164,6 +171,7 @@ public final class SurvivalModule implements Listener {
             eco = reg.getProvider();
             spawners.setEconomy(eco);
             robots.setEconomy(eco);
+            station.setEconomy(eco);
             tags.setEconomy(eco);
             kits.setEconomy(eco);
             votes.setEconomy(eco);

@@ -14,8 +14,8 @@ PERMANENT_OPS = [OWNER, {"uuid": "8c67e820-3611-42b8-9f5f-d355d31f9ca9", "name":
 ADDRESS = "blackforgemc.com"
 # served straight from GitHub (public repo, main branch): a merged pack is downloadable at once, no website re-upload.
 # The file name carries the SHA-1, so a new pack is a new file and clients never get a stale cached copy.
-PACK_URL = "https://raw.githubusercontent.com/crayosog-star/BlackforgeMC/main/website/pack/blackforge-pack-acec528b.zip"
-PACK_SHA1 = "acec528bf380d6d5cc81d2447ac7c6edde4b6bdb"
+PACK_URL = "https://raw.githubusercontent.com/crayosog-star/BlackforgeMC/main/website/pack/blackforge-pack-f1429319.zip"
+PACK_SHA1 = "f1429319fe511e89e0c6bb2f252cdd4b4d4a39db"
 # local testing only: tools/pack_override.txt (line 1 URL, line 2 SHA-1) beats the two lines above. Delete it once the pack is on GitHub.
 _override = Path(__file__).with_name("pack_override.txt")
 if _override.exists():

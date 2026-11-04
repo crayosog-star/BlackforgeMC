@@ -87,7 +87,11 @@ public final class Robots implements Listener {
         /** Sub-millisecond charge left over between ticks (blended and Fisherman rates aren't whole numbers). Not saved. */
         double chargeCarry;
         Location loc; Inventory storage; UUID entity; int timer; String status = "";
+        /** The name the player gave it, or null. */
+        String name;
         Bot(String id) { this.id = id; }
+        /** "Agent Bob", or "Miner Agent" until it's named. */
+        String title() { return name != null ? "Agent " + name : job.label + " Agent"; }
         int interval() { return job == Job.FISHERMAN ? (int) (RobotRules.fishIntervalMs(tier) / 1000) : INTERVAL[tier - 1]; }
         /** Old saves and robot items have no rate: fall back to the burning cell tier's rate. */
         void fixRate() { if (!(chargeRate > 0)) chargeRate = RobotRules.rateForTier(Math.max(1, Math.min(5, fuelTier))); }
@@ -103,6 +107,9 @@ public final class Robots implements Listener {
     private String crateOnly;   // non-null: robots can't be bought here, only won from these crates
     private Ranks ranks;
     private Economy eco;
+    private BaseStation stations;
+    private final Map<UUID, Naming> naming = new java.util.concurrent.ConcurrentHashMap<>();   // who we're waiting on for a name
+    private record Naming(String botId, long until) {}
     private final Random rnd = new Random();
 
     Robots(BlackForgeCore plugin) {
@@ -120,11 +127,12 @@ public final class Robots implements Listener {
     void setWorkArea(BiPredicate<UUID, Location> rule) { this.workArea = rule; }
     void setRanks(Ranks r) { this.ranks = r; }
     void setEconomy(Economy e) { this.eco = e; }
+    void setStations(BaseStation s) { this.stations = s; }
 
     int limit(Player p) {
         Ranks.Rank r = ranks == null ? null : ranks.of(p);
         if (r == null) return 2;
-        return switch (r.id()) { case "copper" -> 3; case "iron" -> 4; case "gold" -> 5; case "diamond" -> 6; default -> 8; };
+        return Math.min(RobotRules.MAX_AGENTS, switch (r.id()) { case "copper" -> 3; case "iron" -> 4; default -> 5; });
     }
 
     int owned(UUID u) { int n = 0; for (Bot b : bots.values()) if (b.owner.equals(u)) n++; return n; }
@@ -134,9 +142,9 @@ public final class Robots implements Listener {
     static ItemStack fuelCell(int tier, int n) {
         int t = Math.max(1, Math.min(5, tier));
         ItemStack it = Ui.item(FUEL_ICON[t - 1], FUEL_COLOR[t - 1] + "<bold>Fuel Cell " + Spawners.roman(t),
-                "<gray>Powers a robot for <white>" + time(FUEL_MINUTES[t - 1] * 60_000L),
-                "<gray>Charge rate: <white>x" + FUEL_CHARGE[t - 1] + " <dark_gray>(levels robots up faster)",
-                "", "<yellow>Open a robot and click its fuel slot");
+                "<gray>Powers an agent for <white>" + time(FUEL_MINUTES[t - 1] * 60_000L),
+                "<gray>Charge rate: <white>x" + FUEL_CHARGE[t - 1] + " <dark_gray>(levels agents up faster)",
+                "", "<yellow>Open an agent and click its fuel slot");
         it.editMeta(m -> { m.getPersistentDataContainer().set(FUEL, PersistentDataType.INTEGER, t); m.setEnchantmentGlintOverride(true); });
         it.setAmount(Math.max(1, Math.min(64, n)));
         return it;
@@ -148,13 +156,15 @@ public final class Robots implements Listener {
     }
 
     /** A robot in item form. Carries its job, tier, charge and fuel so picking it up loses nothing. */
-    static ItemStack robotItem(Job job, int tier, long charge, long fuel, int fuelTier) {
-        ItemStack it = Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, job.color + "<bold>⚙ " + job.label + " Robot " + Spawners.roman(tier),
+    static ItemStack robotItem(Job job, int tier, long charge, long fuel, int fuelTier) { return robotItem(job, tier, charge, fuel, fuelTier, null); }
+
+    static ItemStack robotItem(Job job, int tier, long charge, long fuel, int fuelTier, String name) {
+        ItemStack it = Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, job.color + "<bold>⚙ " + (name != null ? "Agent " + name : job.label + " Agent") + " " + Spawners.roman(tier),
                 "<gray>" + job.desc, "<gray>Tier: <white>" + Spawners.roman(tier) + " <dark_gray>| <gray>Fuel: <white>" + time(fuel),
                 "<gray>Charge: <white>" + time(charge), "", "<yellow>Right-click a block on your island or claim to place");
         it.editMeta(m -> {
             PersistentDataContainer pdc = m.getPersistentDataContainer();
-            pdc.set(ITEM, PersistentDataType.STRING, job.name() + ";" + tier + ";" + charge + ";" + fuel + ";" + fuelTier);
+            pdc.set(ITEM, PersistentDataType.STRING, job.name() + ";" + tier + ";" + charge + ";" + fuel + ";" + fuelTier + (name != null ? ";" + name : ""));
             m.setEnchantmentGlintOverride(true);
         });
         return it;
@@ -192,8 +202,8 @@ public final class Robots implements Listener {
         Player p = e.getPlayer();
         Block at = e.getClickedBlock().getRelative(e.getBlockFace());
         if (!at.isPassable() || !at.getRelative(BlockFace.UP).isPassable()) { p.sendMessage(Ui.mm("<red>Not enough room there.")); return; }
-        if (!canUse.test(p, at.getLocation())) { p.sendMessage(Ui.mm("<red>Robots can only go on your own island or claimed land.")); return; }
-        if (owned(p.getUniqueId()) >= limit(p)) { p.sendMessage(Ui.mm("<red>You have " + owned(p.getUniqueId()) + "/" + limit(p) + " robots placed. Ranks raise the limit.")); return; }
+        if (!canUse.test(p, at.getLocation())) { p.sendMessage(Ui.mm("<red>Agents can only go on your own island or claimed land.")); return; }
+        if (owned(p.getUniqueId()) >= limit(p)) { p.sendMessage(Ui.mm("<red>You have " + owned(p.getUniqueId()) + "/" + limit(p) + " agents placed. Ranks raise the limit.")); return; }
         String[] d = e.getItem().getItemMeta().getPersistentDataContainer().get(ITEM, PersistentDataType.STRING).split(";");
         Bot b = new Bot(UUID.randomUUID().toString());
         b.owner = p.getUniqueId();
@@ -202,6 +212,7 @@ public final class Robots implements Listener {
         b.charge = Long.parseLong(d[2]);
         b.fuel = Long.parseLong(d[3]);
         b.fuelTier = Integer.parseInt(d[4]);
+        if (d.length > 5 && RobotRules.validName(d[5])) b.name = d[5];   // older items have no name
         b.fixRate();   // the item has no rate: derive it from fuelTier (see itemFuelTier)
         // face the way the player is looking, snapped to N/E/S/W, so a Miner mines what you clicked toward
         float yaw = Math.round(p.getYaw() / 90f) * 90f;
@@ -212,7 +223,7 @@ public final class Robots implements Listener {
         spawn(b);
         e.getItem().setAmount(e.getItem().getAmount() - 1);
         p.playSound(b.loc, Sound.ENTITY_COPPER_GOLEM_SPAWN, 1f, 1f);
-        p.sendMessage(Ui.mm("<green>Robot placed! Right-click it to add fuel, switch its job or collect its loot."));
+        p.sendMessage(Ui.mm("<green>Agent placed! Right-click it to add fuel, switch its job or collect its loot."));
         save();
     }
 
@@ -244,7 +255,7 @@ public final class Robots implements Listener {
         g.setGlowing(b.tier >= 5);
         g.getEquipment().setItemInMainHand(new ItemStack(b.job.icon));
         String st = b.fuel <= 0 ? "<red>No fuel" : b.status.isEmpty() ? "<white>" + time(b.fuel) : b.status;
-        g.customName(Ui.mm(b.job.color + "⚙ " + b.job.label + " " + Spawners.roman(b.tier) + " <dark_gray>• " + st));
+        g.customName(Ui.mm(b.job.color + "⚙ " + (b.name != null ? "Agent " + b.name + " <dark_gray>• " + b.job.color + b.job.label : b.title()) + " " + Spawners.roman(b.tier) + " <dark_gray>• " + st));
     }
 
     private CopperGolem entity(Bot b) {
@@ -267,7 +278,7 @@ public final class Robots implements Listener {
         b.entity = g.getUniqueId();
         Player p = e.getPlayer();
         if (!b.owner.equals(p.getUniqueId()) && !canUse.test(p, g.getLocation()) && !p.hasPermission("blackforge.admin")) {
-            p.sendMessage(Ui.mm("<red>That's " + Bukkit.getOfflinePlayer(b.owner).getName() + "'s robot.")); return;
+            p.sendMessage(Ui.mm("<red>That's " + Bukkit.getOfflinePlayer(b.owner).getName() + "'s agent.")); return;
         }
         open(p, b);
     }
@@ -303,7 +314,7 @@ public final class Robots implements Listener {
                 if (g == null) { plugin.getLogger().info("Robot " + b.id + " had no entity (was " + b.entity + ", lookup=" + Bukkit.getEntity(b.entity == null ? new UUID(0, 0) : b.entity) + ") - respawning it"); g = spawn(b); }
             }
             if (b.fuel <= 0) { if (++b.timer % 5 == 0) style(b, g); continue; }
-            boolean full = b.storage.firstEmpty() < 0;
+            boolean full = b.storage.firstEmpty() < 0 && (stations == null || !stations.hasRoom(b.loc));
             boolean dry = !full && b.job == Job.FISHERMAN && !nearWater(b);
             b.status = full ? "<red>Storage full" : dry ? "<red>Needs water" : "";
             if (!full && !dry) {
@@ -335,7 +346,10 @@ public final class Robots implements Listener {
 
     private void store(Bot b, Collection<ItemStack> items) {
         for (ItemStack it : items) if (it != null && !it.getType().isAir())
-            b.storage.addItem(it).values().forEach(l -> b.loc.getWorld().dropItemNaturally(b.loc, l));
+        {
+            ItemStack left = stations == null ? it : stations.deliver(b.loc, it);   // the Base Station first, if there's one in range
+            if (left != null) b.storage.addItem(left).values().forEach(l -> b.loc.getWorld().dropItemNaturally(b.loc, l));
+        }
     }
 
     private static final Set<Material> NO_MINE = EnumSet.of(Material.BEDROCK, Material.SPAWNER, Material.END_PORTAL_FRAME, Material.END_PORTAL,
@@ -486,7 +500,7 @@ public final class Robots implements Listener {
 
     // row 1: job selector; row 2: actions; rows 3-6: storage
     private static final int[] JOB_SLOTS = {1, 3, 5, 7};
-    private static final int SLOT_COLLECT = 9, SLOT_XP = 10, SLOT_FUEL = 11, SLOT_INFO = 13, SLOT_UPGRADE = 15, SLOT_PICKUP = 17;
+    private static final int SLOT_COLLECT = 9, SLOT_XP = 10, SLOT_FUEL = 11, SLOT_INFO = 13, SLOT_UPGRADE = 15, SLOT_RENAME = 16, SLOT_PICKUP = 17;
     private static final int STORAGE_START = 18;
 
     /** "▮▮▮▮▯▯▯": lit segments coloured red/yellow/green by position, unlit ones dark grey. */
@@ -502,9 +516,11 @@ public final class Robots implements Listener {
 
     void open(Player p, Bot b) {
         Menu m = new Menu(b.id, "robot");
-        m.inv = Bukkit.createInventory(m, 54, Ui.mm("<dark_gray>⚙ " + b.job.label + " Robot " + Spawners.roman(b.tier)));
-        ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
-        for (int i = 0; i < STORAGE_START; i++) m.inv.setItem(i, pane);
+        m.inv = Bukkit.createInventory(m, 54, StationUi.title(StationUi.Screen.AGENT, "⚙ " + b.title() + " " + Spawners.roman(b.tier)));
+        if (!StationUi.art()) {
+            ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
+            for (int i = 0; i < STORAGE_START; i++) m.inv.setItem(i, pane);
+        }
         int used = 0;
         for (ItemStack it : b.storage.getContents()) if (it != null) used++;
         m.inv.setItem(SLOT_COLLECT, Ui.item(Material.CHEST, "<green><bold>Collect All", "<gray>Storage: <white>" + used + "/" + b.storage.getSize() + " slots", "<gray>Click an item below to take just that stack."));
@@ -518,7 +534,7 @@ public final class Robots implements Listener {
                 "<gray>Works every <white>" + b.interval() + "s" + (b.job == Job.MINER ? "" : " <gray>in a <white>" + RADIUS[b.tier - 1] + "<gray>-block radius"),
                 "<gray>Charge: <white>" + time(b.charge)));
         if (!b.status.isEmpty()) info.add(b.status);
-        m.inv.setItem(SLOT_INFO, Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, b.job.color + "<bold>" + b.job.label + " Robot " + Spawners.roman(b.tier), info.toArray(String[]::new)));
+        m.inv.setItem(SLOT_INFO, Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, b.job.color + "<bold>" + b.title() + " " + Spawners.roman(b.tier), info.toArray(String[]::new)));
         if (b.tier >= MAX_TIER) m.inv.setItem(SLOT_UPGRADE, Ui.item(Material.NETHER_STAR, "<gold><bold>MAX TIER"));
         else {
             int t = b.tier - 1;
@@ -530,7 +546,8 @@ public final class Robots implements Listener {
                     "<gray>Charge: " + bar + " <white>" + pct + "%", "<dark_gray>(" + time(b.charge) + " / " + UP_CHARGE_HOURS[t] + "h - burn fuel to charge)",
                     "<#9d7bff>" + UP_ESSENCE[t] + " Mob Essence", "<green>" + NetEconomy.money(UP_MONEY[t]), "", "<yellow>Click to upgrade"));
         }
-        m.inv.setItem(SLOT_PICKUP, Ui.item(Material.HOPPER, "<red><bold>Pick Up Robot", "<gray>Gives you the robot item (keeps tier,", "<gray>charge and fuel) and its storage."));
+        m.inv.setItem(SLOT_RENAME, Ui.item(Material.NAME_TAG, "<aqua><bold>Rename", "<gray>Name: <white>" + (b.name != null ? b.name : "none"), "<gray>Type a name and it becomes <white>Agent Name<gray>.", "", "<yellow>Click to rename"));
+        m.inv.setItem(SLOT_PICKUP, Ui.item(Material.HOPPER, "<red><bold>Pick Up Agent", "<gray>Gives you the agent item (keeps tier,", "<gray>charge and fuel) and its storage."));
         for (int i = 0; i < 4; i++) {
             Job j = Job.values()[i];
             ItemStack icon = Ui.item(j.icon, j.color + "<bold>" + j.label, "<gray>" + j.desc, "", j == b.job ? "<green>✔ Current job" : "<yellow>Click to switch");
@@ -581,6 +598,11 @@ public final class Robots implements Listener {
                 open(p, b);
             }
             case SLOT_UPGRADE -> { upgrade(p, b); open(p, b); }
+            case SLOT_RENAME -> {
+                naming.put(p.getUniqueId(), new Naming(b.id, System.currentTimeMillis() + 60_000L));
+                p.closeInventory();
+                p.sendMessage(Ui.mm("<aqua>Type your agent's name in chat: <gray>1-16 letters or numbers. <white>clear<gray> removes the name, <white>cancel<gray> stops."));
+            }
             case SLOT_PICKUP -> pickUp(p, b);
             default -> {
                 for (int i = 0; i < 4; i++) if (JOB_SLOTS[i] == slot && b.job != Job.values()[i]) {
@@ -588,7 +610,7 @@ public final class Robots implements Listener {
                     b.timer = 0;
                     CopperGolem g = entity(b);
                     if (g != null) style(b, g);
-                    p.sendMessage(Ui.mm("<green>Your robot is now a " + b.job.color + b.job.label + "<green>."));
+                    p.sendMessage(Ui.mm("<green>Your agent is now a " + b.job.color + b.job.label + "<green>."));
                     open(p, b);
                 }
             }
@@ -622,7 +644,7 @@ public final class Robots implements Listener {
             if (!all) break;
         }
         p.getInventory().setStorageContents(inv);
-        if (added == 0) p.sendMessage(Ui.mm(b.fuel >= MAX_TANK - 30 * 60_000L ? "<red>The tank is full." : "<red>You have no Fuel Cells. Buy them at <white>/robots<red> or the Scrap Shop."));
+        if (added == 0) p.sendMessage(Ui.mm(b.fuel >= MAX_TANK - 30 * 60_000L ? "<red>The tank is full." : "<red>You have no Fuel Cells. Buy them at <white>/agents<red> or the Scrap Shop."));
         else { p.sendMessage(Ui.mm("<green>Added " + added + " Fuel Cell" + (added > 1 ? "s" : "") + ". Fuel: <white>" + time(b.fuel))); p.playSound(p.getLocation(), Sound.ITEM_BUCKET_FILL_LAVA, 0.6f, 1.2f); }
     }
 
@@ -642,7 +664,7 @@ public final class Robots implements Listener {
         CopperGolem g = entity(b);
         if (g != null) { style(b, g); g.getWorld().spawnParticle(Particle.WAX_OFF, g.getLocation().add(0, 1, 0), 40, 0.4, 0.6, 0.4); }
         p.playSound(p.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.8f, 1.2f);
-        p.sendMessage(Ui.mm("<gold><bold>Robot upgraded to Tier " + Spawners.roman(b.tier) + "!"));
+        p.sendMessage(Ui.mm("<gold><bold>Agent upgraded to Tier " + Spawners.roman(b.tier) + "!"));
         save();
     }
 
@@ -653,9 +675,75 @@ public final class Robots implements Listener {
         bots.remove(b.id);
         for (ItemStack it : b.storage.getContents()) if (it != null) give(p, it);
         if (b.xp > 0) p.giveExp(b.xp);
-        give(p, robotItem(b.job, b.tier, b.charge, b.fuel, itemFuelTier(b.chargeRate)));
-        p.sendMessage(Ui.mm("<green>Robot picked up."));
+        give(p, robotItem(b.job, b.tier, b.charge, b.fuel, itemFuelTier(b.chargeRate), b.name));
+        p.sendMessage(Ui.mm("<green>Agent picked up."));
         save();
+    }
+
+    // This message is a name, so it never reaches chat. The chat filter still sees it, as it does all typed text.
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onChatName(io.papermc.paper.event.player.AsyncChatEvent e) {
+        Naming n = naming.remove(e.getPlayer().getUniqueId());
+        if (n == null || n.until() < System.currentTimeMillis()) return;
+        e.setCancelled(true);
+        String typed = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(e.message()).trim();
+        Player p = e.getPlayer();
+        Bukkit.getScheduler().runTask(plugin, () -> applyName(p, n.botId(), typed));
+    }
+
+    @EventHandler
+    public void onQuitNaming(org.bukkit.event.player.PlayerQuitEvent e) { naming.remove(e.getPlayer().getUniqueId()); }
+
+    private void applyName(Player p, String botId, String typed) {
+        Bot b = bots.get(botId);
+        if (b == null || typed.equalsIgnoreCase("cancel")) { p.sendMessage(Ui.mm("<gray>Rename cancelled.")); return; }
+        if (typed.equalsIgnoreCase("clear")) b.name = null;
+        else if (!RobotRules.validName(typed)) { p.sendMessage(Ui.mm("<red>Names are 1-16 letters or numbers, with no spaces.")); return; }
+        else if (net.blackforge.core.moderation.AutoMod.blocks(typed)) { p.sendMessage(Ui.mm("<red>That name isn't allowed.")); return; }
+        else b.name = typed;
+        CopperGolem g = entity(b);
+        if (g != null) style(b, g);
+        save();
+        p.sendMessage(Ui.mm("<green>Your agent is now <white>" + b.title() + "<green>."));
+    }
+
+    // ------------------------------------------------------------------ Base Station
+
+    /** This player's agents, the highest tier first. */
+    List<Bot> agentsOf(UUID owner) {
+        List<Bot> out = new ArrayList<>();
+        for (Bot b : bots.values()) if (b.owner.equals(owner)) out.add(b);
+        out.sort(Comparator.comparingInt((Bot b) -> b.tier).reversed());
+        return out;
+    }
+
+    private boolean mayUse(Player p, Bot b) {
+        return b.owner.equals(p.getUniqueId()) || canUse.test(p, b.loc) || p.hasPermission("blackforge.admin");
+    }
+
+    /** An agent's card in the Forge: its tier and the price of the next one, and nothing from its storage. */
+    ItemStack forgeIcon(Bot b) {
+        List<String> lore = new ArrayList<>(List.of("<gray>Job: " + b.job.color + b.job.label, "<gray>Tier: <white>" + Spawners.roman(b.tier), ""));
+        if (b.tier >= MAX_TIER) lore.add("<gold><bold>Max tier");
+        else {
+            int t = b.tier - 1;
+            lore.add("<gray>Upgrade to Tier <white>" + Spawners.roman(b.tier + 1) + "<gray>:");
+            lore.add("<green>" + NetEconomy.money(UP_MONEY[t]));
+            lore.add("<#9d7bff>" + UP_ESSENCE[t] + " Mob Essence");
+            lore.add("<gray>Charge: <white>" + time(b.charge) + " <dark_gray>/ " + UP_CHARGE_HOURS[t] + "h");
+            lore.add("");
+            lore.add("<yellow>Click to upgrade");
+        }
+        ItemStack it = Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, b.job.color + "<bold>" + b.title(), lore.toArray(String[]::new));
+        it.setAmount(b.tier);
+        return it;
+    }
+
+    void upgradeFromStation(Player p, String id) {
+        Bot b = bots.get(id);
+        if (b == null) return;
+        if (!mayUse(p, b)) { p.sendMessage(Ui.mm("<red>That's " + Bukkit.getOfflinePlayer(b.owner).getName() + "'s agent.")); return; }
+        upgrade(p, b);   // same rules and costs as the agent's own menu
     }
 
     @EventHandler
@@ -665,17 +753,19 @@ public final class Robots implements Listener {
 
     void openShop(Player p) {
         Menu m = new Menu("", "shop");
-        m.inv = Bukkit.createInventory(m, 36, Ui.mm("<dark_gray>⚙ Robot Workshop"));
-        ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
-        for (int i = 0; i < 36; i++) m.inv.setItem(i, pane);
-        m.inv.setItem(4, Ui.item(Material.BOOK, "<gold><bold>How robots work",
-                crateOnly == null ? "<gray>1. Buy a robot and place it on your island" : "<gray>1. Win a robot from a crate, place it in your claim", "<gray>2. Right-click it and add Fuel Cells",
+        m.inv = Bukkit.createInventory(m, 36, StationUi.title(StationUi.Screen.WORKSHOP, "⚙ Agent Workshop"));
+        if (!StationUi.art()) {
+            ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
+            for (int i = 0; i < 36; i++) m.inv.setItem(i, pane);
+        }
+        m.inv.setItem(4, Ui.item(Material.BOOK, "<gold><bold>How agents work",
+                crateOnly == null ? "<gray>1. Buy an agent and place it on your island" : "<gray>1. Win an agent from a crate, place it in your claim", "<gray>2. Right-click it and add Fuel Cells",
                 "<gray>3. Pick a job: Farmer, Miner, Grinder, Fisherman", "<gray>4. Burning fuel builds Charge - with Charge,",
-                "<gray>   Essence and money it can reach the next tier", "", "<gray>Your robots: <white>" + owned(p.getUniqueId()) + "/" + limit(p) + " <dark_gray>(ranks raise this)"));
+                "<gray>   Essence and money it can reach the next tier", "", "<gray>Your agents: <white>" + owned(p.getUniqueId()) + "/" + limit(p) + " <dark_gray>(ranks raise this)"));
         ItemStack r = robotItem(Job.MINER, 1, 0, 0, 1);
         r.editMeta(x -> { List<net.kyori.adventure.text.Component> l = new ArrayList<>(Optional.ofNullable(x.lore()).orElse(List.of())); l.add(Ui.mm(""));
             if (crateOnly == null) { l.add(Ui.mm("<green>Price: " + NetEconomy.money(ROBOT_PRICE))); l.add(Ui.mm("<yellow>Click to buy")); }
-            else { l.add(Ui.mm("<red>Not for sale here")); l.add(Ui.mm("<gray>Win robots from " + crateOnly + " <gray>crates")); }
+            else { l.add(Ui.mm("<red>Not for sale here")); l.add(Ui.mm("<gray>Win agents from " + crateOnly + " <gray>crates")); }
             x.lore(l); });
         m.inv.setItem(13, r);
         for (int t = 1; t <= 5; t++) {
@@ -685,15 +775,17 @@ public final class Robots implements Listener {
                 l.add(Ui.mm("<green>" + NetEconomy.money(FUEL_MONEY[tt - 1]) + " <dark_gray>+ <#9d7bff>" + FUEL_ESSENCE[tt - 1] + " Mob Essence")); l.add(Ui.mm("<yellow>Click to buy")); x.lore(l); });
             m.inv.setItem(19 + 2 * (t - 1), f);
         }
+        if (stations != null) m.inv.setItem(31, stations.shopIcon());
         p.openInventory(m.inv);
     }
 
     private void shopClick(Player p, int slot) {
-        if (slot == 13) {
-            if (crateOnly != null) { p.sendMessage(Ui.mm("<gray>Robots can only be won from " + crateOnly + " <gray>crates.")); return; }
-            if (eco == null || !eco.withdrawPlayer(p, ROBOT_PRICE).transactionSuccess()) { p.sendMessage(Ui.mm("<red>A robot costs " + NetEconomy.money(ROBOT_PRICE) + ".")); return; }
+        if (slot == 31 && stations != null) stations.buy(p);
+        else if (slot == 13) {
+            if (crateOnly != null) { p.sendMessage(Ui.mm("<gray>Agents can only be won from " + crateOnly + " <gray>crates.")); return; }
+            if (eco == null || !eco.withdrawPlayer(p, ROBOT_PRICE).transactionSuccess()) { p.sendMessage(Ui.mm("<red>An agent costs " + NetEconomy.money(ROBOT_PRICE) + ".")); return; }
             give(p, robotItem(Job.MINER, 1, 0, 0, 1));
-            p.sendMessage(Ui.mm("<green>You bought a robot! Place it on your island."));
+            p.sendMessage(Ui.mm("<green>You bought an agent! Place it on your island."));
         } else if (slot >= 19 && slot <= 27 && (slot - 19) % 2 == 0) {
             int t = (slot - 19) / 2 + 1;
             if (Spawners.countEssence(p) < FUEL_ESSENCE[t - 1]) { p.sendMessage(Ui.mm("<red>You need " + FUEL_ESSENCE[t - 1] + " Mob Essence.")); return; }
@@ -708,19 +800,19 @@ public final class Robots implements Listener {
     }
 
     private void registerCommand() {
-        Bukkit.getCommandMap().register("blackforge", new Command("robots", "Robot workshop", "/robots", List.of("robot", "fuel")) {
+        Bukkit.getCommandMap().register("blackforge", new Command("agents", "Agent workshop", "/agents", List.of("agent", "robots", "robot", "fuel")) {
             @Override public boolean execute(CommandSender s, String label, String[] a) {
                 if (a.length >= 3 && a[0].equalsIgnoreCase("give") && s.hasPermission("blackforge.admin")) {   // robots give <player> <robot|fuel|essence> [tier/amount] [job]
                     Player t = Bukkit.getPlayerExact(a[1]);
                     if (t == null) { s.sendMessage(Ui.mm("<red>Not online.")); return true; }
                     int n = a.length > 3 ? Integer.parseInt(a[3]) : 1;
                     switch (a[2].toLowerCase()) {
-                        case "robot" -> give(t, robotItem(a.length > 4 ? Job.valueOf(a[4].toUpperCase()) : Job.MINER, Math.max(1, Math.min(5, n)), 0, 0, 1));
+                        case "agent", "robot" -> give(t, robotItem(a.length > 4 ? Job.valueOf(a[4].toUpperCase()) : Job.MINER, Math.max(1, Math.min(5, n)), 0, 0, 1));
                         case "fuel" -> give(t, fuelCell(n, 1));
                         case "essence" -> Spawners.giveEssence(t, n);
                         case "fragment", "fragments" -> give(t, Spawners.fragment(n));
                         case "emptyspawner" -> { for (int i = 0; i < n; i++) give(t, Spawners.emptySpawner()); }
-                        default -> { s.sendMessage(Ui.mm("<red>robot|fuel|essence|fragment|emptyspawner")); return true; }
+                        default -> { s.sendMessage(Ui.mm("<red>agent|fuel|essence|fragment|emptyspawner")); return true; }
                     }
                     s.sendMessage(Ui.mm("<green>Given."));
                     return true;
@@ -729,7 +821,7 @@ public final class Robots implements Listener {
                     Player t = Bukkit.getPlayerExact(a[1]);
                     if (t == null) { s.sendMessage(Ui.mm("<red>Not online.")); return true; }
                     for (Bot b : bots.values()) if (b.owner.equals(t.getUniqueId())) b.charge += Long.parseLong(a[2]) * 3600_000L;
-                    s.sendMessage(Ui.mm("<green>Charged " + t.getName() + "'s robots.")); return true;
+                    s.sendMessage(Ui.mm("<green>Charged " + t.getName() + "'s agents.")); return true;
                 }
                 if (s instanceof Player p) openShop(p);
                 return true;
@@ -771,6 +863,7 @@ public final class Robots implements Listener {
             b.fixRate();
             b.charge = s.getLong("charge");
             b.xp = s.getInt("xp");
+            b.name = s.getString("name");
             b.loc = new Location(w, s.getDouble("x"), s.getDouble("y"), s.getDouble("z"), (float) s.getDouble("yaw"), 0);
             b.storage = Bukkit.createInventory(null, STORAGE[b.tier - 1]);
             List<?> items = s.getList("storage", List.of());
@@ -779,7 +872,7 @@ public final class Robots implements Listener {
             if (ent != null) b.entity = UUID.fromString(ent);
             bots.put(id, b);
         }
-        if (bots.size() > before) plugin.getLogger().info("Loaded " + (bots.size() - before) + " robots" + (pending.isEmpty() ? "" : " (" + pending.size() + " waiting for their world)"));
+        if (bots.size() > before) plugin.getLogger().info("Loaded " + (bots.size() - before) + " agents" + (pending.isEmpty() ? "" : " (" + pending.size() + " waiting for their world)"));
     }
 
     void save() {
@@ -795,6 +888,7 @@ public final class Robots implements Listener {
             y.set(k + "charge-rate", b.chargeRate);
             y.set(k + "charge", b.charge);
             y.set(k + "xp", b.xp);
+            y.set(k + "name", b.name);
             y.set(k + "world", b.loc.getWorld().getName());
             y.set(k + "x", b.loc.getX()); y.set(k + "y", b.loc.getY()); y.set(k + "z", b.loc.getZ()); y.set(k + "yaw", b.loc.getYaw());
             y.set(k + "entity", b.entity == null ? null : b.entity.toString());
