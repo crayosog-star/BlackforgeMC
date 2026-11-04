@@ -137,6 +137,22 @@ hopper-upgrades:
   essence: 128             # per Hopper Upgrade
   max-per-chunk: 16
 
+# Forge Allays: a base upgrade that stays at the Base Station and moves items (plan: docs/plans/forge-allays.md).
+# Nothing reads these yet. Lists are per tier I, II, III. enabled stays false until the launch task.
+allays:
+  enabled: false
+  flock: [1, 2, 3]                # allays per base
+  leash: [12, 20, 28]             # blocks from the Station, and never outside the claim
+  price: [75000, 250000, 750000]  # to reach each tier
+  essence: [256, 1024, 4096]      # to reach each tier
+  carry: 16                       # items per trip
+  speed: 6.0                      # blocks a second
+  pause-seconds: 1.0              # pause after each trip
+  min-drop-age-ticks: 60          # leaves newer drops alone, so players can pick up their own
+  scan-seconds: 5                 # how often a base looks for work
+  max-scans-per-tick: 4           # bases scanned per tick across the server
+  sell-fee: 0.10                  # Steward's cut of a sale
+
 # Agents, called robots in the code and saves (Survival + Skyblock copper golems). NOT read by the plugin yet - a later task wires these up.
 # fish-seconds (per robot tier I..V) and fisher-burn match the built-in values in RobotRules; the rest are for the
 # upcoming chest trips (radius in blocks, store when any item reaches store-threshold, fetch fuel at 2 minutes left).
