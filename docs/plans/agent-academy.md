@@ -1,5 +1,5 @@
 # Agent Academy
-**Status:** Awaiting approval
+**Status:** Approved
 **Next task:** P1.T1
 
 ## Rules of engagement
@@ -425,6 +425,7 @@ None yet.
 
 ## Change log
 - 2026-11-04: plan written. Field Exams dropped and Survival-only scope set by Colin.
+- 2026-11-04: Colin approved the plan.
 
 ## Later ideas
 - Skyblock and OneBlock support, with separate balance.
