@@ -22,7 +22,7 @@ import java.util.function.BooleanSupplier;
 public final class Academy implements Listener {
     static final String BRASS = "<#C9A227>";
     private static final String VERDIGRIS = "<#4FA08B>";
-    private static final int SIZE = 54, RANK = 4, PROGRESS = 20, LIFETIME = 22, TODAY = 24, PERKS = 38, ADD_LEVELS = 40, SPEC = 42, BACK = 49, RESPEC = 51;
+    private static final int SIZE = 54, RANK = 4, PROGRESS = 20, LIFETIME = 22, TODAY = 24, TRAIT_1 = 11, TRAIT_2 = 15, PERKS = 38, ADD_LEVELS = 40, SPEC = 42, BACK = 49, RESPEC = 51;
     private static final int CONFIRM_YES = 29, CONFIRM_NO = 33;
     private static final int[] PERK_SLOTS = {20, 21, 22, 23, 24};
     private static final int[] JOB_SLOTS = {28, 30, 32, 34};
@@ -91,6 +91,9 @@ public final class Academy implements Listener {
                 "<gray>Work done: <white>" + b.record.workDone,
                 "<gray>Time worked: <white>" + Robots.time(b.record.minutesWorked * 60_000L)));
 
+        showTrait(v, TRAIT_1, b, 0, "reaches level 10");
+        showTrait(v, TRAIT_2, b, 1, "reaches level 30");
+
         Robots.Job[] jobs = Robots.Job.values();
         for (int i = 0; i < jobs.length && i < JOB_SLOTS.length; i++) {
             Robots.Job j = jobs[i];
@@ -118,6 +121,35 @@ public final class Academy implements Listener {
         }
         if (robots.isSandbox() && !maxed) v.inv.setItem(ADD_LEVELS, Ui.item(Material.ANVIL, BRASS + "<bold>Add 10 Levels", "<gray>Foundry only: raises this job's level for free.", "", "<yellow>Click to add"));
         p.openInventory(v.inv);
+    }
+
+    private void showTrait(View v, int slot, Robots.Bot b, int index, String unlock) {
+        boolean has = index < b.record.traits.size();
+        String trait = has ? b.record.traits.get(index) : null;
+        v.inv.setItem(slot, has
+                ? Ui.item(Material.AMETHYST_SHARD, BRASS + "<bold>" + traitName(trait), "<gray>" + traitEffect(trait, robots.tuning()), "<dark_gray>" + traitRarity(trait))
+                : Ui.item(Material.LIGHT_GRAY_DYE, "<gray><bold>Trait Slot", "<gray>Fills when any job " + unlock + "."));
+    }
+
+    static String traitName(String trait) { return trait.isEmpty() ? trait : Character.toUpperCase(trait.charAt(0)) + trait.substring(1); }
+
+    static String traitRarity(String trait) {
+        int weight = AcademyRules.TRAIT_WEIGHTS.getOrDefault(trait, 0);
+        return weight >= 30 ? "Common" : weight >= 15 ? "Rare" : "Legendary";
+    }
+
+    static String traitEffect(String trait, AgentStats.Tuning t) {
+        return switch (trait) {
+            case AcademyRules.THRIFTY -> percentOff(t.thriftyFuel()) + "% less fuel burned";
+            case AcademyRules.SWIFT -> "Works " + percentOn(t.swiftSpeed()) + "% faster";
+            case AcademyRules.CHARGED -> "Builds Charge " + percentOn(t.chargedCharge()) + "% faster";
+            case AcademyRules.LUCKY -> Math.round(t.luckyDouble() * 100) + "% chance to double a drop";
+            case AcademyRules.STUDIOUS -> "Earns " + percentOn(t.studiousMastery()) + "% more Mastery";
+            case AcademyRules.PRODIGY -> "Earns " + percentOn(t.prodigyMastery()) + "% more Mastery";
+            case AcademyRules.ANCIENT -> "Works " + percentOn(t.ancientSpeed()) + "% faster and burns " + percentOff(t.ancientFuel()) + "% less fuel";
+            case AcademyRules.GILDED -> "A gold name tag and a faint sparkle";
+            default -> "";
+        };
     }
 
     private static String perkName(String perk) {

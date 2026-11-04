@@ -357,13 +357,16 @@ public final class Robots implements Listener {
         stylePart(b, "hand", () -> g.getEquipment().setItemInMainHand(new ItemStack(b.job.icon)));
         stylePart(b, "copper", () -> g.setWeatheringState(look[b.tier - 1]));
         stylePart(b, "glow", () -> g.setGlowing(b.tier >= 5));
+        if (academyOn() && b.record.traits.contains(AcademyRules.GILDED))
+            stylePart(b, "gilded", () -> g.getWorld().spawnParticle(Particle.WAX_OFF, g.getLocation().add(0, 1.2, 0), 2, 0.3, 0.4, 0.3, 0));
     }
 
     /** Empty unless the Academy is on, so the name tag stays as it is everywhere else. */
     private String rankTag(Bot b) {
         if (!academyOn()) return "";
         int level = jobLevel(b);
-        return " <dark_gray>• " + Academy.BRASS + AcademyRules.rankFor(level) + " " + level;
+        String color = b.record.traits.contains(AcademyRules.GILDED) ? "<gold>" : Academy.BRASS;
+        return " <dark_gray>• " + color + AcademyRules.rankFor(level) + " " + level;
     }
 
     private int jobLevel(Bot b) {
@@ -532,7 +535,7 @@ public final class Robots implements Listener {
         Player owner = Bukkit.getPlayer(b.owner);
         double radius = plugin.getConfig().getDouble("academy.coach-radius", 16);
         boolean coached = owner != null && owner.getWorld() == b.loc.getWorld() && owner.getLocation().distanceSquared(b.loc) <= radius * radius;
-        b.pointsCarry += AcademyRules.workPoints(done, perWork, coached ? plugin.getConfig().getDouble("academy.coach-mult", 1.25) : 1);
+        b.pointsCarry += AcademyRules.workPoints(done, perWork, coached ? plugin.getConfig().getDouble("academy.coach-mult", 1.25) : 1) * AgentStats.masteryMult(b.record, tuning);
         long whole = (long) b.pointsCarry;
         b.pointsCarry -= whole;
         b.record.workDone += done;
@@ -540,6 +543,34 @@ public final class Robots implements Listener {
         academy.earn(b.record.jobs.computeIfAbsent(job, k -> new AgentRecord.JobTrack()), whole, academyToday(),
                 academySoftCap(), plugin.getConfig().getDouble("academy.over-cap-rate", 0.25));
         celebrate(b, before, jobLevel(b));
+        rollTraitsDue(b);
+    }
+
+    /**
+     * Fills any earned trait slots. It works from the saved points each time rather than on the level-up alone, so a
+     * restart between the two can't lose a roll: the next cycle rolls it. One save covers the points and the trait.
+     */
+    private void rollTraitsDue(Bot b) {
+        boolean rolled = false;
+        while (b.record.traits.size() < academy.traitSlots(b.record)) {
+            String trait = AcademyRules.rollTrait(b.record.traits, traitWeights(), rnd);
+            if (trait == null) break;
+            b.record.traits.add(trait);
+            rolled = true;
+            Player owner = Bukkit.getPlayer(b.owner);
+            if (owner != null) {
+                owner.playSound(owner.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.7f, 1.2f);
+                owner.sendMessage(Ui.mm(Academy.BRASS + b.title() + " <gray>gained a trait: <white>" + Academy.traitName(trait) + "<gray>. " + Academy.traitEffect(trait, tuning)));
+            }
+        }
+        if (rolled) save();
+    }
+
+    /** academy.traits.weights from config, falling back to the plan's values. */
+    Map<String, Integer> traitWeights() {
+        Map<String, Integer> w = new LinkedHashMap<>();
+        AcademyRules.TRAIT_WEIGHTS.forEach((trait, fallback) -> w.put(trait, plugin.getConfig().getInt("academy.traits.weights." + trait, fallback)));
+        return w;
     }
 
     static String jobKey(Bot b) { return b.job.name().toLowerCase(Locale.ROOT); }
@@ -587,6 +618,7 @@ public final class Robots implements Listener {
         int before = academy.levelFor(track.points);
         track.points = Math.max(track.points, academy.pointsFor(before + levels));
         celebrate(b, before, academy.levelFor(track.points));
+        rollTraitsDue(b);
     }
 
     /** The Forge's way in: a list of this player's Agents. Does nothing if the Academy is off. */
@@ -609,6 +641,7 @@ public final class Robots implements Listener {
             int before = academy.levelFor(track.points);
             track.points = Math.clamp(track.points + amount, 0, cap);
             celebrate(b, before, academy.levelFor(track.points));
+            rollTraitsDue(b);
             s.sendMessage(Ui.mm("<gray>" + b.title() + " <dark_gray>(" + jobKey(b) + ")<gray>: <white>" + track.points + " <gray>points, level <white>"
                     + academy.levelFor(track.points) + "<gray>, today <white>" + track.todayPoints + " <dark_gray>raw"));
         }

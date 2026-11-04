@@ -367,7 +367,10 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Edge cases:** a job jumping past level 10 and 30 together, no duplicates, the same trait never granted twice after switching jobs, restart between level-up and roll (the save must include both or neither).
 - **Done when:** unit tests use a seeded `Random` to check no duplicates and, over 100,000 rolls, each weight within 1 percentage point. In the Foundry, a tester reaches level 30 and sees two different traits.
 - **Leaves ready:** traits for P4.T2.
-- **Evidence:**
+- **Evidence:** not ticked; prepared on a branch with no PR, because earlier phase gates aren't confirmed.
+  - Verified: no duplicates, and each weight within 1 percentage point over 100,000 seeded rolls, with `javac` 21 and a local stand-in for JUnit.
+  - Untested: the Paper compile, and reaching level 30 in the Foundry for two different traits.
+  - Note: rolling is worked out from saved points each cycle, so a restart between the level-up and the roll can't lose a trait.
 
 ### [ ] P4.T2: Add trait rerolls
 - **Needs:** P4.T1; respec payment pattern from P3.T5.

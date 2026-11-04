@@ -193,4 +193,37 @@ class AgentStatsTest {
         assertEquals(1.5, spec("fisherman", LEVEL_29, "diver").treasureMult());
         assertEquals(2.0, spec("fisherman", LEVEL_30, "diver").treasureMult());
     }
+
+    // ---------------------------------------------------------------- traits
+
+    private static AgentRecord withTrait(String trait) {
+        AgentRecord r = new AgentRecord();
+        r.traits.add(trait);
+        return r;
+    }
+
+    @Test
+    void traitsApplyToEveryJob() {
+        for (String job : JOBS) {
+            assertEquals(0.95, stats(job, withTrait("thrifty")).fuelMult());
+            assertEquals(1.05, stats(job, withTrait("swift")).speedMult());
+            assertEquals(1.10, stats(job, withTrait("charged")).chargeMult());
+            assertEquals(0.02, stats(job, withTrait("lucky")).doubleDropChance());
+            assertEquals(1.05, stats(job, withTrait("ancient")).speedMult());
+            assertEquals(0.95, stats(job, withTrait("ancient")).fuelMult());
+        }
+    }
+
+    @Test
+    void gildedChangesNoStats() {
+        assertEquals(AgentStats.of("miner", 1), stats("miner", withTrait("gilded")));
+        assertEquals(1.0, AgentStats.masteryMult(withTrait("gilded"), TUNE));
+    }
+
+    @Test
+    void masteryTraitsOnlyChangeMastery() {
+        assertEquals(1.15, AgentStats.masteryMult(withTrait("studious"), TUNE));
+        assertEquals(1.30, AgentStats.masteryMult(withTrait("prodigy"), TUNE));
+        assertEquals(AgentStats.of("miner", 1), stats("miner", withTrait("studious")));
+    }
 }

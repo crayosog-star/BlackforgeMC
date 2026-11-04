@@ -14,6 +14,19 @@ final class AcademyRules {
     static final String PROSPECTOR = "prospector", EXCAVATOR = "excavator", HARVESTER = "harvester", BOTANIST = "botanist",
             REAPER = "reaper", BUTCHER = "butcher", ANGLER = "angler", DIVER = "diver";
 
+    static final String THRIFTY = "thrifty", SWIFT = "swift", CHARGED = "charged", LUCKY = "lucky", STUDIOUS = "studious",
+            PRODIGY = "prodigy", ANCIENT = "ancient", GILDED = "gilded";
+    /** Roll weights, which also give each trait's rarity. */
+    static final java.util.Map<String, Integer> TRAIT_WEIGHTS = traitWeights();
+
+    private static java.util.Map<String, Integer> traitWeights() {
+        java.util.Map<String, Integer> w = new java.util.LinkedHashMap<>();
+        w.put(THRIFTY, 35); w.put(SWIFT, 35); w.put(CHARGED, 30);
+        w.put(LUCKY, 15); w.put(STUDIOUS, 15);
+        w.put(PRODIGY, 4); w.put(ANCIENT, 3); w.put(GILDED, 3);
+        return java.util.Collections.unmodifiableMap(w);
+    }
+
     private static final int SPEC_LEVEL = 10;
     private static final int CAPSTONE_LEVEL = 30;
     private static final int[] PERK_LEVELS = {5, 15, 25};
@@ -88,6 +101,27 @@ final class AcademyRules {
         double factor = Math.pow(Math.max(1, mult), Math.max(0, uses));
         if (baseMoney > 0) factor = Math.min(factor, Math.max(1, (double) maxMoney / baseMoney));
         return new Price(Math.round(baseMoney * factor), Math.round(baseEssence * factor));
+    }
+
+    /** One weighted trait, never one in exclude. Null if nothing is left to roll. */
+    static String rollTrait(java.util.Collection<String> exclude, java.util.Map<String, Integer> weights, java.util.Random random) {
+        int total = 0;
+        for (var e : weights.entrySet()) if (!exclude.contains(e.getKey())) total += Math.max(0, e.getValue());
+        if (total <= 0) return null;
+        int roll = random.nextInt(total);
+        for (var e : weights.entrySet()) {
+            if (exclude.contains(e.getKey())) continue;
+            roll -= Math.max(0, e.getValue());
+            if (roll < 0) return e.getKey();
+        }
+        return null;
+    }
+
+    /** How many trait slots this record has earned: the first when any job reaches 10, the second at 30. */
+    int traitSlots(AgentRecord r) {
+        int best = 0;
+        for (AgentRecord.JobTrack t : r.jobs.values()) best = Math.max(best, levelFor(t.points));
+        return best >= CAPSTONE_LEVEL ? 2 : best >= SPEC_LEVEL ? 1 : 0;
     }
 
     /** A job's two specialization paths. */

@@ -276,6 +276,42 @@ class AcademyRulesTest {
         assertFalse(AcademyRules.canPickSpec(t, "prospector", "miner", 30));
     }
 
+    // ---------------------------------------------------------------- traits
+
+    @Test
+    void traitOddsMatchTheirWeights() {
+        java.util.Random random = new java.util.Random(42);
+        java.util.Map<String, Integer> counts = new java.util.HashMap<>();
+        int rolls = 100_000;
+        for (int i = 0; i < rolls; i++) counts.merge(AcademyRules.rollTrait(List.of(), AcademyRules.TRAIT_WEIGHTS, random), 1, Integer::sum);
+        int total = AcademyRules.TRAIT_WEIGHTS.values().stream().mapToInt(Integer::intValue).sum();
+        AcademyRules.TRAIT_WEIGHTS.forEach((trait, weight) -> {
+            double expected = 100.0 * weight / total, got = 100.0 * counts.get(trait) / rolls;
+            assertTrue(Math.abs(expected - got) < 1.0, trait + " rolled " + got + "%, expected " + expected + "%");
+        });
+    }
+
+    @Test
+    void rollsNeverRepeatAnExcludedTrait() {
+        java.util.Random random = new java.util.Random(7);
+        for (int i = 0; i < 10_000; i++) assertFalse("swift".equals(AcademyRules.rollTrait(List.of("swift"), AcademyRules.TRAIT_WEIGHTS, random)));
+        assertNull(AcademyRules.rollTrait(AcademyRules.TRAIT_WEIGHTS.keySet(), AcademyRules.TRAIT_WEIGHTS, random));
+    }
+
+    @Test
+    void traitSlotsOpenAtTenAndThirtyOnAnyJob() {
+        AgentRecord r = new AgentRecord();
+        assertEquals(0, RULES.traitSlots(r));
+        AgentRecord.JobTrack t = new AgentRecord.JobTrack();
+        r.jobs.put("farmer", t);
+        t.points = RULES.pointsFor(9);
+        assertEquals(0, RULES.traitSlots(r));
+        t.points = RULES.pointsFor(10);
+        assertEquals(1, RULES.traitSlots(r));
+        t.points = RULES.pointsFor(30);
+        assertEquals(2, RULES.traitSlots(r));
+    }
+
     // ---------------------------------------------------------------- levels
 
     @Test

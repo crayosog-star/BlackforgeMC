@@ -196,7 +196,25 @@ academy:
     quickline-speed-mult: 1.35
     diver-mult: 1.5
     trove-mult: 2.0
-  traits: {}
+  # Rolled when any job first reaches level 10, then 30. A bigger weight makes a trait more common.
+  traits:
+    weights:
+      thrifty: 35
+      swift: 35
+      charged: 30
+      lucky: 15
+      studious: 15
+      prodigy: 4
+      ancient: 3
+      gilded: 3
+    thrifty-fuel-mult: 0.95
+    swift-speed-mult: 1.05
+    charged-charge-mult: 1.10
+    lucky-double-chance: 0.02
+    studious-mastery-mult: 1.15
+    prodigy-mastery-mult: 1.30
+    ancient-speed-mult: 1.05
+    ancient-fuel-mult: 0.95
   # Resetting a job's perks and path. The price multiplies by mult-per-use each time, up to max-money.
   respec:
     money: 25000
