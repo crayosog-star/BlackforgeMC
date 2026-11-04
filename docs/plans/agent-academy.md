@@ -382,7 +382,10 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Edge cases:** double-clicks, too little Essence or money, and the count following the Agent after trades, so reselling can't reset the price.
 - **Done when:** unit tests cover prices. In the Foundry, a tester rerolls a slot for free and logs show the entry. P4.T3 checks real payment.
 - **Leaves ready:** the final item state for P4.T3.
-- **Evidence:**
+- **Evidence:** not ticked; prepared on a branch with no PR, because earlier phase gates aren't confirmed.
+  - Verified: prices and the saved count passed unit tests with `javac` 21 and a local stand-in for JUnit.
+  - Untested: the Paper compile, a free reroll in the Foundry, and the log entry. P4.T3 checks real payment.
+  - Note: the format moves to `4|`, and `1|` to `3|` still read.
 
 ### [ ] P4.T3: Add staff preview on Survival and check trading
 - **Needs:** P4.T1-T2; `S/Robots.java:194`; `S/AuctionHouse.java:137`.

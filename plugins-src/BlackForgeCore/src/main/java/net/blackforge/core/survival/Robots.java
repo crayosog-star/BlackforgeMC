@@ -592,6 +592,30 @@ public final class Robots implements Listener {
                 c.getDouble("academy.respec.mult-per-use", 1.5), c.getLong("academy.respec.max-money", 500000));
     }
 
+    /** The next trait reroll's price for this Agent. */
+    AcademyRules.Price rerollPrice(AgentRecord record) {
+        var c = plugin.getConfig();
+        return AcademyRules.escalatingPrice(record.rerolls, c.getLong("academy.reroll.money", 50000), c.getLong("academy.reroll.essence", 256),
+                c.getDouble("academy.reroll.mult-per-use", 1.5), c.getLong("academy.reroll.max-money", 1000000));
+    }
+
+    /** Pays and rolls one slot again. It can't match the other slot, but may land on the same trait. */
+    void rerollTrait(Player p, Bot b, int slot) {
+        if (slot >= b.record.traits.size()) return;
+        AcademyRules.Price price = rerollPrice(b.record);
+        if (!payAcademy(p, price)) return;
+        String old = b.record.traits.get(slot);
+        List<String> others = new ArrayList<>(b.record.traits);
+        others.remove(slot);
+        String now = AcademyRules.rollTrait(others, traitWeights(), rnd);
+        if (now == null) now = old;
+        b.record.traits.set(slot, now);
+        b.record.rerolls++;
+        plugin.getLogger().info("Academy reroll: agent=" + b.record.uid + " player=" + p.getName() + " money=" + price.money() + " essence=" + price.essence() + " old=" + old + " new=" + now);
+        p.sendMessage(Ui.mm(Academy.BRASS + b.title() + " <gray>now has <white>" + Academy.traitName(now) + "<gray>. " + Academy.traitEffect(now, tuning)));
+        save();
+    }
+
     /** Takes both or neither. Free only in the Foundry, and it says why if the player can't pay. */
     boolean payAcademy(Player p, AcademyRules.Price price) {
         if (sandbox) return true;

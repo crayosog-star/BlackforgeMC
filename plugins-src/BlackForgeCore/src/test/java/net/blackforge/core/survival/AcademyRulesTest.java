@@ -32,7 +32,7 @@ class AcademyRulesTest {
     void roundTripKeepsEveryField() {
         AgentRecord in = sample();
         String text = in.encode();
-        assertTrue(text.startsWith("3|"));
+        assertTrue(text.startsWith("4|"));
         AgentRecord out = AgentRecord.decode(text);
         assertEquals("6f1c-uid", out.uid);
         assertEquals(1234, out.workDone);
@@ -115,7 +115,7 @@ class AcademyRulesTest {
         assertEquals(List.of("efficient", "keen"), r.jobs.get("miner").perks);
         assertEquals(0, r.jobs.get("miner").todayPoints);
         assertNull(r.jobs.get("miner").todayDate);
-        assertTrue(r.encode().startsWith("3|"));
+        assertTrue(r.encode().startsWith("4|"));
     }
 
     @Test
@@ -133,6 +133,25 @@ class AcademyRulesTest {
         AgentRecord two = AgentRecord.decode("2|u|0|0||miner:5:::9:2026-11-04");
         assertEquals(0, two.jobs.get("miner").respecs);
         assertEquals(9, two.jobs.get("miner").todayPoints);
+    }
+
+    @Test
+    void rerollCountRoundTripsAndOlderVersionsReadAsZero() {
+        AgentRecord in = sample();
+        in.rerolls = 4;
+        assertEquals(4, AgentRecord.decode(in.encode()).rerolls);
+        AgentRecord three = AgentRecord.decode("3|u|0|0|swift|miner:5:::0::2");
+        assertEquals("u", three.uid);
+        assertEquals(0, three.rerolls);
+        assertEquals(2, three.jobs.get("miner").respecs);
+        assertEquals("", AgentRecord.decode("4|u|0|0|swift|miner:5:::0::2").uid);
+    }
+
+    @Test
+    void rerollPricesEscalateThenStopAtTheLimit() {
+        assertEquals(new AcademyRules.Price(50000, 256), AcademyRules.escalatingPrice(0, 50000, 256, 1.5, 1000000));
+        assertEquals(new AcademyRules.Price(75000, 384), AcademyRules.escalatingPrice(1, 50000, 256, 1.5, 1000000));
+        assertEquals(new AcademyRules.Price(1000000, 5120), AcademyRules.escalatingPrice(100, 50000, 256, 1.5, 1000000));
     }
 
     @Test

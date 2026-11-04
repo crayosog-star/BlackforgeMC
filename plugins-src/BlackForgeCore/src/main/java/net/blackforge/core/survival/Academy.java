@@ -91,8 +91,8 @@ public final class Academy implements Listener {
                 "<gray>Work done: <white>" + b.record.workDone,
                 "<gray>Time worked: <white>" + Robots.time(b.record.minutesWorked * 60_000L)));
 
-        showTrait(v, TRAIT_1, b, 0, "reaches level 10");
-        showTrait(v, TRAIT_2, b, 1, "reaches level 30");
+        showTrait(v, TRAIT_1, b, 0, "reaches level 10", readOnly ? null : back, stillAllowed, p);
+        showTrait(v, TRAIT_2, b, 1, "reaches level 30", readOnly ? null : back, stillAllowed, p);
 
         Robots.Job[] jobs = Robots.Job.values();
         for (int i = 0; i < jobs.length && i < JOB_SLOTS.length; i++) {
@@ -123,12 +123,39 @@ public final class Academy implements Listener {
         p.openInventory(v.inv);
     }
 
-    private void showTrait(View v, int slot, Robots.Bot b, int index, String unlock) {
+    /** agentBack is null for a read-only viewer, who sees the trait but can't reroll it. */
+    private void showTrait(View v, int slot, Robots.Bot b, int index, String unlock, Runnable agentBack, BooleanSupplier stillAllowed, Player p) {
         boolean has = index < b.record.traits.size();
         String trait = has ? b.record.traits.get(index) : null;
         v.inv.setItem(slot, has
-                ? Ui.item(Material.AMETHYST_SHARD, BRASS + "<bold>" + traitName(trait), "<gray>" + traitEffect(trait, robots.tuning()), "<dark_gray>" + traitRarity(trait))
+                ? Ui.item(Material.AMETHYST_SHARD, BRASS + "<bold>" + traitName(trait), "<gray>" + traitEffect(trait, robots.tuning()), "<dark_gray>" + traitRarity(trait),
+                        "", agentBack == null ? "" : "<yellow>Click to reroll <gray>(" + robots.priceText(robots.rerollPrice(b.record)) + ")")
                 : Ui.item(Material.LIGHT_GRAY_DYE, "<gray><bold>Trait Slot", "<gray>Fills when any job " + unlock + "."));
+        if (has && agentBack != null) v.actions.put(slot, () -> {
+            Runnable toAgent = () -> openAgent(p, b, false, agentBack, stillAllowed);
+            confirm(p, b, "Reroll " + traitName(trait) + "?", robots.priceText(robots.rerollPrice(b.record)) + ". Odds: " + rerollOdds(b, index), () -> {
+                if (index < b.record.traits.size() && trait.equals(b.record.traits.get(index))) robots.rerollTrait(p, b, index);   // a double-click sees the new trait and stops
+                toAgent.run();
+            }, toAgent, stillAllowed);
+        });
+    }
+
+    /** The chance of each rarity on this slot's next roll, leaving out the other slot's trait. */
+    private String rerollOdds(Robots.Bot b, int index) {
+        java.util.Map<String, Integer> weights = robots.traitWeights();
+        double total = 0, common = 0, rare = 0, legendary = 0;
+        for (var e : weights.entrySet()) {
+            int other = b.record.traits.indexOf(e.getKey());
+            if (other >= 0 && other != index) continue;
+            total += e.getValue();
+            switch (traitRarity(e.getKey())) {
+                case "Common" -> common += e.getValue();
+                case "Rare" -> rare += e.getValue();
+                default -> legendary += e.getValue();
+            }
+        }
+        if (total <= 0) return "none";
+        return Math.round(100 * common / total) + "% Common, " + Math.round(100 * rare / total) + "% Rare, " + Math.round(100 * legendary / total) + "% Legendary";
     }
 
     static String traitName(String trait) { return trait.isEmpty() ? trait : Character.toUpperCase(trait.charAt(0)) + trait.substring(1); }

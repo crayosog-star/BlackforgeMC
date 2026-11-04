@@ -215,6 +215,12 @@ academy:
     prodigy-mastery-mult: 1.30
     ancient-speed-mult: 1.05
     ancient-fuel-mult: 0.95
+  # Rerolling one trait. The price multiplies by mult-per-use with each reroll this Agent has had, up to max-money.
+  reroll:
+    money: 50000
+    essence: 256
+    mult-per-use: 1.5
+    max-money: 1000000
   # Resetting a job's perks and path. The price multiplies by mult-per-use each time, up to max-money.
   respec:
     money: 25000

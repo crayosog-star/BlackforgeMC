@@ -14,7 +14,7 @@ import java.util.Map;
  * kept as they are, so a rollback or a removed perk never rewrites saved data.
  */
 final class AgentRecord {
-    private static final String PREFIX = "3|";
+    private static final String PREFIX = "4|";
 
     /** Empty until an Agent is given an identity. */
     String uid = "";
@@ -22,6 +22,8 @@ final class AgentRecord {
     final List<String> traits = new ArrayList<>();
     long workDone;
     long minutesWorked;
+    /** How many trait rerolls this Agent has had. It stays with the Agent, so reselling can't reset the price. */
+    int rerolls;
 
     /** One job's progress. A null spec means no specialization has been chosen. */
     static final class JobTrack {
@@ -35,7 +37,7 @@ final class AgentRecord {
         int respecs;
     }
 
-    /** Text form: 3|uid|workDone|minutesWorked|trait,trait|job:points:spec:perk,perk:todayPoints:todayDate:respecs;job:... with each name URL-encoded. */
+    /** Text form: 4|uid|workDone|minutesWorked|trait,trait|job:points:spec:perk,perk:todayPoints:todayDate:respecs;job:...|rerolls with each name URL-encoded. */
     String encode() {
         List<String> jobText = new ArrayList<>();
         for (Map.Entry<String, JobTrack> e : jobs.entrySet()) {
@@ -44,22 +46,23 @@ final class AgentRecord {
                     + ":" + Math.max(0, t.todayPoints) + ":" + enc(t.todayDate) + ":" + Math.max(0, t.respecs));
         }
         return PREFIX + enc(uid) + "|" + Math.max(0, workDone) + "|" + Math.max(0, minutesWorked) + "|"
-                + encList(traits) + "|" + String.join(";", jobText);
+                + encList(traits) + "|" + String.join(";", jobText) + "|" + Math.max(0, rerolls);
     }
 
     /** Reads encode()'s text. Anything unreadable gives a new empty record; this never throws. */
     static AgentRecord decode(String text) {
         // older versions stay readable, and are saved as the current format next time
-        int version = text == null ? 0 : text.startsWith("1|") ? 1 : text.startsWith("2|") ? 2 : text.startsWith(PREFIX) ? 3 : 0;
+        int version = text == null ? 0 : text.startsWith("1|") ? 1 : text.startsWith("2|") ? 2 : text.startsWith("3|") ? 3 : text.startsWith(PREFIX) ? 4 : 0;
         if (version == 0) return new AgentRecord();
         try {
             String[] parts = text.substring(PREFIX.length()).split("\\|", -1);
-            if (parts.length != 5) return new AgentRecord();
+            if (parts.length != (version >= 4 ? 6 : 5)) return new AgentRecord();
             AgentRecord r = new AgentRecord();
             r.uid = dec(parts[0]);
             r.workDone = Math.max(0, Long.parseLong(parts[1]));
             r.minutesWorked = Math.max(0, Long.parseLong(parts[2]));
             r.traits.addAll(decList(parts[3]));
+            if (version >= 4) r.rerolls = Math.max(0, Integer.parseInt(parts[5]));
             if (!parts[4].isEmpty()) {
                 for (String job : parts[4].split(";", -1)) {
                     String[] f = job.split(":", -1);
