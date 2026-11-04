@@ -20,7 +20,9 @@ record AgentStats(int intervalSeconds, double speedMult, int radius, double dama
     record Tuning(double efficientFuel, double quickSpeed, int reachRadius, double keenDouble, double steadyCharge,
                   int prospectorFortune, double motherlodeChance, int excavatorHeight, int clearcutHeight, int harvesterExtra, double bumperChance,
                   int botanistCrops, int verdantCrops, double reaperDamage, int reaperHits, int cleaveHits, double butcherChance, double primeChance,
-                  double anglerSpeed, double quicklineSpeed, double diverMult, double troveMult) {
+                  double anglerSpeed, double quicklineSpeed, double diverMult, double troveMult,
+                  double thriftyFuel, double swiftSpeed, double chargedCharge, double luckyDouble, double studiousMastery, double prodigyMastery,
+                  double ancientSpeed, double ancientFuel) {
         static final Tuning DEFAULTS = read((key, fallback) -> fallback);
 
         /** get receives a key under academy, and the default to use if it's missing. */
@@ -35,7 +37,11 @@ record AgentStats(int intervalSeconds, double speedMult, int radius, double dama
                     get.applyAsDouble("specs.reaper-damage-mult", 1.25), (int) get.applyAsDouble("specs.reaper-hits", 1.0), (int) get.applyAsDouble("specs.cleave-hits", 2.0),
                     get.applyAsDouble("specs.butcher-chance", 0.20), get.applyAsDouble("specs.prime-chance", 0.35),
                     get.applyAsDouble("specs.angler-speed-mult", 1.20), get.applyAsDouble("specs.quickline-speed-mult", 1.35),
-                    get.applyAsDouble("specs.diver-mult", 1.5), get.applyAsDouble("specs.trove-mult", 2.0));
+                    get.applyAsDouble("specs.diver-mult", 1.5), get.applyAsDouble("specs.trove-mult", 2.0),
+                    get.applyAsDouble("traits.thrifty-fuel-mult", 0.95), get.applyAsDouble("traits.swift-speed-mult", 1.05),
+                    get.applyAsDouble("traits.charged-charge-mult", 1.10), get.applyAsDouble("traits.lucky-double-chance", 0.02),
+                    get.applyAsDouble("traits.studious-mastery-mult", 1.15), get.applyAsDouble("traits.prodigy-mastery-mult", 1.30),
+                    get.applyAsDouble("traits.ancient-speed-mult", 1.05), get.applyAsDouble("traits.ancient-fuel-mult", 0.95));
         }
     }
 
@@ -86,8 +92,29 @@ record AgentStats(int intervalSeconds, double speedMult, int radius, double dama
                 }
             }
         }
+        // traits belong to the Agent, so they count whatever job it's doing
+        for (String trait : record.traits) {
+            switch (trait) {
+                case AcademyRules.THRIFTY -> fuel *= tune.thriftyFuel();
+                case AcademyRules.SWIFT -> speed *= tune.swiftSpeed();
+                case AcademyRules.CHARGED -> charge *= tune.chargedCharge();
+                case AcademyRules.LUCKY -> doubleDrop += tune.luckyDouble();
+                case AcademyRules.ANCIENT -> { speed *= tune.ancientSpeed(); fuel *= tune.ancientFuel(); }
+                default -> { }   // Studious and Prodigy change Mastery (see masteryMult), and Gilded only its looks
+            }
+        }
         return new AgentStats(interval, speed, radius, damage, hits, harvests, fortune, fuel, charge, doubleDrop, treasure,
                 mineHeight, grow, cycleDouble, harvestDouble, copyDrop);
+    }
+
+    /** What this Agent's traits multiply its Mastery gains by. */
+    static double masteryMult(AgentRecord record, Tuning tune) {
+        double mult = 1;
+        for (String trait : record.traits) {
+            if (AcademyRules.STUDIOUS.equals(trait)) mult *= tune.studiousMastery();
+            else if (AcademyRules.PRODIGY.equals(trait)) mult *= tune.prodigyMastery();
+        }
+        return mult;
     }
 
     /** Fuel taken for this much burn. Rounds up, so the last few milliseconds of fuel always run out. */
