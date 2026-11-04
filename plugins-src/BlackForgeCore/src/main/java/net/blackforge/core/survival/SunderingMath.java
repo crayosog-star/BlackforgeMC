@@ -10,7 +10,7 @@ public final class SunderingMath {
     private SunderingMath() {}
 
     // Far from the Survival coordinates: several Survival listeners check x/y/z without checking the world.
-    public static final int CX = 3000, CZ = 3000, Y = 100, RADIUS = 100, PIT_RING = 70, PIT_RADIUS = 12, ANCHOR_RADIUS = 13, PILLAR_HEIGHT = 11, PITS = 5, CHAINS = 4;
+    public static final int CX = 3000, CZ = 3000, Y = 100, RADIUS = 86, PIT_RING = 70, PIT_RADIUS = 12, ANCHOR_RADIUS = 13, PILLAR_HEIGHT = 11, PITS = 5, CHAINS = 4;
 
     // Wake-up timeline, in ticks: tremor, four chains snap one by one, break-out, leap to the centre.
     public static final int TREMOR_END = 100, BREAK_OUT = 300, LANDS = 400;

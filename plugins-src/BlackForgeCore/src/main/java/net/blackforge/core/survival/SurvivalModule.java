@@ -632,11 +632,10 @@ public final class SurvivalModule implements Listener {
         switch (a[0].toLowerCase()) {
             case "spawn" -> teleportSafe(p, spawn(), "spawn");
             case "crates", "crate" -> teleportSafe(p, DistrictLife.cratesWarp(world), "the crates");
-            case "sundering", "boss" -> {
-                if (boss.arena().ready()) teleportSafe(p, boss.arena().plaza(), "The Sundering");
-                else p.sendMessage(Ui.mm("<gold>The Sundering's arena is still being built."));
+            case "sundering", "boss", "worldboss", "worldbosses", "graveyard" -> {
+                if (boss.arena().ready()) teleportSafe(p, boss.arena().arrival(), "the Dragon's Graveyard");
+                else p.sendMessage(Ui.mm("<gold>The world boss arena is still being built."));
             }
-            case "worldboss", "worldbosses", "graveyard" -> teleportSafe(p, new Location(world, 8000.5, 121, 8154.5, 180f, 0f), "the Dragon's Graveyard");
             case "koth", "arena" -> dropInto(p, koth.arrival(), "the KOTH arena - PvP is on!");
             case "pvp", "scrapyard" -> { dropInto(p, pvp.arrival(), "the Scrapyard - PvP is on!"); }
             case "market", "ah", "auction" -> teleportSafe(p, DistrictLife.marketWarp(world), "the market");

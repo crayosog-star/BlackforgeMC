@@ -231,34 +231,10 @@ public final class WorldBoss implements Listener {
 
     private static final String DISPLAY_TAG = "boss_display";
 
-    /** All five bosses in a row in the KOTH arena, standing still and harmless, so they can be looked at. Gone on restart. */
+    /** Keep all five bosses up (chained in their pits) in the Dragon's Graveyard so they can be looked at. */
     public String display(boolean on) {
-        for (org.bukkit.entity.Entity e : world.getEntities()) if (e.getScoreboardTags().contains(DISPLAY_TAG)) e.remove();
-        if (!on) return "Display bosses removed.";
-        double z = SurvivalLayout.KOTH_Z + 0.5 + 12;
-        for (int i = 0; i < BOSSES.size(); i++) {
-            Boss b = BOSSES.get(i);
-            double x = SurvivalLayout.KOTH_X + 0.5 + (i - (BOSSES.size() - 1) / 2.0) * 12;
-            Location at = new Location(world, x, SurvivalLayout.KOTH_Y + 1, z, 0f, 0f);
-            Mob shown = world.spawn(at, b.type(), m -> {
-                m.customName(Ui.mm(b.color() + "<bold>" + b.name()));
-                m.setCustomNameVisible(true);
-                m.setPersistent(false);
-                m.setRemoveWhenFarAway(false);
-                m.addScoreboardTag(DISPLAY_TAG);
-                set(m, Attribute.MAX_HEALTH, b.health());
-                set(m, Attribute.SCALE, b.scale());
-                m.setHealth(b.health());
-                m.setAI(false);
-                m.setInvulnerable(true);
-                m.setSilent(true);
-                if (m instanceof PiglinAbstract pa) pa.setImmuneToZombification(true);
-                m.setInvisible(true);
-            });
-            BossModel look = BossModel.of(b.id());
-            if (look != null) { look.fixYaw(0f); look.attach(plugin, shown, DISPLAY_TAG); }
-        }
-        return "Spawned " + BOSSES.size() + " display bosses in the KOTH arena (frozen). /blackforge boss display off removes them.";
+        arena.hold(on);
+        return on ? "The five bosses are standing in their pits in the Dragon's Graveyard (/warp worldboss). /blackforge boss display off lets them sleep again." : "Display released.";
     }
 
     private static void set(LivingEntity e, Attribute a, double v) { var i = e.getAttribute(a); if (i != null) i.setBaseValue(v); }

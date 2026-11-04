@@ -399,7 +399,47 @@ public class Graveyard extends Vox {
     }
     static void fall(int x, int y, int z) {
         set(x, y, z, "lava");
-        for (int yy = y - 1; yy >= -91; yy--) { if (!air(x, yy, z)) break; set(x, yy, z, "lava[level=8]"); }
+        int cx = x, cz = z, cy = y - 1, guard = 0;
+        while (cy >= -91 && guard++ < 900) {
+            if (air(cx, cy, cz)) { set(cx, cy, cz, "lava[level=8]"); cy--; continue; }
+            int sx = Integer.signum(cx), sz = Integer.signum(cz); boolean moved = false;
+            for (int[] d : new int[][]{{sx, 0}, {0, sz}, {-sx, 0}, {0, -sz}}) {
+                if (d[0] == 0 && d[1] == 0) continue; int nx = cx + d[0], nz = cz + d[1];
+                if (air(nx, cy + 1, nz) && air(nx, cy, nz)) { set(nx, cy + 1, nz, "lava[level=8]"); cx = nx; cz = nz; moved = true; break; }
+            }
+            if (!moved) break;
+        }
+    }
+    /** Ramps that climb from the arena floor to the wall terrace, for spectators (before the radial stretch). */
+    static void specStairs() {
+        for (double a : new double[]{0, 180, 51.4, 128.6, -51.4, -128.6}) {
+            double dx = cos(toRadians(a)), dz = sin(toRadians(a));
+            String face = abs(dx) > abs(dz) ? (dx > 0 ? "west" : "east") : (dz > 0 ? "north" : "south");
+            for (int x = -76; x <= 76; x++) for (int z = -76; z <= 76; z++) {
+                double t = x * dx + z * dz, sd = abs(-x * dz + z * dx);
+                if (sd > 3.2 || t < 57.4 || t > 67) continue;
+                int top = t < 63.4 ? (int) floor(t - 57.4) + 1 : 7;
+                for (int y = -6; y < (t < 63.4 ? top : 7); y++) set(x, y, z, "polished_blackstone_bricks");
+                if (t < 63.4) set(x, top, z, "polished_blackstone_brick_stairs[facing=" + face + ",half=bottom]"); else set(x, 7, z, "polished_blackstone_bricks");
+                for (int y = top + 1; y <= top + 6; y++) if (y > 7 || t < 63.4) set(x, y, z, "air");
+                if (sd > 2.2) set(x, top + 1, z, t < 66 ? "polished_blackstone_brick_wall" : "air");
+            }
+        }
+    }
+    /** The Sundering's five boss pits and chain pillars, in the plugin's coordinates (centre 0,0). */
+    static void pits() {
+        for (int i = 0; i < 5; i++) {
+            double a = -PI / 2 + i * 2 * PI / 5; int cx = (int) round(cos(a) * 70), cz = (int) round(sin(a) * 70);
+            for (int x = cx - 12; x <= cx + 12; x++) for (int z = cz - 12; z <= cz + 12; z++) {
+                if ((x - cx) * (x - cx) + (z - cz) * (z - cz) > 144) continue;
+                set(x, 0, z, "air"); set(x, -1, z, hn(x, 1, z) < .14 ? "shroomlight" : "crimson_nylium");
+                for (int y = 1; y <= 4; y++) set(x, y, z, "air");
+            }
+            for (int j = 0; j < 4; j++) {
+                double b = PI / 4 + j * PI / 2; int ax = cx + (int) round(cos(b) * 13), az = cz + (int) round(sin(b) * 13);
+                box(ax - 1, 0, az - 1, ax + 1, 10, az + 1, "polished_blackstone_bricks"); box(ax - 1, 11, az - 1, ax + 1, 11, az + 1, "gold_block"); set(ax, 12, az, "soul_lantern");
+            }
+        }
     }
     static void curtainBanners() {
         for (double a = 7.5; a < 360; a += 15) {
@@ -539,7 +579,7 @@ public class Graveyard extends Vox {
     // =================== EMIT ===================
     static void emit(File out) throws IOException {
         boolean[] done = new boolean[g.length]; List<String> cmds = new ArrayList<>(), lava = new ArrayList<>();
-        final int WX = 8000, WY = 120, WZ = 8000;
+        final int WX = 3000, WY = 100, WZ = 3000; final String PRE = "execute in minecraft:sundering run ";
         for (int y = Y0; y < Y0 + H; y++) for (int z = Z0; z < Z0 + D; z++) for (int x = X0; x < X0 + W; x++) {
             int i = ix(x, y, z); if (g[i] == 0 || done[i]) continue; short v = g[i];
             int x1 = x; while (x1 + 1 < X0 + W && g[ix(x1 + 1, y, z)] == v && !done[ix(x1 + 1, y, z)]) x1++;
@@ -547,7 +587,7 @@ public class Graveyard extends Vox {
             int y1 = y; outer2: while (y1 + 1 < Y0 + H && (long) (x1 - x + 1) * (z1 - z + 1) * (y1 - y + 2) <= 32768) { for (int kz = z; kz <= z1; kz++) for (int k = x; k <= x1; k++) { int j = ix(k, y1 + 1, kz); if (g[j] != v || done[j]) break outer2; } y1++; }
             for (int yy = y; yy <= y1; yy++) for (int zz = z; zz <= z1; zz++) for (int xx = x; xx <= x1; xx++) done[ix(xx, yy, zz)] = true;
             String b = pal.get(v);
-            String c = (x == x1 && y == y1 && z == z1) ? "setblock " + (WX + x) + " " + (WY + y) + " " + (WZ + z) + " minecraft:" + b : "fill " + (WX + x) + " " + (WY + y) + " " + (WZ + z) + " " + (WX + x1) + " " + (WY + y1) + " " + (WZ + z1) + " minecraft:" + b;
+            String c = PRE + ((x == x1 && y == y1 && z == z1) ? "setblock " + (WX + x) + " " + (WY + y) + " " + (WZ + z) + " minecraft:" + b : "fill " + (WX + x) + " " + (WY + y) + " " + (WZ + z) + " " + (WX + x1) + " " + (WY + y1) + " " + (WZ + z1) + " minecraft:" + b);
             (b.equals("lava") ? lava : cmds).add(c);
         }
         try (PrintWriter w = new PrintWriter(new FileWriter(out))) { for (String c : cmds) w.println(c); w.println("#LAVA"); for (String c : lava) w.println(c); }
@@ -606,13 +646,13 @@ public class Graveyard extends Vox {
     static void build(String[] a) throws Exception {
         long t0 = System.currentTimeMillis();
         String only = a.length > 1 ? a[1] : "all";
-        arena(); rimAndWall(); curtainBanners(); outerRing(); gate(); bridge();
+        arena(); rimAndWall(); specStairs(); curtainBanners(); outerRing(); gate(); bridge();
         remap(A);
-        abyssFloor(); skull(); spine(); ringChains(); islands(); lavaFalls();
+        abyssFloor(); pits(); skull(); spine(); ringChains(); islands(); lavaFalls();
         System.out.println("built in " + (System.currentTimeMillis() - t0) + "ms");
         File dir = new File(a[0]); dir.mkdirs();
         if (a.length > 2 && a[2].equals("emit")) emit(new File(dir, "commands.txt"));
-        if (a.length > 2 && a[2].equals("sample")) { Random rr = new Random(5); try (PrintWriter w = new PrintWriter(new File(dir, "sample.txt"))) { int c = 0; while (c < 500) { int x = X0 + rr.nextInt(W), y = Y0 + rr.nextInt(H), z = Z0 + rr.nextInt(D); String b = get(x, y, z); if (b.equals("air") || b.startsWith("lava")) continue; w.println((8000 + x) + " " + (120 + y) + " " + (8000 + z) + " " + b); c++; } } }
+        if (a.length > 2 && a[2].equals("sample")) { Random rr = new Random(5); try (PrintWriter w = new PrintWriter(new File(dir, "sample.txt"))) { int c = 0; while (c < 500) { int x = X0 + rr.nextInt(W), y = Y0 + rr.nextInt(H), z = Z0 + rr.nextInt(D); String b = get(x, y, z); if (b.equals("air") || b.startsWith("lava")) continue; w.println((3000 + x) + " " + (100 + y) + " " + (3000 + z) + " " + b); c++; } } }
         preview(new File(dir, "view_front.png"), 0, 78, 236, 0, 46, -70, 78, 1536, 864);
         preview(new File(dir, "view_arena.png"), 20, 40, 120, 0, 10, -20, 80, 1536, 864);
         preview(new File(dir, "view_high.png"), 0, 190, 330, 0, 30, -40, 70, 1536, 864);

@@ -70,22 +70,20 @@ public final class SunderingArena implements Listener {
         world = Bukkit.getWorld(WORLD);
         if (world == null) world = new WorldCreator(WORLD).generator(new Worlds.Void()).environment(World.Environment.NORMAL)
                 .type(WorldType.FLAT).generateStructures(false).createWorld();
-        net.blackforge.core.LobbyRules.setupWorld(plugin, world, 18000);   // forever midnight
+        net.blackforge.core.LobbyRules.setupWorld(plugin, world, 12700);   // forever dusk
         world.setDifficulty(Difficulty.NORMAL);
         world.setPVP(false);
         for (Entity e : world.getEntities()) if (!(e instanceof Player)) e.remove();
-        File marker = new File(plugin.getDataFolder(), MARKER);
-        if (marker.exists()) { ready = true; return; }
-        Paster.paste(plugin, world, SunderingBuilder.build(), 6000, () -> {
-            try { marker.createNewFile(); } catch (Exception ignored) { }
-            ready = true;
-            plugin.getLogger().info("The Sundering: arena built");
-        });
+        // The arena itself is the Dragon's Graveyard, placed into this world by tools/graveyard (centre CX,CZ, floor y=Y).
+        ready = true;
+        plugin.getLogger().info("The Sundering: arena ready");
     }
 
     boolean ready() { return ready; }
     World world() { return world; }
     public Location plaza() { return new Location(world, CX + 0.5, Y + 1, CZ + 8.5, 180f, 0f); }
+    /** Where /warp lands: the south end of the bridge, facing the arena. */
+    public Location arrival() { return new Location(world, CX + 0.5, Y + 1, CZ + 154.5, 180f, 0f); }
     Location center() { return new Location(world, CX + 0.5, Y + 1, CZ + 0.5); }
     Sleeper sleeper(String id) { return sleepers.get(id); }
     Collection<Sleeper> sleepers() { return sleepers.values(); }
