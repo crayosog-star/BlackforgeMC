@@ -12,6 +12,7 @@ They're plain Markdown, so they're also readable straight from GitHub by anyone 
 |---|---|
 | `blackforge-render-shot` | Getting a picture of a build, map, boss or scene without launching a server: which of the six renderers to use, how to aim the camera, and what a render can't show. |
 | `blackforge-plan-large` | Planning a very large concept across 4+ phases: one document with every task in order, proof for each task, phase gates and rules of engagement. |
+| `blackforge-issue-manager` | One lead agent that triages every open GitHub issue, splits the fixes evenly across up to 3 worker agents, opens one PR per issue and keeps labels current. Only codes issues from repo members or labelled `agent-ok`, because its PRs auto-deploy. Run on a schedule. |
 
 ## What is deliberately not here
 
