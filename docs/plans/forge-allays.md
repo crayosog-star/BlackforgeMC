@@ -136,8 +136,8 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Evidence:** Verified: the `BlackForgeCore` build, unit tests and strict walkcheck pass with these hooks in. Untested: the in-game fuel and Trader sale checks. Both still need a tester, so this stays unticked until then.
 
 ### [ ] P1.T3: Prove flight control in the Foundry
-- **Needs:** P1.T1; `S/FoundrySystems.java:25-40`; the hub's staff command pattern, `testCommand` at `plugins-src/BlackForgeCore/src/main/java/net/blackforge/core/hub/HubModule.java:138`; the smooth-motion guidance in the `motion` skill.
-- **Files:** create `S/Allays.java`, `S/AllayFlight.java`, `plugins-src/BlackForgeCore/src/test/java/net/blackforge/core/survival/AllayFlightTest.java`; change `S/FoundrySystems.java`, `plugins-src/BlackForgeCore/src/main/java/net/blackforge/core/hub/HubModule.java`.
+- **Needs:** P1.T1; `S/FoundrySystems.java:25-40`; command registration through `Bukkit.getCommandMap()`, as `S/Robots.java:981` does; the smooth-motion guidance in the `motion` skill.
+- **Files:** create `S/Allays.java`, `S/AllayFlight.java`, `plugins-src/BlackForgeCore/src/test/java/net/blackforge/core/survival/AllayFlightTest.java`; change `S/FoundrySystems.java`.
 - **Steps:**
   1. `AllayFlight`: move an entity from A to B with ease-in and ease-out, updating each tick, using the speed from config. Keep the position maths pure and unit-tested in `AllayFlightTest`.
   2. `Allays`: spawn with `setAI(false)`, `setInvulnerable(true)`, `setSilent(true)`, `setCollidable(false)`, `setPersistent(false)`, no duplication, and a persistent-data marker. Cancel `PlayerInteractEntityEvent` and leashing for marked allays.
@@ -315,6 +315,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | P1.T3 registers `/allay` from `Allays`, as `Robots` does, instead of changing `HubModule` | Small wiring change, no check weakened; flagged to Colin in the PR |
 
 ## Later ideas
 - Skyblock and OneBlock allays, which need a sell path first.
