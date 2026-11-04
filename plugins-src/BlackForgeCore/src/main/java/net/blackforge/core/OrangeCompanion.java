@@ -31,7 +31,9 @@ final class OrangeCompanion {
     private static final List<VoiceCue> VOICE_CUES = List.of(
             new VoiceCue(Duration.ofSeconds(10).toNanos(), INTRO),
             new VoiceCue(Duration.ofSeconds(30).toNanos(), "blackforge:pet.vickie"),
-            new VoiceCue(Duration.ofSeconds(40).toNanos(), "blackforge:pet.hesitant_gulp")
+            new VoiceCue(Duration.ofSeconds(40).toNanos(), "blackforge:pet.hesitant_gulp"),
+            new VoiceCue(Duration.ofSeconds(50).toNanos(), "blackforge:pet.in_the_smoke"),
+            new VoiceCue(Duration.ofSeconds(60).toNanos(), "blackforge:pet.you_good_gang")
     );
 
     enum Toggle {

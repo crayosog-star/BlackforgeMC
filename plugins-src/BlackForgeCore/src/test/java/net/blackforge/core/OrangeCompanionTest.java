@@ -61,6 +61,11 @@ class OrangeCompanionTest {
         assertNull(pet.voiceDue(40 * SECOND - 1));
         assertEquals("blackforge:pet.hesitant_gulp", pet.voiceDue(40 * SECOND));
         assertNull(pet.voiceDue(40 * SECOND));
+        assertNull(pet.voiceDue(50 * SECOND - 1));
+        assertEquals("blackforge:pet.in_the_smoke", pet.voiceDue(50 * SECOND));
+        assertNull(pet.voiceDue(60 * SECOND - 1));
+        assertEquals("blackforge:pet.you_good_gang", pet.voiceDue(60 * SECOND));
+        assertNull(pet.voiceDue(60 * SECOND));
         assertNull(pet.voiceDue(3600 * SECOND));
     }
 
@@ -71,7 +76,7 @@ class OrangeCompanionTest {
         assertEquals(OrangeCompanion.INTRO, pet.voiceDue(10 * SECOND));
         long returned = 50 * SECOND;
         pet.startVoiceClock(returned);
-        assertEquals("blackforge:pet.hesitant_gulp", pet.voiceDue(returned));
+        assertEquals("blackforge:pet.in_the_smoke", pet.voiceDue(returned));
         assertNull(pet.voiceDue(returned + SECOND));
     }
 }
