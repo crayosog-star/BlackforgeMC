@@ -118,4 +118,35 @@ class AgentStatsTest {
         assertEquals(0.85, TUNE.efficientFuel());
         assertEquals(1, TUNE.reachRadius());
     }
+
+    // ---------------------------------------------------------------- specializations
+
+    private static final long LEVEL_9 = AcademyRules.DEFAULTS.pointsFor(9), LEVEL_10 = AcademyRules.DEFAULTS.pointsFor(10),
+            LEVEL_29 = AcademyRules.DEFAULTS.pointsFor(29), LEVEL_30 = AcademyRules.DEFAULTS.pointsFor(30);
+
+    private static AgentRecord specialized(String job, long points, String spec) {
+        AgentRecord r = trained(job, points);
+        r.jobs.get(job).spec = spec;
+        return r;
+    }
+
+    private static AgentStats spec(String job, long points, String spec) { return stats(job, specialized(job, points, spec)); }
+
+    @Test
+    void minerAndFarmerPathsApplyFromLevelTen() {
+        assertEquals(0, spec("miner", LEVEL_9, "prospector").fortune());
+        assertEquals(1, spec("miner", LEVEL_10, "prospector").fortune());
+        assertEquals(0, spec("miner", LEVEL_9, "excavator").mineHeight());
+        assertEquals(1, spec("miner", LEVEL_10, "excavator").mineHeight());
+        assertEquals(1, spec("farmer", LEVEL_9, "harvester").harvests());
+        assertEquals(3, spec("farmer", LEVEL_10, "harvester").harvests());
+        assertEquals(0, spec("farmer", LEVEL_9, "botanist").growCrops());
+        assertEquals(1, spec("farmer", LEVEL_10, "botanist").growCrops());
+    }
+
+    @Test
+    void aPathFromAnotherJobDoesNothing() {
+        assertEquals(1, spec("farmer", LEVEL_30, "prospector").harvests());
+        assertEquals(0, spec("farmer", LEVEL_30, "prospector").fortune());
+    }
 }

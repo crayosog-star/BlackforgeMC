@@ -22,7 +22,7 @@ import java.util.function.BooleanSupplier;
 public final class Academy implements Listener {
     static final String BRASS = "<#C9A227>";
     private static final String VERDIGRIS = "<#4FA08B>";
-    private static final int SIZE = 54, RANK = 4, PROGRESS = 20, LIFETIME = 22, TODAY = 24, PERKS = 38, ADD_LEVELS = 40, BACK = 49;
+    private static final int SIZE = 54, RANK = 4, PROGRESS = 20, LIFETIME = 22, TODAY = 24, PERKS = 38, ADD_LEVELS = 40, SPEC = 42, BACK = 49;
     private static final int CONFIRM_YES = 29, CONFIRM_NO = 33;
     private static final int[] PERK_SLOTS = {20, 21, 22, 23, 24};
     private static final int[] JOB_SLOTS = {28, 30, 32, 34};
@@ -106,6 +106,10 @@ public final class Academy implements Listener {
             v.inv.setItem(PERKS, Ui.item(Material.ENCHANTED_BOOK, VERDIGRIS + "<bold>Perks", "<gray>Earned at job levels <white>5<gray>, <white>15 <gray>and <white>25<gray>.",
                     "<gray>Chosen: <white>" + (track == null ? 0 : track.perks.size()) + "/3", waiting > 0 ? "<green>" + waiting + " to choose" : "<dark_gray>Nothing to choose yet", "", "<yellow>Click to view"));
             v.actions.put(PERKS, () -> openPerks(p, b, back, stillAllowed));
+            String spec = track == null ? null : track.spec;
+            v.inv.setItem(SPEC, Ui.item(Material.NETHER_STAR, VERDIGRIS + "<bold>Specialization", "<gray>Chosen at job level <white>10<gray>.",
+                    "<gray>Path: <white>" + (spec == null ? "none" : specName(spec)), "", "<yellow>Click to view"));
+            v.actions.put(SPEC, () -> openSpecs(p, b, back, stillAllowed));
         }
         if (robots.isSandbox() && !maxed) v.inv.setItem(ADD_LEVELS, Ui.item(Material.ANVIL, BRASS + "<bold>Add 10 Levels", "<gray>Foundry only: raises this job's level for free.", "", "<yellow>Click to add"));
         p.openInventory(v.inv);
@@ -130,6 +134,57 @@ public final class Academy implements Listener {
             case AcademyRules.KEEN -> Math.round(t.keenDouble() * 100) + "% chance to double a drop";
             default -> "Builds Charge " + percentOn(t.steadyCharge()) + "% faster";
         };
+    }
+
+    private static String specName(String spec) {
+        return switch (spec) {
+            case AcademyRules.PROSPECTOR -> "Prospector";
+            case AcademyRules.EXCAVATOR -> "Excavator";
+            case AcademyRules.HARVESTER -> "Harvester";
+            case AcademyRules.BOTANIST -> "Botanist";
+            case AcademyRules.REAPER -> "Reaper";
+            case AcademyRules.BUTCHER -> "Butcher";
+            case AcademyRules.ANGLER -> "Angler";
+            case AcademyRules.DIVER -> "Treasure Diver";
+            default -> spec;
+        };
+    }
+
+    private String specEffect(String spec) {
+        AgentStats.Tuning t = robots.tuning();
+        return switch (spec) {
+            case AcademyRules.PROSPECTOR -> "+" + t.prospectorFortune() + " Fortune level";
+            case AcademyRules.EXCAVATOR -> "Also mines the block above its target";
+            case AcademyRules.HARVESTER -> "+" + t.harvesterExtra() + " harvests per cycle";
+            case AcademyRules.BOTANIST -> "Grows " + t.botanistCrops() + " crop one stage per cycle";
+            case AcademyRules.REAPER -> "+" + percentOn(t.reaperDamage()) + "% damage, +" + t.reaperHits() + " hit";
+            case AcademyRules.BUTCHER -> Math.round(t.butcherChance() * 100) + "% chance to copy a normal drop";
+            case AcademyRules.ANGLER -> "Fishes " + percentOn(t.anglerSpeed()) + "% faster";
+            case AcademyRules.DIVER -> "Treasure chance x" + t.diverMult();
+            default -> "";
+        };
+    }
+
+    private void openSpecs(Player p, Robots.Bot b, Runnable agentBack, BooleanSupplier stillAllowed) {
+        View v = open(b.id, "Specialization", () -> openAgent(p, b, false, agentBack, stillAllowed), stillAllowed);
+        String job = Robots.jobKey(b);
+        AgentRecord.JobTrack track = b.record.jobs.computeIfAbsent(job, k -> new AgentRecord.JobTrack());
+        int level = robots.academyRules().levelFor(track.points);
+        int[] slots = {20, 24};
+        List<String> paths = AcademyRules.specsFor(job);
+        for (int i = 0; i < paths.size(); i++) {
+            String spec = paths.get(i);
+            boolean chosen = spec.equals(track.spec), can = AcademyRules.canPickSpec(track, spec, job, level);
+            ItemStack icon = Ui.item(chosen ? Material.NETHER_STAR : Material.GLOWSTONE_DUST, (chosen ? "<green>" : can ? VERDIGRIS : "<gray>") + "<bold>" + specName(spec),
+                    "<gray>" + specEffect(spec), "", chosen ? "<green>Chosen" : can ? "<yellow>Click to choose" : "<dark_gray>" + (level < 10 ? "Unlocks at level 10" : "Another path is chosen"));
+            v.inv.setItem(slots[i], icon);
+            if (can) v.actions.put(slots[i], () -> confirm(p, b, "Become a " + specName(spec) + "?", "Changing this later costs money.", () -> {
+                AgentRecord.JobTrack now = b.record.jobs.computeIfAbsent(Robots.jobKey(b), k -> new AgentRecord.JobTrack());
+                if (AcademyRules.canPickSpec(now, spec, Robots.jobKey(b), robots.academyRules().levelFor(now.points))) { now.spec = spec; robots.save(); }
+                openSpecs(p, b, agentBack, stillAllowed);
+            }, () -> openSpecs(p, b, agentBack, stillAllowed), stillAllowed));
+        }
+        p.openInventory(v.inv);
     }
 
     private static long percentOff(double mult) { return Math.round((1 - mult) * 100); }

@@ -16,15 +16,26 @@ record AgentStats(int intervalSeconds, double speedMult, int radius, double dama
     private static final int FORTUNE_FROM_TIER = 4;
     private static final AgentRecord EMPTY = new AgentRecord();
 
-    /** The academy.perks values from config. */
-    record Tuning(double efficientFuel, double quickSpeed, int reachRadius, double keenDouble, double steadyCharge) {
+    /** The academy.perks and academy.specs values from config. */
+    record Tuning(double efficientFuel, double quickSpeed, int reachRadius, double keenDouble, double steadyCharge,
+                  int prospectorFortune, double motherlodeChance, int excavatorHeight, int clearcutHeight, int harvesterExtra, double bumperChance,
+                  int botanistCrops, int verdantCrops, double reaperDamage, int reaperHits, int cleaveHits, double butcherChance, double primeChance,
+                  double anglerSpeed, double quicklineSpeed, double diverMult, double troveMult) {
         static final Tuning DEFAULTS = read((key, fallback) -> fallback);
 
         /** get receives a key under academy, and the default to use if it's missing. */
         static Tuning read(ToDoubleBiFunction<String, Double> get) {
             return new Tuning(get.applyAsDouble("perks.efficient-fuel-mult", 0.85), get.applyAsDouble("perks.quick-speed-mult", 1.10),
                     (int) get.applyAsDouble("perks.reach-radius", 1.0), get.applyAsDouble("perks.keen-double-chance", 0.05),
-                    get.applyAsDouble("perks.steady-charge-mult", 1.15));
+                    get.applyAsDouble("perks.steady-charge-mult", 1.15),
+                    (int) get.applyAsDouble("specs.prospector-fortune", 1.0), get.applyAsDouble("specs.motherlode-chance", 0.02),
+                    (int) get.applyAsDouble("specs.excavator-height", 1.0), (int) get.applyAsDouble("specs.clearcut-height", 2.0),
+                    (int) get.applyAsDouble("specs.harvester-extra", 2.0), get.applyAsDouble("specs.bumper-chance", 0.05),
+                    (int) get.applyAsDouble("specs.botanist-crops", 1.0), (int) get.applyAsDouble("specs.verdant-crops", 3.0),
+                    get.applyAsDouble("specs.reaper-damage-mult", 1.25), (int) get.applyAsDouble("specs.reaper-hits", 1.0), (int) get.applyAsDouble("specs.cleave-hits", 2.0),
+                    get.applyAsDouble("specs.butcher-chance", 0.20), get.applyAsDouble("specs.prime-chance", 0.35),
+                    get.applyAsDouble("specs.angler-speed-mult", 1.20), get.applyAsDouble("specs.quickline-speed-mult", 1.35),
+                    get.applyAsDouble("specs.diver-mult", 1.5), get.applyAsDouble("specs.trove-mult", 2.0));
         }
     }
 
@@ -56,6 +67,16 @@ record AgentStats(int intervalSeconds, double speedMult, int radius, double dama
                     case AcademyRules.KEEN -> doubleDrop += tune.keenDouble();
                     case AcademyRules.STEADY -> charge *= tune.steadyCharge();
                     default -> { }   // a removed perk stays saved but does nothing
+                }
+            }
+            int level = rules.levelFor(track.points);
+            if (track.spec != null && AcademyRules.specUnlocked(level) && AcademyRules.specFits(track.spec, job)) {
+                switch (track.spec) {
+                    case AcademyRules.PROSPECTOR -> fortune += tune.prospectorFortune();
+                    case AcademyRules.EXCAVATOR -> mineHeight = tune.excavatorHeight();
+                    case AcademyRules.HARVESTER -> harvests += tune.harvesterExtra();
+                    case AcademyRules.BOTANIST -> grow = tune.botanistCrops();
+                    default -> { }
                 }
             }
         }

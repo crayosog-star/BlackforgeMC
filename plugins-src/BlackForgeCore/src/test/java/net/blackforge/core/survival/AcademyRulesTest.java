@@ -247,6 +247,16 @@ class AcademyRulesTest {
         assertFalse(AcademyRules.canPickPerk(t, "made-up", "miner", 30));
     }
 
+    @Test
+    void specsArePickedOnceFromTheJobsPathsAtLevelTen() {
+        AgentRecord.JobTrack t = new AgentRecord.JobTrack();
+        assertFalse(AcademyRules.canPickSpec(t, "prospector", "miner", 9));
+        assertTrue(AcademyRules.canPickSpec(t, "prospector", "miner", 10));
+        assertFalse(AcademyRules.canPickSpec(t, "reaper", "miner", 10));
+        t.spec = "excavator";
+        assertFalse(AcademyRules.canPickSpec(t, "prospector", "miner", 30));
+    }
+
     // ---------------------------------------------------------------- levels
 
     @Test

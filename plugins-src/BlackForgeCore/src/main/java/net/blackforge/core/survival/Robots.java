@@ -615,12 +615,23 @@ public final class Robots implements Listener {
     /** Returns the blocks mined. */
     private int mine(Bot b, CopperGolem g, AgentStats stats) {
         Block target = b.loc.getBlock().getRelative(facing(b.loc));
-        Material t = target.getType();
-        if (t.isAir() || target.isLiquid() || NO_MINE.contains(t) || t.getHardness() < 0 || target.getState() instanceof Container) return 0;
-        if (!workArea.test(b.owner, target.getLocation())) return 0;
         Material[] picks = {Material.STONE_PICKAXE, Material.IRON_PICKAXE, Material.DIAMOND_PICKAXE, Material.NETHERITE_PICKAXE, Material.NETHERITE_PICKAXE};
         ItemStack tool = new ItemStack(picks[b.tier - 1]);
         if (stats.fortune() > 0) tool.addUnsafeEnchantment(Enchantment.FORTUNE, stats.fortune());
+        if (!mineBlock(b, target, tool)) return 0;
+        int mined = 1;
+        // the blocks above are extras: each passes the same checks, and one being refused doesn't undo the rest
+        for (int up = 1; up <= stats.mineHeight(); up++) if (mineBlock(b, target.getRelative(0, up, 0), tool)) mined++;
+        g.swingMainHand();
+        target.getWorld().playSound(target.getLocation(), Sound.BLOCK_STONE_BREAK, 0.4f, 1f);
+        return mined;
+    }
+
+    /** Mines one block if every safety check allows it. Containers, claim edges and protected blocks are left alone. */
+    private boolean mineBlock(Bot b, Block target, ItemStack tool) {
+        Material t = target.getType();
+        if (t.isAir() || target.isLiquid() || NO_MINE.contains(t) || t.getHardness() < 0 || target.getState() instanceof Container) return false;
+        if (!workArea.test(b.owner, target.getLocation())) return false;
         Player owner = Bukkit.getPlayer(b.owner);
         if (owner != null) {
             // Let other plugins (OneBlock, island protection) see the break as the owner's
@@ -629,17 +640,15 @@ public final class Robots implements Listener {
             Collection<ItemStack> drops = target.getDrops(tool);
             Material before = target.getType();
             Bukkit.getPluginManager().callEvent(ev);
-            if (ev.isCancelled()) return 0;
+            if (ev.isCancelled()) return false;
             store(b, drops);
             if (target.getType() == before) target.setType(Material.AIR);
         } else {
-            if (isMagicBlock(target)) return 0;   // OneBlock needs its owner online to roll the next block
+            if (isMagicBlock(target)) return false;   // OneBlock needs its owner online to roll the next block
             store(b, target.getDrops(tool));
             target.setType(Material.AIR);
         }
-        g.swingMainHand();
-        target.getWorld().playSound(target.getLocation(), Sound.BLOCK_STONE_BREAK, 0.4f, 1f);
-        return 1;
+        return true;
     }
 
     private boolean isMagicBlock(Block bl) {
@@ -685,8 +694,31 @@ public final class Robots implements Listener {
                         done++;
                     }
                 }
-        if (done > 0) g.swingMainHand();
-        return done;
+        int grown = growCrops(b, stats, r);
+        if (done + grown > 0) g.swingMainHand();
+        return done + grown;
+    }
+
+    /** The Botanist: moves random immature crops in the work area on by one stage. */
+    private int growCrops(Bot b, AgentStats stats, int r) {
+        if (stats.growCrops() <= 0) return 0;
+        Block c = b.loc.getBlock();
+        List<Block> young = new ArrayList<>();
+        for (int dy = -1; dy <= 2; dy++)
+            for (int dx = -r; dx <= r; dx++)
+                for (int dz = -r; dz <= r; dz++) {
+                    Block bl = c.getRelative(dx, dy, dz);
+                    if (SEEDS.containsKey(bl.getType()) && bl.getBlockData() instanceof Ageable a && a.getAge() < a.getMaximumAge() && workArea.test(b.owner, bl.getLocation())) young.add(bl);
+                }
+        Collections.shuffle(young, rnd);
+        int grown = Math.min(stats.growCrops(), young.size());
+        for (Block bl : young.subList(0, grown)) {
+            Ageable a = (Ageable) bl.getBlockData();
+            a.setAge(a.getAge() + 1);
+            bl.setBlockData(a);
+            bl.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, bl.getLocation().add(0.5, 0.5, 0.5), 4, 0.25, 0.25, 0.25);
+        }
+        return grown;
     }
 
     /** Returns the hits that landed. */

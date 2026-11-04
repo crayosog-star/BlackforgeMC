@@ -177,7 +177,25 @@ academy:
     reach-radius: 1
     keen-double-chance: 0.05
     steady-charge-mult: 1.15
-  specs: {}
+  # What each specialization does at job level 10, and its capstone at level 30. A capstone that gives a higher value replaces the level 10 one.
+  specs:
+    prospector-fortune: 1
+    motherlode-chance: 0.02
+    excavator-height: 1
+    clearcut-height: 2
+    harvester-extra: 2
+    bumper-chance: 0.05
+    botanist-crops: 1
+    verdant-crops: 3
+    reaper-damage-mult: 1.25
+    reaper-hits: 1
+    cleave-hits: 2
+    butcher-chance: 0.20
+    prime-chance: 0.35
+    angler-speed-mult: 1.20
+    quickline-speed-mult: 1.35
+    diver-mult: 1.5
+    trove-mult: 2.0
   traits: {}
 
 # The Trader in the Gilded Grove (Survival): sells raw farmed goods for the player's balance.

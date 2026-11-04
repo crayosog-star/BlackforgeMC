@@ -11,6 +11,9 @@ final class AcademyRules {
     static final String EFFICIENT = "efficient", QUICK = "quick", REACH = "reach", KEEN = "keen", STEADY = "steady";
     static final java.util.List<String> PERKS = java.util.List.of(EFFICIENT, QUICK, REACH, KEEN, STEADY);
 
+    static final String PROSPECTOR = "prospector", EXCAVATOR = "excavator", HARVESTER = "harvester", BOTANIST = "botanist",
+            REAPER = "reaper", BUTCHER = "butcher", ANGLER = "angler", DIVER = "diver";
+
     private static final int SPEC_LEVEL = 10;
     private static final int CAPSTONE_LEVEL = 30;
     private static final int[] PERK_LEVELS = {5, 15, 25};
@@ -76,6 +79,24 @@ final class AcademyRules {
         if (!r.traits.isEmpty()) lines.add("<gray>Traits: <white>" + String.join(", ", r.traits));
         lines.add("<gray>Work done: <white>" + r.workDone);
         return lines;
+    }
+
+    /** A job's two specialization paths. */
+    static java.util.List<String> specsFor(String job) {
+        return switch (job) {
+            case "miner" -> java.util.List.of(PROSPECTOR, EXCAVATOR);
+            case "farmer" -> java.util.List.of(HARVESTER, BOTANIST);
+            case "grinder" -> java.util.List.of(REAPER, BUTCHER);
+            case "fisherman" -> java.util.List.of(ANGLER, DIVER);
+            default -> java.util.List.of();
+        };
+    }
+
+    static boolean specFits(String spec, String job) { return specsFor(job).contains(spec); }
+
+    /** A job picks one path, once, at level 10. Checked again when the player confirms. */
+    static boolean canPickSpec(AgentRecord.JobTrack track, String spec, String job, int level) {
+        return track.spec == null && specUnlocked(level) && specFits(spec, job);
     }
 
     /** Long Reach only helps jobs that work a radius. */

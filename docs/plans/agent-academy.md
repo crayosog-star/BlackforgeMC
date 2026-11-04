@@ -296,7 +296,11 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Edge cases:** blocks in `NO_MINE`, containers, claim edges, breaking the block an Agent stands on, block-break events cancelled by other systems, crops that are already grown.
 - **Done when:** unit tests cover the stat changes. In the Foundry, a tester confirms each of the four paths, and that an Excavator next to a chest or claim edge leaves both alone.
 - **Leaves ready:** the spec check in the job code for P3.T3.
-- **Evidence:**
+- **Evidence:** not ticked; prepared on a branch with no PR, because earlier phase gates aren't confirmed.
+  - Verified: stat changes passed unit tests with `javac` 21 and a local stand-in for JUnit.
+  - Untested: the Paper compile, and all four paths in the Foundry, including an Excavator beside a chest and at a claim edge.
+  - Note: `mineBlock` runs the same checks for the blocks above, and `done` includes grown crops, so a Botanist still earns Mastery.
+  - Note: `Tuning` and `config.yml` already hold all spec and capstone values; the Grinder, Fisherman and capstone code using them comes in P3.T3 and P3.T4.
 
 ### [ ] P3.T3: Add Grinder and Fisherman specializations
 - **Needs:** P3.T2; `S/Robots.java:496`, `531`, `548`.
