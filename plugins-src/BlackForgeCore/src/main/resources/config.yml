@@ -63,6 +63,7 @@ nightrend:
   flip-cooldown-seconds: 3
   mixed-attack-speed: 2.3
   repeat-side-chance: 0.03
+  left-swing-delay-ticks: 3   # the left swing waits this long, or your own game ignores it mid right-swing
 
 # Rimelock (hub Arena only for now): leap, slam, and a 16-block-tall, 6-block-radius cage holds for 10 s. Nobody
 # inside can leave, mobs included, except the caster (and their team, once teams exist); anyone can walk in; no hits

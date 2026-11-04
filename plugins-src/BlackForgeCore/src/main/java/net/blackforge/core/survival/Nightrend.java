@@ -81,6 +81,7 @@ public final class Nightrend implements Listener, Hackable {
     private final boolean enabled;
     private final double damage, singleSpeed, pairSpeed, mixedSpeed, reachChange, behindArc, behindDamage, repeatChance;
     private final long empMillis, flipCooldownMillis;
+    private final int leftSwingDelay;   // ticks: lets your own client accept the left swing (see onSwing)
     private final boolean packLive;
     private final NamespacedKey tagKey, damageKey, speedKey, reachKey, pairKey, mixedKey;
     private final Set<UUID> pairOn = new HashSet<>();     // a Nightrend in each hand
@@ -110,6 +111,7 @@ public final class Nightrend implements Listener, Hackable {
         this.mixedSpeed = Math.max(singleSpeed, Math.min(pairSpeed, c.getDouble("nightrend.mixed-attack-speed", 2.3)));
         this.repeatChance = Math.max(0, Math.min(0.9, c.getDouble("nightrend.repeat-side-chance", 0.03)));
         this.packLive = c.getBoolean("resource-pack-live", false);
+        this.leftSwingDelay = Math.max(0, Math.min(6, c.getInt("nightrend.left-swing-delay-ticks", 3)));
         this.flipCooldownMillis = Math.round(Math.max(0, c.getDouble("nightrend.flip-cooldown-seconds", 3)) * 1000);
         this.tagKey = new NamespacedKey(BlackForgeCore.NS, "nightrend");
         this.damageKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_damage");
@@ -392,14 +394,17 @@ public final class Nightrend implements Listener, Hackable {
         UUID id = p.getUniqueId();
         boolean off = swingTick.getOrDefault(id, -1) == Bukkit.getCurrentTick()
                 ? swingWasOff.getOrDefault(id, false) : nextOff.getOrDefault(id, false);
-        slash(p, off);
+        if (off) Bukkit.getScheduler().runTaskLater(plugin, () -> slash(p, true), Math.max(1, leftSwingDelay));   // in step with the left arm
+        else slash(p, false);
     }
 
     /**
      * Every left-click swing with the pair, hit or miss, uses one arm: right, left, right... and now and then
      * ({@code repeat-side-chance}) the same arm twice. On a left-arm turn the right-arm swing is cancelled, so other
-     * players see only the left arm. Your own first-person view always shows the right arm too: the game draws that
-     * itself before the server hears about it.
+     * players see only the left arm. Your own client starts a right swing the moment you click and ignores any new
+     * swing during the first half of it (3 ticks), so the left swing is sent {@code left-swing-delay-ticks} (3) later or
+     * you'd never see it yourself. You'll still see the right arm on every click in first person: the game draws that
+     * before the server hears about it.
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onSwing(PlayerAnimationEvent e) {
@@ -410,7 +415,9 @@ public final class Nightrend implements Listener, Hackable {
         boolean off = nextOff.getOrDefault(id, false);
         if (off) {
             e.setCancelled(true);   // others don't see the right arm this time
-            p.swingOffHand();
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (p.isOnline() && !p.isDead() && pairOn.contains(id)) p.swingOffHand();
+            }, Math.max(1, leftSwingDelay));
         }
         Boolean prev = swingWasOff.get(id);
         if (prev != null && prev == off) bloodSurge(p, off);   // the same arm twice: its blade flares
