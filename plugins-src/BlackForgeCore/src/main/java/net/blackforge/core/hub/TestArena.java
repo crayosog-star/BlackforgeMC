@@ -528,7 +528,18 @@ public final class TestArena implements Listener {
      * so it's safe to call on every start.
      */
     public void ensureOnWall(ItemStack item, java.util.function.Predicate<ItemStack> same) {
-        for (ItemStack s : showcase) if (s != null && same.test(s)) return;
+        for (int slot = 0; slot < SLOTS; slot++) {
+            ItemStack s = showcase[slot];
+            if (s == null || !same.test(s)) continue;
+            // copies saved before an item had its texture never get skinned (frames aren't inventories), so refresh them
+            var model = item.getItemMeta().getItemModel();
+            if (model != null && !model.equals(s.getItemMeta().getItemModel())) {
+                showcase[slot] = item.asOne();
+                if (frames[slot] != null && frames[slot].isValid()) frames[slot].setItem(showcase[slot].clone(), false);
+                saveShowcase();
+            }
+            return;
+        }
         for (int slot = 0; slot < SLOTS; slot++) {
             if (showcase[slot] != null) continue;
             showcase[slot] = item.asOne();

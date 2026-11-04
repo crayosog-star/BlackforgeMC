@@ -53,7 +53,7 @@ import java.util.function.Predicate;
  *   <li>Equip flourish: the moment you hold the pair, both blades flip up out of your hands and settle in your grip
  *   (display entities; at most once per {@code flip-cooldown-seconds}). Other players see the flipping copies with the
  *   real held daggers hidden (a fake equipment packet), then the real ones come back the tick the copies go. The
- *   flipper never sees the copies: their own view keeps their real daggers. Putting the pair away ends it at once.</li>
+ *   flipper never sees the copies: their own view keeps their real daggers and both arms swing instead. Putting the pair away ends it at once.</li>
  * </ul>
  *
  * Two variants are the same dagger: {@link #item()} and {@link #offItem()} differ only in a tag the Arena kit uses
@@ -74,10 +74,10 @@ public final class Nightrend implements Listener, Hackable {
 
     private final BlackForgeCore plugin;
     private final Predicate<Location> allowedAt;
-    private final boolean enabled;
+    private final boolean enabled, customModel;
     private final double damage, singleSpeed, pairSpeed, reachChange, behindArc, behindDamage;
     private final long empMillis, flipCooldownMillis;
-    private final NamespacedKey tagKey, damageKey, speedKey, reachKey, pairKey;
+    private final NamespacedKey tagKey, damageKey, speedKey, reachKey, pairKey, modelKey;
     private final Set<UUID> pairOn = new HashSet<>();
     private final Map<UUID, Integer> hits = new HashMap<>();
     private final Map<UUID, Long> hackedUntil = new HashMap<>(), lastFlip = new HashMap<>();
@@ -91,6 +91,7 @@ public final class Nightrend implements Listener, Hackable {
         this.allowedAt = allowedAt;
         FileConfiguration c = plugin.getConfig();
         this.enabled = c.getBoolean("nightrend.enabled", true);
+        this.customModel = c.getBoolean("nightrend.custom-model", c.getBoolean("resource-pack-live", false));   // only once the resource pack is live
         this.damage = Math.max(1, Math.min(20, c.getDouble("nightrend.damage", 5)));
         this.singleSpeed = Math.max(0.5, Math.min(4, c.getDouble("nightrend.attack-speed", 2.0)));
         this.pairSpeed = Math.max(singleSpeed, Math.min(4, c.getDouble("nightrend.pair-attack-speed", 2.6)));
@@ -100,6 +101,7 @@ public final class Nightrend implements Listener, Hackable {
         this.empMillis = Math.round(Math.max(0, c.getDouble("nightrend.emp-seconds", 4)) * 1000);
         this.flipCooldownMillis = Math.round(Math.max(0, c.getDouble("nightrend.flip-cooldown-seconds", 3)) * 1000);
         this.tagKey = new NamespacedKey(BlackForgeCore.NS, "nightrend");
+        this.modelKey = new NamespacedKey("blackforge", "nightrend");
         this.damageKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_damage");
         this.speedKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_speed");
         this.reachKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_reach");
@@ -128,6 +130,7 @@ public final class Nightrend implements Listener, Hackable {
                     Ui.mm("<gray>Hits from <white>behind<gray> do only <white>" + Math.round(behindDamage * 100) + "%<gray> damage"),
                     Ui.mm(""),
                     Ui.mm("<dark_gray>BlackForgeMC PvP item")));
+            if (customModel) m.setItemModel(modelKey);   // from the first tick: kits, the wall and the flip copies, not just after ItemSkins' next pass
             m.setMaxStackSize(1);
             m.addAttributeModifier(Attribute.ATTACK_DAMAGE, new AttributeModifier(damageKey,
                     NightrendMath.damageModifier(damage), AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.MAINHAND));
@@ -292,6 +295,9 @@ public final class Nightrend implements Listener, Hackable {
             live.add(d[i]);
         }
         flipping.add(p.getUniqueId());
+        // the flipper's own cue: both arms swing, since the flip copies are hidden from their camera
+        p.swingMainHand();
+        p.swingOffHand();
         Set<Player> viewers = new HashSet<>(p.getTrackedBy());
         hideHands(p, viewers);   // everyone else sees only the flipping copies, never two pairs
         World w = p.getWorld();

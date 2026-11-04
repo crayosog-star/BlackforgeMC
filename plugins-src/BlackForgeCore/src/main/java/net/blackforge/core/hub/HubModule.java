@@ -107,15 +107,16 @@ public final class HubModule implements Listener {
         chain = new net.blackforge.core.survival.AshenChain(plugin, l -> l.getWorld() == arena.world(), arena::isPracticeTarget, arena::isTestDummy);   // Arena only; never used up; the dummy is pinned, the practice zombie can be pulled
         surge.onActivate(p -> chain.breakFree(p, "Surge"));   // Surge tears you loose from a burning chain
         chain.crystalsFrom(cage);   // a Rimelock's rim crystals are a way out: hook one with the chain
+        // Registered here, not at the end, so the main blade takes the last hotbar slot: the pair only works in your hands.
+        nightrend = new net.blackforge.core.survival.Nightrend(plugin, l -> l.getWorld() == arena.world());   // Arena only
+        arena.addTestItem(nightrend::item, nightrend::isMainBlade);                       // the pair: one in the kit...
+        arena.addTestItem(nightrend::offItem, nightrend::isOffBlade, it -> false, true);  // ...and one straight into the off hand
         arena.addTestItem(chain::item, chain::isChain);
         bonfire = new net.blackforge.core.survival.AshenBonfire(plugin, l -> l.getWorld() == arena.world());   // Arena only; never used up
         arena.addTestItem(bonfire::item, bonfire::isBonfire);
-        nightrend = new net.blackforge.core.survival.Nightrend(plugin, l -> l.getWorld() == arena.world());   // Arena only; registered on the wall after the EMP
         emp = new net.blackforge.core.survival.Emp(plugin, l -> l.getWorld() == arena.world(), true);   // Arena only; staff: no cooldown in the Arena
         emp.hackable(surge, cage, eye, chain, bonfire, gaia, rite, darkness, nightrend);   // everything the EMP shuts down
         arena.addTestItem(emp::item, emp::isEmp);
-        arena.addTestItem(nightrend::item, nightrend::isMainBlade);                       // the pair: one in the kit...
-        arena.addTestItem(nightrend::offItem, nightrend::isOffBlade, it -> false, true);  // ...and one straight into the off hand
         // staff test commands, Arena only: one item each
         // Display only: they work in Survival and Skyblock, where hoppers, claims and Essence exist.
         arena.addTestItem(net.blackforge.core.survival.BaseStation::item, net.blackforge.core.survival.BaseStation::isStationItem);
