@@ -159,7 +159,7 @@ public final class TestArena implements Listener {
         world.setPVP(true);
         world.setSpawnFlags(false, false);
         world.setSpawnLocation(spawn());
-        for (int cx = -3; cx <= 2; cx++) for (int cz = -3; cz <= 2; cz++) world.addPluginChunkTicket(cx, cz, plugin);
+        for (int cx = -3; cx <= 2; cx++) for (int cz = FoundryZone.MIN_CHUNK_Z; cz <= 2; cz++) world.addPluginChunkTicket(cx, cz, plugin);
         loadShowcase();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         if (!new File(plugin.getDataFolder(), MARKER).exists()) build(Bukkit.getConsoleSender());
@@ -178,6 +178,10 @@ public final class TestArena implements Listener {
 
     public void shutdown() { removeEntities(); }
 
+    /** Where someone who falls into the void is brought back to. */
+    private java.util.function.Function<Player, Location> voidReturn = p -> spawn();
+    void setVoidReturn(java.util.function.Function<Player, Location> rule) { this.voidReturn = rule; }
+
     // ------------------------------------------------------------------ build
 
     public void build(CommandSender who) {
@@ -188,7 +192,7 @@ public final class TestArena implements Listener {
         for (Player p : world.getPlayers()) p.teleport(spawn().add(0, 30, 0));   // out of the way while it pastes
         // clear the old island first so nothing from a previous design is left floating
         var clear = new net.blackforge.core.build.Canvas();
-        for (int x = -40; x < 40; x++) for (int z = -40; z < 40; z++) for (int y = TestArenaBuilder.Y - 40; y <= TestArenaBuilder.Y + 30; y++)
+        for (int x = -40; x < 40; x++) for (int z = FoundryZone.MIN_Z; z < 40; z++) for (int y = TestArenaBuilder.Y - 40; y <= TestArenaBuilder.Y + 30; y++)
             if (!world.getBlockAt(x, y, z).getType().isAir()) clear.set(x, y, z, "minecraft:air");
         var canvas = TestArenaBuilder.build();
         Paster.paste(plugin, world, clear, 6000, () -> Paster.paste(plugin, world, canvas, 6000, () -> {
@@ -437,7 +441,7 @@ public final class TestArena implements Listener {
     public void onMove(PlayerMoveEvent e) {
         if (e.getTo().getWorld() != world || e.getTo().getY() >= TestArenaBuilder.VOID_Y) return;
         Player p = e.getPlayer();
-        p.teleport(spawn());
+        p.teleport(voidReturn.apply(p));
         p.setFallDistance(0);
         p.playSound(p.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1f);
     }
@@ -464,6 +468,7 @@ public final class TestArena implements Listener {
         Player by = attacker(e.getDamager());
         if (by == null || by == victim || by.getWorld() != world) return;
         if (by.getGameMode() == GameMode.CREATIVE || by.getGameMode() == GameMode.SPECTATOR) return;
+        if (FoundryZone.contains(victim.getLocation().getX(), victim.getLocation().getZ()) || FoundryZone.contains(by.getLocation().getX(), by.getLocation().getZ())) return;   // nobody gets killed mid-test in the Foundry
         e.setCancelled(false);
     }
 

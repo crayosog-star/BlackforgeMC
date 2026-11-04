@@ -32,6 +32,7 @@ public final class HubModule implements Listener {
     private final BlackForgeCore plugin;
     private final World world;
     private final TestArena arena;
+    private final Foundry foundry;
     private final net.blackforge.core.survival.GaiaPotion gaia;   // Potion of Gaia, usable in the Arena only
     private final net.blackforge.core.survival.GaleBellows bellows;   // Gale Bellows, works in the Arena (PvP is on there)
     private final net.blackforge.core.survival.Surge surge;   // Surge ability item, usable in the Arena only
@@ -66,7 +67,8 @@ public final class HubModule implements Listener {
         LobbyRules.setupWorld(plugin, world, 18000);   // midnight under the Inferno biome's red sky
         world.setSpawnLocation(spawn());
         // the Arena (item testing ground) is free to shuffle, drop and pick up items; everything else stays locked
-        Bukkit.getPluginManager().registerEvents(new LobbyRules(p -> false).allowItems(p -> p.getWorld().getName().equals(TestArena.WORLD) || p.getWorld().getName().equals(net.blackforge.core.survival.RiteChambers.WORLD)), plugin);
+        Bukkit.getPluginManager().registerEvents(new LobbyRules(p -> false).allowItems(p -> p.getWorld().getName().equals(TestArena.WORLD) || p.getWorld().getName().equals(net.blackforge.core.survival.RiteChambers.WORLD))
+                .allowBuild((p, l) -> l.getWorld().getName().equals(TestArena.WORLD) && FoundryZone.contains(l.getX(), l.getZ())), plugin);
         new net.blackforge.core.SpawnSafety(plugin, l -> l.getWorld() == world, p -> spawn()).withStuckCommand();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         registerJoinCommand();   // the clickable links in the first-join guide run /bfjoin
@@ -86,6 +88,7 @@ public final class HubModule implements Listener {
         parkour = new HubParkour(plugin, this, world);
         Bukkit.getScheduler().runTaskTimer(plugin, this::leaderboards, 60L, 1200L);
         arena = new TestArena(plugin);
+        foundry = new Foundry(plugin, arena);   // agents, hopper tiers and the Forge, free and unsaved, inside the Foundry only
         gaia = new net.blackforge.core.survival.GaiaPotion(plugin, (pl, l) -> l.getWorld() == arena.world(),   // never on the hub itself
                 l -> l.getWorld() == arena.world());   // Arena: no refund (refill covers it), new cloud replaces your old one
         darkness = new net.blackforge.core.survival.DarknessPotion(plugin, l -> l.getWorld() == arena.world());
@@ -117,7 +120,7 @@ public final class HubModule implements Listener {
         arena.addTestItem(nightrend::item, nightrend::isMainBlade);                       // the pair: one in the kit...
         arena.addTestItem(nightrend::offItem, nightrend::isOffBlade, it -> false, true);  // ...and one straight into the off hand
         // staff test commands, Arena only: one item each
-        // Display only: they work in Survival and Skyblock, where hoppers, claims and Essence exist.
+        // On the wall everywhere in the Arena; they only work inside the Foundry.
         arena.addTestItem(net.blackforge.core.survival.BaseStation::item, net.blackforge.core.survival.BaseStation::isStationItem);
         arena.addTestItem(net.blackforge.core.survival.HopperUpgrades::upgradeItem, net.blackforge.core.survival.HopperUpgrades::isUpgrade);
         testCommand("jbello", List.of("bellows", "galebellows"), () -> bellows.item());
@@ -177,7 +180,7 @@ public final class HubModule implements Listener {
 
     private DragonAnimator dragons;
 
-    public void shutdown() { gaia.shutdown(); surge.shutdown(); rite.shutdown(); cage.shutdown(); eye.shutdown(); chain.shutdown(); bonfire.shutdown(); emp.shutdown(); nightrend.shutdown(); holograms.forEach(TextDisplay::remove); boards.forEach(TextDisplay::remove); if (parkour != null) parkour.shutdown(); if (dragons != null) dragons.remove(); arena.shutdown(); }
+    public void shutdown() { gaia.shutdown(); surge.shutdown(); rite.shutdown(); cage.shutdown(); eye.shutdown(); chain.shutdown(); bonfire.shutdown(); emp.shutdown(); nightrend.shutdown(); holograms.forEach(TextDisplay::remove); boards.forEach(TextDisplay::remove); if (parkour != null) parkour.shutdown(); if (dragons != null) dragons.remove(); foundry.shutdown(); arena.shutdown(); }
     // ------------------------------------------------------------------ leaderboards
 
     private final List<TextDisplay> boards = new ArrayList<>();
