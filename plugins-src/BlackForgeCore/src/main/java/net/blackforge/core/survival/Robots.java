@@ -89,6 +89,8 @@ public final class Robots implements Listener {
         double chargeCarry;
         /** Seconds of work done toward the next cycle, so a fractional speed bonus isn't lost. Not saved. */
         double workProgress;
+        /** The fraction of a Mastery point left over after a cycle. Not saved. */
+        double pointsCarry;
         Location loc; Inventory storage; UUID entity; int timer; String status = "";
         /** The name the player gave it, or null. */
         String name;
@@ -129,6 +131,9 @@ public final class Robots implements Listener {
     private int sandboxPerPlayer, sandboxTotal;
     /** Logs what each Grinder does when that changes. On by default in the Foundry only. */
     private final boolean grinderLog;
+    /** Whether Agents earn Mastery here. See academyOn(). */
+    private final boolean academyOn;
+    private final AcademyRules academy;
 
     Robots(BlackForgeCore plugin) { this(plugin, false); }
 
@@ -136,13 +141,16 @@ public final class Robots implements Listener {
         this.plugin = plugin;
         this.sandbox = sandbox;
         this.grinderLog = plugin.getConfig().getBoolean("robots.grinder-debug-log", sandbox);
+        this.academyOn = sandbox || plugin.getConfig().getStringList("academy.live-modes").contains(plugin.getConfig().getString("mode", "backend"));
+        this.academy = new AcademyRules(plugin.getConfig().getDouble("academy.level-base", 20), plugin.getConfig().getDouble("academy.level-exponent", 2.0),
+                plugin.getConfig().getInt("academy.max-level", 30));
         this.file = new File(plugin.getDataFolder(), "robots.yml");
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 40L, 20L);
+        registerCommand();
         if (sandbox) return;
         load();
         Bukkit.getScheduler().runTaskTimer(plugin, this::save, 1200L, 1200L);
-        registerCommand();
     }
 
     void setSandboxLimits(int perPlayer, int total) { this.sandboxPerPlayer = perPlayer; this.sandboxTotal = total; }
@@ -450,8 +458,45 @@ public final class Robots implements Listener {
         });
     }
 
-    /** Called after every cycle with how much real work was done. The Academy earns Mastery here from Phase 2. */
-    private void onWorked(Bot b, int done) {}
+    /** The one switch for the Academy: on in the Foundry, and in any server mode listed in academy.live-modes. */
+    boolean academyOn() { return academyOn; }
+
+    /** Called after every cycle with how much real work was done. A job's Mastery only grows here and through the staff command. */
+    private void onWorked(Bot b, int done) {
+        if (done <= 0 || !academyOn()) return;
+        String job = jobKey(b);
+        int perWork = plugin.getConfig().getInt("academy.points-per-work." + job, b.job == Job.GRINDER ? 2 : b.job == Job.FISHERMAN ? 12 : 1);
+        Player owner = Bukkit.getPlayer(b.owner);
+        double radius = plugin.getConfig().getDouble("academy.coach-radius", 16);
+        boolean coached = owner != null && owner.getWorld() == b.loc.getWorld() && owner.getLocation().distanceSquared(b.loc) <= radius * radius;
+        b.pointsCarry += AcademyRules.workPoints(done, perWork, coached ? plugin.getConfig().getDouble("academy.coach-mult", 1.25) : 1);
+        long whole = (long) b.pointsCarry;
+        b.pointsCarry -= whole;
+        b.record.workDone += done;
+        academy.earn(b.record.jobs.computeIfAbsent(job, k -> new AgentRecord.JobTrack()), whole, java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString(),
+                plugin.getConfig().getLong("academy.daily-soft-cap", 1500), plugin.getConfig().getDouble("academy.over-cap-rate", 0.25));
+    }
+
+    private static String jobKey(Bot b) { return b.job.name().toLowerCase(Locale.ROOT); }
+
+    /** Staff: /agents academy points <player> <amount> adds to each placed Agent's current job, skipping the daily limit. 0 just reads them. */
+    private void academyPoints(CommandSender s, String[] a) {
+        if (!academyOn()) { s.sendMessage(Ui.mm("<red>The Academy is off on this server.")); return; }
+        Player t = a.length == 4 ? Bukkit.getPlayerExact(a[2]) : null;
+        long amount;
+        try { amount = a.length == 4 ? Long.parseLong(a[3]) : 0; } catch (NumberFormatException ex) { t = null; amount = 0; }
+        if (t == null) { s.sendMessage(Ui.mm("<red>/agents academy points <online player> <whole number>")); return; }
+        List<Bot> agents = agentsOf(t.getUniqueId());
+        if (agents.isEmpty()) { s.sendMessage(Ui.mm("<gray>" + t.getName() + " has no placed Agents.")); return; }
+        long cap = academy.pointsFor(Integer.MAX_VALUE);
+        for (Bot b : agents) {
+            AgentRecord.JobTrack track = b.record.jobs.computeIfAbsent(jobKey(b), k -> new AgentRecord.JobTrack());
+            track.points = Math.clamp(track.points + amount, 0, cap);
+            s.sendMessage(Ui.mm("<gray>" + b.title() + " <dark_gray>(" + jobKey(b) + ")<gray>: <white>" + track.points + " <gray>points, level <white>"
+                    + academy.levelFor(track.points) + "<gray>, today <white>" + track.todayPoints + " <dark_gray>raw"));
+        }
+        save();
+    }
 
     private void store(Bot b, Collection<ItemStack> items) {
         for (ItemStack it : items) if (it != null && !it.getType().isAir())
@@ -951,6 +996,14 @@ public final class Robots implements Listener {
     private void registerCommand() {
         Bukkit.getCommandMap().register("blackforge", new Command("agents", "Agent workshop", "/agents", List.of("agent", "robots", "robot", "fuel")) {
             @Override public boolean execute(CommandSender s, String label, String[] a) {
+                if (a.length >= 2 && a[0].equalsIgnoreCase("academy") && a[1].equalsIgnoreCase("points") && s.hasPermission("blackforge.admin")) {
+                    academyPoints(s, a);
+                    return true;
+                }
+                if (sandbox) {   // the Foundry only has this for the Academy's staff command: no shop, and no giving items
+                    s.sendMessage(Ui.mm("<gray>Agents here come from the Foundry's chests."));
+                    return true;
+                }
                 if (a.length >= 3 && a[0].equalsIgnoreCase("give") && s.hasPermission("blackforge.admin")) {   // robots give <player> <robot|fuel|essence> [tier/amount] [job]
                     Player t = Bukkit.getPlayerExact(a[1]);
                     if (t == null) { s.sendMessage(Ui.mm("<red>Not online.")); return true; }

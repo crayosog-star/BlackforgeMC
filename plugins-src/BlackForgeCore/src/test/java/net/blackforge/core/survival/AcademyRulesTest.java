@@ -32,7 +32,7 @@ class AcademyRulesTest {
     void roundTripKeepsEveryField() {
         AgentRecord in = sample();
         String text = in.encode();
-        assertTrue(text.startsWith("1|"));
+        assertTrue(text.startsWith("2|"));
         AgentRecord out = AgentRecord.decode(text);
         assertEquals("6f1c-uid", out.uid);
         assertEquals(1234, out.workDone);
@@ -73,7 +73,7 @@ class AcademyRulesTest {
 
     @Test
     void corruptInputGivesAnEmptyRecord() {
-        String[] corrupt = {null, "", "garbage", "1|", "1|too|few", "2|u|1|1||", "1|u|x|1||", "1|u|1|1||miner:notanumber::",
+        String[] corrupt = {null, "", "garbage", "1|", "1|too|few", "9|u|1|1||", "1|u|x|1||", "1|u|1|1||miner:notanumber::",
                 "1|u|1|1||miner:1", "1|u|1|1||:1::", "1|%zz|1|1||", "1|u|1|1||miner:1::|extra"};
         for (String text : corrupt) {
             AgentRecord r = AgentRecord.decode(text);
@@ -90,6 +90,78 @@ class AcademyRulesTest {
         assertEquals(0, r.workDone);
         assertEquals(0, r.minutesWorked);
         assertEquals(0, r.jobs.get("miner").points);
+    }
+
+    @Test
+    void dailyFieldsRoundTrip() {
+        AgentRecord in = sample();
+        in.jobs.get("miner").todayPoints = 321;
+        in.jobs.get("miner").todayDate = "2026-11-04";
+        AgentRecord out = AgentRecord.decode(in.encode());
+        assertEquals(321, out.jobs.get("miner").todayPoints);
+        assertEquals("2026-11-04", out.jobs.get("miner").todayDate);
+        assertEquals(0, out.jobs.get("farmer").todayPoints);
+        assertNull(out.jobs.get("farmer").todayDate);
+    }
+
+    @Test
+    void oldFormatStillReads() {
+        AgentRecord r = AgentRecord.decode("1|u%2F1|7|8|swift|miner:2000:prospector:efficient,keen;farmer:0::");
+        assertEquals("u/1", r.uid);
+        assertEquals(7, r.workDone);
+        assertEquals(List.of("swift"), r.traits);
+        assertEquals(2000, r.jobs.get("miner").points);
+        assertEquals("prospector", r.jobs.get("miner").spec);
+        assertEquals(List.of("efficient", "keen"), r.jobs.get("miner").perks);
+        assertEquals(0, r.jobs.get("miner").todayPoints);
+        assertNull(r.jobs.get("miner").todayDate);
+        assertTrue(r.encode().startsWith("2|"));
+    }
+
+    @Test
+    void wrongFieldCountForItsVersionIsCorrupt() {
+        assertEquals("", AgentRecord.decode("1|u|0|0||miner:1::x:y").uid);
+        assertEquals("", AgentRecord.decode("2|u|0|0||miner:1::").uid);
+    }
+
+    // ---------------------------------------------------------------- earning
+
+    private static final String DAY1 = "2026-11-04", DAY2 = "2026-11-05";
+
+    @Test
+    void workPointsUseTheJobRateAndCoachBonus() {
+        assertEquals(1.0, AcademyRules.workPoints(1, 1, 1));
+        assertEquals(1.25, AcademyRules.workPoints(1, 1, 1.25));
+        assertEquals(12.0, AcademyRules.workPoints(1, 12, 1));
+        assertEquals(0.0, AcademyRules.workPoints(0, 2, 1.25));
+        assertEquals(0.0, AcademyRules.workPoints(-3, 2, 1));
+    }
+
+    @Test
+    void earningStopsBeingFullValueAtTheDailyCap() {
+        AgentRecord.JobTrack t = new AgentRecord.JobTrack();
+        assertEquals(1500, RULES.earn(t, 1500, DAY1, 1500, 0.25));
+        assertEquals(25, RULES.earn(t, 100, DAY1, 1500, 0.25));
+        assertEquals(1525, t.points);
+        assertEquals(1600, t.todayPoints);
+    }
+
+    @Test
+    void aNewDateRestartsTheDailyCount() {
+        AgentRecord.JobTrack t = new AgentRecord.JobTrack();
+        RULES.earn(t, 2000, DAY1, 1500, 0.25);
+        assertEquals(100, RULES.earn(t, 100, DAY2, 1500, 0.25));
+        assertEquals(DAY2, t.todayDate);
+        assertEquals(100, t.todayPoints);
+    }
+
+    @Test
+    void pointsStopAtTheMaxLevel() {
+        AgentRecord.JobTrack t = new AgentRecord.JobTrack();
+        t.points = RULES.pointsFor(30) - 5;
+        assertEquals(5, RULES.earn(t, 100, DAY1, 1500, 0.25));
+        assertEquals(RULES.pointsFor(30), t.points);
+        assertEquals(0, RULES.earn(t, 100, DAY1, 1500, 0.25));
     }
 
     // ---------------------------------------------------------------- levels

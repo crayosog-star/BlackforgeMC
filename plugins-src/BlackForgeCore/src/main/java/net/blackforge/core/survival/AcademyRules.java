@@ -57,6 +57,28 @@ final class AcademyRules {
         return awardedTotal(before + raw, softCap, overCapRate) - awardedTotal(before, softCap, overCapRate);
     }
 
+    /** Points one cycle of work is worth, before the daily limit. May be a fraction; the caller carries it over. */
+    static double workPoints(int done, int pointsPerWork, double coachMult) {
+        return Math.max(0, done) * (double) Math.max(0, pointsPerWork) * Math.max(0, coachMult);
+    }
+
+    /**
+     * Adds a gain to one job for a UTC date and returns the points awarded. A new date restarts the daily count. Points
+     * stop at the max level's total, so a limit raised later doesn't hand out banked levels.
+     */
+    long earn(AgentRecord.JobTrack track, long gain, String date, long softCap, double overCapRate) {
+        if (!date.equals(track.todayDate)) {
+            track.todayDate = date;
+            track.todayPoints = 0;
+        }
+        long raw = Math.max(0, gain);
+        long awarded = dailyGain(track.todayPoints, raw, softCap, overCapRate);
+        track.todayPoints += raw;
+        long before = track.points;
+        track.points = Math.max(before, Math.min(before + awarded, pointsFor(maxLevel)));
+        return track.points - before;
+    }
+
     private static long awardedTotal(long rawTotal, long softCap, double overCapRate) {
         long cap = Math.max(0, softCap);
         if (rawTotal <= cap) return rawTotal;

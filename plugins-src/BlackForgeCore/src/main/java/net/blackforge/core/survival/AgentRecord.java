@@ -14,7 +14,9 @@ import java.util.Map;
  * kept as they are, so a rollback or a removed perk never rewrites saved data.
  */
 final class AgentRecord {
-    private static final String PREFIX = "1|";
+    private static final String PREFIX = "2|";
+    /** Records saved before the daily fields existed. Still readable, and saved as the current format next time. */
+    private static final String OLD_PREFIX = "1|";
 
     /** Empty until an Agent is given an identity. */
     String uid = "";
@@ -28,14 +30,18 @@ final class AgentRecord {
         long points;
         final List<String> perks = new ArrayList<>();
         String spec;
+        /** Today's raw gains before the daily limit (see AcademyRules.dailyGain), and the UTC date they belong to. */
+        long todayPoints;
+        String todayDate;
     }
 
-    /** Text form: 1|uid|workDone|minutesWorked|trait,trait|job:points:spec:perk,perk;job:... with each name URL-encoded. */
+    /** Text form: 2|uid|workDone|minutesWorked|trait,trait|job:points:spec:perk,perk:todayPoints:todayDate;job:... with each name URL-encoded. */
     String encode() {
         List<String> jobText = new ArrayList<>();
         for (Map.Entry<String, JobTrack> e : jobs.entrySet()) {
             JobTrack t = e.getValue();
-            jobText.add(enc(e.getKey()) + ":" + Math.max(0, t.points) + ":" + enc(t.spec) + ":" + encList(t.perks));
+            jobText.add(enc(e.getKey()) + ":" + Math.max(0, t.points) + ":" + enc(t.spec) + ":" + encList(t.perks)
+                    + ":" + Math.max(0, t.todayPoints) + ":" + enc(t.todayDate));
         }
         return PREFIX + enc(uid) + "|" + Math.max(0, workDone) + "|" + Math.max(0, minutesWorked) + "|"
                 + encList(traits) + "|" + String.join(";", jobText);
@@ -43,7 +49,8 @@ final class AgentRecord {
 
     /** Reads encode()'s text. Anything unreadable gives a new empty record; this never throws. */
     static AgentRecord decode(String text) {
-        if (text == null || !text.startsWith(PREFIX)) return new AgentRecord();
+        if (text == null || !(text.startsWith(PREFIX) || text.startsWith(OLD_PREFIX))) return new AgentRecord();
+        boolean old = text.startsWith(OLD_PREFIX);
         try {
             String[] parts = text.substring(PREFIX.length()).split("\\|", -1);
             if (parts.length != 5) return new AgentRecord();
@@ -55,11 +62,15 @@ final class AgentRecord {
             if (!parts[4].isEmpty()) {
                 for (String job : parts[4].split(";", -1)) {
                     String[] f = job.split(":", -1);
-                    if (f.length != 4 || f[0].isEmpty()) return new AgentRecord();
+                    if (f.length != (old ? 4 : 6) || f[0].isEmpty()) return new AgentRecord();
                     JobTrack t = new JobTrack();
                     t.points = Math.max(0, Long.parseLong(f[1]));
                     t.spec = f[2].isEmpty() ? null : dec(f[2]);
                     t.perks.addAll(decList(f[3]));
+                    if (!old) {
+                        t.todayPoints = Math.max(0, Long.parseLong(f[4]));
+                        t.todayDate = f[5].isEmpty() ? null : dec(f[5]);
+                    }
                     r.jobs.put(dec(f[0]), t);
                 }
             }

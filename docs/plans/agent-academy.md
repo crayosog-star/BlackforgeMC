@@ -206,7 +206,14 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Edge cases:** owner offline (no bonus but earning continues), UTC day change, job switch (each job has its own points), max level, Foundry mobs that can't be hit (no work counted).
 - **Done when:** unit tests cover daily cap and date rollover, and that a `1|` record still decodes. In the Foundry, a tester checks via `/agents academy points` and normal work that points rise, and that an unfuelled Agent gains none.
 - **Leaves ready:** real Mastery values for P2.T2.
-- **Evidence:**
+- **Evidence:** not ticked; prepared on a branch with no PR, because the Phase 1 gate isn't confirmed.
+  - Verified: `AcademyRulesTest` and `AgentStatsTest` passed, compiled with `javac` 21 and a small local stand-in for JUnit, including the daily cap, date rollover and `1|` decoding.
+  - Verified: `Robots.java` parses under `javac` 21. It wasn't compiled against Paper.
+  - Untested: the automerge build and everything in the Foundry.
+  - Note: `/agents academy points <player> 0` only reads values, which lets a tester see normal work raising points before The Academy exists.
+  - Note: the command had to register in the Foundry too. It previously didn't exist on the hub, so the rest of `/agents` there just gives a short message.
+  - Note: `workDone` also counts up here, so P2.T2 has a lifetime stat to show. `minutesWorked` doesn't yet.
+  - Note: rolling back past this task means old code can't read `2|` and gives an Agent a new UID. Nothing is lost while Academy is off for players.
 
 ### [ ] P2.T2: Build The Academy menu
 - **Needs:** Mastery from P2.T1; `S/Robots.java:581`, `597`; `S/BaseStation.java:270-274`, `359`.
@@ -442,6 +449,7 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - 2026-11-04, Phase 2 (open): can't start until Colin or a tester confirms the Phase 1 gate.
 
 ## Change log
+- 2026-11-04: Colin said to keep working, so P2.T1 is prepared on a stacked branch before the Phase 1 gate. No Phase 2 PR opens until that gate is confirmed; rule 9 otherwise stands.
 - 2026-11-04: Colin told the build to continue while P1.T1's live check is open, so P1.T2 and P1.T3 go ahead. The Phase 1 gate still has to pass before Phase 2.
 - 2026-11-04: plan written. Field Exams dropped and Survival-only scope set by Colin.
 - 2026-11-04: Colin approved the plan.

@@ -153,7 +153,7 @@ robots:
   # grinder-debug-log: true
 
 # The Academy: Agents earn Mastery by working (Survival, once live). live-modes lists the server modes it's on for; the
-# Arena's Foundry always has it, for testing. Nothing reads these yet except the startup log line for live-modes.
+# Arena's Foundry always has it, for testing.
 # level-base and level-exponent: total points for a level = base x level^exponent. Per job, per UTC day: full points up
 # to daily-soft-cap, then over-cap-rate of them. coach-mult applies while the owner is within coach-radius blocks.
 academy:
