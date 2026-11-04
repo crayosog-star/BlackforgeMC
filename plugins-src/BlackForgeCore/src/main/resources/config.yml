@@ -120,6 +120,41 @@ last-rite:
   allow-totems: true
   chamber-slots: 8         # rites at once per server
 
+# Night Thieves (Survival). Outside a claim you're trusted on, at night, every roll-seconds there's a chance a gang comes
+# for you. Solo: one thief in a copy of your gear, solo-multiplier stronger. A group within party-radius rolls once and
+# gets more, tougher thieves the more of them there are and the better their gear. One in mage-every is a mage who throws
+# Hex Bolts. A hit can steal: weapon-turn-chance of the time he takes your weapon and fights you with it, otherwise he
+# grabs your most valuable item and runs. Kill him to get it back. Staff: /blackforge thieves spawn <player> | clear | status
+thief-ambush:
+  enabled: true
+  roll-seconds: 60
+  chance: 0.05
+  cooldown-minutes: 10         # no second ambush this soon after one ends
+  min-playtime-minutes: 60     # brand-new players are left alone
+  party-radius: 24
+  max-thieves: 8
+  thieves-per-gear: 12         # groups: +1 thief per this much average gear score (iron kit ~16, netherite ~28)
+  solo-multiplier: 1.5         # health, damage and armour vs the gear they copy
+  per-extra-player: 0.08
+  per-gear-point: 0.015        # per point of average gear score above 10
+  max-multiplier: 2.5
+  mage-every: 3
+  steal-chance: 0.25           # per thief hit that lands
+  weapon-turn-chance: 0.5
+  speed: 0.3                   # movement speed (a zombie is 0.23)
+  flee-speed-boost: 0.05
+  escape-seconds: 30
+  escape-distance: 40
+  give-up-seconds: 180
+  hex-damage: 4.0              # times the multiplier
+  cast-gap-min-ticks: 60
+  cast-gap-max-ticks: 90
+  reward-coins: 150            # per thief killed, times the multiplier, split between the group
+  key-chance: 0.04
+  key-crate: iron
+  rare-key-chance: 0.01
+  rare-key-crate: gold
+
 # Base Station (Survival + Skyblock): one per claim or island. Sells Hopper Upgrades, upgrades Agents, collects their output.
 base-station:
   enabled: true
