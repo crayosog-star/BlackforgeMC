@@ -9,8 +9,10 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.metadata.MetadataValue;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
@@ -33,6 +35,7 @@ final class CosmeticFx implements Listener {
     private final Cosmetics cos;
     private Predicate<Player> blocked = p -> false;
     private final Map<UUID, Pet> pets = new HashMap<>();
+    private final Map<UUID, OrangeCompanion> orangeCompanions = new HashMap<>();
     private final Map<UUID, Cape> capes = new HashMap<>();
     private final Map<UUID, Location> last = new HashMap<>();
     private final BukkitTask fastTask, petTask;
@@ -44,10 +47,18 @@ final class CosmeticFx implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         fastTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickFx, 20L, 2L);
         petTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickPets, 40L, 10L);
-        Hooks.onStat((p, key, n, max) -> { String pid = cos.equipped(p, Cosmetics.Kind.PET); if (pid != null && !max) cos.addPetXp(p.getUniqueId(), pid, (int) Math.min(25, n * 5)); });
+        Hooks.onStat((p, key, n, max) -> {
+            UUID u = p.getUniqueId();
+            if (max || orangeCompanions.containsKey(u)) return;
+            String pid = cos.equipped(p, Cosmetics.Kind.PET);
+            if (pid != null) cos.addPetXp(u, pid, (int) Math.min(25, n * 5));
+        });
         Hooks.onKill((killer, victim, where) -> petDid(killer, 3));
         // anything left over from a crashed run (they aren't saved, but a chunk can be loaded mid-spawn)
-        for (World w : Bukkit.getWorlds()) for (Entity e : w.getEntities()) if (e.getScoreboardTags().contains(PET_TAG) || e.getScoreboardTags().contains(CAPE_TAG)) e.remove();
+        for (World w : Bukkit.getWorlds()) for (Entity e : w.getEntities()) {
+            Set<String> tags = e.getScoreboardTags();
+            if (tags.contains(PET_TAG) || tags.contains(CAPE_TAG) || tags.contains(OrangeCompanion.TAG)) e.remove();
+        }
     }
 
     private static final Set<String> TRAILS = Set.of("t_ember", "t_ash", "t_spore", "t_bubble", "t_arc", "t_script", "t_sakura", "t_prism", "t_wraith", "t_molten", "t_galaxy", "t_haunt", "t_snowdrift", "t_heart", "t_bloom", "t_sun", "t_anniv", "t_founder");
@@ -72,6 +83,30 @@ final class CosmeticFx implements Listener {
         petTask.cancel();
         for (UUID u : new ArrayList<>(pets.keySet())) removePet(u);
         for (UUID u : new ArrayList<>(capes.keySet())) removeCape(u);
+        orangeCompanions.values().forEach(OrangeCompanion::removeModel);
+        orangeCompanions.clear();
+    }
+
+    void setOrangeCompanion(Player p, boolean enabled) {
+        UUID u = p.getUniqueId();
+        if (enabled) {
+            orangeCompanions.computeIfAbsent(u, id -> new OrangeCompanion());
+            removePet(u);
+        } else if (disableOrangeCompanion(u)) {
+            p.stopSound(OrangeCompanion.VOICE, SoundCategory.PLAYERS);
+        }
+    }
+
+    private boolean disableOrangeCompanion(UUID u) {
+        OrangeCompanion companion = orangeCompanions.remove(u);
+        if (companion == null) return false;
+        companion.removeModel();
+        return true;
+    }
+
+    private void hideOrangeCompanion(UUID u) {
+        OrangeCompanion companion = orangeCompanions.get(u);
+        if (companion != null) companion.removeModel();
     }
 
     /** Called right after someone equips or removes something, so the change shows at once. */
@@ -109,9 +144,16 @@ public void onCatch(org.bukkit.event.player.PlayerFishEvent e) {
 
 @EventHandler public void onQuit(PlayerQuitEvent e) { gone(e.getPlayer().getUniqueId()); }
 
-    @EventHandler public void onDeath(PlayerDeathEvent e) { removePet(e.getPlayer().getUniqueId()); removeCape(e.getPlayer().getUniqueId()); }
+    @EventHandler public void onDeath(PlayerDeathEvent e) {
+        UUID u = e.getPlayer().getUniqueId();
+        removePet(u);
+        removeCape(u);
+        hideOrangeCompanion(u);
+    }
 
-    private void gone(UUID u) { removePet(u); removeCape(u); last.remove(u); }
+    @EventHandler public void onWorldChange(PlayerChangedWorldEvent e) { hideOrangeCompanion(e.getPlayer().getUniqueId()); }
+
+    private void gone(UUID u) { removePet(u); removeCape(u); disableOrangeCompanion(u); last.remove(u); }
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onInteract(PlayerInteractEntityEvent e) { if (e.getRightClicked().getScoreboardTags().contains(PET_TAG)) e.setCancelled(true); }
@@ -136,7 +178,12 @@ public void onCatch(org.bukkit.event.player.PlayerFishEvent e) {
         double speed = was != null && was.getWorld() == now.getWorld() ? Math.hypot(now.getX() - was.getX(), now.getZ() - was.getZ()) / 2.0 : 0;   // blocks per tick
         String trail = cos.equipped(p, Cosmetics.Kind.TRAIL), aura = cos.equipped(p, Cosmetics.Kind.AURA), cape = cos.equipped(p, Cosmetics.Kind.CAPE);
         if (cape == null) cape = Crews.capeFor(p);   // no cape on: members of a crew wear their crew's colours
-        if (hidden(p)) { removeCape(u); return; }
+        if (hidden(p)) { removeCape(u); hideOrangeCompanion(u); return; }
+        OrangeCompanion companion = orangeCompanions.get(u);
+        if (companion != null) {
+            if (p.isInvisible() || p.getMetadata("vanished").stream().anyMatch(MetadataValue::asBoolean)) companion.removeModel();
+            else companion.follow(p, now, display -> hideFromOptedOut(display, u));
+        }
         if (trail != null && speed > 0.02 && !p.isFlying() && !p.isGliding()) trail(trail, p, now);
         if (aura != null) aura(aura, p, now);
         if (cape == null || p.isGliding() || p.isSwimming() || p.isSleeping() || p.isRiptiding()) removeCape(u);
@@ -484,6 +531,9 @@ public void onCatch(org.bukkit.event.player.PlayerFishEvent e) {
     private void reconcileVisibility() {
         Map<Entity, UUID> all = new HashMap<>();
         for (Map.Entry<UUID, Pet> e : pets.entrySet()) if (e.getValue().entity.isValid()) all.put(e.getValue().entity, e.getKey());
+        for (var e : orangeCompanions.entrySet()) {
+            for (BlockDisplay d : e.getValue().displays()) if (d.isValid()) all.put(d, e.getKey());
+        }
         for (Map.Entry<UUID, Cape> e : capes.entrySet()) for (BlockDisplay d : e.getValue().parts) if (d != null && d.isValid()) all.put(d, e.getKey());
         for (Player viewer : Bukkit.getOnlinePlayers()) {
             UUID v = viewer.getUniqueId();
@@ -505,6 +555,7 @@ public void onCatch(org.bukkit.event.player.PlayerFishEvent e) {
 
     private void tickPet(Player p) {
         UUID u = p.getUniqueId();
+        if (orangeCompanions.containsKey(u)) return;
         String id = cos.equipped(p, Cosmetics.Kind.PET);
         if (id == null || hidden(p) || !PETS.containsKey(id)) { removePet(u); return; }
         Pet pet = pets.get(u);
