@@ -1,0 +1,65 @@
+{
+  "providers": [
+    {
+      "type": "space",
+      "advances": {
+        "\uf001": -8,
+        "\uf002": -169
+      }
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/station_home.png",
+      "height": 71,
+      "ascent": 13,
+      "chars": [
+        "\ue000"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/station_storage.png",
+      "height": 71,
+      "ascent": 13,
+      "chars": [
+        "\ue001"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/station_hoppers.png",
+      "height": 71,
+      "ascent": 13,
+      "chars": [
+        "\ue002"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/station_agents.png",
+      "height": 71,
+      "ascent": 13,
+      "chars": [
+        "\ue003"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/agent.png",
+      "height": 125,
+      "ascent": 13,
+      "chars": [
+        "\ue004"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/workshop.png",
+      "height": 89,
+      "ascent": 13,
+      "chars": [
+        "\ue005"
+      ]
+    }
+  ]
+}

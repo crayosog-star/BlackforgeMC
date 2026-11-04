@@ -47,7 +47,15 @@ public final class AutoMod implements Listener {
     private static final Pattern IP = Pattern.compile("\\b\\d{1,3}(?:[.,\\s]\\d{1,3}){3}(?::\\d{2,5})?\\b");
     private static final Set<String> COMMANDS_THAT_CHAT = Set.of("msg", "tell", "w", "whisper", "r", "reply", "me", "mail", "say", "m", "pm", "t", "ac", "helpop");
 
+    private static AutoMod instance;
+
+    /** Would the chat filter refuse this text? For names players choose. False if the filter isn't running. */
+    public static boolean blocks(String text) {
+        return instance != null && (instance.severeHit(text) != null || instance.mildHit(text) != null);
+    }
+
     public AutoMod(BlackForgeCore plugin) {
+        instance = this;
         this.plugin = plugin;
         this.store = new ModStore(plugin);
         load();

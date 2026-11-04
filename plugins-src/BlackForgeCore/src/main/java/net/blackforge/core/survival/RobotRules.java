@@ -98,4 +98,7 @@ final class RobotRules {
     static Optional<FuelCell> lowestTierCell(List<FuelCell> cells) {
         return cells.stream().min(Comparator.comparingInt(FuelCell::tier));
     }
+
+    /** An agent's name: 1-16 letters or digits, so it's safe inside MiniMessage text and saved item data. */
+    static boolean validName(String name) { return name != null && name.matches("[A-Za-z0-9]{1,16}"); }
 }

@@ -100,7 +100,7 @@ public final class Spawners implements Listener {
 
     static ItemStack essence(int n) {
         ItemStack it = Ui.item(Material.ECHO_SHARD, "<#9d7bff><bold>Mob Essence",
-                "<gray>Dropped by mobs from spawners.", "<gray>Buys spawner mob types and upgrades,", "<gray>robot upgrades and fuel cells.");
+                "<gray>Dropped by mobs from spawners.", "<gray>Buys spawner mob types and upgrades,", "<gray>agent upgrades and fuel cells.");
         it.editMeta(m -> m.getPersistentDataContainer().set(ESSENCE, PersistentDataType.BYTE, (byte) 1));
         it.setAmount(Math.max(1, Math.min(64, n)));
         return it;
