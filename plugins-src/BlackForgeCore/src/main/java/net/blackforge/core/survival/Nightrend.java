@@ -18,6 +18,8 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
+import org.bukkit.event.player.PlayerAnimationEvent;
+import org.bukkit.event.player.PlayerAnimationType;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
@@ -44,8 +46,8 @@ import java.util.function.Predicate;
  *   <li>One dagger in your main hand hits for {@code damage} (5) at {@code attack-speed} (2.0 a second) with
  *   {@code reach-change} (-0.5) blocks of reach. It isn't a sword, so there's no sweep: one target per hit.</li>
  *   <li>With a Nightrend in <b>each</b> hand you attack at {@code pair-attack-speed} (2.6), and every second hit
- *   the blades take turns: a red slash off the main-hand blade, then the off arm swings and its blade slashes back the
- *   other way (cosmetic; same damage). Drop either and the bonus is gone.</li>
+ *   every swing uses both arms: the right swings, then the left follows {@code off-hand-delay-ticks} (3) later, and a
+ *   hit slashes a red arc off each blade in that order (cosmetic; same damage). Drop either and the bonus is gone.</li>
  *   <li>Hits from the arc behind the target ({@code behind-arc-degrees}, 120) only do {@code behind-damage} (60%),
  *   with a duller sound. Players and mobs alike. "Behind" is where the target is facing, not where it's walking.</li>
  *   <li>A slight aura: a few dark-red embers drift off each blade while you hold it. Off while invisible or vanished.</li>
@@ -77,6 +79,7 @@ public final class Nightrend implements Listener, Hackable {
     private final boolean enabled;
     private final double damage, singleSpeed, pairSpeed, reachChange, behindArc, behindDamage;
     private final long empMillis, flipCooldownMillis;
+    private final int offHandDelay;   // ticks between the right swing and the left one
     private final NamespacedKey tagKey, damageKey, speedKey, reachKey, pairKey;
     private final Set<UUID> pairOn = new HashSet<>();
     private final Map<UUID, Integer> hits = new HashMap<>();
@@ -98,6 +101,7 @@ public final class Nightrend implements Listener, Hackable {
         this.behindArc = Math.max(0, Math.min(360, c.getDouble("nightrend.behind-arc-degrees", 120)));
         this.behindDamage = Math.max(0, Math.min(1, c.getDouble("nightrend.behind-damage", 0.6)));
         this.empMillis = Math.round(Math.max(0, c.getDouble("nightrend.emp-seconds", 4)) * 1000);
+        this.offHandDelay = Math.max(1, Math.min(10, c.getInt("nightrend.off-hand-delay-ticks", 3)));
         this.flipCooldownMillis = Math.round(Math.max(0, c.getDouble("nightrend.flip-cooldown-seconds", 3)) * 1000);
         this.tagKey = new NamespacedKey(BlackForgeCore.NS, "nightrend");
         this.damageKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_damage");
@@ -359,20 +363,31 @@ public final class Nightrend implements Listener, Hackable {
         }
 
         if (!pairOn.contains(p.getUniqueId())) return;
-        int n = hits.merge(p.getUniqueId(), 1, Integer::sum);
-        if (n >= 1000) hits.put(p.getUniqueId(), 0);
-        // the blades take turns: main-hand slash on odd hits, the off hand swings and slashes on even ones
-        if (NightrendMath.offHandHit(n)) Bukkit.getScheduler().runTaskLater(plugin, () -> slash(p, true), 1L);
-        else slash(p, false);
+        // both blades: the main-hand slash now, the off-hand one a beat later (its arm swing comes from onSwing)
+        slash(p, false);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> slash(p, true), offHandDelay);
     }
 
     /**
-     * One blade's slash: a thin red arc sweeps across in front of you, starting on that blade's side. The off-hand
-     * blade also swings the off arm (the main arm already swings with every attack). Left-handed players are mirrored.
+     * Every left-click swing with the pair, hit or miss: the right arm swings as normal, then the left arm follows
+     * {@code off-hand-delay-ticks} later. Fired by the client's swing, so swings at the air count too.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onSwing(PlayerAnimationEvent e) {
+        if (e.getAnimationType() != PlayerAnimationType.ARM_SWING) return;
+        Player p = e.getPlayer();
+        if (!pairOn.contains(p.getUniqueId()) || !isNightrend(p.getInventory().getItemInMainHand())) return;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (p.isOnline() && !p.isDead() && pairOn.contains(p.getUniqueId())) p.swingOffHand();
+        }, offHandDelay);
+    }
+
+    /**
+     * One blade's slash: a thin red arc sweeps across in front of you, starting on that blade's side. Particles only;
+     * the arms are swung by the client (right) and {@link #onSwing} (left). Left-handed players are mirrored.
      */
     private void slash(Player p, boolean offHand) {
         if (!p.isOnline() || p.isDead() || !pairOn.contains(p.getUniqueId())) return;
-        if (offHand) p.swingOffHand();
         World w = p.getWorld();
         Location eye = p.getEyeLocation();
         double yaw = eye.getYaw();                                  // fixed at the start: the arc doesn't follow the camera
