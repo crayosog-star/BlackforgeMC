@@ -119,10 +119,11 @@ final class Containment {
     /** The melted Frost Titan leaves a puddle in his pit; it is drained again when the iceberg re-forms. */
     private void puddle(int pit, boolean on) {
         int[] c = pit(pit);
-        for (int x = c[0] - 6; x <= c[0] + 6; x++) for (int z = c[1] - 6; z <= c[1] + 6; z++) {
-            if (Math.hypot(x - c[0], z - c[1]) > 6.1) continue;
+        for (int x = c[0] - 12; x <= c[0] + 12; x++) for (int z = c[1] - 12; z <= c[1] + 12; z++) {
+            double r = Math.hypot(x - c[0], z - c[1]);
+            if (r > 12) continue;
             Block b = world.getBlockAt(x, Y, z);
-            if (on && b.getType() == Material.AIR) b.setType(Material.WATER, false);
+            if (on && r <= 11.2 && b.getType() == Material.AIR) b.setType(Material.WATER, false);
             else if (!on && b.getType() == Material.WATER) b.setType(Material.AIR, false);
         }
     }
@@ -187,6 +188,14 @@ final class Containment {
             }
         }
         melted[pit] = target + 1;
+        // steam and meltwater all over the berg while it goes
+        int[] c = pit(pit);
+        for (int k = 0; k < 3; k++) {
+            double a = rnd.nextDouble() * Math.PI * 2, r = rnd.nextDouble() * 10;
+            Location l = new Location(world, c[0] + 0.5 + Math.cos(a) * r, Y + 1 + rnd.nextDouble() * 12 * (1 - f * 0.6), c[1] + 0.5 + Math.sin(a) * r);
+            world.spawnParticle(Particle.CLOUD, l, 4, 0.5, 0.4, 0.5, 0.02);
+            world.spawnParticle(Particle.FALLING_WATER, l, 6, 0.6, 0.2, 0.6, 0);
+        }
         if (target > done && rnd.nextInt(4) == 0) {
             Snap s = all.get(Math.max(0, target - 1));
             world.playSound(new Location(world, s.x, s.y, s.z), Sound.BLOCK_POWDER_SNOW_BREAK, 4f, 0.7f);

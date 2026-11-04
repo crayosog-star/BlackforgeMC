@@ -498,6 +498,7 @@ public class Graveyard extends Vox {
             }
             for (int y = 1; y <= 22; y++) for (int x = cx - 14; x <= cx + 14; x++) for (int z = cz - 14; z <= cz + 14; z++) if (hypot(x - cx, z - cz) <= 14.2) set(x, y, z, "air");
             switch (i) { case 0 -> magmaCocoon(cx, cz); case 1 -> ribcage(cx, cz); case 2 -> voidShards(cx, cz); case 3 -> iceberg(cx, cz); default -> cage(cx, cz, i); }
+            if (i == 3) for (int x = cx - 18; x <= cx + 18; x++) for (int z = cz - 18; z <= cz + 18; z++) { double r = hypot(x - cx, z - cz); if (r > 12.4 && r <= 17.5 && hn(x, 9, z) < 1.0 - (r - 12.4) / 6.0) set(x, 0, z, pick(x, 2, z, "packed_ice", "blue_ice", "packed_ice", "snow_block", "ice")); }
             for (int j = 0; j < 4; j++) {
                 double b = PI / 4 + j * PI / 2; int ax = cx + (int) round(cos(b) * 13), az = cz + (int) round(sin(b) * 13);
                 box(ax - 1, 0, az - 1, ax + 1, 10, az + 1, "polished_blackstone_bricks"); box(ax - 1, 11, az - 1, ax + 1, 11, az + 1, "gold_block"); set(ax, 12, az, "soul_lantern");
