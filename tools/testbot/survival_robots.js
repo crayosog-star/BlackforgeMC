@@ -7,11 +7,13 @@ const once = (b, e) => new Promise(r => b.once(e, r));
 const rcon = c => { try { return execSync(`python ../netctl.py cmd survival "${c}"`).toString().replace(/§./g, '').trim(); } catch (e) { return 'ERR'; } };
 const A = mineflayer.createBot({ host: '127.0.0.1', port: 25577, username: 'AlloyTesterA', version: '1.20.4', auth: 'offline' });
 const chat = [];
-A.on('message', m => { const t = m.toString(); chat.push(t); if (/[Rr]obot|claim|Claim|Fuel|crate/.test(t) && !/Welcome/.test(t)) console.log('  chat>', t.slice(0, 160)); });
+A.on('message', m => { const t = m.toString(); chat.push(t); if (/[Aa]gent|claim|Claim|Fuel|crate/.test(t) && !/Welcome/.test(t)) console.log('  chat>', t.slice(0, 160)); });
 const txt = w => JSON.stringify(w.title).match(/"value":"([^"]{2,})"/g)?.map(s => s.slice(9, -1)).filter(s => !/^(string|byte|compound|list)$/.test(s)).join('') || '?';
 async function openWin(fn) { const w = once(A, 'windowOpen'); await fn(); const win = await Promise.race([w, sleep(4000).then(() => null)]); await sleep(500); return win; }
 const golemAt = p => Object.values(A.entities).find(e => e !== A.entity && e.type !== 'player' && e.name !== 'item' && e.position.distanceTo(p) < 1.6);
 const eggs = () => A.inventory.items().filter(i => /spawn_egg/.test(i.name));
+// the agent menu's slots, from Robots.java
+const MENU = { fuel: 11, pickup: 17 };
 let pass = 0, fail = 0;
 const check = (name, ok, extra = '') => { ok ? pass++ : fail++; console.log(ok ? 'PASS' : 'FAIL', name, extra); };
 async function place(standX, x, z) {
@@ -39,7 +41,7 @@ async function place(standX, x, z) {
   win = await openWin(async () => A._client.write('block_dig', { status: 0, location: molten.position, face: 3, sequence: 1 }));
   const shown = win ? win.slots.slice(0, win.inventoryStart).filter(Boolean) : [];
   console.log('  preview:', win ? txt(win) : 'none', shown.length, 'rewards');
-  check('Molten preview lists the robots', shown.some(s => JSON.stringify(s.nbt || '').includes('Robot')), shown.map(s => s.name).join(','));
+  check('Molten preview lists the robots', shown.some(s => JSON.stringify(s.nbt || '').includes('Agent')), shown.map(s => s.name).join(','));
   if (A.currentWindow) A.closeWindow(A.currentWindow);
 
   rcon('minecraft:gamemode creative AlloyTesterA');
@@ -48,7 +50,7 @@ async function place(standX, x, z) {
   const cmds = [...cfg.matchAll(/"(robots give \{player\} [^"]+)"/g)].map(m => m[1].replace('{player}', 'AlloyTesterA'));
   for (const c of cmds) rcon(c);
   await sleep(1000);
-  const got = A.inventory.items().map(i => (i.nbt ? JSON.stringify(i.nbt).match(/(Miner|Farmer|Grinder|Fisherman) Robot [IV]+|Fuel Cell [IV]+/)?.[0] : null) || i.name);
+  const got = A.inventory.items().map(i => (i.nbt ? JSON.stringify(i.nbt).match(/(Miner|Farmer|Grinder|Fisherman) Agent [IV]+|Fuel Cell [IV]+/)?.[0] : null) || i.name);
   console.log('  got:', got.join(', '));
   check('every crate robot command works', eggs().length === cmds.filter(c => / robot /.test(c)).length, `${eggs().length} robots from ${cmds.length} commands`);
 
@@ -74,7 +76,7 @@ async function place(standX, x, z) {
     const g = golemAt(r);
     if (!g) continue;
     win = await openWin(() => A.activateEntityAt(g, new Vec3(0, 0.5, 0)));
-    if (win) { await A.clickWindow(2, 0, 0); await sleep(800); A.closeWindow(A.currentWindow || win); }
+    if (win) { await A.clickWindow(MENU.fuel, 0, 0); await sleep(800); A.closeWindow(A.currentWindow || win); }
   }
   console.log('  waiting for the miners...'); await sleep(25000);
   const b1 = rcon('execute if block 2006 100 2005 minecraft:gold_block'), b2 = rcon('execute if block 2016 100 2008 minecraft:gold_block');
@@ -86,7 +88,7 @@ async function place(standX, x, z) {
     rcon(`minecraft:tp AlloyTesterA ${stand}`); await sleep(1200);
     const g = golemAt(r); if (!g) continue;
     win = await openWin(() => A.activateEntityAt(g, new Vec3(0, 0.5, 0)));
-    if (win) { await A.clickWindow(8, 0, 0); await sleep(1000); if (A.currentWindow) A.closeWindow(A.currentWindow); }
+    if (win) { await A.clickWindow(MENU.pickup, 0, 0); await sleep(1000); if (A.currentWindow) A.closeWindow(A.currentWindow); }
   }
   check('robots picked back up', !golemAt(r1) && !golemAt(r2));
   A.chat('/unclaim'); await sleep(1000);
