@@ -11,11 +11,16 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.World;
+import org.bukkit.block.Barrel;
+import org.bukkit.block.Block;
+import org.bukkit.block.Chest;
+import org.bukkit.block.Container;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Allay;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
+import org.bukkit.entity.ItemFrame;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.EventHandler;
@@ -56,13 +61,15 @@ import java.util.function.Predicate;
 public final class Allays implements Listener {
     private static final String NAME = "<gradient:#c8743a:#4fd1b5><bold>Forge Allay</bold></gradient>";
     private static final String[] TIER_NAME = {"Gatherer", "Courier", "Steward"};
-    private static final String[] TIER_JOB = {"Carries loose drops to the Station", "Sorts the Station into framed chests and refuels Agents", "Sells from an emerald-framed chest, less a fee"};
+    private static final String[] TIER_JOB = {"Carries loose drops to the Station", "Also sorts the Station into chests: put an item in a frame on a chest", "Sells from an emerald-framed chest, less a fee"};
     private static final int TRIP_BLOCKS = 12, MAX_TEST = 6, TEST_LIFE_TICKS = 5 * 60 * 20;
     /** The highest tier with its job built so far. Higher cards say so rather than sell nothing. */
-    private static final int BUILT_TIER = 1;
+    private static final int BUILT_TIER = 2;
     private static final int[] CARD_SLOTS = {11, 13, 15};
     private static final int BACK_SLOT = 22, MENU_SIZE = 27;
-    private static final int RETRY_TICKS = 40, NEVER_PICKED_UP = 1000;
+    private static final int RETRY_TICKS = 40, NEVER_PICKED_UP = 1000, WORK_CHECK_TICKS = 10;
+    /** An item frame holding this marks a sell chest, not a sorting chest. */
+    private static final Material SELL_MARK = Material.EMERALD;
     private static final double REACH_SQ = 9;
     /** The game itself draws a mob with this exact name upside down, as it does on a name tag. */
     private static final String FLIP_NAME = "Dinnerbone";
@@ -85,6 +92,8 @@ public final class Allays implements Listener {
         /** What it's fetching, and what it's holding. Holding is kept in memory, because the item has left the world. */
         UUID job; ItemStack carried;
         int rest; String label;
+        /** Where a load is going, other than the Station. */
+        Block dest;
         /** What the player called it, or null. */
         String name;
         /** Shows the name of a flipped allay, whose real name has to be the one the game flips. */
@@ -92,14 +101,18 @@ public final class Allays implements Listener {
         Worker(int index) { this.index = index; }
     }
 
-    private enum State { IDLE, FETCH, RETURN, PAUSE, WAIT }
+    private enum State { IDLE, FETCH, DELIVER, RETURN, PAUSE, WAIT }
+
+    /** A chest that takes this material, from an item frame on it. */
+    private record Link(Material material, Block chest) {}
 
     /** One claim or island's upgrade. */
     private static final class Base {
         final String region; final UUID buyer; int tier;
         final List<Worker> workers = new ArrayList<>();
         final List<AllayJobs.Job> jobs = new ArrayList<>();
-        long lastScan = Long.MIN_VALUE / 2;
+        final List<Link> links = new ArrayList<>();
+        long lastScan = Long.MIN_VALUE / 2, lastLinkScan = Long.MIN_VALUE / 2;
         Base(String region, UUID buyer) { this.region = region; this.buyer = buyer; }
     }
 
@@ -116,7 +129,7 @@ public final class Allays implements Listener {
     private final boolean sandbox;
     private final AllayRules.Table table;
     private final double speed;
-    private final int pauseTicks, carry, minDropAge, scanTicks, maxScans;
+    private final int pauseTicks, carry, minDropAge, scanTicks, maxScans, linkScanTicks;
     private final NamespacedKey deathDrop;
     private org.bukkit.World deathWorld;
     private double deathX, deathY, deathZ;
@@ -142,6 +155,7 @@ public final class Allays implements Listener {
         this.minDropAge = c.getInt("allays.min-drop-age-ticks", 60);
         this.scanTicks = Math.max(20, c.getInt("allays.scan-seconds", 5) * 20);
         this.maxScans = Math.max(1, c.getInt("allays.max-scans-per-tick", 4));
+        this.linkScanTicks = Math.max(20, c.getInt("allays.link-scan-seconds", 30) * 20);
         this.speed = Math.max(0.5, c.getDouble("allays.speed", 6.0));
         this.pauseTicks = (int) Math.max(0, Math.round(c.getDouble("allays.pause-seconds", 1.0) * 20));
         Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -422,6 +436,7 @@ public final class Allays implements Listener {
         int flock = table.flock(b.tier);
         while (b.workers.size() < flock) b.workers.add(new Worker(b.workers.size()));
         scan(b, at);
+        scanLinks(b, at);
         Set<UUID> taken = new HashSet<>();
         for (Worker w : b.workers) if (w.job != null) taken.add(w.job);
         for (Worker w : b.workers) {
@@ -438,6 +453,7 @@ public final class Allays implements Listener {
         w.entity = spawn(new Location(at.getWorld(), spot[0], spot[1], spot[2]));
         w.label = null;
         w.job = null;
+        w.dest = null;
         if (w.carried != null) goHome(w, at, flock);
         else w.state = State.IDLE;
     }
@@ -445,15 +461,24 @@ public final class Allays implements Listener {
     private void work(Base b, Worker w, Location at, int flock, Set<UUID> taken) {
         switch (w.state) {
             case IDLE -> {
+                idle(w, at, flock);
+                if ((now + w.index) % WORK_CHECK_TICKS != 0) return;
                 Inventory store = station.storageIn(b.region);
-                var job = store == null || store.firstEmpty() < 0 ? Optional.<AllayJobs.Job>empty()
+                if (store == null) return;
+                if (AllayRules.canSort(b.tier) && startSort(b, w, store)) return;
+                var job = store.firstEmpty() < 0 ? Optional.<AllayJobs.Job>empty()
                         : AllayJobs.nearest(xyz(w.entity.getLocation()), b.jobs, taken);
                 if (job.isPresent()) {
                     w.job = job.get().id();
                     taken.add(w.job);
                     w.state = State.FETCH;
                     fly(w, new double[]{job.get().x(), job.get().y() + 0.4, job.get().z()});
-                } else idle(w, at, flock);
+                }
+            }
+            case DELIVER -> {
+                if (!advance(w, at, flock)) return;
+                dropOff(w);
+                goHome(w, at, flock);
             }
             case FETCH -> {
                 if (!advance(w, at, flock)) return;
@@ -486,6 +511,57 @@ public final class Allays implements Listener {
         w.ticks = AllayFlight.ticks(Math.sqrt(dx * dx + dy * dy + dz * dz), speed);
     }
 
+    /** Takes a load out of the Station for the nearest linked chest with room. False if there's nothing to sort. */
+    private boolean startSort(Base b, Worker w, Inventory store) {
+        ItemStack[] all = store.getContents();
+        for (int i = 0; i < all.length; i++) {
+            ItemStack it = all[i];
+            if (it == null || it.getType().isAir() || Robots.fuelTier(it) > 0) continue;   // Fuel Cells stay for the Agents
+            Block chest = chestFor(b, w, it);
+            if (chest == null) continue;
+            int n = Math.min(it.getAmount(), carry);
+            ItemStack load = it.clone();
+            load.setAmount(n);
+            if (n >= it.getAmount()) store.setItem(i, null);
+            else { it.setAmount(it.getAmount() - n); store.setItem(i, it); }
+            w.carried = load;
+            w.dest = chest;
+            w.state = State.DELIVER;
+            Location c = chest.getLocation();
+            fly(w, new double[]{c.getX() + 0.5, c.getY() + 1.4, c.getZ() + 0.5});
+            return true;
+        }
+        return false;
+    }
+
+    /** The nearest chest linked to this item that still has room for some of it. */
+    private Block chestFor(Base b, Worker w, ItemStack it) {
+        Map<double[], Block> places = new HashMap<>();
+        for (Link l : b.links) {
+            if (l.material() != it.getType() || !l.chest().getWorld().isChunkLoaded(l.chest().getX() >> 4, l.chest().getZ() >> 4)) continue;
+            if (!(l.chest().getState(false) instanceof Container c) || !hasRoom(c.getInventory(), it)) continue;
+            Location at = l.chest().getLocation();
+            places.put(new double[]{at.getX(), at.getY(), at.getZ()}, l.chest());
+        }
+        return AllayJobs.nearestPlace(xyz(w.entity.getLocation()), places.keySet()).map(places::get).orElse(null);
+    }
+
+    private static boolean hasRoom(Inventory inv, ItemStack it) {
+        if (inv.firstEmpty() >= 0) return true;
+        for (ItemStack s : inv.getContents()) if (s != null && s.isSimilar(it) && s.getAmount() < s.getMaxStackSize()) return true;
+        return false;
+    }
+
+    /** Puts the load in its chest. Whatever doesn't fit, or a load whose chest has gone, goes back to the Station. */
+    private void dropOff(Worker w) {
+        Block chest = w.dest;
+        w.dest = null;
+        if (w.carried == null || chest == null || !(chest.getState(false) instanceof Container c)) return;
+        Map<Integer, ItemStack> left = c.getInventory().addItem(w.carried);
+        w.carried = left.isEmpty() ? null : left.values().iterator().next();
+        chest.getWorld().playSound(chest.getLocation(), Sound.BLOCK_AMETHYST_CLUSTER_PLACE, 0.4f, 1.3f);
+    }
+
     /** Back to its place in the circle, aiming for where that will be when it arrives so it doesn't snap. */
     private void goHome(Worker w, Location at, int flock) {
         w.job = null;
@@ -501,7 +577,7 @@ public final class Allays implements Listener {
         double[] p = AllayFlight.at(w.from, w.to, w.tick, w.ticks);
         World world = w.entity.getWorld();
         if (!world.isChunkLoaded((int) Math.floor(p[0]) >> 4, (int) Math.floor(p[2]) >> 4)) {
-            if (w.state == State.FETCH) goHome(w, at, flock);
+            if (w.state == State.FETCH || w.state == State.DELIVER) goHome(w, at, flock);
             else { w.tick = w.ticks; return true; }   // home is the Station's own area: being unloaded here means we're about to sleep anyway
             return false;
         }
@@ -592,6 +668,23 @@ public final class Allays implements Listener {
         }
     }
 
+    /** Finds the chests with an item in a frame on them. It's slow work that rarely changes, so a Courier's base does it now and then. */
+    private void scanLinks(Base b, Location at) {
+        if (!AllayRules.canSort(b.tier) || scansThisTick >= maxScans || !AllayJobs.due(b.lastLinkScan, now, linkScanTicks)) return;
+        scansThisTick++;
+        b.lastLinkScan = now;
+        b.links.clear();
+        int leash = table.leash(b.tier);
+        for (Entity e : at.getWorld().getNearbyEntities(at, leash, leash, leash, x -> x instanceof ItemFrame)) {
+            ItemFrame frame = (ItemFrame) e;
+            Material m = frame.getItem().getType();
+            if (m.isAir() || m == SELL_MARK) continue;
+            Block chest = frame.getLocation().getBlock().getRelative(frame.getAttachedFace());
+            if (chest.equals(at.getBlock()) || !inBase(chest.getLocation(), b.region)) continue;
+            if (chest.getState(false) instanceof Chest || chest.getState(false) instanceof Barrel) b.links.add(new Link(m, chest));
+        }
+    }
+
     private boolean inBase(Location l, String region) {
         return sandbox ? zone.test(l) : region.equals(station.regionAt(l));   // the Foundry's regions are a chunk each, too small to work in
     }
@@ -637,6 +730,7 @@ public final class Allays implements Listener {
             // an entity that's already gone went with its chunk, so a load stays held until it's back
             w.entity = null;
             w.job = null;
+            w.dest = null;
             w.state = State.IDLE;
         }
     }

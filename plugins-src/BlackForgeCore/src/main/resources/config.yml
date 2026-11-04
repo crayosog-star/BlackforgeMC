@@ -150,6 +150,7 @@ allays:
   pause-seconds: 1.0              # pause after each trip
   min-drop-age-ticks: 60          # leaves newer drops alone, so players can pick up their own
   scan-seconds: 5                 # how often a base looks for work
+  link-scan-seconds: 30           # how often a base looks for framed chests
   max-scans-per-tick: 4           # bases scanned per tick across the server
   sell-fee: 0.10                  # Steward's cut of a sale
   sausage-flip: true              # an allay named Smoked Sausage flies upside down

@@ -28,6 +28,12 @@ class AllayJobsTest {
         assertEquals(Optional.empty(), AllayJobs.nearest(HERE, List.of(), Set.of()));
     }
 
+    @Test void nearestPlace() {
+        double[] a = {3, 64, 0}, b = {9, 64, 0};
+        assertSame(a, AllayJobs.nearestPlace(HERE, List.of(b, a)).get());
+        assertTrue(AllayJobs.nearestPlace(HERE, List.of()).isEmpty());
+    }
+
     @Test void scanTiming() {
         assertTrue(AllayJobs.due(0, 100, 100));
         assertFalse(AllayJobs.due(0, 99, 100));
