@@ -22,7 +22,6 @@ final class SellCatalog {
             new Item("beetroot", "Beetroot", 1.0), new Item("melon_slice", "Melon Slice", 0.3), new Item("pumpkin", "Pumpkin", 2.5),
             new Item("sugar_cane", "Sugar Cane", 0.8), new Item("cactus", "Cactus", 0.8), new Item("bamboo", "Bamboo", 0.2),
             new Item("nether_wart", "Nether Wart", 1.2), new Item("cocoa_beans", "Cocoa Beans", 1.0), new Item("sweet_berries", "Sweet Berries", 0.5),
-            new Item("kelp", "Kelp", 0.2),
             // mob drops
             new Item("rotten_flesh", "Rotten Flesh", 0.5), new Item("bone", "Bone", 1.0), new Item("string", "String", 1.0),
             new Item("spider_eye", "Spider Eye", 2.0), new Item("gunpowder", "Gunpowder", 3.0), new Item("blaze_rod", "Blaze Rod", 8.0),
