@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 JAVA = str(next((ROOT / "tools").glob("jdk-25*")) / "bin" / "java.exe")
 PROXY_PORT = 25577
 SERVERS = {"hub": (30001, "1536M"), "skyblock": (30002, "2G"), "survival": (30003, "2560M"),
-           "factions": (30004, "2G"), "arcade": (30005, "1536M")}
+           "factions": (30004, "2G"), "arcade": (30005, "1536M"), "raft": (30006, "2G")}
 FLAGS = ["-XX:+UseG1GC", "-XX:+ParallelRefProcEnabled", "-XX:MaxGCPauseMillis=200", "-XX:+UnlockExperimentalVMOptions",
          "-XX:+DisableExplicitGC", "-XX:G1NewSizePercent=30", "-XX:G1MaxNewSizePercent=40", "-XX:G1HeapRegionSize=8M",
          "-XX:G1ReservePercent=20", "-XX:InitiatingHeapOccupancyPercent=15"]

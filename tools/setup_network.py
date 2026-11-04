@@ -30,6 +30,10 @@ SERVERS = {
         "level-type": "minecraft\\:flat", "generate-structures": "false", "spawn-protection": "0",
         "generator-settings": '{"layers"\\:[{"block"\\:"minecraft\\:air","height"\\:1}],"biome"\\:"minecraft\\:the_void"}',
         "view-distance": "8", "allow-nether": "false"}),
+    "raft": (30006, "2G", ["LuckPerms-Bukkit"], {
+        "difficulty": "normal", "spawn-protection": "0", "allow-nether": "false", "pvp": "false", "view-distance": "10",
+        "level-type": "minecraft\\:flat", "generate-structures": "false",
+        "generator-settings": '{"layers"\\:[{"block"\\:"minecraft\\:air","height"\\:1}],"biome"\\:"minecraft\\:warm_ocean"}'}),
 }
 BENTO_ADDONS = ["BSkyBlock", "Level", "Challenges", "Warps"]
 PROXY_PLUGINS = ["ViaVersion", "ViaBackwards"]   # no LuckPerms on the proxy: it would overwrite shared rank data

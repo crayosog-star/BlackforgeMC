@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** Server switching and network player counts over the BungeeCord channel (Velocity supports it). */
 public final class Net implements PluginMessageListener {
-    public static final String[] SERVERS = {"hub", "skyblock", "survival", "factions", "arcade"};
+    public static final String[] SERVERS = {"hub", "skyblock", "survival", "factions", "arcade", "raft"};
     private static final String CHANNEL = "BungeeCord";
     private final BlackForgeCore plugin;
     private final Map<String, Integer> counts = new ConcurrentHashMap<>();

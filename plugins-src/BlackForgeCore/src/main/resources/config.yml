@@ -273,6 +273,7 @@ hub:
     arcade: arcade
     factions: factions
     skyblock: skyblock
+    raft: raft
   # spawn: set in-game with /blackforge setspawn (until set, the built-in spawn is used)
   join:
     enabled: true                     # false = no arrival effects at all

@@ -5,8 +5,8 @@ import datetime, os, re, shutil
 ROOT = r'C:\MinecraftNetwork'
 STAMP = datetime.date.today().isoformat()
 BACKUP = os.path.join(ROOT, 'build', f'config-backup-{STAMP}')
-SERVERS = ['hub', 'skyblock', 'survival', 'factions', 'arcade']
-SIM = {'skyblock': 8, 'survival': 8, 'factions': 8, 'arcade': 8}   # hub stays at 4
+SERVERS = ['hub', 'skyblock', 'survival', 'factions', 'arcade', 'raft']
+SIM = {'skyblock': 8, 'survival': 8, 'factions': 8, 'arcade': 8, 'raft': 8}   # hub stays at 4
 changed = []
 
 

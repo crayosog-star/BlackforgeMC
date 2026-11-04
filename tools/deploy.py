@@ -27,6 +27,7 @@ SERVERS = {
     "survival": {"port": 30003, "mode": "survival", "display": "Survival", "join": ""},
     "factions": {"port": 30004, "mode": "factions", "display": "Factions", "join": ""},
     "arcade":   {"port": 30005, "mode": "arcade", "display": "Arcade", "join": ""},
+    "raft":     {"port": 30006, "mode": "raft", "display": "Raft", "join": "raft"},
 }
 
 secret_file = ROOT / "tools" / "rcon.secret"

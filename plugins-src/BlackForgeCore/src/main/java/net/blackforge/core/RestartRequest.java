@@ -15,7 +15,7 @@ import java.util.*;
 public final class RestartRequest {
     private RestartRequest() {}
 
-    public static final List<String> SERVERS = List.of("hub", "skyblock", "survival", "factions", "arcade");
+    public static final List<String> SERVERS = List.of("hub", "skyblock", "survival", "factions", "arcade", "raft");
 
     /** Parsed request: which servers, and whether to skip the countdown. */
     public record Parsed(List<String> servers, boolean now) {}
