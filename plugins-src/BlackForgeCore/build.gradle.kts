@@ -89,6 +89,16 @@ tasks.register<JavaExec>("bosses") {
     args((project.findProperty("jar") ?: "").toString(), (project.findProperty("dir") ?: layout.projectDirectory.dir("previews/bosses").asFile.absolutePath).toString())
 }
 
+// scratch render, remove before shipping: gradle shot -Pjar=<26.3.jar> [-Pw=640 -Ph=360 -Pss=1]
+tasks.register<JavaExec>("shot") {
+    classpath = sourceSets["main"].runtimeClasspath + sourceSets["main"].compileClasspath
+    mainClass.set("net.blackforge.core.build.ScratchShot")
+    maxHeapSize = "6g"
+    args((project.findProperty("jar") ?: "").toString(),
+         (project.findProperty("dir") ?: layout.projectDirectory.dir("previews/scratch").asFile.absolutePath).toString(),
+         (project.findProperty("w") ?: "1920").toString(), (project.findProperty("h") ?: "1080").toString(), (project.findProperty("ss") ?: "2").toString())
+}
+
 // Renders the Infernal Kingdom (survival spawn rebuild, staging): gradle kingdom
 tasks.register<JavaExec>("kingdom") {
     classpath = sourceSets["main"].runtimeClasspath
