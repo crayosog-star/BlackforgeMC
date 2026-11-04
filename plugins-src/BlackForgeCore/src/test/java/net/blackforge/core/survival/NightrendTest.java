@@ -48,12 +48,12 @@ class NightrendTest {
         assertEquals(0.0, NightrendMath.hitMultiplier(true, -1), EPS);
     }
 
-    @Test void everySecondHitIsTheOffHand() {
-        assertFalse(NightrendMath.offHandHit(0));
-        assertFalse(NightrendMath.offHandHit(1));
-        assertTrue(NightrendMath.offHandHit(2));
-        assertFalse(NightrendMath.offHandHit(3));
-        assertTrue(NightrendMath.offHandHit(4));
+    @Test void bladesAlternateUnlessTheRollRepeats() {
+        assertTrue(NightrendMath.nextIsOffHand(false, 0.5, 0.03));    // right, then left
+        assertFalse(NightrendMath.nextIsOffHand(true, 0.5, 0.03));    // left, then right
+        assertFalse(NightrendMath.nextIsOffHand(false, 0.02, 0.03));  // the rare repeat: right again
+        assertTrue(NightrendMath.nextIsOffHand(true, 0.02, 0.03));    // left again
+        assertTrue(NightrendMath.nextIsOffHand(false, 0.03, 0.03));   // the chance is exclusive
     }
 
     @Test void slashSweepsLeftToRightAndEasesOut() {

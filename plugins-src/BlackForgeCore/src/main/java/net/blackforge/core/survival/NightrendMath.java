@@ -49,8 +49,13 @@ final class NightrendMath {
         return fromBehind ? Math.max(0, Math.min(1, behindMultiplier)) : 1.0;
     }
 
-    /** With a pair, every second hit (2nd, 4th, ...) is the off-hand blade's slash. */
-    static boolean offHandHit(int hitNumber) { return hitNumber > 0 && hitNumber % 2 == 0; }
+    /** Ticks a left swing waits: half of the 6-tick swing the client has already started on its right arm. */
+    static final long OFF_SWING_DELAY = 3;
+
+    /** Which blade goes next: the other one, unless {@code roll} (0-1) lands under {@code repeatChance}, then the same again. */
+    static boolean nextIsOffHand(boolean offHandNow, double roll, double repeatChance) {
+        return roll < repeatChance ? offHandNow : !offHandNow;
+    }
 
     /** Eased progress of the slash at tick {@code t} (0..SLASH_TICKS): fast out of the swing, slowing at the end. */
     static double slashProgress(int t) {

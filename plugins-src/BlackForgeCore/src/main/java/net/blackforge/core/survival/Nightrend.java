@@ -18,6 +18,7 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
+import org.bukkit.event.player.PlayerAnimationEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
@@ -35,6 +36,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
 
 /**
@@ -44,8 +46,8 @@ import java.util.function.Predicate;
  *   <li>One dagger in your main hand hits for {@code damage} (5) at {@code attack-speed} (2.0 a second) with
  *   {@code reach-change} (-0.5) blocks of reach. It isn't a sword, so there's no sweep: one target per hit.</li>
  *   <li>With a Nightrend in <b>each</b> hand you attack at {@code pair-attack-speed} (2.6), and every second hit
- *   the blades take turns: a red slash off the main-hand blade, then the off arm swings and its blade slashes back the
- *   other way (cosmetic; same damage). Drop either and the bonus is gone.</li>
+ *   the blades take turns, right then left, each swinging its own arm and slashing its own way, with a
+ *   {@code repeat-chance} (3%) that the same blade goes again (cosmetic; same damage). Drop either and the bonus is gone.</li>
  *   <li>Hits from the arc behind the target ({@code behind-arc-degrees}, 120) only do {@code behind-damage} (60%),
  *   with a duller sound. Players and mobs alike. "Behind" is where the target is facing, not where it's walking.</li>
  *   <li>A slight aura: a few dark-red embers drift off each blade while you hold it. Off while invisible or vanished.</li>
@@ -75,11 +77,11 @@ public final class Nightrend implements Listener, Hackable {
     private final BlackForgeCore plugin;
     private final Predicate<Location> allowedAt;
     private final boolean enabled, customModel;
-    private final double damage, singleSpeed, pairSpeed, reachChange, behindArc, behindDamage;
+    private final double damage, singleSpeed, pairSpeed, reachChange, behindArc, behindDamage, repeatChance;
     private final long empMillis, flipCooldownMillis;
     private final NamespacedKey tagKey, damageKey, speedKey, reachKey, pairKey, modelKey;
     private final Set<UUID> pairOn = new HashSet<>();
-    private final Map<UUID, Integer> hits = new HashMap<>();
+    private final Set<UUID> offNext = new HashSet<>();   // the off-hand blade swings next; absent = the main hand
     private final Map<UUID, Long> hackedUntil = new HashMap<>(), lastFlip = new HashMap<>();
     private final Set<ItemDisplay> live = new HashSet<>();
     private final Set<UUID> flipping = new HashSet<>();   // a flip is playing for them
@@ -98,6 +100,7 @@ public final class Nightrend implements Listener, Hackable {
         this.reachChange = Math.max(-2, Math.min(1, c.getDouble("nightrend.reach-change", -0.5)));
         this.behindArc = Math.max(0, Math.min(360, c.getDouble("nightrend.behind-arc-degrees", 120)));
         this.behindDamage = Math.max(0, Math.min(1, c.getDouble("nightrend.behind-damage", 0.6)));
+        this.repeatChance = Math.max(0, Math.min(1, c.getDouble("nightrend.repeat-chance", 0.03)));
         this.empMillis = Math.round(Math.max(0, c.getDouble("nightrend.emp-seconds", 4)) * 1000);
         this.flipCooldownMillis = Math.round(Math.max(0, c.getDouble("nightrend.flip-cooldown-seconds", 3)) * 1000);
         this.tagKey = new NamespacedKey(BlackForgeCore.NS, "nightrend");
@@ -177,7 +180,6 @@ public final class Nightrend implements Listener, Hackable {
         boolean here = enabled && allowedAt.test(p.getLocation());
         boolean hacked = hackedUntil.getOrDefault(p.getUniqueId(), 0L) > now;
         setPair(p, here && main && off && !hacked && !p.isDead());
-        if (!main) hits.remove(p.getUniqueId());
         if (auraNow && here && (main || off) && !flipping.contains(p.getUniqueId()) && visible(p)) aura(p, main, off);
     }
 
@@ -229,7 +231,7 @@ public final class Nightrend implements Listener, Hackable {
             if (now - lastFlip.getOrDefault(id, 0L) >= flipCooldownMillis && visible(p)) { lastFlip.put(id, now); flipUp(p); }
         } else {
             pairOn.remove(id);
-            hits.remove(id);
+            offNext.remove(id);
         }
     }
 
@@ -365,20 +367,36 @@ public final class Nightrend implements Listener, Hackable {
         }
 
         if (!pairOn.contains(p.getUniqueId())) return;
-        int n = hits.merge(p.getUniqueId(), 1, Integer::sum);
-        if (n >= 1000) hits.put(p.getUniqueId(), 0);
-        // the blades take turns: main-hand slash on odd hits, the off hand swings and slashes on even ones
-        if (NightrendMath.offHandHit(n)) Bukkit.getScheduler().runTaskLater(plugin, () -> slash(p, true), 1L);
+        // the client sends the hit, then the swing, so offNext is still this swing's blade (onSwing moves it on)
+        if (offNext.contains(p.getUniqueId())) Bukkit.getScheduler().runTaskLater(plugin, () -> slash(p, true), NightrendMath.OFF_SWING_DELAY);
         else slash(p, false);
     }
 
     /**
-     * One blade's slash: a thin red arc sweeps across in front of you, starting on that blade's side. The off-hand
-     * blade also swings the off arm (the main arm already swings with every attack). Left-handed players are mirrored.
+     * Every swing of the pair, hit or miss, is one blade's turn. A left turn stops the right arm's swing reaching other
+     * players and swings the left instead. The swinger's own game always starts the right arm and ignores a new swing
+     * for the first half of it, so the left arm waits {@link NightrendMath#OFF_SWING_DELAY} ticks or it would never show.
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void onSwing(PlayerAnimationEvent e) {
+        Player p = e.getPlayer();
+        UUID id = p.getUniqueId();
+        if (!pairOn.contains(id)) return;
+        boolean off = offNext.contains(id);
+        if (off) {
+            e.setCancelled(true);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline() && pairOn.contains(id)) p.swingOffHand(); }, NightrendMath.OFF_SWING_DELAY);
+        }
+        if (NightrendMath.nextIsOffHand(off, ThreadLocalRandom.current().nextDouble(), repeatChance)) offNext.add(id);
+        else offNext.remove(id);
+    }
+
+    /**
+     * One blade's slash: a thin red arc sweeps across in front of you, starting on that blade's side.
+     * Left-handed players are mirrored.
      */
     private void slash(Player p, boolean offHand) {
         if (!p.isOnline() || p.isDead() || !pairOn.contains(p.getUniqueId())) return;
-        if (offHand) p.swingOffHand();
         World w = p.getWorld();
         Location eye = p.getEyeLocation();
         double yaw = eye.getYaw();                                  // fixed at the start: the arc doesn't follow the camera
@@ -438,7 +456,7 @@ public final class Nightrend implements Listener, Hackable {
         setPair(p, false);
         AttributeInstance ai = p.getAttribute(Attribute.ATTACK_SPEED);
         if (ai != null) ai.removeModifier(pairKey);   // belt and braces: never leave the bonus behind
-        hits.remove(p.getUniqueId());
+        offNext.remove(p.getUniqueId());
         if (!p.isOnline()) lastFlip.remove(p.getUniqueId());
         if (!p.isOnline() || p.isDead()) hackedUntil.remove(p.getUniqueId());
     }
