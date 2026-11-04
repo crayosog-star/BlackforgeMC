@@ -112,6 +112,7 @@ public final class Allays implements Listener {
     private final List<Flyer> flyers = new ArrayList<>();
     private final Map<String, Base> bases = new HashMap<>();
     private long now;
+    private int sandboxLimit = Integer.MAX_VALUE;
 
     /** {@code zone}: where staff may test flight. {@code sandbox}: the Arena's Foundry, where everything is free and nothing is saved. */
     Allays(BlackForgeCore plugin, BaseStation station, Predicate<Location> zone, boolean sandbox) {
@@ -133,6 +134,8 @@ public final class Allays implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
         if (sandbox) registerCommand();
     }
+
+    void setSandboxLimit(int total) { this.sandboxLimit = total; }
 
     private static AllayRules.Table table(org.bukkit.configuration.file.FileConfiguration c) {
         AllayRules.Table d = AllayRules.Table.DEFAULT;
@@ -308,6 +311,11 @@ public final class Allays implements Listener {
         Base b = bases.get(region);
         // read from the base, not the card: two members can have this menu open at once
         if ((b == null ? 0 : b.tier) != t - 1 || t > BUILT_TIER) return;
+        if (sandbox) {
+            int all = table.flock(t) - (b == null ? 0 : b.workers.size());
+            for (Base o : bases.values()) all += o.workers.size();
+            if (all > sandboxLimit) { p.sendActionBar(Ui.mm("<red>The Foundry has enough allays flying right now. Try again soon.")); return; }
+        }
         AllayRules.Cost cost = table.cost(t);
         if (!station.pay(p, cost.money(), cost.essence())) return;
         if (b == null) { b = new Base(region, p.getUniqueId()); bases.put(region, b); }

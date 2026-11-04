@@ -1,6 +1,6 @@
 # Forge Allays
 **Status:** In progress. Approved by Colin on 2026-11-04 with the recommended defaults
-**Next task:** P2.T3
+**Next task:** P3.T1, once the Phase 2 gate is confirmed (rule 9)
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -191,7 +191,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** a player leaving the Arena (nothing carries out); restart; many players at once (cap with `foundry.max-agents-total`-style `foundry.max-allays-total: 12`).
 - **Done when:** the Phase 2 gate passes on the live Foundry, and leaving the Arena leaves no allay behind.
 - **Leaves ready:** a test bench for later tiers.
-- **Evidence:**
+- **Evidence:** Untested in game. The Phase 2 gate needs a tester, and two of its checks need a second player. The build runs before merge.
 
 ## Phase 3: Tier II, Courier (Foundry only)
 - **Goal:** in the Foundry, a Tier II flock sorts the Station into framed chests and keeps Agents fuelled.
@@ -316,6 +316,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | P2.T3 drops bench items from a spot on the open floor instead of a dispenser, so the Arena doesn't need rebuilding | Same test, less risk; flagged to Colin in the PR |
 | 2026-11-04 | P2.T2 marks death drops on the item entity, not the stack, so a player's recovered items don't keep a hidden tag and still stack | Same check, safer method; flagged to Colin in the PR |
 | 2026-11-04 | Phase 2 started before the Phase 1 in-game gate was played | Colin, in chat |
 | 2026-11-04 | P1.T3 registers `/allay` from `Allays`, as `Robots` does, instead of changing `HubModule` | Small wiring change, no check weakened; flagged to Colin in the PR |

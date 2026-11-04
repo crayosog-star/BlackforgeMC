@@ -20,7 +20,7 @@ public final class FoundrySystems {
     private final Allays allays;
 
     /** Where the fixed benches are, from the hub's layout. */
-    public record Layout(int[] laneZ, int laneX, int y, Location forge, Location penMobs, int mobs, Location title, Location[] supply) {}
+    public record Layout(int[] laneZ, int laneX, int y, Location forge, Location penMobs, int mobs, Location title, Location[] supply, Location allayBench) {}
 
     public FoundrySystems(BlackForgeCore plugin, World world, Layout at, java.util.function.ToIntFunction<Location> supplyAt, Predicate<Location> zone, BiPredicate<Player, Location> access) {
         var c = plugin.getConfig();
@@ -37,8 +37,9 @@ public final class FoundrySystems {
         station.setRegion(l -> zone.test(l) ? "foundry:" + (l.getBlockX() >> 4) + ":" + (l.getBlockZ() >> 4) : null);
         allays = new Allays(plugin, station, zone, true);
         station.setAllays(allays);
+        allays.setSandboxLimit(c.getInt("foundry.max-allays-total", 12));
         Bukkit.getPluginManager().registerEvents(new FoundrySupply(supplyAt, hoppers), plugin);
-        lab = new FoundryLab(plugin, world, hoppers, station, zone, new FoundryLab.Layout(at.laneZ(), at.laneX(), at.y(), at.forge(), at.penMobs(), at.mobs(), at.title(), at.supply()));
+        lab = new FoundryLab(plugin, world, hoppers, station, zone, new FoundryLab.Layout(at.laneZ(), at.laneX(), at.y(), at.forge(), at.penMobs(), at.mobs(), at.title(), at.supply(), at.allayBench()));
     }
 
     /** Removes this player's agents and allays, and everything in them. */

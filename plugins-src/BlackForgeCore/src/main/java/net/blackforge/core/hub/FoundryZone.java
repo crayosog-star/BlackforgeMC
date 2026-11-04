@@ -22,6 +22,8 @@ public final class FoundryZone {
     public static final int SUPPLY_Z = -53;
     /** The Forge: a Base Station anyone can use. */
     public static final int FORGE_X = 0, FORGE_Z = -60;
+    /** Allay Bench: a spot on the open floor by the Forge where loose items keep landing, in reach of a Gatherer. */
+    public static final int ALLAY_BENCH_X = 7, ALLAY_BENCH_Z = -60;
     /** Hopper lanes, tier I to III: source chest on top, the hopper, then the sink one block east. */
     public static final int LANE_X = 14;
     public static final int[] LANE_Z = {-66, -61, -56};

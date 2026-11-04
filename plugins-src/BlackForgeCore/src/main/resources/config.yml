@@ -218,6 +218,7 @@ foundry:
   max-agents-per-player: 20
   max-agents-total: 60
   max-upgraded-hoppers-per-chunk: 64
+  max-allays-total: 12
 
 # Black Forge hub (hub server only). Commands: /blackforge setspawn | reload | dragons | effects | portals | info
 hub:
