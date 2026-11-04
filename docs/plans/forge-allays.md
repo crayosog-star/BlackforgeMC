@@ -1,6 +1,6 @@
 # Forge Allays
 **Status:** In progress. Approved by Colin on 2026-11-04 with the recommended defaults
-**Next task:** P1.T3
+**Next task:** P2.T1, which can't start until the Phase 1 gate is confirmed (rule 9; see Blockers log)
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -136,8 +136,8 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Evidence:** Verified: the `BlackForgeCore` build, unit tests and strict walkcheck pass with these hooks in. Untested: the in-game fuel and Trader sale checks. Both still need a tester, so this stays unticked until then.
 
 ### [ ] P1.T3: Prove flight control in the Foundry
-- **Needs:** P1.T1; `S/FoundrySystems.java:25-40`; the hub's staff command pattern, `testCommand` at `plugins-src/BlackForgeCore/src/main/java/net/blackforge/core/hub/HubModule.java:138`; the smooth-motion guidance in the `motion` skill.
-- **Files:** create `S/Allays.java`, `S/AllayFlight.java`, `plugins-src/BlackForgeCore/src/test/java/net/blackforge/core/survival/AllayFlightTest.java`; change `S/FoundrySystems.java`, `plugins-src/BlackForgeCore/src/main/java/net/blackforge/core/hub/HubModule.java`.
+- **Needs:** P1.T1; `S/FoundrySystems.java:25-40`; command registration through `Bukkit.getCommandMap()`, as `S/Robots.java:981` does; the smooth-motion guidance in the `motion` skill.
+- **Files:** create `S/Allays.java`, `S/AllayFlight.java`, `plugins-src/BlackForgeCore/src/test/java/net/blackforge/core/survival/AllayFlightTest.java`; change `S/FoundrySystems.java`.
 - **Steps:**
   1. `AllayFlight`: move an entity from A to B with ease-in and ease-out, updating each tick, using the speed from config. Keep the position maths pure and unit-tested in `AllayFlightTest`.
   2. `Allays`: spawn with `setAI(false)`, `setInvulnerable(true)`, `setSilent(true)`, `setCollidable(false)`, `setPersistent(false)`, no duplication, and a persistent-data marker. Cancel `PlayerInteractEntityEvent` and leashing for marked allays.
@@ -145,7 +145,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** a player leaving the Foundry; a server restart (the marker removes stragglers on entity load, using the pattern at `S/Robots.java:382`); a jukebox beside it; a held item.
 - **Done when:** the Phase 1 gate checks pass in game. If flight is visibly jerky or the allay can't be fully controlled, stop and record it in the Blockers log, because the design then needs Colin's decision.
 - **Leaves ready:** a controllable allay and `Allays` class.
-- **Evidence:**
+- **Evidence:** Verified: the `BlackForgeCore` build and strict walkcheck pass, so the Allay calls compile against the pinned Paper build, and all 7 `AllayFlightTest` tests pass. Untested: nobody has flown one in game yet, so this stays unticked until the Phase 1 gate is checked.
 
 ## Phase 2: Tier I, Gatherer (Foundry only)
 - **Goal:** in the Foundry, a player can summon a Gatherer in the Forge and watch it carry loose drops to the Station.
@@ -311,10 +311,12 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Blockers log
 | Date | Task | Problem | Decision |
 |---|---|---|---|
+| 2026-11-04 | Phase 1 gate | The in-game checks for P1.T2 and P1.T3 need a tester, so Phase 2 can't start (rule 9) | Waiting on Colin or a tester |
 
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | P1.T3 registers `/allay` from `Allays`, as `Robots` does, instead of changing `HubModule` | Small wiring change, no check weakened; flagged to Colin in the PR |
 
 ## Later ideas
 - Skyblock and OneBlock allays, which need a sell path first.
