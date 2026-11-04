@@ -29,6 +29,7 @@ import java.util.function.Predicate;
  */
 final class FoundryTips implements Listener {
     private static final Map<String, String> TIPS = Map.ofEntries(
+            Map.entry("allay", "Slot 34 summons a Forge Allay. It carries loose drops to the Forge, like the ones landing on the Allay Bench."),
             Map.entry("supply", "Click anything in this chest for a full stack. It never runs out."),
             Map.entry("forge", "Upgrades here are free. Click an agent's card to raise its tier, and use the arrow if you have more than five."),
             Map.entry("lane", "Each lane shows its rated speed and the speed it's really moving. Tier I is a plain hopper."),
@@ -70,6 +71,7 @@ final class FoundryTips implements Listener {
         else {
             String bench = FoundryZone.benchAt(e.getClickedBlock().getX(), e.getClickedBlock().getY(), e.getClickedBlock().getZ());
             if (bench != null) show(p, bench);
+            if ("forge".equals(bench)) show(p, "allay");
         }
     }
 

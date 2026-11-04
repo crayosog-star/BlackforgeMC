@@ -44,7 +44,8 @@ public final class Foundry implements Listener {
         this.systems = new FoundrySystems(plugin, w, new FoundrySystems.Layout(FoundryZone.LANE_Z, FoundryZone.LANE_X, y + 1,
                 new Location(w, FoundryZone.FORGE_X, y + 1, FoundryZone.FORGE_Z),
                 new Location(w, (FoundryZone.PEN_X1 + FoundryZone.PEN_X2) / 2 + 0.5, y + 1, (FoundryZone.PEN_Z1 + FoundryZone.PEN_Z2) / 2 + 0.5), FoundryZone.PEN_MOBS,
-                new Location(w, 0.5, y + 7.5, FoundryZone.GATE_Z + 0.5), supply),
+                new Location(w, 0.5, y + 7.5, FoundryZone.GATE_Z + 0.5), supply,
+                new Location(w, FoundryZone.ALLAY_BENCH_X + 0.5, y + 1, FoundryZone.ALLAY_BENCH_Z + 0.5)),
                 l -> l.getWorld() == w ? FoundryZone.supplyAt(l.getBlockX(), l.getBlockY(), l.getBlockZ()) : -1, this::inZone,
                 (p, l) -> inZone(l) && (placed.owner(pos(l.getBlock())) == null || p.getUniqueId().equals(placed.owner(pos(l.getBlock())))));
         Bukkit.getPluginManager().registerEvents(this, plugin);

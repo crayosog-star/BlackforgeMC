@@ -26,7 +26,7 @@ import java.util.function.Predicate;
  */
 final class FoundryLab {
     /** Where the hub's layout says everything is. */
-    record Layout(int[] laneZ, int laneX, int y, Location forge, Location penMobs, int mobs, Location title, Location[] supply) {}
+    record Layout(int[] laneZ, int laneX, int y, Location forge, Location penMobs, int mobs, Location title, Location[] supply, Location allayBench) {}
 
     private static final class Lane {
         final int tier; final Block source, hopper, sink; final Deque<Integer> counts = new ArrayDeque<>(); TextDisplay holo;
@@ -42,6 +42,10 @@ final class FoundryLab {
     private final List<TextDisplay> labels = new ArrayList<>();
     private final List<Husk> mobs = new ArrayList<>();
     private final java.util.Random rnd = new java.util.Random();
+    private static final Material[] BENCH_ITEMS = {Material.COBBLESTONE, Material.WHEAT, Material.BONE, Material.ROTTEN_FLESH, Material.OAK_LOG, Material.RAW_IRON};
+    private static final int BENCH_MAX = 6, BENCH_SECONDS = 5;
+    private final List<org.bukkit.entity.Item> benchDrops = new ArrayList<>();
+    private int benchTimer;
 
     FoundryLab(BlackForgeCore plugin, World world, HopperUpgrades hoppers, BaseStation station, Predicate<Location> zone, Layout layout) {
         this.world = world; this.hoppers = hoppers; this.station = station; this.zone = zone; this.layout = layout;
@@ -60,10 +64,25 @@ final class FoundryLab {
         for (Player p : world.getPlayers()) if (zone.test(p.getLocation())) occupied = true;
         if (!occupied && layout.forge().getBlock().getState(false) instanceof Barrel b) b.getInventory().clear();   // shared storage, so it resets too
         for (Lane l : lanes) runLane(l);
+        runAllayBench(occupied);
         mobs.removeIf(m -> !m.isValid());
         // spread out and standing still, so they stay in the pen and an agent placed beside one always reaches it
         while (mobs.size() < layout.mobs()) mobs.add(world.spawn(layout.penMobs().clone().add(rnd.nextInt(7) - 3, 0, rnd.nextInt(7) - 3), Husk.class,
                 h -> { h.setPersistent(false); h.setRemoveWhenFarAway(false); h.setSilent(true); h.setAware(false); }));
+    }
+
+    /** Keeps a few loose items landing while someone's here, and clears them when nobody is. They're never saved. */
+    private void runAllayBench(boolean occupied) {
+        benchDrops.removeIf(i -> !i.isValid());
+        if (!occupied) {
+            benchDrops.forEach(org.bukkit.entity.Item::remove);
+            benchDrops.clear();
+            return;
+        }
+        if (++benchTimer < BENCH_SECONDS || benchDrops.size() >= BENCH_MAX) return;
+        benchTimer = 0;
+        Location at = layout.allayBench().clone().add(rnd.nextDouble() * 3 - 1.5, 1, rnd.nextDouble() * 3 - 1.5);
+        benchDrops.add(world.dropItem(at, new ItemStack(BENCH_ITEMS[rnd.nextInt(BENCH_ITEMS.length)], 1 + rnd.nextInt(32)), i -> i.setPersistent(false)));
     }
 
     /** Fills the source chest, empties the sink and shows what really came through over the last 5 seconds. */
@@ -88,6 +107,7 @@ final class FoundryLab {
     private void spawnLabels() {
         label(layout.title(), "<gradient:#ffb347:#ff5a1a><bold>THE FOUNDRY</bold></gradient><newline><gray>Build and test anything<newline><dark_gray>It all goes when you leave", 1.3f);
         label(layout.forge().clone().add(0.5, 2.3, 0.5), "<gold><bold>The Forge</bold><newline><gray>Upgrades are free here", 1f);
+        label(layout.allayBench().clone().add(0, 1.8, 0), "<#4fd1b5><bold>Allay Bench</bold><newline><gray>Summon a Forge Allay from slot 34<newline><gray>of the Forge to clear these drops", 1f);
         for (int i = 0; i < layout.supply().length; i++)
             label(layout.supply()[i].clone().add(0.5, 1.5, 0.5), "<#ffb347><bold>" + FoundrySupply.NAMES[i] + "</bold><newline><gray>Never runs out", 0.9f);
     }
