@@ -73,6 +73,7 @@ public final class BaseStation implements Listener {
     private BiPredicate<Player, Location> access = (p, l) -> false;
     private Function<Location, String> regionOf = l -> null;
     private Economy eco;
+    private Allays allays;
 
     BaseStation(BlackForgeCore plugin, Robots robots, HopperUpgrades hoppers) { this(plugin, robots, hoppers, false); }
 
@@ -97,6 +98,7 @@ public final class BaseStation implements Listener {
     void setAccess(BiPredicate<Player, Location> rule) { this.access = rule; }
     void setRegion(Function<Location, String> rule) { this.regionOf = rule; }
     void setEconomy(Economy e) { this.eco = e; }
+    void setAllays(Allays a) { this.allays = a; }
 
     // ------------------------------------------------------------------ items
 
@@ -136,7 +138,7 @@ public final class BaseStation implements Listener {
         p.sendMessage(Ui.mm("<green>You bought a Base Station. Place it in your claim or island."));
     }
 
-    private boolean pay(Player p, int money, int ess) {
+    boolean pay(Player p, int money, int ess) {
         if (sandbox) return true;
         if (Spawners.countEssence(p) < ess) { p.sendMessage(Ui.mm("<red>You need " + ess + " Mob Essence (you have " + Spawners.countEssence(p) + ").")); return false; }
         if (eco == null || eco.getBalance(p) < money) { p.sendMessage(Ui.mm("<red>You need " + NetEconomy.money(money) + ".")); return false; }
@@ -291,7 +293,7 @@ public final class BaseStation implements Listener {
     private static final int[] CARD_X = {18, 52, 88, 124, 158};
     private static final int HOPPER_INFO = 31, FORGE_SIZE = 36;
     private static final int[] BUY_SLOTS = {32, 33};
-    private static final int NEXT_PAGE = 27;
+    private static final int NEXT_PAGE = 27, ALLAY_SLOT = 34;
 
     /** The Foundry's prebuilt Forge: marks the barrel a station. It's in its own chunk's region, like any other. */
     void adopt(Block b) {
@@ -304,6 +306,11 @@ public final class BaseStation implements Listener {
     }
 
     private void forge(Player p, Location at) { forge(p, at, 0); }
+
+    void openForge(Player p, Location at) { forge(p, at); }
+
+    /** Is it still a station, and can this player still use it? A menu can outlast either. */
+    boolean usable(Player p, Location at) { return isStation(at.getBlock()) && access.test(p, at); }
 
     private void forge(Player p, Location at, int page) {
         List<Robots.Bot> all = robots.agentsOf(p.getUniqueId());
@@ -356,6 +363,7 @@ public final class BaseStation implements Listener {
         if (pages > 1) m.inv.setItem(NEXT_PAGE, Ui.item(Material.ARROW, "<yellow><bold>Next Agents", "<gray>Page <white>" + (page + 1) + "<gray> of <white>" + pages));
         m.inv.setItem(BUY_SLOTS[0], buyIcon(1));
         m.inv.setItem(BUY_SLOTS[1], buyIcon(10));
+        if (allays != null && allays.available(p)) m.inv.setItem(ALLAY_SLOT, allays.forgeIcon(regionOf.apply(at)));
         p.openInventory(m.inv);
     }
 
@@ -382,9 +390,10 @@ public final class BaseStation implements Listener {
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
         // the station can be broken, or the player's access lost, while a menu stays open
-        if (!isStation(m.at.getBlock()) || !access.test(p, m.at)) { p.closeInventory(); return; }
+        if (!usable(p, m.at)) { p.closeInventory(); return; }
         int slot = e.getRawSlot();
         if (slot == NEXT_PAGE && m.pages > 1) { forge(p, m.at, m.page + 1); return; }
+        if (slot == ALLAY_SLOT && allays != null && allays.available(p)) { allays.openMenu(p, m.at); return; }
         if (slot == BUY_SLOTS[0] || slot == BUY_SLOTS[1]) { buyUpgrades(p, slot == BUY_SLOTS[0] ? 1 : 10); return; }
         String id = m.agents.get(slot);
         if (id == null) return;

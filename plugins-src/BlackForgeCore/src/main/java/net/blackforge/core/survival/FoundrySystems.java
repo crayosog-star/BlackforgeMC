@@ -35,13 +35,14 @@ public final class FoundrySystems {
         station.setAccess(access);
         // one station per chunk: the island is shared, so a region can't be one player's
         station.setRegion(l -> zone.test(l) ? "foundry:" + (l.getBlockX() >> 4) + ":" + (l.getBlockZ() >> 4) : null);
-        allays = new Allays(plugin, zone);
+        allays = new Allays(plugin, station, zone, true);
+        station.setAllays(allays);
         Bukkit.getPluginManager().registerEvents(new FoundrySupply(supplyAt, hoppers), plugin);
         lab = new FoundryLab(plugin, world, hoppers, station, zone, new FoundryLab.Layout(at.laneZ(), at.laneX(), at.y(), at.forge(), at.penMobs(), at.mobs(), at.title(), at.supply()));
     }
 
-    /** Removes this player's agents and everything in them. */
-    public void clear(UUID owner) { robots.removeOwnedBy(owner); }
+    /** Removes this player's agents and allays, and everything in them. */
+    public void clear(UUID owner) { robots.removeOwnedBy(owner); allays.clear(owner); }
 
     public void shutdown() { lab.shutdown(); allays.shutdown(); }
 }

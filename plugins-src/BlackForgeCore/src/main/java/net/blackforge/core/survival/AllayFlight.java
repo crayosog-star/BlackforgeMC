@@ -29,6 +29,12 @@ final class AllayFlight {
         return Math.min(MAX_LIFT, Math.abs(distance) / 8) * Math.sin(Math.PI * c);
     }
 
+    /** Offset from its idle spot above the Station at this tick: a slow circle with its flock, evenly spaced, and a gentle bob. */
+    static double[] hover(int index, int flock, long tick) {
+        double angle = 2 * Math.PI * index / Math.max(1, flock) + tick * 0.015;
+        return new double[]{Math.cos(angle) * 1.4, Math.sin(tick * 0.05 + index) * 0.25, Math.sin(angle) * 1.4};
+    }
+
     /** Where it is at this tick of the trip, as {x, y, z}. */
     static double[] at(double[] from, double[] to, int tick, int ticks) {
         double t = (double) tick / ticks, e = ease(t);
