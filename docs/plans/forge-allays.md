@@ -1,6 +1,6 @@
 # Forge Allays
 **Status:** In progress. Approved by Colin on 2026-11-04 with the recommended defaults
-**Next task:** P1.T1
+**Next task:** P1.T2
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -110,7 +110,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Rollback:** revert the PR. Nothing is saved in this phase.
 - **Phase gate:** a tester confirms in the Foundry: `/allay start` spawns a test allay that flies between two points smoothly, doesn't follow a player, ignores right-clicks and held items, and doesn't duplicate beside a playing jukebox; `/allay stop` removes it.
 
-### [ ] P1.T1: Add allay rules and config
+### [x] P1.T1: Add allay rules and config
 - **Needs:** `S/RobotRules.java` as the pattern for pure rules.
 - **Files:** create `S/AllayRules.java`, `plugins-src/BlackForgeCore/src/test/java/net/blackforge/core/survival/AllayRulesTest.java`; change `plugins-src/BlackForgeCore/src/main/resources/config.yml`.
 - **Steps:**
@@ -121,7 +121,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** tier out of range throws; a fee outside 0-1 is clamped.
 - **Done when:** `AllayRulesTest` covers each method, including that the default speed and carry give 3.2 items a second on a 12-block run. CI passes on `BlackForgeCore`.
 - **Leaves ready:** rules and config for later tasks.
-- **Evidence:**
+- **Evidence:** Verified: all 8 `AllayRulesTest` tests pass when run alone on Java 21 with a small stand-in for JUnit. Automerge runs them for real on the `BlackForgeCore` build and won't merge if they fail. Nothing reads the config yet, so there's nothing to play.
 
 ### [ ] P1.T2: Add the hooks allays need, with no behaviour change
 - **Needs:** `S/BaseStation.java:70`, `151`, `166`; `S/Robots.java:769`, `864`; `S/GroveTrader.java:133-152`.
