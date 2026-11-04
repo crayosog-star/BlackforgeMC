@@ -34,13 +34,12 @@ class GildedGroveTest {
         }
     }
 
-    @Test void warpLandsOnFloorWithHeadroomInsideTheProtectedArea() {
+    @Test void warpLandsOnFloorWithHeadroom() {
         Canvas c = GildedGrove.build();
         int x = (int) Math.floor(KingdomLayout.GROVE_WARP_X), y = (int) KingdomLayout.GROVE_WARP_Y, z = KingdomLayout.GROVE_WARP_Z;
         assertNotNull(c.get(x, y - 1, z));
         assertNull(c.get(x, y, z));
         assertNull(c.get(x, y + 1, z));
-        assertTrue(SurvivalLayout.inSpawn(x, y, z));
     }
 
     @Test void walkingAroundIsSafe() {
@@ -63,11 +62,10 @@ class GildedGroveTest {
         }
     }
 
-    @Test void bridgeAndIslandAreProtected() {
+    @Test void groveRegionIsWhereItWasPlanned() {
         double y = KingdomLayout.GROVE_Y + 1;
         assertTrue(KingdomLayout.inGrove(KingdomLayout.GROVE_X, y, KingdomLayout.GROVE_Z));
         assertTrue(KingdomLayout.inGrove(-60, y, KingdomLayout.GROVE_BRIDGE_Z));
-        assertTrue(SurvivalLayout.inSpawn(-30, SurvivalLayout.Y + 12, KingdomLayout.GROVE_BRIDGE_Z));
         assertFalse(KingdomLayout.inGrove(300, y, 300));
     }
 }

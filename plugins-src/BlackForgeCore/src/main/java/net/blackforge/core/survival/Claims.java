@@ -151,7 +151,7 @@ public final class Claims implements Listener {
 
     private boolean nearProtectedArea(int cx, int cz) {
         int x = (cx << 4) + 8, z = (cz << 4) + 8;
-        return KingdomLayout.nearGrove(x, z) || Math.hypot(x, z) < 96 || Math.hypot(x - SurvivalLayout.KOTH_X, z - SurvivalLayout.KOTH_Z) < 96
+        return Math.hypot(x, z) < 96 || Math.hypot(x - SurvivalLayout.KOTH_X, z - SurvivalLayout.KOTH_Z) < 96
                 || (Math.abs(x - SurvivalLayout.PVP_X) < SurvivalLayout.PVP_HALF + 48 && Math.abs(z - SurvivalLayout.PVP_Z) < SurvivalLayout.PVP_HALF + 48);
     }
 

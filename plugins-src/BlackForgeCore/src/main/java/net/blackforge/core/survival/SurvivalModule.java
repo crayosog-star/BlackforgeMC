@@ -51,7 +51,7 @@ public final class SurvivalModule implements Listener {
     private final DarknessPotion darkness;
     private final Surge surge;
     private final PlayerVaults vaults;
-    private final DistrictLife districts;
+    private final GroveTrader trader;
     private final Gladiators gladiators;
     private final CollectionBook collection;
     private final BlockLog blockLog;
@@ -94,7 +94,7 @@ public final class SurvivalModule implements Listener {
         claims = new Claims(plugin);
         staging = new KingdomStaging(plugin);
         abyss = new net.blackforge.core.abyss.AbyssWorld(plugin);
-        crates = new Crates(plugin, world, DistrictLife.CRATE_SPOTS, Y + 2);   // in the Grand Hall
+        crates = new Crates(plugin, world);
         koth = new Koth(plugin, world, crates);
         pvp = new PvpZone(plugin, world, crates);
         tags = new NameTags(plugin);
@@ -205,15 +205,13 @@ public final class SurvivalModule implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         new net.blackforge.core.SpawnSafety(plugin, l -> l.getWorld() == world && inSpawn(l.getX(), l.getY(), l.getZ()), p -> spawn());
         new TradingHall(plugin, world, ranks);
-        districts = new DistrictLife(plugin, world);
         pirate = new AbyssPirate(plugin, world, abyss);   // Captain Salt-Eye: the quest that opens the way to the Abyssal Sea
         new SpawnLife(plugin, world, crates, this::spawn);
         gladiators = new Gladiators(plugin, world, this::spawn);
         plugin.discord().setGladiator(gladiators::discordRole);
         collection = new CollectionBook(plugin);
         new DailyShop(plugin);
-        GroveTrader trader = new GroveTrader(plugin);
-        districts.setTrader(trader);
+        trader = new GroveTrader(plugin);
         allays.setTrader(trader);
         new ShowcaseWarp(plugin);
         new LagGuard(plugin, world, this::protectedArea);
@@ -248,7 +246,6 @@ public final class SurvivalModule implements Listener {
         pirate.shutdown();
         abyss.shutdown();
         boss.stop(null);
-        districts.shutdown();
         gladiators.shutdown();
         collection.save();
         blockLog.shutdown();
@@ -267,8 +264,8 @@ public final class SurvivalModule implements Listener {
         hall.shutdown();
     }
 
-    /** Where everyone arrives and respawns: the Grand Hall of the BlackForge kingdom (the old courtyard pad is {@link #courtyard()}). */
-    public Location spawn() { return DistrictLife.arrival(world); }
+    /** Where everyone arrives and respawns: the fortress courtyard. */
+    public Location spawn() { return new Location(world, SPAWN_X, SPAWN_Y, SPAWN_Z, SPAWN_YAW, 0); }
     public Location courtyard() { return new Location(world, SPAWN_X, SPAWN_Y, SPAWN_Z, SPAWN_YAW, 0); }
 
     public void build(CommandSender who) {
@@ -402,7 +399,7 @@ public final class SurvivalModule implements Listener {
                 return true;
             }
             @Override public List<String> tabComplete(CommandSender s, String alias, String[] args) {
-                if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "sundering", "koth", "worldboss", "pvp", "wild", "market", "smithy", "merchant", "wilds", "hall", "sell");
+                if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "sundering", "koth", "worldboss", "pvp", "wild", "market", "sell");
                 if (name.equals("ah") && args.length == 1) return List.of("sell", "listings", "collect", "help");
                 if (name.equals("claim") && args.length == 1)
                     return claims.qolEnabled()
@@ -647,34 +644,25 @@ public final class SurvivalModule implements Listener {
         });
     }
 
-    /** Refused until the island exists, so nobody lands in the void. */
-    private void warpSell(Player p) {
-        if (!DistrictLife.groveBuilt(plugin)) { p.sendMessage(Ui.mm("<gold>The Gilded Grove opens soon.")); return; }
-        if (inCombat(p)) return;
-        teleportSafe(p, DistrictLife.groveWarp(world), "the Gilded Grove");
-        p.sendMessage(Ui.mm("<gold>Follow the arrows: <white>the Trader <gold>buys your items, straight ahead."));
-    }
+    /** /sell: the Trader's menu, wherever you are (it used to be an island of its own). */
+    private void warpSell(Player p) { trader.open(p); }
 
     private void warp(Player p, String[] a) {
         if (a.length == 0) {
-            p.sendMessage(Ui.mm("<gold><bold>Warps</bold> <dark_gray>» <yellow>spawn <gray>• <yellow>crates <gray>• <yellow>sundering <gray>• <yellow>market <gray>• <yellow>smithy <gray>• <yellow>merchant <gray>• <yellow>wilds <gray>• <yellow>hall <gray>• <yellow>sell <gray>• <yellow>koth <gray>• <yellow>worldboss <gray>• <yellow>pvp <gray>• <yellow>wild"));
+            p.sendMessage(Ui.mm("<gold><bold>Warps</bold> <dark_gray>» <yellow>spawn <gray>• <yellow>crates <gray>• <yellow>sundering <gray>• <yellow>market <gray>• <yellow>koth <gray>• <yellow>worldboss <gray>• <yellow>pvp <gray>• <yellow>wild"));
             p.sendMessage(Ui.mm("<gray>Use <white>/warp <name>"));
             return;
         }
         switch (a[0].toLowerCase()) {
             case "spawn" -> teleportSafe(p, spawn(), "spawn");
-            case "crates", "crate" -> teleportSafe(p, DistrictLife.cratesWarp(world), "the crates");
+            case "crates", "crate" -> teleportSafe(p, new Location(world, CRATES_WARP_X, Y + 2, CRATES_WARP_Z, 180, 0), "crates");
             case "sundering", "boss", "worldboss", "worldbosses", "graveyard" -> {
                 if (boss.arena().ready()) teleportSafe(p, boss.arena().arrival(), "the Dragon's Graveyard");
                 else p.sendMessage(Ui.mm("<gold>The world boss arena is still being built."));
             }
             case "koth", "arena" -> dropInto(p, koth.arrival(), "the KOTH arena - PvP is on!");
             case "pvp", "scrapyard" -> { dropInto(p, pvp.arrival(), "the Scrapyard - PvP is on!"); }
-            case "market", "ah", "auction" -> teleportSafe(p, DistrictLife.marketWarp(world), "the market");
-            case "smithy", "blacksmith" -> teleportSafe(p, DistrictLife.warp(world, "smithy"), "the Smithy");
-            case "merchant", "merchants" -> teleportSafe(p, DistrictLife.warp(world, "market"), "the Merchant District");
-            case "wilds", "gate" -> teleportSafe(p, DistrictLife.warp(world, "wilds"), "the Gate of the Wilds");
-            case "hall", "grandhall" -> teleportSafe(p, DistrictLife.warp(world, "hall"), "the Grand Hall");
+            case "market", "ah", "auction" -> teleportSafe(p, new Location(world, BELL_X + 0.5, Y + 1, BELL_Z - 4.5, 0, 0), "the market");
             case "sell", "shop", "grove" -> warpSell(p);
             case "wild", "rtp" -> rtp(p);
             default -> p.sendMessage(Ui.mm("<red>No warp called " + a[0] + ". <gray>Try /warp"));
@@ -781,7 +769,7 @@ public final class SurvivalModule implements Listener {
     public void onBell(PlayerInteractEvent e) {
         Block b = e.getClickedBlock();
         if (b == null || b.getType() != Material.BELL || e.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK) return;
-        if (b.getX() != DistrictLife.BELL_X || b.getZ() != DistrictLife.BELL_Z || b.getY() != Y + 2 || e.getHand() != org.bukkit.inventory.EquipmentSlot.HAND) return;
+        if (b.getX() != BELL_X || b.getZ() != BELL_Z || b.getY() != Y + 2 || e.getHand() != org.bukkit.inventory.EquipmentSlot.HAND) return;
         e.setCancelled(true);
         world.playSound(b.getLocation(), Sound.BLOCK_BELL_USE, 1f, 1f);
         if (ah != null) ah.openBrowse(e.getPlayer(), 0);
@@ -867,14 +855,14 @@ public final class SurvivalModule implements Listener {
         if (!e.hasChangedBlock()) return;
         Location to = e.getTo();
         if (to.getWorld() != world) return;
-        if (KingdomLayout.inShaft(to.getX(), to.getY(), to.getZ(), KingdomLayout.SCRAP_Z)) { dropInto(p, pvp.arrival(), "the Scrapyard - PvP is on!"); return; }
-        if (KingdomLayout.inShaft(to.getX(), to.getY(), to.getZ(), KingdomLayout.KOTH_Z)) { dropInto(p, koth.arrival(), "the KOTH arena - PvP is on!"); return; }
-        boolean wild = KingdomLayout.inWildGate(to.getX(), to.getY(), to.getZ()), arena = false;
+        if (inShaft(to.getX(), to.getY(), to.getZ(), PVP_SHAFT_Z)) { dropInto(p, pvp.arrival(), "the Scrapyard - PvP is on!"); return; }
+        if (inShaft(to.getX(), to.getY(), to.getZ(), KOTH_SHAFT_Z)) { dropInto(p, koth.arrival(), "the KOTH arena - PvP is on!"); return; }
+        boolean wild = inWildGate(to.getX(), to.getY(), to.getZ()), arena = false;
         if (!wild) return;
         long now = System.currentTimeMillis();
         if (gateCooldown.getOrDefault(p.getUniqueId(), 0L) > now) return;
         gateCooldown.put(p.getUniqueId(), now + 3000);
-        p.setVelocity(new org.bukkit.util.Vector(0.8, 0.3, 0));   // the Wilds gate is on the west side: back toward the kingdom
+        p.setVelocity(new org.bukkit.util.Vector(wild ? -0.8 : 0.8, 0.3, 0));
         if (wild) rtp(p); else dropInto(p, koth.arrival(), "the KOTH arena - PvP is on!");
     }
 
@@ -902,22 +890,22 @@ public final class SurvivalModule implements Listener {
         int archZ = (int) SPAWN_Z - 9;
         holos.add(Ui.hologram(new Location(world, 0.5, Y + 10.6, archZ + 0.5),
                 "<gray>Welcome to</gray><newline>" + Ui.TITLE + " <white><bold>SURVIVAL", 1.6f));                                    // 0
-        holos.add(Ui.hologram(new Location(world, -(KingdomLayout.D) + 2.5, Y + 9.5, 0.5), "<#7ddc4a><bold>THE WILD</bold><newline><gray>Random teleport", 1.5f));   // 1
-        holos.add(Ui.hologram(new Location(world, KingdomLayout.DROP_X + 0.5, Y + 11.4, 31.5), "<#b06bff><bold>THE DROP ZONE</bold><newline><gray>Jump in a shaft to drop into a fight", 1.5f));      // 2
+        holos.add(Ui.hologram(new Location(world, GATE_X - 2.5, Y + 9.5, 0.5), "<#7ddc4a><bold>THE WILD</bold><newline><gray>Random teleport", 1.5f));   // 1
+        holos.add(Ui.hologram(new Location(world, DROP_X + 0.5, Y + 11.4, 0.5), "<#b06bff><bold>THE DROP ZONE</bold><newline><gray>Jump in a shaft to drop into a fight", 1.5f));      // 2
         holos.add(Ui.hologram(new Location(world, 0.5, Y + 2.6, 9.5),
                 "<gold><bold>GETTING STARTED</bold><newline><green>/rtp <gray>head out into the wild<newline><yellow>/claim <gray>protect the chunk you're in"
-                        + "<newline><yellow>/sethome <gray>then <yellow>/home <gray>to come back<newline><gold>/ah <gray>buy and sell • <gold>/warp crates <gray>open keys<newline><red>/pvp <gray>the Scrapyard: supply drops every 3h<newline><light_purple>/tags <gray>colour your name • <gold>/kits <gray>god kits • <aqua>/enchants<newline><gold>/daily <gray>free reward • <#5fd35f>/vote <gray>for keys • <#c6a15b>/scrap <gray>the Scrap Shop", 0.9f));  // 3
+                        + "<newline><yellow>/sethome <gray>then <yellow>/home <gray>to come back<newline><gold>/ah <gray>buy and sell • <gold>/warp crates <gray>open keys<newline><red>/pvp <gray>the Scrapyard: supply drops every 5h<newline><light_purple>/tags <gray>colour your name • <gold>/kits <gray>god kits • <aqua>/enchants<newline><gold>/daily <gray>free reward • <#5fd35f>/vote <gray>for keys • <#c6a15b>/scrap <gray>the Scrap Shop", 0.9f));  // 3
         kothHolo = Ui.hologram(new Location(world, SurvivalLayout.KOTH_X + 0.5, HILL_TOP + 4.5, SurvivalLayout.KOTH_Z + 0.5), "<#e5484d><bold>KING OF THE HILL", 2.0f);
         holos.add(kothHolo);                                                                                                         // 4
-        holos.add(Ui.hologram(new Location(world, KingdomLayout.DROP_X + 0.5, Y + 8.4, 31.5), koth.status(), 1.0f));                              // 5
-        holos.add(Ui.board(new Location(world, -3.5, Y + 3.4, KingdomLayout.BOARD_Z), RULES, 1.0f, 180));                         // 6
-        leaderboard = Ui.board(new Location(world, 3.5, Y + 3.4, KingdomLayout.BOARD_Z), topText, 1.0f, 180);
+        holos.add(Ui.hologram(new Location(world, DROP_X + 0.5, Y + 6.6, 0.5), koth.status(), 1.0f));                              // 5
+        holos.add(Ui.board(new Location(world, -BOARD_X + 0.6, Y + 1.6, BOARD_Z + 0.5), RULES, 1.0f, -90));                         // 6
+        leaderboard = Ui.board(new Location(world, BOARD_X + 0.4, Y + 1.6, BOARD_Z + 0.5), topText, 1.0f, 90);
         holos.add(leaderboard);                                                                                                      // 7
-        holos.add(Ui.hologram(new Location(world, DistrictLife.BELL_X + 0.5, Y + 3.8, DistrictLife.BELL_Z + 0.5),
+        holos.add(Ui.hologram(new Location(world, BELL_X + 0.5, Y + 3.8, BELL_Z + 0.5),
                 "<gold><bold>AUCTION HOUSE</bold><newline><gray>Ring the bell or type <white>/ah<newline><gray>Sell with <white>/ah sell <price>", 1.1f));   // 8
-        holos.add(Ui.hologram(new Location(world, KingdomLayout.DROP_X + 0.5, Y + 3.2, KingdomLayout.SCRAP_Z + 0.5), "<#ff5a3c><bold>⬇ THE SCRAPYARD ⬇</bold><newline><gray>Supply drops • PvP", 1.2f));   // 9
-        holos.add(Ui.hologram(new Location(world, KingdomLayout.DROP_X + 0.5, Y + 3.2, KingdomLayout.KOTH_Z + 0.5), "<#e5484d><bold>⬇ KOTH ARENA ⬇</bold><newline><gray>Hold the hill • PvP", 1.2f));       // 10
-        holos.add(Ui.hologram(new Location(world, KingdomLayout.HALL_CX + 0.5, Y + 8.6, KingdomLayout.HALL_CZ + 0.5), "<gradient:#ffd27a:#ff7a1a><bold>HALL OF FAME</bold></gradient><newline><gray>The best players on BlackForgeMC", 1.6f));
+        holos.add(Ui.hologram(new Location(world, DROP_X + 0.5, Y + 3.2, PVP_SHAFT_Z + 0.5), "<#ff5a3c><bold>⬇ THE SCRAPYARD ⬇</bold><newline><gray>Supply drops • PvP", 1.2f));   // 9
+        holos.add(Ui.hologram(new Location(world, DROP_X + 0.5, Y + 3.2, KOTH_SHAFT_Z + 0.5), "<#e5484d><bold>⬇ KOTH ARENA ⬇</bold><newline><gray>Hold the hill • PvP", 1.2f));       // 10
+        holos.add(Ui.hologram(new Location(world, HALL_CX + 0.5, Y + 9.0, HALL_CZ - 8.5), "<gradient:#ffd27a:#ff7a1a><bold>HALL OF FAME</bold></gradient><newline><gray>The best players on BlackForgeMC", 1.6f));
         crates.spawnHolograms();
         Bukkit.getScheduler().runTaskLater(plugin, hall::refresh, 5L);
     }

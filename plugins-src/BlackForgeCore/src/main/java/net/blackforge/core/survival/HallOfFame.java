@@ -59,7 +59,7 @@ public final class HallOfFame implements Listener {
     private Economy eco;
     private boolean dirty;
 
-    HallOfFame(BlackForgeCore plugin, World world) { this(plugin, world, KingdomLayout.HALL, Y, SURVIVAL_BOARDS); }
+    HallOfFame(BlackForgeCore plugin, World world) { this(plugin, world, HALL, Y, SURVIVAL_BOARDS); }
 
     HallOfFame(BlackForgeCore plugin, World world, List<HallSpot> spots, int baseY, List<Board> boards) {
         this.spots = spots;

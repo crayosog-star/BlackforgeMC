@@ -3,12 +3,16 @@ package net.blackforge.core.survival;
 import net.blackforge.core.BlackForgeCore;
 import net.blackforge.core.Ui;
 import net.blackforge.core.abyss.AbyssWorld;
+import io.papermc.paper.datacomponent.item.ResolvableProfile;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.title.Title;
+import org.bukkit.profile.PlayerTextures;
 import org.bukkit.*;
 import org.bukkit.command.Command;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Mannequin;
 import org.bukkit.entity.Villager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -24,13 +28,13 @@ import java.time.Duration;
 import java.util.*;
 
 /**
- * Captain Salt-Eye, a pirate in the Merchant District, and the way to the Abyssal Sea. There is no warp: he gossips about the
+ * Captain Salt-Eye, a pirate beside the auction bell in the market hall, and the way to the Abyssal Sea. There is no warp: he gossips about the
  * sea (how to survive it, what lives in it, where Atlantis hides), and if you bring him what a ship needs to go where the
  * lights end (24 prismarine shards, a heart of the sea, 12 glow ink sacs) he charts the route and will sail you out.
  * Progress is kept per player in abyss-quest.yml. Until abyss.public is true only staff can actually sail.
  */
 final class AbyssPirate implements Listener {
-    private static final int Y = SurvivalLayout.Y, D = SpawnUpgradeBuilder.DIST;
+    private static final int Y = SurvivalLayout.Y;
     private record Task(Material item, int need, String what, String why) {}
     private static final List<Task> TASKS = List.of(
             new Task(Material.PRISMARINE_SHARD, 24, "24 Prismarine Shards", "to caulk a hull that will sail where the water is thick with the dark"),
@@ -74,37 +78,38 @@ final class AbyssPirate implements Listener {
 
     private Location spot() {
         var c = plugin.getConfig();
-        return new Location(world, c.getDouble("abyss.pirate-x", -6.5), c.getDouble("abyss.pirate-y", Y + 1), c.getDouble("abyss.pirate-z", D + 3.5), 200f, 0f);
+        return new Location(world, c.getDouble("abyss.pirate-x", SurvivalLayout.BELL_X - 4.5), c.getDouble("abyss.pirate-y", Y + 1), c.getDouble("abyss.pirate-z", SurvivalLayout.BELL_Z - 0.5), 180f, 0f);
     }
 
-    private Villager find() {
-        for (Entity e : world.getNearbyEntities(spot(), 6, 6, 6)) if (e instanceof Villager v && v.getPersistentDataContainer().has(tag, PersistentDataType.STRING)) return v;
+    private Mannequin find() {
+        for (Entity e : world.getNearbyEntities(spot(), 6, 6, 6)) if (e instanceof Mannequin v && v.getPersistentDataContainer().has(tag, PersistentDataType.STRING)) return v;
         return null;
     }
 
     private void ensure() {
-        if (!new File(plugin.getDataFolder(), "spawn-upgrade-phase2").exists()) return;   // only once the districts are built
+        if (!new File(plugin.getDataFolder(), "spawn-v2").exists()) return;   // only once the spawn is built
         Location at = spot();
         world.getChunkAt(at).load();
-        Villager found = null;
+        Mannequin found = null;
         for (Entity e : world.getNearbyEntities(at, 6, 6, 6)) {
-            if (!(e instanceof Villager v) || !v.getPersistentDataContainer().has(tag, PersistentDataType.STRING)) continue;
-            if (found == null) found = v; else v.remove();
+            if (!e.getPersistentDataContainer().has(tag, PersistentDataType.STRING)) continue;
+            if (e instanceof Villager) { e.remove(); continue; }   // the old villager stand-in, before the custom skin
+            if (!(e instanceof Mannequin m)) continue;
+            if (found == null) found = m; else m.remove();
         }
         if (found != null) return;
-        world.spawn(at, Villager.class, v -> {
-            v.getPersistentDataContainer().set(tag, PersistentDataType.STRING, "pirate");
-            v.setProfession(Villager.Profession.FISHERMAN);
-            v.setVillagerType(Villager.Type.SWAMP);
-            v.setVillagerLevel(5);
-            v.setAI(false);
-            v.setInvulnerable(true);
-            v.setPersistent(true);
-            v.setRemoveWhenFarAway(false);
-            v.setCollidable(false);
-            v.setSilent(true);
-            v.customName(Ui.mm("<#2bd9a5>Captain Salt-Eye"));
-            v.setCustomNameVisible(true);
+        world.spawn(at, Mannequin.class, m -> {
+            m.getPersistentDataContainer().set(tag, PersistentDataType.STRING, "pirate");
+            m.setProfile(ResolvableProfile.resolvableProfile().skinPatch(sp -> sp.body(Key.key("blackforge", "entity/pirate")).model(PlayerTextures.SkinModel.CLASSIC)).build());
+            m.setDescription(Ui.mm("<gray>Sea-grey eyes, salt-white beard"));
+            m.setImmovable(true);
+            m.setInvulnerable(true);
+            m.setPersistent(true);
+            m.setRemoveWhenFarAway(false);
+            m.setCollidable(false);
+            m.setSilent(true);
+            m.customName(Ui.mm("<#2bd9a5>Captain Salt-Eye"));
+            m.setCustomNameVisible(true);
         });
     }
 
@@ -116,7 +121,7 @@ final class AbyssPirate implements Listener {
 
     @EventHandler
     public void onInteract(PlayerInteractEntityEvent e) {
-        if (!(e.getRightClicked() instanceof Villager v) || !v.getPersistentDataContainer().has(tag, PersistentDataType.STRING)) return;
+        if (!(e.getRightClicked() instanceof Mannequin v) || !v.getPersistentDataContainer().has(tag, PersistentDataType.STRING)) return;
         e.setCancelled(true);
         Player p = e.getPlayer();
         if (stage(p) == 1) {
@@ -195,7 +200,7 @@ final class AbyssPirate implements Listener {
             case "status" -> status(p);
             case "sail" -> {
                 if (stage(p) < 2) { menu(p); return; }
-                if (!near(p)) { p.sendMessage(Ui.mm("<gray>Find Captain Salt-Eye in the Merchant District to set sail.")); return; }
+                if (!near(p)) { p.sendMessage(Ui.mm("<gray>Find Captain Salt-Eye in the market hall, by the auction bell, to set sail.")); return; }
                 p.sendMessage(Ui.mm("<#2bd9a5>Captain Salt-Eye: <red>\"Last chance to think it over.\" <gray>Whatever ye lose out there stays out there, and something very large lives past the lights."));
                 p.sendMessage(Ui.mm("  " + btn("I'm ready - set sail", "confirm", "green")));
             }
@@ -213,9 +218,9 @@ final class AbyssPirate implements Listener {
     }
 
     private boolean near(Player p) {
-        Villager v = find();
+        Mannequin v = find();
         return v != null && v.getWorld() == p.getWorld() && v.getLocation().distance(p.getLocation()) < 14;
     }
 
-    void shutdown() { Villager v = find(); if (v != null) v.remove(); }
+    void shutdown() { Mannequin v = find(); if (v != null) v.remove(); }
 }

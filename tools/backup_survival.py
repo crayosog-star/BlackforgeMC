@@ -5,7 +5,7 @@ import os, subprocess, sys, time, zipfile, datetime
 ROOT = r'C:\MinecraftNetwork'
 OUT = r'F:\Backups\BlackForgeMC'
 STAMP = datetime.datetime.now().strftime('%Y-%m-%d_%H%M')
-DEST = os.path.join(OUT, f'survival-pre-infernal-kingdom-{STAMP}.zip')
+DEST = os.path.join(OUT, f'survival-{os.environ.get("BF_BACKUP_TAG", "pre-infernal-kingdom")}-{STAMP}.zip')
 KEEP = ['world', 'plugins\\BlackForgeCore', 'plugins\\LuckPerms', 'plugins\\Essentials', 'plugins\\GriefPreventionData', 'plugins\\TAB',
         'plugins\\Vault', 'plugins\\Tebex', 'server.properties', 'bukkit.yml', 'spigot.yml', 'commands.yml', 'ops.json', 'whitelist.json']
 

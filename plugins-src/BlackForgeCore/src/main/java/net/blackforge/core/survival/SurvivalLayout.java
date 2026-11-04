@@ -9,7 +9,7 @@ public final class SurvivalLayout {
     public static final int Y = 150;                       // spawn plaza surface
     public static final double SPAWN_X = 0.5, SPAWN_Y = Y + 1, SPAWN_Z = 32.5;
     public static final float SPAWN_YAW = 180f;
-    public static final int SPAWN_RADIUS = 125;            // protected, no fall damage (covers the rampart and the four districts beyond it)
+    public static final int SPAWN_RADIUS = 92;             // protected, no fall damage
     public static final int ISLAND_R = 84;
 
     /** The Farm Ring: decorative crop fields between these radii around the town (protected like the rest of spawn). */
@@ -102,7 +102,6 @@ public final class SurvivalLayout {
         return dx * dx + dz * dz <= (KOTH_R + 1) * (KOTH_R + 1) && y > KOTH_Y - 20 && y < KOTH_Y + 30;
     }
     public static boolean inSpawn(double x, double y, double z) {
-        if (KingdomLayout.inGrove(x, y, z)) return true;
         return x * x + z * z <= SPAWN_RADIUS * SPAWN_RADIUS && y > Y - 40 && y < Y + 60;
     }
 }
