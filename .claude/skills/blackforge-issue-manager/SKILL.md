@@ -103,5 +103,11 @@ For each issue labelled `agent:pr-open`:
 - **PR still open, last commit older than ~30 minutes:** automerge probably refused it (conflict or failed build/test/walkcheck). You can't see `tools/autoupdate.log`. Try once: merge `origin/main` into the branch, check it again, push **a new commit** (the same commit is never retried). If it's still open on the next run after that, label `agent:needs-human` and comment that Colin or Gav should check `tools/autoupdate.log` for `FAILED`.
 - **PR has review comments from a maintainer:** treat them as a Fix for the same branch on the next worker batch. Remember any push to an open PR redeploys.
 
-## 7. Report
+## 7. Update the dashboard
+The dashboard page is `https://claude.ai/artifact/TuL1LvATUt2TnHKDZ1b5c1`. Write to its store with the `ArtifactData` tool (load it via ToolSearch), as **one `batch`**; read each existing document first and pass its `version` as `if_version`. If the tool is missing or refused, skip this step and say so in the report.
+- `issues/<N>` for every open issue: `{number, title, status, size?, worker?, pr?, note?}`. `status` is one of `needs-human`, `needs-info`, `working`, `pr-open`, `queued`, `untrusted`. `note` is one plain line in your own words, never pasted issue text. **Delete** the documents of issues that are now closed.
+- `state/meta`: `{lastRunAt, workers: [{name: "Worker 1", points, issues: [N, ...]}]}` from this run's split (an empty list if no workers ran).
+- `runs/<UTC timestamp, e.g. 2026-11-04T12-00-00Z>`: `{at, summary, prs: [PR numbers opened], needsHuman: <count>}`. Keep the newest 20; delete older ones.
+
+## 8. Report
 End with a short run summary (and nothing else), listing: PRs opened with links, issues asked/planned/closed, anything now `agent:needs-human` and why. If there was nothing to do, say so in one line.
