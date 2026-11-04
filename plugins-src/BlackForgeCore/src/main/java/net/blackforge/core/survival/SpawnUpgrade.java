@@ -37,20 +37,20 @@ final class SpawnUpgrade {
         if (a.length < 2 || !a[0].equalsIgnoreCase("spawnupgrade")) return false;
         if (!s.hasPermission("blackforge.admin")) return true;
         int phase = a.length > 2 ? Integer.parseInt(a[2]) : 1;
-        if (phase < 1 || phase > 3) { s.sendMessage(Ui.mm("<red>Phases 1, 2 and 3 exist.")); return true; }
+        if (phase < 1 || phase > 4) { s.sendMessage(Ui.mm("<red>Phases 1, 2, 3 and 4 exist.")); return true; }
         if (running) { s.sendMessage(Ui.mm("<red>Already working - wait for it to finish.")); return true; }
         switch (a[1].toLowerCase()) {
             case "apply" -> run(s, phase, true);
             case "undo" -> run(s, phase, false);
             case "status" -> s.sendMessage(Ui.mm("<gray>Phase " + phase + ": " + (marker(phase).exists() ? "<green>applied" : "<yellow>not applied")));
-            default -> s.sendMessage(Ui.mm("<gray>/blackforge spawnupgrade apply|undo|status 1|2|3"));
+            default -> s.sendMessage(Ui.mm("<gray>/blackforge spawnupgrade apply|undo|status 1|2|3|4"));
         }
         return true;
     }
 
     private void run(CommandSender s, int phase, boolean apply) {
         running = true;
-        Canvas c = phase == 1 ? SpawnUpgradeBuilder.phase1() : phase == 2 ? SpawnUpgradeBuilder.phase2() : SpawnUpgradeBuilder.phase3();
+        Canvas c = phase == 1 ? SpawnUpgradeBuilder.phase1() : phase == 2 ? SpawnUpgradeBuilder.phase2() : phase == 3 ? SpawnUpgradeBuilder.phase3() : SpawnUpgradeBuilder.phase4();
         Map<Long, String> all = new HashMap<>(c.blocks());
         all.putAll(c.lateBlocks());
         // chunk by chunk, so each chunk loads once

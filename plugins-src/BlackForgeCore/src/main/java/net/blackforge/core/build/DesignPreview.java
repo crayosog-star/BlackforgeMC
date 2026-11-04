@@ -93,6 +93,17 @@ public final class DesignPreview {
                         new View("drop_aerial", new WorldCam.Cam(-84, Y + 36, 8, -103, Y + 4, 31, 70)),
                         new View("overview", new WorldCam.Cam(150, Y + 120, 150, 0, Y + 5, 0, 75)));
             }
+            case "spawnupgrade4" -> {
+                c = net.blackforge.core.survival.SpawnUpgradeBuilder.phase4();
+                int Y = net.blackforge.core.survival.SurvivalLayout.Y, gx = net.blackforge.core.survival.KingdomLayout.GROVE_X, gz = net.blackforge.core.survival.KingdomLayout.GROVE_Z;
+                look = WorldCam.Look.sunset();
+                look.fogStart = 220; look.fogEnd = 520; look.maxDist = 520;
+                views = List.of(
+                        new View("grove_aerial", new WorldCam.Cam(gx + 70, Y + 80, gz - 75, gx, Y + 24, gz, 70)),
+                        new View("grove_arrival", new WorldCam.Cam(gx + 0.5, Y + 23, gz - 26, gx + 0.5, Y + 28, gz + 10, 75)),
+                        new View("grove_pavilion", new WorldCam.Cam(gx + 0.5, Y + 23, gz - 2, gx + 0.5, Y + 29, gz, 85)),
+                        new View("grove_bridge", new WorldCam.Cam(-5, Y + 6, 111, gx, Y + 26, gz - 10, 70)));
+            }
             case "coliseum" -> {
                 c = net.blackforge.core.survival.ColiseumBuilder.build();
                 int Y = net.blackforge.core.survival.SurvivalLayout.Y, CZ = net.blackforge.core.survival.ColiseumBuilder.CZ;

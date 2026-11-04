@@ -570,6 +570,15 @@ public final class SpawnUpgradeBuilder {
         for (int z : new int[]{22, 31, 40}) { ab(c, -95, 1, z, "chiseled_polished_blackstone"); abLate(c, -95, 2, z, "campfire[lit=true]"); }
     }
 
+    /** The Gilded Grove, the shop island (blocks only ever go where the world has air). */
+    public static Canvas phase4() {
+        Canvas c = GildedGrove.build();
+        Canvas out = new Canvas();
+        c.blocks().forEach((k, v) -> { if (allowedAt(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k)) && !v.equals("minecraft:air")) out.set(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k), v); });
+        c.lateBlocks().forEach((k, v) -> { if (allowedAt(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k))) out.setLate(Canvas.kx(k), Canvas.ky(k), Canvas.kz(k), v); });
+        return out;
+    }
+
     /** The annexes (blocks only ever go where the world has air). */
     public static Canvas phase3() {
         Canvas c = new Canvas();

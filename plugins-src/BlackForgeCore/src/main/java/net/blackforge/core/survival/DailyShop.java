@@ -56,7 +56,7 @@ final class DailyShop implements Listener {
         this.file = new File(plugin.getDataFolder(), "dailyshop.yml");
         this.data = YamlConfiguration.loadConfiguration(file);
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        Bukkit.getCommandMap().register("blackforge", new Command("dailyshop", "Today's shop", "/dailyshop", List.of("shop", "dshop")) {
+        Bukkit.getCommandMap().register("blackforge", new Command("dailyshop", "Today's shop", "/dailyshop", List.of("dshop")) {
             @Override public boolean execute(CommandSender s, String label, String[] a) {
                 if (s instanceof Player p) open(p); else s.sendMessage("Players only.");
                 return true;
