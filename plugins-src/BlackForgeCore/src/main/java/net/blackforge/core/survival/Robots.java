@@ -766,6 +766,26 @@ public final class Robots implements Listener {
         }
     }
 
+    /** Puts one cell's worth in the tank. The caller has checked that it fits and takes the cell away. */
+    private static void pour(Bot b, RobotRules.FuelCell c) {
+        // blend the tank's current rate with only the newly accepted fuel
+        b.chargeRate = RobotRules.blendRate(b.fuel, b.chargeRate, c.chargeMs(), RobotRules.rateForTier(c.tier()));
+        b.fuelTier = b.fuel > 0 ? Math.max(b.fuelTier, c.tier()) : c.tier();   // icon/colour only now
+        b.fuel += c.chargeMs();
+    }
+
+    /** Fuels an agent from one cell of this stack with no player involved. False, and the stack is untouched, if it isn't fuel or won't fit. */
+    boolean fuelFromItem(Bot b, ItemStack cell) {
+        int t = fuelTier(cell);
+        if (t == 0 || cell.getAmount() <= 0) return false;
+        long ms = FUEL_MINUTES[t - 1] * 60_000L;
+        if (b.fuel + ms > MAX_TANK) return false;
+        b.fixRate();
+        pour(b, new RobotRules.FuelCell(t, ms));
+        cell.setAmount(cell.getAmount() - 1);
+        return true;
+    }
+
     private void addFuel(Player p, Bot b, boolean all) {
         int added = 0;
         ItemStack[] inv = p.getInventory().getStorageContents();
@@ -784,10 +804,7 @@ public final class Robots implements Listener {
             if (pick.isEmpty()) break;
             RobotRules.FuelCell c = pick.get();
             int i = slots.get(fits.indexOf(c));
-            // blend the tank's current rate with only the newly accepted fuel
-            b.chargeRate = RobotRules.blendRate(b.fuel, b.chargeRate, c.chargeMs(), RobotRules.rateForTier(c.tier()));
-            b.fuelTier = b.fuel > 0 ? Math.max(b.fuelTier, c.tier()) : c.tier();   // icon/colour only now
-            b.fuel += c.chargeMs();
+            pour(b, c);
             inv[i].setAmount(inv[i].getAmount() - 1);
             added++;
             if (!all) break;
@@ -865,6 +882,14 @@ public final class Robots implements Listener {
         List<Bot> out = new ArrayList<>();
         for (Bot b : bots.values()) if (b.owner.equals(owner)) out.add(b);
         out.sort(Comparator.comparingInt((Bot b) -> b.tier).reversed());
+        return out;
+    }
+
+    /** This owner's agents within this many blocks of a spot. */
+    List<Bot> agentsNear(Location at, int radius, UUID owner) {
+        List<Bot> out = new ArrayList<>();
+        for (Bot b : bots.values())
+            if (b.owner.equals(owner) && b.loc.getWorld() == at.getWorld() && b.loc.distanceSquared(at) <= (double) radius * radius) out.add(b);
         return out;
     }
 

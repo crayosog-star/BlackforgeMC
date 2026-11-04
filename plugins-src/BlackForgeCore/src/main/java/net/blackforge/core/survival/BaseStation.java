@@ -175,6 +175,26 @@ public final class BaseStation implements Listener {
         return b != null && b.getInventory().firstEmpty() >= 0;
     }
 
+    // ------------------------------------------------------------------ lookups
+
+    /** Which claim or island a spot is in, or null if it's in neither. */
+    String regionAt(Location l) { return regionOf.apply(l); }
+
+    /** This region's station, if it's loaded and really there. */
+    Location stationIn(String region) {
+        Spot s = region == null ? null : stations.get(region);
+        World w = s == null ? null : Bukkit.getWorld(s.world());
+        if (w == null || !w.isChunkLoaded(s.x() >> 4, s.z() >> 4)) return null;
+        Block b = w.getBlockAt(s.x(), s.y(), s.z());
+        return isStation(b) ? b.getLocation() : null;
+    }
+
+    /** The storage of this region's station, or null if {@link #stationIn} finds none. */
+    Inventory storageIn(String region) {
+        Location at = stationIn(region);
+        return at != null && at.getBlock().getState(false) instanceof Barrel b ? b.getInventory() : null;
+    }
+
     // ------------------------------------------------------------------ placing and breaking
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
