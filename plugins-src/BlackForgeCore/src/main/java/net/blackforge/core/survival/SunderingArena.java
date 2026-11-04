@@ -54,6 +54,7 @@ public final class SunderingArena implements Listener {
     private final Map<String, Sleeper> sleepers = new LinkedHashMap<>();
     private final Random rnd = new Random();
     private World world;
+    private Containment contain;
     private boolean ready, up, eventOn;
 
     SunderingArena(BlackForgeCore plugin, double bossSize) {
@@ -75,6 +76,7 @@ public final class SunderingArena implements Listener {
         world.setPVP(false);
         for (Entity e : world.getEntities()) if (!(e instanceof Player)) e.remove();
         // The arena itself is the Dragon's Graveyard, placed into this world by tools/graveyard (centre CX,CZ, floor y=Y).
+        contain = new Containment(plugin, world);
         ready = true;
         plugin.getLogger().info("The Sundering: arena ready");
     }
@@ -129,6 +131,7 @@ public final class SunderingArena implements Listener {
     /** Put this boss back in its pit; {@code forming} fades the chains in. */
     void chain(Sleeper s, boolean forming) {
         clear(s);
+        if (up && contain != null) contain.restore(s.pit);
         if (!up) return;
         Location at = pitSpot(s);
         s.host = WorldBoss.spawnHost(at, s.kind, bossSize);
@@ -179,6 +182,7 @@ public final class SunderingArena implements Listener {
 
     /** One chain breaks: its links scatter and shrink away. */
     void snap(Sleeper s, int chain) {
+        if (contain != null) contain.snap(s.pit, chain);
         if (chain >= s.chains.size()) return;
         List<BlockDisplay> links = s.chains.get(chain);
         for (BlockDisplay d : links) {
@@ -192,6 +196,12 @@ public final class SunderingArena implements Listener {
         }
         Bukkit.getScheduler().runTaskLater(plugin, () -> links.forEach(Entity::remove), 16L);
     }
+
+    /** The Frost Titan's iceberg melts as his wake-up runs. */
+    void melt(Sleeper s, double f) { if (contain != null) contain.melt(s.pit, f); }
+
+    /** The cage / iceberg goes when the boss bursts out. */
+    void breakOut(Sleeper s) { if (contain != null) contain.breakOut(s.pit); }
 
     /** The woken boss is out of its pit: the fight owns its mob from here. */
     void release(Sleeper s) {

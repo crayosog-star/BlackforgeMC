@@ -159,6 +159,7 @@ public final class WorldBoss implements Listener {
         if (boss == null || !boss.isValid()) { end(null); return; }
         World w = arena.world();
         int t = ++wakeTick;
+        if (chosen != null) arena.melt(chosen, Math.min(1, t / (double) SunderingMath.BREAK_OUT));
         for (Player p : w.getPlayers()) p.showBossBar(bar);
         if (t < SunderingMath.TREMOR_END) {
             for (SunderingArena.Sleeper s : arena.sleepers()) if (s.model != null) s.model.setSlump(1 - 0.18 * Math.abs(Math.sin(t * 0.5 + s.pit)));
@@ -187,6 +188,7 @@ public final class WorldBoss implements Listener {
             }
         }
         if (t == SunderingMath.BREAK_OUT) {
+            arena.breakOut(chosen);
             w.strikeLightningEffect(at);
             w.spawnParticle(Particle.EXPLOSION_EMITTER, at, 4, 3, 1, 3);
             w.playSound(at, Sound.ENTITY_ENDER_DRAGON_GROWL, 10f, 0.5f);

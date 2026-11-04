@@ -426,15 +426,42 @@ public class Graveyard extends Vox {
             }
         }
     }
+    /** Iron cage around a pit: bar wall, lid and a crown of spikes; the plugin shatters it when this boss wakes. */
+    static void cage(int cx, int cz, int i) {
+        for (int x = cx - 14; x <= cx + 14; x++) for (int z = cz - 14; z <= cz + 14; z++) {
+            double r = hypot(x - cx, z - cz);
+            if (r >= 11.3 && r <= 12.7) { for (int y = 0; y <= 10; y++) set(x, y, z, "iron_bars"); }
+            if (r <= 12.7 && ((x + z) & 1) == 0 || (r <= 12.7 && ((x - cx) % 4 == 0 || (z - cz) % 4 == 0))) set(x, 11, z, "iron_bars");
+            if (r >= 11.3 && r <= 12.7 && ((x * 7 + z * 3) % 5 == 0)) { set(x, 12, z, "iron_bars"); set(x, 13, z, "iron_bars"); }
+        }
+        // heavy bands + cage floor frame in the boss's colour
+        String band = i == 0 ? "magma_block" : i == 1 ? "bone_block[axis=y]" : i == 2 ? "crying_obsidian" : "gold_block";
+        for (int x = cx - 14; x <= cx + 14; x++) for (int z = cz - 14; z <= cz + 14; z++) { double r = hypot(x - cx, z - cz); if (r >= 11.3 && r <= 12.7) { set(x, 0, z, "polished_blackstone_bricks"); if ((x + z) % 6 == 0) set(x, 5, z, band); } }
+    }
+    /** The Frost Titan's iceberg: a translucent shell over a cavity, spikes and all. Melts away when he is the one chosen. */
+    static void iceberg(int cx, int cz) {
+        for (int x = cx - 13; x <= cx + 13; x++) for (int z = cz - 13; z <= cz + 13; z++) {
+            double r = hypot(x - cx, z - cz); if (r > 12.5) continue;
+            double ridge = 13 + vn(x * 1.7, z * 1.7, 3.5) * 7;
+            for (int y = 0; y <= 20; y++) {
+                double h = (y - 0.0) / ridge; double inner = 6.8 * sqrt(max(0, 1 - pow(y / 12.5, 2)));
+                double outer = 11.8 * (1 - 0.8 * pow(h, 1.7)) + vn(x, y * 1.3 + z, 2.5) * 1.4;
+                if (y == 0 && r > 6.2 && r < 11.5) { set(x, y, z, "packed_ice"); continue; }
+                if (r > inner && r <= outer && h < 1) { double q = hn(x, y, z); set(x, y, z, q < .55 ? "ice" : q < .8 ? "packed_ice" : "blue_ice"); }
+            }
+        }
+        for (int k = 0; k < 7; k++) { double a = k * 2 * PI / 7 + .3; int sx = cx + (int) round(cos(a) * 9), sz = cz + (int) round(sin(a) * 9); capsule(sx, 4, sz, sx + cos(a) * 2, 15 + (k % 3) * 3, sz + sin(a) * 2, 2.0, .3, (x, y, z) -> pick(x, y, z, "ice", "blue_ice", "packed_ice")); }
+    }
     /** The Sundering's five boss pits and chain pillars, in the plugin's coordinates (centre 0,0). */
     static void pits() {
         for (int i = 0; i < 5; i++) {
             double a = -PI / 2 + i * 2 * PI / 5; int cx = (int) round(cos(a) * 70), cz = (int) round(sin(a) * 70);
             for (int x = cx - 12; x <= cx + 12; x++) for (int z = cz - 12; z <= cz + 12; z++) {
                 if ((x - cx) * (x - cx) + (z - cz) * (z - cz) > 144) continue;
-                set(x, 0, z, "air"); set(x, -1, z, hn(x, 1, z) < .14 ? "shroomlight" : "crimson_nylium");
-                for (int y = 1; y <= 4; y++) set(x, y, z, "air");
+                set(x, 0, z, "air"); set(x, -1, z, i == 3 ? pick(x, 1, z, "packed_ice", "blue_ice", "packed_ice", "snow_block") : (hn(x, 1, z) < .14 ? "shroomlight" : "crimson_nylium"));
+                for (int y = 1; y <= 16; y++) set(x, y, z, "air");
             }
+            if (i == 3) iceberg(cx, cz); else cage(cx, cz, i);
             for (int j = 0; j < 4; j++) {
                 double b = PI / 4 + j * PI / 2; int ax = cx + (int) round(cos(b) * 13), az = cz + (int) round(sin(b) * 13);
                 box(ax - 1, 0, az - 1, ax + 1, 10, az + 1, "polished_blackstone_bricks"); box(ax - 1, 11, az - 1, ax + 1, 11, az + 1, "gold_block"); set(ax, 12, az, "soul_lantern");
@@ -577,11 +604,13 @@ public class Graveyard extends Vox {
     }
 
     // =================== EMIT ===================
+    static boolean onlyPits = false;
+    static boolean nearPit(int x, int z) { for (int i = 0; i < 5; i++) { double a = -PI / 2 + i * 2 * PI / 5; if (abs(x - round(cos(a) * 70)) <= 16 && abs(z - round(sin(a) * 70)) <= 16) return true; } return false; }
     static void emit(File out) throws IOException {
         boolean[] done = new boolean[g.length]; List<String> cmds = new ArrayList<>(), lava = new ArrayList<>();
         final int WX = 3000, WY = 100, WZ = 3000; final String PRE = "execute in minecraft:sundering run ";
         for (int y = Y0; y < Y0 + H; y++) for (int z = Z0; z < Z0 + D; z++) for (int x = X0; x < X0 + W; x++) {
-            int i = ix(x, y, z); if (g[i] == 0 || done[i]) continue; short v = g[i];
+            int i = ix(x, y, z); if (g[i] == 0 || done[i]) continue; if (onlyPits && !(y >= -1 && y <= 22 && nearPit(x, z))) continue; short v = g[i];
             int x1 = x; while (x1 + 1 < X0 + W && g[ix(x1 + 1, y, z)] == v && !done[ix(x1 + 1, y, z)]) x1++;
             int z1 = z; outer: while (z1 + 1 < Z0 + D) { for (int k = x; k <= x1; k++) { int j = ix(k, y, z1 + 1); if (g[j] != v || done[j]) break outer; } z1++; }
             int y1 = y; outer2: while (y1 + 1 < Y0 + H && (long) (x1 - x + 1) * (z1 - z + 1) * (y1 - y + 2) <= 32768) { for (int kz = z; kz <= z1; kz++) for (int k = x; k <= x1; k++) { int j = ix(k, y1 + 1, kz); if (g[j] != v || done[j]) break outer2; } y1++; }
@@ -613,6 +642,8 @@ public class Graveyard extends Vox {
         if (b.contains("leaves") || b.startsWith("moss")) return new int[]{40, 70, 36};
         if (b.contains("log")) return new int[]{60, 40, 28};
         if (b.contains("chain")) return new int[]{40, 40, 46};
+        if (b.equals("ice") || b.contains("packed_ice") || b.contains("blue_ice") || b.contains("snow")) return new int[]{150, 205, 240};
+        if (b.startsWith("iron_bars")) return new int[]{110, 112, 120};
         if (b.contains("glass")) return new int[]{200, 40, 40};
         return new int[]{54, 48, 56};
     }
@@ -651,6 +682,7 @@ public class Graveyard extends Vox {
         abyssFloor(); pits(); skull(); spine(); ringChains(); islands(); lavaFalls();
         System.out.println("built in " + (System.currentTimeMillis() - t0) + "ms");
         File dir = new File(a[0]); dir.mkdirs();
+        if (a.length > 3 && a[3].equals("pits")) onlyPits = true;
         if (a.length > 2 && a[2].equals("emit")) emit(new File(dir, "commands.txt"));
         if (a.length > 2 && a[2].equals("sample")) { Random rr = new Random(5); try (PrintWriter w = new PrintWriter(new File(dir, "sample.txt"))) { int c = 0; while (c < 500) { int x = X0 + rr.nextInt(W), y = Y0 + rr.nextInt(H), z = Z0 + rr.nextInt(D); String b = get(x, y, z); if (b.equals("air") || b.startsWith("lava")) continue; w.println((3000 + x) + " " + (100 + y) + " " + (3000 + z) + " " + b); c++; } } }
         preview(new File(dir, "view_front.png"), 0, 78, 236, 0, 46, -70, 78, 1536, 864);
@@ -659,6 +691,8 @@ public class Graveyard extends Vox {
         preview(new File(dir, "view_gate.png"), 0, 70, -20, 0, 62, -120, 70, 1536, 864);
         preview(new File(dir, "view_bridge.png"), 0, 16, 170, 0, 44, -110, 85, 1536, 864);
         preview(new File(dir, "view_wall.png"), -40, 22, 40, 60, 12, -60, 90, 1536, 864);
+        preview(new File(dir, "view_ice.png"), 0, 22, 10, -41, 8, 57, 60, 1536, 864);
+        preview(new File(dir, "view_cage.png"), 5, 22, 20, 66, 7, -22, 60, 1536, 864);
         System.out.println("total " + (System.currentTimeMillis() - t0) + "ms");
     }
 }
