@@ -1,6 +1,6 @@
 # Forge Allays
 **Status:** In progress. Approved by Colin on 2026-11-04 with the recommended defaults
-**Next task:** P1.T2
+**Next task:** P1.T3
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -133,7 +133,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** a failed deposit still returns items to the player, as today; a Forge purchase and a Trader sale behave exactly as before.
 - **Done when:** in the Foundry, adding fuel by click and shift-click still works. On Survival, a Trader sale pays and counts toward the daily total as before. Existing tests pass.
 - **Leaves ready:** Station, fuel and sale hooks.
-- **Evidence:**
+- **Evidence:** Verified: the `BlackForgeCore` build, unit tests and strict walkcheck pass with these hooks in. Untested: the in-game fuel and Trader sale checks. Both still need a tester, so this stays unticked until then.
 
 ### [ ] P1.T3: Prove flight control in the Foundry
 - **Needs:** P1.T1; `S/FoundrySystems.java:25-40`; the hub's staff command pattern, `testCommand` at `plugins-src/BlackForgeCore/src/main/java/net/blackforge/core/hub/HubModule.java:138`; the smooth-motion guidance in the `motion` skill.
