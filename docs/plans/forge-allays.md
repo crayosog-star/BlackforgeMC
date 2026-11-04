@@ -1,6 +1,6 @@
 # Forge Allays
-**Status:** In progress. Approved by Colin on 2026-11-04 with the recommended defaults
-**Next task:** P5.T4
+**Status:** Launched on Survival at Colin's request. In-game checks and the P5.T2 measurements still aren't confirmed, so tasks that need them stay unticked
+**Next task:** None to build. Confirm the unticked in-game checks and measure P5.T2 on live
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -306,7 +306,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** Skyblock keeps an empty slot 34, since `setAllays` isn't called there.
 - **Done when:** a non-staff player on live Survival buys Tier I and it delivers, and Skyblock's Forge is unchanged.
 - **Leaves ready:** feature live.
-- **Evidence:**
+- **Evidence:** `tools/deploy.py:98` writes only its own short keys, so `allays.enabled` comes from the jar's default config. Untested in game: a non-staff player buying Tier I on live Survival, and Skyblock's Forge staying unchanged.
 
 ## Blockers log
 | Date | Task | Problem | Decision |
@@ -316,6 +316,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | Launch flag turned on with the gates unrecorded, because Colin said "finish up and push everything" | Colin, in chat |
 | 2026-11-04 | Colin said "finish up and push everything". P5.T1-T3 ship together to save restarts. Allay menu art needs a resource pack update, so it moves to Later ideas and the menu stays plain. The P5.T2 measurements need a live server, so they're recorded as not measured | Colin, in chat |
 | 2026-11-04 | `allays.preview-staff` defaults to true, not false, so staff can run the Phase 4 checks without a live config edit; players still see nothing. Carried items are only saved on a clean stop, so a crash can't double a load. P5.T4 must set this flag as Colin wants after launch | Flagged to Colin in the PR |
 | 2026-11-04 | Phase 4 started after Colin said "looks great, keep going". He didn't list which checks he played, so the Phase 1-3 gates aren't recorded as individually confirmed | Colin, in chat |
