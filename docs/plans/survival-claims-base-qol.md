@@ -321,6 +321,8 @@ Colin approves the candidate, activation method and window after seeing the evid
 - 2026-11-04 — Colin approved the full claim guide and one-time first-claim tip. Added the copy, trigger and staging checks to P2.T1.
 - 2026-11-04 — Resolved the P1.T1 wiring overlap with upstream Forge Allays and repeated the local staging checks before opening the PR.
 
+- 2026-11-04 — Colin authorized the direct main push for P1.T1. Integrated candidate 22ae1c4 on main dbe03d1 compiled all 280 production Java sources and passed the isolated Survival, Skyblock and Foundry staging matrix again.
+
 ## Later ideas
 
 - Named bases, multi-chunk claim tools, map UI, and per-base trust.
