@@ -612,6 +612,8 @@ public final class Allays implements Listener {
     /** Back to its place in the circle, aiming for where that will be when it arrives so it doesn't snap. */
     private void goHome(Worker w, Location at, int flock) {
         w.job = null;
+        w.dest = null;
+        w.agent = null;   // a trip that gave up mustn't keep its claim on an Agent
         w.state = State.RETURN;
         double[] here = xyz(w.entity.getLocation()), spot = hover(at, w.index, flock, now);
         int eta = AllayFlight.ticks(Math.sqrt(Math.pow(spot[0] - here[0], 2) + Math.pow(spot[1] - here[1], 2) + Math.pow(spot[2] - here[2], 2)), speed);
