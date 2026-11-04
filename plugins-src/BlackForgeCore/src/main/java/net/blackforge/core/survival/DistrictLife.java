@@ -46,7 +46,7 @@ final class DistrictLife implements Listener {
     static final int BELL_X = 0, BELL_Z = D - 3;
     static Location marketWarp(World world) { return new Location(world, 0.5, Y + 1, BELL_Z - 2.5, 0f, 0f); }
 
-    /** /warp shop's landing point. */
+    /** /sell's landing point. */
     static Location groveWarp(World world) { return new Location(world, KingdomLayout.GROVE_WARP_X, KingdomLayout.GROVE_WARP_Y, KingdomLayout.GROVE_WARP_Z + 0.5, 0f, 0f); }
     static boolean groveBuilt(BlackForgeCore plugin) { return new java.io.File(plugin.getDataFolder(), "spawn-upgrade-phase4").exists(); }
 
@@ -150,6 +150,7 @@ final class DistrictLife implements Listener {
         villager("blacksmith", "<#ff7a1a>Blacksmith", Villager.Profession.WEAPONSMITH, D + 1.5, 0.5, 90f);
         villager("merchant", "<gold>Merchant", Villager.Profession.LIBRARIAN, 0.5, D + 1.5, 180f);
         if (groveBuilt(plugin)) {
+            if (trader != null) trader.ensureFrames(world);
             villager("grove_daily", "<gradient:#ffd27a:#5fd38a>Daily Shop</gradient>", Villager.Profession.CARTOGRAPHER, KingdomLayout.GROVE_X - 5.5, KingdomLayout.GROVE_Y + 1, KingdomLayout.GROVE_Z + 0.5, -90f);
             villager("grove_trader", "<gradient:#ffd27a:#5fd38a>Trader</gradient>", Villager.Profession.FARMER, KingdomLayout.GROVE_X + 0.5, KingdomLayout.GROVE_Y + 1, KingdomLayout.GROVE_Z + 6.5, 180f);
             villager("grove_auction", "<gradient:#ffd27a:#5fd38a>Auction House</gradient>", Villager.Profession.LIBRARIAN, KingdomLayout.GROVE_X + 6.5, KingdomLayout.GROVE_Y + 1, KingdomLayout.GROVE_Z + 0.5, 90f);
@@ -188,6 +189,7 @@ final class DistrictLife implements Listener {
         holos.clear();
         holos.add(Ui.hologram(new Location(world, 0.5, Y + 6, -(D - 7) + 0.5),
                 "<#ff6a00><bold>BLACKFORGEMC</bold><newline><gray>Welcome to the Grand Hall<newline><white>/warp <gray>• <white>/daily <gray>• <white>/vote <gray>• <white>/pv<newline><gray>Crates and the Hall of Fame are at spawn", 1.3f));
+        if (groveBuilt(plugin) && trader != null) trader.priceTags(world, holos);
         if (groveBuilt(plugin)) holos.add(Ui.hologram(new Location(world, KingdomLayout.GROVE_WARP_X, KingdomLayout.GROVE_Y + 5, KingdomLayout.GROVE_WARP_Z + 2.5),
                 "<gradient:#ffd27a:#5fd38a><bold>THE GILDED GROVE</bold></gradient><newline><gray>A BlackForgeMC trading haven<newline><white>Sell your goods <gray>at the pavilion ahead", 1.0f));
         holos.add(Ui.hologram(new Location(world, D + 1.5, Y + 3.2, 0.5), "<#ff7a1a><bold>BLACKSMITH</bold><newline><gray>Right-click to use the anvil", 1.0f));

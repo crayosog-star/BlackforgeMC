@@ -1,5 +1,6 @@
 package net.blackforge.core.survival;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -38,6 +39,40 @@ final class SellCatalog {
             // mining
             new Item("coal", "Coal", 1.0), new Item("raw_copper", "Raw Copper", 1.0), new Item("raw_iron", "Raw Iron", 3.0),
             new Item("raw_gold", "Raw Gold", 4.0), new Item("quartz", "Nether Quartz", 2.0), new Item("diamond", "Diamond", 40.0));
+
+    /** One glow item frame on the pavilion's centre block: the air block it hangs in (relative to the centre), and which way it faces. */
+    record FrameSlot(int dx, int dy, int dz, String facing) {}
+
+    static final int CORE_HALF = 3, ROW_LOW = 2, ROW_HIGH = 4;
+
+    /** One frame per item, in {@link #ITEMS} order: crops north (facing arrivals), mob drops east, fish and wood south, mining west. */
+    static List<FrameSlot> gallery() {
+        List<FrameSlot> out = new ArrayList<>();
+        face(out, 12, "NORTH");
+        face(out, 14, "EAST");
+        face(out, 13, "SOUTH");
+        face(out, 6, "WEST");
+        return out;
+    }
+
+    private static void face(List<FrameSlot> out, int count, String facing) {
+        int width = 2 * CORE_HALF + 1, high = Math.min(count, width), low = count - high;
+        row(out, high, ROW_HIGH, facing);
+        row(out, low, ROW_LOW, facing);
+    }
+
+    private static void row(List<FrameSlot> out, int count, int dy, String facing) {
+        int start = -(count - 1) / 2, out1 = CORE_HALF + 1;
+        for (int i = 0; i < count; i++) {
+            int v = start + i;
+            switch (facing) {
+                case "NORTH" -> out.add(new FrameSlot(v, dy, -out1, facing));
+                case "SOUTH" -> out.add(new FrameSlot(v, dy, out1, facing));
+                case "EAST" -> out.add(new FrameSlot(out1, dy, v, facing));
+                default -> out.add(new FrameSlot(-out1, dy, v, facing));
+            }
+        }
+    }
 
     /** Money for selling {@code amount} more of an item after {@code soldToday} already sold: full price up to the cap, the over-cap rate after it. */
     static double payout(double price, int soldToday, int amount, int softCap, double overRate) {

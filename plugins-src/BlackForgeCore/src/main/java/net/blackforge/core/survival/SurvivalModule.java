@@ -305,7 +305,7 @@ public final class SurvivalModule implements Listener {
         // registered before Essentials loads (loadbefore), so these take the plain names
         reg("spawn", List.of(), (p, a) -> teleportSafe(p, spawn(), "spawn"));
         reg("warp", List.of("warps"), this::warp);
-        reg("shop", List.of(), (p, a) -> warpShop(p));
+        reg("sell", List.of(), (p, a) -> warpSell(p));   // goes to the Trader in the Gilded Grove; selling only happens there
         reg("rtp", List.of("wild", "randomtp"), (p, a) -> rtp(p));
         reg("claim", List.of("claims"), (p, a) -> claims.command(p, "claim", a));
         reg("unclaim", List.of(), (p, a) -> claims.command(p, "unclaim", a));
@@ -376,7 +376,7 @@ public final class SurvivalModule implements Listener {
                 return true;
             }
             @Override public List<String> tabComplete(CommandSender s, String alias, String[] args) {
-                if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "koth", "pvp", "wild", "market", "smithy", "merchant", "wilds", "hall", "shop");
+                if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "koth", "pvp", "wild", "market", "smithy", "merchant", "wilds", "hall", "sell");
                 if (name.equals("ah") && args.length == 1) return List.of("sell", "listings", "collect", "help");
                 if (name.equals("claim") && args.length == 1) return List.of("map", "show", "info", "list", "trust", "untrust", "unclaimall", "help");
                 return super.tabComplete(s, alias, args);
@@ -616,14 +616,14 @@ public final class SurvivalModule implements Listener {
     }
 
     /** Refused until the island exists, so nobody lands in the void. */
-    private void warpShop(Player p) {
+    private void warpSell(Player p) {
         if (!DistrictLife.groveBuilt(plugin)) { p.sendMessage(Ui.mm("<gold>The Gilded Grove opens soon.")); return; }
         teleportSafe(p, DistrictLife.groveWarp(world), "the Gilded Grove");
     }
 
     private void warp(Player p, String[] a) {
         if (a.length == 0) {
-            p.sendMessage(Ui.mm("<gold><bold>Warps</bold> <dark_gray>» <yellow>spawn <gray>• <yellow>crates <gray>• <yellow>market <gray>• <yellow>smithy <gray>• <yellow>merchant <gray>• <yellow>wilds <gray>• <yellow>hall <gray>• <yellow>shop <gray>• <yellow>koth <gray>• <yellow>pvp <gray>• <yellow>wild"));
+            p.sendMessage(Ui.mm("<gold><bold>Warps</bold> <dark_gray>» <yellow>spawn <gray>• <yellow>crates <gray>• <yellow>market <gray>• <yellow>smithy <gray>• <yellow>merchant <gray>• <yellow>wilds <gray>• <yellow>hall <gray>• <yellow>sell <gray>• <yellow>koth <gray>• <yellow>pvp <gray>• <yellow>wild"));
             p.sendMessage(Ui.mm("<gray>Use <white>/warp <name>"));
             return;
         }
@@ -637,7 +637,7 @@ public final class SurvivalModule implements Listener {
             case "merchant", "merchants" -> teleportSafe(p, DistrictLife.warp(world, "market"), "the Merchant District");
             case "wilds", "gate" -> teleportSafe(p, DistrictLife.warp(world, "wilds"), "the Gate of the Wilds");
             case "hall", "grandhall" -> teleportSafe(p, DistrictLife.warp(world, "hall"), "the Grand Hall");
-            case "shop", "shops", "grove" -> warpShop(p);
+            case "sell", "shop", "grove" -> warpSell(p);
             case "wild", "rtp" -> rtp(p);
             default -> p.sendMessage(Ui.mm("<red>No warp called " + a[0] + ". <gray>Try /warp"));
         }

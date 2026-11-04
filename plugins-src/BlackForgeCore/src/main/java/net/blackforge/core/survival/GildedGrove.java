@@ -5,7 +5,7 @@ import net.blackforge.core.build.Canvas;
 import java.util.Random;
 
 /**
- * The Gilded Grove: a luxurious forest island where /warp shop lands, floating just above the caldera's south-west ridge
+ * The Gilded Grove: a luxurious forest island where /sell lands, floating just above the caldera's south-west ridge
  * and joined to the Merchant District by a rising bridge. Spawn upgrade phase 4: {@link SpawnUpgrade} only places these
  * blocks where the world has air, and undo rebuilds this same canvas, so everything here must stay deterministic (fixed
  * seeds only). No fire, lava or campfires among the trees, every leaf is persistent, and nothing that keeps growing.
@@ -188,6 +188,15 @@ public final class GildedGrove {
         set(c, CX, base + 12, CZ, "emerald_block");
         for (int y = base + 10; y >= base + 5; y--) if (y > base + 5) set(c, CX, y, CZ, "iron_chain[axis=y]");
         late(c, CX, base + 5, CZ, "lantern[hanging=true]");
+        // the centrepiece: a quartz block whose four faces carry the Trader's glow item frames
+        int ch = SellCatalog.CORE_HALF;
+        for (int x = CX - ch; x <= CX + ch; x++) for (int z = CZ - ch; z <= CZ + ch; z++) {
+            boolean corner = Math.abs(x - CX) == ch && Math.abs(z - CZ) == ch;
+            for (int y = 1; y <= 5; y++) set(c, x, G + y, z, y == 1 ? "gilded_blackstone" : corner ? GOLD : y == 3 ? "chiseled_quartz_block" : QUARTZ);
+            set(c, x, G + 6, z, GOLD);
+        }
+        set(c, CX, G + 7, CZ, "emerald_block");
+        late(c, CX, G + 8, CZ, "lantern");
         // the stands: a gold plinth either side of each NPC
         for (int[] s : new int[][]{{CX - 7, CZ - 3}, {CX - 7, CZ + 3}, {CX + 7, CZ - 3}, {CX + 7, CZ + 3}, {CX - 3, CZ + 7}, {CX + 3, CZ + 7}}) {
             set(c, s[0], G + 1, s[1], "chiseled_quartz_block");

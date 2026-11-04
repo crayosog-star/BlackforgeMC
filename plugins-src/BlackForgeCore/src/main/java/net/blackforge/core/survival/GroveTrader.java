@@ -4,18 +4,29 @@ import net.blackforge.core.BlackForgeCore;
 import net.blackforge.core.NetEconomy;
 import net.blackforge.core.Ui;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.World;
+import org.bukkit.block.BlockFace;
 import org.bukkit.Sound;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.GlowItemFrame;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.hanging.HangingBreakEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.io.File;
 import java.time.LocalDate;
@@ -47,9 +58,11 @@ final class GroveTrader implements Listener {
     private final boolean enabled;
     private final int softCap;
     private final double overRate;
+    private final NamespacedKey frameTag;
 
     GroveTrader(BlackForgeCore plugin) {
         this.plugin = plugin;
+        this.frameTag = new NamespacedKey(BlackForgeCore.NS, "grove_frame");
         this.file = new File(plugin.getDataFolder(), "grove-sales.yml");
         this.data = YamlConfiguration.loadConfiguration(file);
         var cfg = plugin.getConfig();
@@ -145,6 +158,64 @@ final class GroveTrader implements Listener {
         p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_YES, 0.8f, 1.2f);
         p.sendMessage(Ui.mm("<green>Sold for <gold>" + NetEconomy.money(total) + "<green>."));
     }
+
+    // ------------------------------------------------------------------ the glow item frames at the centre of the pavilion
+
+    private static Location at(World world, SellCatalog.FrameSlot s) {
+        return new Location(world, KingdomLayout.GROVE_X + s.dx() + 0.5, KingdomLayout.GROVE_Y + s.dy() + 0.5, KingdomLayout.GROVE_Z + s.dz() + 0.5);
+    }
+
+    /** Puts back any frame that has gone missing; duplicates are removed. */
+    void ensureFrames(World world) {
+        Location centre = new Location(world, KingdomLayout.GROVE_X + 0.5, KingdomLayout.GROVE_Y + 4, KingdomLayout.GROVE_Z + 0.5);
+        java.util.Set<Integer> found = new java.util.HashSet<>();
+        for (Entity e : world.getNearbyEntities(centre, 7, 6, 7)) {
+            Integer i = e.getPersistentDataContainer().get(frameTag, PersistentDataType.INTEGER);
+            if (i != null && !found.add(i)) e.remove();
+        }
+        List<SellCatalog.FrameSlot> slots = SellCatalog.gallery();
+        for (int i = 0; i < slots.size() && i < SellCatalog.ITEMS.size(); i++) {
+            if (found.contains(i)) continue;
+            Material m = Material.matchMaterial(SellCatalog.ITEMS.get(i).id());
+            if (m == null) continue;
+            SellCatalog.FrameSlot s = slots.get(i);
+            int index = i;
+            world.spawn(at(world, s), GlowItemFrame.class, f -> {
+                f.setFacingDirection(BlockFace.valueOf(s.facing()), true);
+                f.setItem(new ItemStack(m), false);
+                f.setItemDropChance(0f);
+                f.setFixed(true);
+                f.setInvulnerable(true);
+                f.setPersistent(true);
+                f.getPersistentDataContainer().set(frameTag, PersistentDataType.INTEGER, index);
+            });
+        }
+    }
+
+    /** A small price tag over each frame. */
+    void priceTags(World world, List<TextDisplay> into) {
+        List<SellCatalog.FrameSlot> slots = SellCatalog.gallery();
+        for (int i = 0; i < slots.size() && i < SellCatalog.ITEMS.size(); i++) {
+            SellCatalog.Item it = SellCatalog.ITEMS.get(i);
+            double price = plugin.getConfig().getDouble("grove-shop.prices." + it.id(), it.price());
+            into.add(Ui.hologram(at(world, slots.get(i)).add(0, 0.72, 0), "<gold>" + NetEconomy.money(price), 0.55f));
+        }
+    }
+
+    private boolean isFrame(Entity e) { return e instanceof GlowItemFrame && e.getPersistentDataContainer().has(frameTag, PersistentDataType.INTEGER); }
+
+    @EventHandler
+    public void onFrameClick(PlayerInteractEntityEvent e) {
+        if (!isFrame(e.getRightClicked())) return;
+        e.setCancelled(true);
+        if (e.getHand() == org.bukkit.inventory.EquipmentSlot.HAND) open(e.getPlayer());
+    }
+
+    @EventHandler
+    public void onFrameDamage(EntityDamageEvent e) { if (isFrame(e.getEntity())) e.setCancelled(true); }
+
+    @EventHandler
+    public void onFrameBreak(HangingBreakEvent e) { if (isFrame(e.getEntity())) e.setCancelled(true); }
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {

@@ -48,6 +48,21 @@ class GildedGroveTest {
         assertTrue(r.ok(), r.summary("gilded grove"));
     }
 
+    @Test void everyFrameHangsInAirOnASolidBlock() {
+        Canvas c = GildedGrove.build();
+        List<SellCatalog.FrameSlot> slots = SellCatalog.gallery();
+        assertEquals(SellCatalog.ITEMS.size(), slots.size());
+        java.util.Set<SellCatalog.FrameSlot> unique = new java.util.HashSet<>(slots);
+        assertEquals(slots.size(), unique.size());
+        for (SellCatalog.FrameSlot s : slots) {
+            int x = KingdomLayout.GROVE_X + s.dx(), y = KingdomLayout.GROVE_Y + s.dy(), z = KingdomLayout.GROVE_Z + s.dz();
+            assertNull(c.get(x, y, z), s.toString());
+            int bx = x, bz = z;
+            switch (s.facing()) { case "NORTH" -> bz++; case "SOUTH" -> bz--; case "EAST" -> bx--; default -> bx++; }
+            assertNotNull(c.get(bx, y, bz), s.toString());
+        }
+    }
+
     @Test void bridgeAndIslandAreProtected() {
         double y = KingdomLayout.GROVE_Y + 1;
         assertTrue(KingdomLayout.inGrove(KingdomLayout.GROVE_X, y, KingdomLayout.GROVE_Z));

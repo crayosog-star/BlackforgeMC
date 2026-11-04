@@ -16,12 +16,12 @@ public final class KingdomLayout {
     public static final int Y = SurvivalLayout.Y;
     static final int D = SpawnUpgradeBuilder.DIST;
 
-    // ------------------------------------------------------------------ the Gilded Grove (/warp shop), spawn upgrade phase 4
+    // ------------------------------------------------------------------ the Gilded Grove (/sell), spawn upgrade phase 4
     /** The island floats just above the caldera's south-west ridge (the rock under it tops out at Y + 17). */
     public static final int GROVE_X = -70, GROVE_Z = 150, GROVE_R = 34, GROVE_Y = Y + 20;
     /** The bridge leaves the Merchant District's west edge at this point and runs west along this z. */
     public static final int GROVE_BRIDGE_X = -9, GROVE_BRIDGE_Z = D;
-    /** Where /warp shop lands: on the avenue just inside the arch, looking south to the pavilion. */
+    /** Where /sell lands: on the avenue just inside the arch, looking south to the pavilion. */
     public static final double GROVE_WARP_X = GROVE_X + 0.5, GROVE_WARP_Y = GROVE_Y + 1;
     public static final int GROVE_WARP_Z = GROVE_Z - GROVE_R + 8;
     public static boolean inGrove(double x, double y, double z) {
