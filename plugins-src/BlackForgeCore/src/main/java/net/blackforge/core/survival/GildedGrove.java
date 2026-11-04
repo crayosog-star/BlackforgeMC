@@ -161,7 +161,7 @@ public final class GildedGrove {
         }
     }
 
-    /** The heart of the place: quartz columns, a gold-ribbed glass dome and three stands (Daily Shop, Auction House, one kept free). */
+    /** The heart of the place: quartz columns, a gold-ribbed glass dome and three stands (Daily Shop, Auction House, the Trader who buys farmed goods). */
     private static void pavilion(Canvas c) {
         int r = PAV_R;
         for (int x = CX - r; x <= CX + r; x++) for (int z = CZ - r; z <= CZ + r; z++) {
@@ -188,7 +188,7 @@ public final class GildedGrove {
         set(c, CX, base + 12, CZ, "emerald_block");
         for (int y = base + 10; y >= base + 5; y--) if (y > base + 5) set(c, CX, y, CZ, "iron_chain[axis=y]");
         late(c, CX, base + 5, CZ, "lantern[hanging=true]");
-        // the stands: a gold plinth behind each NPC; the south one is left empty for a future Trader
+        // the stands: a gold plinth either side of each NPC
         for (int[] s : new int[][]{{CX - 7, CZ - 3}, {CX - 7, CZ + 3}, {CX + 7, CZ - 3}, {CX + 7, CZ + 3}, {CX - 3, CZ + 7}, {CX + 3, CZ + 7}}) {
             set(c, s[0], G + 1, s[1], "chiseled_quartz_block");
             late(c, s[0], G + 2, s[1], "potted_flowering_azalea_bush");

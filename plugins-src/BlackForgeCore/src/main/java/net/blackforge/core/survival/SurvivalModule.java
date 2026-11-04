@@ -192,6 +192,7 @@ public final class SurvivalModule implements Listener {
         plugin.discord().setGladiator(gladiators::discordRole);
         collection = new CollectionBook(plugin);
         new DailyShop(plugin);
+        districts.setTrader(new GroveTrader(plugin));
         new ShowcaseWarp(plugin);
         new LagGuard(plugin, world, this::protectedArea);
         blockLog = new BlockLog(plugin);

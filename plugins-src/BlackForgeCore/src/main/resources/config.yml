@@ -127,3 +127,12 @@ robots:
   walk-speed: 4.0
   fish-seconds: [180, 150, 120, 90, 60]
   fisher-burn: 0.25
+
+# The Trader in the Gilded Grove (Survival): sells raw farmed goods for the player's balance.
+# Per player, per item, per UTC day: full price up to daily-soft-cap, then over-cap-rate of the price.
+# Override any default price under prices, for example:  wheat: 1.5
+grove-shop:
+  enabled: true
+  daily-soft-cap: 1728
+  over-cap-rate: 0.25
+  prices: {}
