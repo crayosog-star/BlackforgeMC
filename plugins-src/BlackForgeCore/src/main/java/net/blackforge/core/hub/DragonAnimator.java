@@ -39,6 +39,9 @@ public final class DragonAnimator {
             new Particle.DustTransition(Color.fromRGB(235, 190, 255), Color.fromRGB(160, 60, 230), 3.0f),
             new Particle.DustTransition(Color.fromRGB(170, 70, 240), Color.fromRGB(60, 10, 120), 3.6f), Particle.WITCH, Particle.REVERSE_PORTAL);
 
+    /** Dragon breath particles want a power value; flames want none. */
+    private static Object fire(Particle p) { return p == Particle.DRAGON_BREATH ? (Object) 1.0f : null; }
+
     private static Palette palette(DragonFlight.Kind k) {
         return switch (k) { case SERPENT -> SOUL; case CRIMSON -> CRIMSON; case VIOLET -> VIOLET; default -> FIRE; };
     }
@@ -165,7 +168,7 @@ public final class DragonAnimator {
                 double dx = f[0] + (rnd.nextDouble() - 0.5) * 0.3, dy = f[1] + (rnd.nextDouble() - 0.5) * 0.3, dz = f[2] + (rnd.nextDouble() - 0.5) * 0.3;
                 // a flame's velocity is direction * speed: add the dragon's own speed so the fire doesn't trail behind it
                 double sp = 0.55 + rnd.nextDouble() * 0.4;
-                world.spawnParticle(pal.flame, m[0], m[1], m[2], 0, dx + fw[0] * v / sp, dy + fw[1] * v / sp, dz + fw[2] * v / sp, sp, null, true);
+                world.spawnParticle(pal.flame, m[0], m[1], m[2], 0, dx + fw[0] * v / sp, dy + fw[1] * v / sp, dz + fw[2] * v / sp, sp, fire(pal.flame), true);
             }
             for (int k = 0; k < 7 * ramp; k++) {
                 double s = rnd.nextDouble() * 11 * ramp, spread = 0.3 + s * 0.22;
@@ -213,7 +216,7 @@ public final class DragonAnimator {
             Fireball b = it.next();
             b.x += b.vx; b.y += b.vy; b.z += b.vz;
             b.vy -= 0.05;
-            world.spawnParticle(b.pal.flame, b.x, b.y, b.z, 5, 0.3, 0.3, 0.3, 0.02, null, true);
+            world.spawnParticle(b.pal.flame, b.x, b.y, b.z, 5, 0.3, 0.3, 0.3, 0.02, fire(b.pal.flame), true);
             world.spawnParticle(Particle.DUST_COLOR_TRANSITION, b.x, b.y, b.z, 2, 0.25, 0.25, 0.25, 0, b.pal.near, true);
             if (rnd.nextBoolean()) world.spawnParticle(Particle.SMOKE, b.x, b.y, b.z, 2, 0.2, 0.2, 0.2, 0.01, null, true);
             // bursts when its time is up or before it reaches the island
@@ -221,7 +224,7 @@ public final class DragonAnimator {
             if (--b.life > 0 && !overIsland) continue;
             it.remove();
             world.spawnParticle(Particle.EXPLOSION_EMITTER, b.x, b.y, b.z, 1, 0, 0, 0, 0, null, true);
-            world.spawnParticle(b.pal.flame, b.x, b.y, b.z, 50 + rnd.nextInt(30), 0.4, 0.4, 0.4, 0.3, null, true);
+            world.spawnParticle(b.pal.flame, b.x, b.y, b.z, 50 + rnd.nextInt(30), 0.4, 0.4, 0.4, 0.3, fire(b.pal.flame), true);
             world.spawnParticle(b.pal.spark, b.x, b.y, b.z, 10, 1.5, 1.5, 1.5, 0, null, true);
             world.playSound(new Location(world, b.x, b.y, b.z), Sound.ENTITY_DRAGON_FIREBALL_EXPLODE, SoundCategory.AMBIENT, 3f, 0.6f + rnd.nextFloat() * 0.3f);
         }

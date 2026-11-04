@@ -59,6 +59,7 @@ public final class HubModule implements Listener {
         {"survival", "12", "IRON_PICKAXE", "<#d9dde3><bold>Survival", "<gray>Classic survival with land claims.<newline><gray>Build safely with friends."},
         {"factions", "14", "NETHERITE_SWORD", "<#e5484d><bold>Factions", "<gray>Form a faction, claim land, raid rivals.<newline><gray>PvP is ON. New map every 3 months."},
         {"arcade", "16", "TNT", "<#ffc53d><bold>Arcade", "<gray>18 minigames: BedWars, SkyWars,<newline><gray>Duels, Murder Mystery and more."},
+        {"raft", "20", "OAK_BOAT", "<#4fc3f7><bold>Raft", "<gray>Stranded on a few planks at sea.<newline><gray>Hook debris, purify water, fight sharks,<newline><gray>follow the radio towers to Utopia."},
     };
 
     public HubModule(BlackForgeCore plugin) {
@@ -78,6 +79,7 @@ public final class HubModule implements Listener {
         else {
             if (!new File(plugin.getDataFolder(), "hub-biome-v2").exists()) applyBiome();
             if (!new File(plugin.getDataFolder(), "hub-castle-v1").exists()) addCastle();
+            if (!new File(plugin.getDataFolder(), "hub-raft-gate-v1").exists()) addRaftGate();
             if (new File(plugin.getDataFolder(), "hub-dragons-v1").exists() && !new File(plugin.getDataFolder(), "hub-dragons-flying").exists()) removeStatues();
         }
         Bukkit.getScheduler().runTaskLater(plugin, this::spawnHolograms, 40L);
@@ -161,7 +163,7 @@ public final class HubModule implements Listener {
             @Override public boolean execute(org.bukkit.command.CommandSender s, String label, String[] a) {
                 if (s instanceof Player p && a.length == 1 && a[0].equals("arena")) arena.enter(p);
                 else if (s instanceof Player p && a.length == 1 && a[0].equals("forgewars")) joinForgeWars(p);
-                else if (s instanceof Player p && a.length == 1 && List.of("skyblock", "survival", "factions", "arcade").contains(a[0])) connect(p, a[0]);
+                else if (s instanceof Player p && a.length == 1 && List.of("skyblock", "survival", "factions", "arcade", "raft").contains(a[0])) connect(p, a[0]);
                 return true;
             }
         });
@@ -345,6 +347,7 @@ public final class HubModule implements Listener {
             p.sendMessage(Ui.mm("  <#d9dde3>» <u><click:run_command:'/bfjoin survival'>Survival</click></u> <gray>- claims, crates, KOTH, the Scrapyard"));
             p.sendMessage(Ui.mm("  <#e5484d>» <u><click:run_command:'/bfjoin factions'>Factions</click></u> <gray>- build a faction, raid rivals"));
             p.sendMessage(Ui.mm("  <#ffc53d>» <u><click:run_command:'/bfjoin arcade'>Arcade</click></u> <gray>- BedWars, SkyWars, Duels + 15 more minigames"));
+            p.sendMessage(Ui.mm("  <#4fc3f7>» <u><click:run_command:'/bfjoin raft'>Raft</click></u> <gray>- survive on a raft at sea, with friends"));
             p.sendMessage(Ui.mm("  <#ff6a00>» <u><click:run_command:'/bfjoin forgewars'>Forge Wars</click></u> <gray>- BedWars with BlackForgeMC abilities"));
             p.sendMessage(Ui.mm("  <gray>Lost? The <#4fd1c5>Guide</#4fd1c5> book (or <white>/guide</white>) explains everything."));
             p.sendMessage(Ui.mm("  <gray>Brought by a friend? <white>/referral <name></white> pays you both."));
@@ -681,6 +684,7 @@ public final class HubModule implements Listener {
                 "<#d9dde3>■ <white>Survival <gray>" + net.count("survival"),
                 "<#e5484d>■ <white>Factions <gray>" + net.count("factions"),
                 "<#ffc53d>■ <white>Arcade <gray>" + net.count("arcade"),
+                "<#4fc3f7>■ <white>Raft <gray>" + net.count("raft"),
                 "  ",
                 Events.sidebarLine(),
                 "   ",
@@ -716,6 +720,18 @@ public final class HubModule implements Listener {
     // ------------------------------------------------------------------ dragons
 
     /** Raises the castle wall around a hub that was built before it existed. */
+    /** The Raft portal, added to a hub that is already built: only places blocks, never clears anything. */
+    private void addRaftGate() {
+        HubLayout.Gate g = HubLayout.GATES.stream().filter(x -> x.server().equals("raft")).findFirst().orElse(null);
+        if (g == null) return;
+        var gate = HubBuilder.buildGate(g);
+        world.getChunkAt(g.cx() >> 4, g.cz() >> 4).load();
+        Paster.paste(plugin, world, gate, 4000, () -> {
+            try { new File(plugin.getDataFolder(), "hub-raft-gate-v1").createNewFile(); } catch (Exception ignored) { }
+            plugin.getLogger().info("Hub Raft gate built: " + gate.size() + " blocks");
+        });
+    }
+
     private void addCastle() {
         var castle = CastleBuilder.build();
         Paster.paste(plugin, world, castle, 4000, () -> {

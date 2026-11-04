@@ -113,6 +113,13 @@ public final class HubBuilder {
 
     private interface Put { void at(int u, int y, int w, String b); }
 
+    /** Just one portal gate (for adding a gate to a hub that is already built). */
+    public static Canvas buildGate(HubLayout.Gate g) {
+        HubBuilder b = new HubBuilder();
+        b.gate(g);
+        return b.c;
+    }
+
     /** Arcade gate bands: glowing at the opening, cooling to blackstone at the edge. */
     private static final String[] FIRE = {"minecraft:shroomlight", "minecraft:orange_concrete", "minecraft:red_concrete",
             "minecraft:red_nether_bricks", "minecraft:nether_bricks", "minecraft:polished_blackstone_bricks"};
@@ -127,6 +134,7 @@ public final class HubBuilder {
             case "oxidized" -> { main = "minecraft:polished_blackstone_bricks"; accent = "minecraft:warped_wart_block"; trim = "minecraft:warped_planks"; light = "minecraft:sea_lantern"; }
             case "iron" -> { main = "minecraft:smooth_basalt"; accent = "minecraft:iron_block"; trim = "minecraft:polished_blackstone_bricks"; light = "minecraft:shroomlight"; }
             case "netherite" -> { main = "minecraft:polished_blackstone_bricks"; accent = "minecraft:netherite_block"; trim = "minecraft:red_nether_bricks"; light = "minecraft:shroomlight"; }
+            case "prismarine" -> { main = "minecraft:dark_prismarine"; accent = "minecraft:prismarine_bricks"; trim = "minecraft:cut_copper"; light = "minecraft:sea_lantern"; }
             default -> { main = "minecraft:polished_blackstone_bricks"; accent = "minecraft:gold_block"; trim = "minecraft:gold_block"; light = "minecraft:ochre_froglight"; }
         }
         int base = Y + 1;
@@ -203,6 +211,12 @@ public final class HubBuilder {
                 put.at(0, y, 0, "minecraft:netherite_block");
                 put.at(0, y + 1, 0, "minecraft:netherite_block");
                 put.at(0, y + 2, 0, "minecraft:shroomlight");
+            }
+            case "prismarine" -> {  // a crest of sea lanterns and a ship's wheel of chains over the harbour
+                for (int u = -5; u <= 5; u++) put.at(u, y, 0, Math.abs(u) % 2 == 0 ? "minecraft:sea_lantern" : "minecraft:prismarine_bricks");
+                for (int u = -3; u <= 3; u++) put.at(u, y + 1, 0, "minecraft:prismarine_brick_slab[type=bottom]");
+                put.at(0, y + 1, 0, "minecraft:conduit");
+                for (int side : new int[]{-1, 1}) for (int k = 1; k <= 3; k++) put.at(side * 7, y - k, 0, "minecraft:iron_chain[axis=y]");
             }
             default -> {           // arcade marquee
                 for (int u = -4; u <= 4; u++) put.at(u, y, 0, "minecraft:gold_block");

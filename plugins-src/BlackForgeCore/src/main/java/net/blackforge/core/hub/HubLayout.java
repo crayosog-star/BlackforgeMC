@@ -28,10 +28,13 @@ public final class HubLayout {
 
     /** Four gatehouses in a line across the forecourt, all facing south (towards spawn). */
     public static final int GATE_Z = -46;
+    public static final int RAFT_X = -36, RAFT_Z = 22;
     public static final List<Gate> GATES = List.of(
         new Gate("survival", "SURVIVAL", "#d9dde3", "iron", -58, GATE_Z, true),
         new Gate("factions", "FACTIONS", "#e5484d", "netherite", -28, GATE_Z, true),
         new Gate("arcade", "ARCADE", "#ffc53d", "gold", 28, GATE_Z, true),
-        new Gate("skyblock", "SKYBLOCK", "#4fd1c5", "oxidized", 58, GATE_Z, true)
+        new Gate("skyblock", "SKYBLOCK", "#4fd1c5", "oxidized", 58, GATE_Z, true),
+        // the harbour: the Raft gate stands on the west side of the plaza, its plane running north-south, facing spawn
+        new Gate("raft", "RAFT", "#4fc3f7", "prismarine", RAFT_X, RAFT_Z, false)
     );
 }
