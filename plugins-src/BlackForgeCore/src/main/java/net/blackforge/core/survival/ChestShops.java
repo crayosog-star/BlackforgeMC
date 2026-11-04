@@ -41,10 +41,12 @@ import java.util.*;
  */
 public final class ChestShops implements Listener {
     private final BlackForgeCore plugin;
+    private final Claims claims;
     private final NamespacedKey ownerKey, itemKey, amountKey, buyKey, sellKey;
 
-    ChestShops(BlackForgeCore plugin) {
+    ChestShops(BlackForgeCore plugin, Claims claims) {
         this.plugin = plugin;
+        this.claims = claims;
         ownerKey = new NamespacedKey(BlackForgeCore.NS, "shop_owner");
         itemKey = new NamespacedKey(BlackForgeCore.NS, "shop_item");
         amountKey = new NamespacedKey(BlackForgeCore.NS, "shop_amount");
@@ -73,6 +75,12 @@ public final class ChestShops implements Listener {
         Player p = e.getPlayer();
         Chest chest = chestBehind(e.getBlock());
         if (chest == null) { p.sendMessage(Ui.mm("<red>Put the [Shop] sign on the front of a chest.")); return; }
+        UUID owner = p.getUniqueId();
+        if (!ownsShop(owner, e.getBlock(), chest)) {
+            e.setCancelled(true);
+            p.sendMessage(Ui.mm("<red>The sign and all of its stock must be inside your own claim."));
+            return;
+        }
         ItemStack item = null;
         for (ItemStack it : chest.getInventory().getContents()) if (it != null && !it.getType().isAir()) { item = it.clone(); break; }
         if (item == null) { p.sendMessage(Ui.mm("<red>Put the item you want to trade in the chest first.")); e.setCancelled(true); return; }
@@ -81,10 +89,8 @@ public final class ChestShops implements Listener {
         double buy = -1, sell = -1;
         String[] parts = plain(e.line(2)).toUpperCase().replace("$", "").split("\\s+");
         for (int i = 0; i + 1 < parts.length; i++) {
-            try {
-                if (parts[i].equals("B")) buy = Double.parseDouble(parts[i + 1]);
-                if (parts[i].equals("S")) sell = Double.parseDouble(parts[i + 1]);
-            } catch (NumberFormatException ignored) { }
+            if (parts[i].equals("B")) buy = NetEconomy.parsePrice(parts[i + 1], 1);
+            if (parts[i].equals("S")) sell = NetEconomy.parsePrice(parts[i + 1], 1);
         }
         if (buy < 0 && sell < 0) { p.sendMessage(Ui.mm("<red>Line 3: prices, like <white>B 100 <red>(players buy) and/or <white>S 80 <red>(players sell)")); e.setCancelled(true); return; }
         item.setAmount(1);
@@ -95,7 +101,8 @@ public final class ChestShops implements Listener {
         double fb = buy, fs = sell;
         ItemStack fi = item;
         Bukkit.getScheduler().runTask(plugin, () -> {
-            if (!(e.getBlock().getState() instanceof Sign s)) return;
+            Chest stock = chestBehind(e.getBlock());
+            if (!(e.getBlock().getState() instanceof Sign s) || stock == null || !ownsShop(owner, e.getBlock(), stock)) return;
             var pdc = s.getPersistentDataContainer();
             pdc.set(ownerKey, PersistentDataType.STRING, p.getUniqueId().toString());
             pdc.set(itemKey, PersistentDataType.STRING, Base64.getEncoder().encodeToString(fi.serializeAsBytes()));
@@ -123,18 +130,27 @@ public final class ChestShops implements Listener {
         e.setCancelled(true);
         Chest chest = chestBehind(b);
         if (chest == null) { p.sendMessage(Ui.mm("<red>This shop's chest is gone.")); return; }
+        UUID ownerId = UUID.fromString(owner);
+        if (!ownsShop(ownerId, b, chest)) {
+            p.sendMessage(Ui.mm("<red>The shop sign and stock must be inside the owner's claim."));
+            return;
+        }
         ItemStack item = ItemStack.deserializeBytes(Base64.getDecoder().decode(pdc.get(itemKey, PersistentDataType.STRING)));
         int amount = pdc.getOrDefault(amountKey, PersistentDataType.INTEGER, 1);
         double price = pdc.getOrDefault(buying ? buyKey : sellKey, PersistentDataType.DOUBLE, -1.0);
-        OfflinePlayer own = Bukkit.getOfflinePlayer(UUID.fromString(owner));
+        OfflinePlayer own = Bukkit.getOfflinePlayer(ownerId);
         if (own.getUniqueId().equals(p.getUniqueId())) { p.sendMessage(Ui.mm("<gray>That's your shop. <white>Sneak + left-click <gray>to break it.")); return; }
         if (price < 0) { p.sendMessage(Ui.mm("<red>This shop doesn't " + (buying ? "sell" : "buy") + " items.")); return; }
+        if (!NetEconomy.validPrice(price)) {
+            p.sendMessage(Ui.mm("<red>This shop has an invalid price. Ask the owner to replace the sign."));
+            return;
+        }
         Inventory stock = chest.getInventory();
         if (buying) {
             if (count(stock, item) < amount) { p.sendMessage(Ui.mm("<red>This shop is out of stock.")); return; }
             if (!fits(p.getInventory(), item, amount)) { p.sendMessage(Ui.mm("<red>Make room in your inventory first.")); return; }
             if (!plugin.economy().withdraw(p, price)) { p.sendMessage(Ui.mm("<red>You need " + NetEconomy.money(price) + ".")); return; }
-            plugin.economy().deposit(own, price);
+            if (!credit(p, own, price, p)) return;
             if (own.getPlayer() != null) net.blackforge.core.Hooks.stat(own.getPlayer(), "shop_sold", 1);
             remove(stock, item, amount);
             give(p.getInventory(), item, amount);
@@ -144,12 +160,23 @@ public final class ChestShops implements Listener {
             if (count(p.getInventory(), item) < amount) { p.sendMessage(Ui.mm("<red>You need " + amount + "x " + itemName(item) + " to sell.")); return; }
             if (!fits(stock, item, amount)) { p.sendMessage(Ui.mm("<red>This shop's chest is full.")); return; }
             if (!plugin.economy().withdraw(own, price)) { p.sendMessage(Ui.mm("<red>The shop owner can't afford to buy right now.")); return; }
-            plugin.economy().deposit(p, price);
+            if (!credit(own, p, price, p)) return;
             remove(p.getInventory(), item, amount);
             give(stock, item, amount);
             p.sendMessage(Ui.mm("<green>Sold " + amount + "x " + itemName(item) + " for " + NetEconomy.money(price) + "."));
         }
         p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_TRADE, 1f, 1.1f);
+    }
+
+    private boolean ownsShop(UUID owner, Block sign, Chest stock) {
+        return owner.equals(claims.ownerAt(sign.getLocation())) && claims.ownsStock(owner, stock.getInventory());
+    }
+
+    private boolean credit(OfflinePlayer payer, OfflinePlayer payee, double price, Player customer) {
+        if (plugin.economy().deposit(payee, price)) return true;
+        if (!plugin.economy().deposit(payer, price)) plugin.getLogger().severe("Could not refund failed shop trade for " + payer.getUniqueId());
+        customer.sendMessage(Ui.mm("<red>The shop payment could not be completed."));
+        return false;
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -159,7 +186,9 @@ public final class ChestShops implements Listener {
         for (Block s : signsOn(b)) {
             if (!(s.getState() instanceof Sign sign)) continue;
             String owner = sign.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING);
-            if (owner != null && !owner.equals(p.getUniqueId().toString()) && !p.hasPermission("blackforge.admin")) {
+            Chest stock = chestBehind(s);
+            if (owner != null && stock != null && ownsShop(UUID.fromString(owner), s, stock)
+                    && !owner.equals(p.getUniqueId().toString()) && !p.hasPermission("blackforge.admin")) {
                 e.setCancelled(true);
                 p.sendMessage(Ui.mm("<red>That's someone else's shop."));
                 return;

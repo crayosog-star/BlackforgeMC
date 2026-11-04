@@ -32,6 +32,7 @@ public final class SurvivalModule implements Listener {
     private final World world;
     private final Claims claims;
     private final KingdomStaging staging;
+    private final net.blackforge.core.abyss.AbyssWorld abyss;
     private final Crates crates;
     private final Koth koth;
     private final PvpZone pvp;
@@ -89,6 +90,7 @@ public final class SurvivalModule implements Listener {
         this.world = Bukkit.getWorlds().getFirst();
         claims = new Claims(plugin);
         staging = new KingdomStaging(plugin);
+        abyss = new net.blackforge.core.abyss.AbyssWorld(plugin);
         crates = new Crates(plugin, world, DistrictLife.CRATE_SPOTS, Y + 2);   // in the Grand Hall
         koth = new Koth(plugin, world, crates);
         pvp = new PvpZone(plugin, world, crates);
@@ -132,7 +134,7 @@ public final class SurvivalModule implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, () -> net.blackforge.core.Events.publishLive(koth.nextStart(), koth.active(), boss.active()), 100L, 600L);
         bounties = new Bounties(plugin);
         jobs = new Jobs(plugin);
-        new ChestShops(plugin);
+        new ChestShops(plugin, claims);
         new AfkZone(plugin, world, new Location(world, 1500.5, 200, 1500.5), 6, crates, "afkzone-built");
         new ResourceWorld(plugin);
         votes.setScrap(scrap);
@@ -226,6 +228,7 @@ public final class SurvivalModule implements Listener {
 
     public void shutdown() {
         staging.shutdown();
+        abyss.shutdown();
         boss.stop(null);
         districts.shutdown();
         gladiators.shutdown();
@@ -379,7 +382,7 @@ public final class SurvivalModule implements Listener {
                 return true;
             }
             @Override public List<String> tabComplete(CommandSender s, String alias, String[] args) {
-                if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "sundering", "koth", "worldboss", "pvp", "wild", "market", "smithy", "merchant", "wilds", "hall", "sell");
+                if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "abyss", "sundering", "koth", "worldboss", "pvp", "wild", "market", "smithy", "merchant", "wilds", "hall", "sell");
                 if (name.equals("ah") && args.length == 1) return List.of("sell", "listings", "collect", "help");
                 if (name.equals("claim") && args.length == 1) return List.of("map", "show", "info", "list", "trust", "untrust", "unclaimall", "help");
                 return super.tabComplete(s, alias, args);
@@ -392,6 +395,7 @@ public final class SurvivalModule implements Listener {
     public boolean admin(CommandSender s, String[] a) {
         if (vaults.admin(s, a)) return true;   // /blackforge vault give <player> [amount]: crates and the store
         if (rite.admin(s, a)) return true;   // /blackforge rite give <player> (for crates)
+        if (abyss.command(s, a)) return true;   // /blackforge abyss stage|tp|serpent|kill: the Abyssal Sea
         if (staging.command(s, a)) return true;   // /blackforge kingdom stage|tp: the Infernal Kingdom in its own staging world
         if (upgrade.command(s, a)) return true;   // /blackforge spawnupgrade apply|undo|status 1: the volcanic kingdom (additive only)
         if (a.length >= 1 && a[0].equalsIgnoreCase("voidout")) {   // clear the land around spawn
@@ -635,6 +639,7 @@ public final class SurvivalModule implements Listener {
         }
         switch (a[0].toLowerCase()) {
             case "spawn" -> teleportSafe(p, spawn(), "spawn");
+            case "abyss", "abyssal", "sea" -> abyss.enter(p);
             case "crates", "crate" -> teleportSafe(p, DistrictLife.cratesWarp(world), "the crates");
             case "sundering", "boss", "worldboss", "worldbosses", "graveyard" -> {
                 if (boss.arena().ready()) teleportSafe(p, boss.arena().arrival(), "the Dragon's Graveyard");

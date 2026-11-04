@@ -43,13 +43,19 @@ public final class DarknessPotion implements Listener, Hackable {
     private final BlackForgeCore plugin;
     private final boolean enabled;
     private final NamespacedKey tagKey, cooldownGroup;
+    private final java.util.function.BiPredicate<Player, Player> mayBlind;
     private final Predicate<Location> pvpAt;          // where players can be darkened (supplied by each server)
     private final Map<UUID, Long> readyAt = new HashMap<>(), darkUntil = new HashMap<>(), immuneUntil = new HashMap<>(), confusedUntil = new HashMap<>();
     private final Random rnd = new Random();
     private final List<java.util.function.Consumer<LivingEntity>> hitHooks = new ArrayList<>();
 
     public DarknessPotion(BlackForgeCore plugin, Predicate<Location> pvpAt) {
+        this(plugin, pvpAt, (caster, target) -> true);
+    }
+
+    public DarknessPotion(BlackForgeCore plugin, Predicate<Location> pvpAt, java.util.function.BiPredicate<Player, Player> mayBlind) {
         this.plugin = plugin;
+        this.mayBlind = mayBlind;
         this.pvpAt = pvpAt;
         this.enabled = plugin.getConfig().getBoolean("darkness-potion.enabled", true);
         this.tagKey = new NamespacedKey(BlackForgeCore.NS, "darkness_potion");
@@ -127,11 +133,14 @@ public final class DarknessPotion implements Listener, Hackable {
         Location at = pot.getLocation();
         List<LivingEntity> hit = new ArrayList<>(e.getAffectedEntities());
         for (LivingEntity le : hit) e.setIntensity(le, 0);   // vanilla applies nothing; we do it all below
+        if (!enabled || !(pot.getShooter() instanceof Player caster) || !caster.isOnline() || caster.getWorld() != at.getWorld()) return;
         splashEffects(at);
         long now = System.currentTimeMillis();
         for (LivingEntity le : hit) {
-            if (le instanceof Player p) darken(p, now);
-            else if (le instanceof Mob m) confuse(m, now);
+            if (le instanceof Player p) {
+                if (p == caster || !pvpAt.test(caster.getLocation()) || !mayBlind.test(caster, p)) continue;
+                darken(p, now);
+            } else if (le instanceof Mob m) confuse(m, now);
             for (var f : hitHooks) f.accept(le);
         }
     }
@@ -144,20 +153,17 @@ public final class DarknessPotion implements Listener, Hackable {
     private void darken(Player p, long now) {
         if (p.getGameMode() == GameMode.CREATIVE || p.getGameMode() == GameMode.SPECTATOR) return;
         if (!pvpAt.test(p.getLocation())) return;
-        boolean stillDark = darkUntil.getOrDefault(p.getUniqueId(), 0L) > now;
-        if (!stillDark && immuneUntil.getOrDefault(p.getUniqueId(), 0L) > now) {
+        if (immuneUntil.getOrDefault(p.getUniqueId(), 0L) > now) {
             p.sendActionBar(Ui.mm("<gray>You shake off the dark."));
             return;
         }
-        // reset, never extend: two potions are not 5 s of blindness
+        // The active interval and the recovery window both reject additional splashes.
         // Blindness for the whole time keeps it fully dark (Darkness alone pulses); Darkness on top adds the pulsing edges
         p.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, DARK_TICKS, 0, false, false, false));
         p.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, DARK_TICKS, 0, false, false, true));
         darkUntil.put(p.getUniqueId(), now + DARK_TICKS * 50L);
         immuneUntil.put(p.getUniqueId(), now + DARK_TICKS * 50L + IMMUNE_MS);
         p.sendActionBar(Ui.mm("<#8C1C2E>☠ <#6E2C83>The dark takes you"));
-        if (stillDark) return;   // the glitch below is already running for them
-
         UUID id = p.getUniqueId();
         int[] t = {0};
         Bukkit.getScheduler().runTaskTimer(plugin, task -> {

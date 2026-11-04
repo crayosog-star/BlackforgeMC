@@ -264,22 +264,30 @@ public final class GaleBellows implements Listener {
         long now = System.currentTimeMillis();
         int landed = 0;
         for (LivingEntity t : hit) {
-            if (!t.isValid() || t.isDead() || t.getWorld() != p.getWorld()) continue;
-            landed++;
+            if (!t.isValid() || t.getWorld() != p.getWorld() || !canTarget(p, t)
+                    || (!alsoTarget.test(t) && !allowed(p, t))) continue;
             Long last = lastPushed.get(t.getUniqueId());
             boolean juggled = last != null && now - last < WindCone.JUGGLE_WINDOW_MS;
-            lastPushed.put(t.getUniqueId(), now);
             AttributeInstance kb = t.getAttribute(Attribute.KNOCKBACK_RESISTANCE);
             double[] v = WindCone.push(t.getX() - p.getX(), t.getZ() - p.getZ(), look.getX(), look.getZ(),
                     kb == null ? 0 : kb.getValue(), !t.isOnGround(), juggled);
             // the hit: a real damage event, so kill credit, combat tags and the arena rules all apply.
             // Clear the vanilla hit cooldown first, or a sword hit just before would swallow the gust's damage.
+            int oldImmunity = t.getNoDamageTicks();
+            EntityDamageEvent previous = t.getLastDamageCause();
             t.setNoDamageTicks(0);
             t.damage(DAMAGE, p);
+            EntityDamageEvent applied = t.getLastDamageCause();
+            if (!alsoTarget.test(t) && (applied == null || applied == previous || applied.isCancelled())) {
+                t.setNoDamageTicks(oldImmunity);
+                continue;
+            }
+            landed++;
+            lastPushed.put(t.getUniqueId(), now);
             // vanilla adds its own knockback for that hit, so set ours on the next tick to replace it
             // (never on the Test Dummy: it's pinned to its post)
             if (!alsoTarget.test(t)) Bukkit.getScheduler().runTask(plugin, () -> {
-                if (!t.isValid() || t.isDead()) return;
+                if (!t.isValid() || !p.isOnline() || t.getWorld() != p.getWorld() || !canTarget(p, t) || !allowed(p, t)) return;
                 double vy = v[1] > 0 ? v[1] : t.getVelocity().getY();
                 t.setVelocity(new Vector(v[0], vy, v[2]));
             });
