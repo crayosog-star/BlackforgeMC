@@ -45,6 +45,18 @@ public final class FoundryZone {
         return -1;
     }
 
+    /** Which test bench this block belongs to, as its tip's id, or null. */
+    public static String benchAt(int x, int y, int z) {
+        if (supplyAt(x, y, z) >= 0) return "supply";
+        if (x == FORGE_X && z == FORGE_Z && y == TestArenaBuilder.Y + 1) return "forge";
+        if (x >= LANE_X && x <= LANE_X + 1) for (int lane : LANE_Z) if (z == lane) return "lane";
+        if (inMineWall(x, y, z)) return "mine";
+        if (x >= FARM_X1 && x <= FARM_X2 && z >= FARM_Z1 && z <= FARM_Z2) return "farm";
+        if (x >= POND_X1 && x <= POND_X2 && z >= POND_Z1 && z <= POND_Z2) return "pond";
+        if (x >= PEN_X1 && x <= PEN_X2 && z >= PEN_Z1 && z <= PEN_Z2) return "pen";
+        return null;
+    }
+
     public static boolean contains(double x, double z) {
         return x >= MIN_X && x < MAX_X + 1 && z >= MIN_Z && z < MAX_Z + 1;
     }
