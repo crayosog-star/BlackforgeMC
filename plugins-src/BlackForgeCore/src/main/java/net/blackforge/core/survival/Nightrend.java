@@ -46,8 +46,10 @@ import java.util.function.Predicate;
  *   <li>One dagger in your main hand hits for {@code damage} (5) at {@code attack-speed} (2.0 a second) with
  *   {@code reach-change} (-0.5) blocks of reach. It isn't a sword, so there's no sweep: one target per hit.</li>
  *   <li>With a Nightrend in <b>each</b> hand you attack at {@code pair-attack-speed} (2.6), and every second hit
- *   every swing uses both arms: the right swings, then the left follows {@code off-hand-delay-ticks} (3) later, and a
- *   hit slashes a red arc off each blade in that order (cosmetic; same damage). Drop either and the bonus is gone.</li>
+ *   swings alternate arms, right then left, with a {@code repeat-side-chance} (3%) of the same arm twice, when that
+ *   blade's glow swells and an aura wraps it for a second (a "blood surge"); a hit
+ *   slashes a red arc off that arm's blade (cosmetic; same damage). Drop either and the bonus is gone.</li>
+ *   <li>A different sword in the off hand gives a smaller boost, {@code mixed-attack-speed} (2.3); speed only.</li>
  *   <li>Hits from the arc behind the target ({@code behind-arc-degrees}, 120) only do {@code behind-damage} (60%),
  *   with a duller sound. Players and mobs alike. "Behind" is where the target is facing, not where it's walking.</li>
  *   <li>A slight aura: a few dark-red embers drift off each blade while you hold it. Off while invisible or vanished.</li>
@@ -77,11 +79,16 @@ public final class Nightrend implements Listener, Hackable {
     private final BlackForgeCore plugin;
     private final Predicate<Location> allowedAt;
     private final boolean enabled;
-    private final double damage, singleSpeed, pairSpeed, reachChange, behindArc, behindDamage;
+    private final double damage, singleSpeed, pairSpeed, mixedSpeed, reachChange, behindArc, behindDamage, repeatChance;
     private final long empMillis, flipCooldownMillis;
-    private final int offHandDelay;   // ticks between the right swing and the left one
-    private final NamespacedKey tagKey, damageKey, speedKey, reachKey, pairKey;
-    private final Set<UUID> pairOn = new HashSet<>();
+    private final boolean packLive;
+    private final NamespacedKey tagKey, damageKey, speedKey, reachKey, pairKey, mixedKey;
+    private final Set<UUID> pairOn = new HashSet<>();     // a Nightrend in each hand
+    private final Set<UUID> mixedOn = new HashSet<>();    // a Nightrend in the main hand, another sword in the off hand
+    private final Map<UUID, Boolean> nextOff = new HashMap<>();   // which arm swings next (true = off hand)
+    private final Map<UUID, Integer> swingTick = new HashMap<>();
+    private final Map<UUID, Boolean> swingWasOff = new HashMap<>();
+    private final Random rnd = new Random();
     private final Map<UUID, Integer> hits = new HashMap<>();
     private final Map<UUID, Long> hackedUntil = new HashMap<>(), lastFlip = new HashMap<>();
     private final Set<ItemDisplay> live = new HashSet<>();
@@ -101,13 +108,16 @@ public final class Nightrend implements Listener, Hackable {
         this.behindArc = Math.max(0, Math.min(360, c.getDouble("nightrend.behind-arc-degrees", 120)));
         this.behindDamage = Math.max(0, Math.min(1, c.getDouble("nightrend.behind-damage", 0.6)));
         this.empMillis = Math.round(Math.max(0, c.getDouble("nightrend.emp-seconds", 4)) * 1000);
-        this.offHandDelay = Math.max(1, Math.min(10, c.getInt("nightrend.off-hand-delay-ticks", 3)));
+        this.mixedSpeed = Math.max(singleSpeed, Math.min(pairSpeed, c.getDouble("nightrend.mixed-attack-speed", 2.3)));
+        this.repeatChance = Math.max(0, Math.min(0.9, c.getDouble("nightrend.repeat-side-chance", 0.03)));
+        this.packLive = c.getBoolean("resource-pack-live", false);
         this.flipCooldownMillis = Math.round(Math.max(0, c.getDouble("nightrend.flip-cooldown-seconds", 3)) * 1000);
         this.tagKey = new NamespacedKey(BlackForgeCore.NS, "nightrend");
         this.damageKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_damage");
         this.speedKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_speed");
         this.reachKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_reach");
         this.pairKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_pair");
+        this.mixedKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_mixed");
         Bukkit.getPluginManager().registerEvents(this, plugin);
         this.task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, TICK_EVERY);
     }
@@ -128,11 +138,14 @@ public final class Nightrend implements Listener, Hackable {
                     Ui.mm("<gray>A black, jagged dagger. Fast and close."),
                     Ui.mm("<gray>Hold one in <white>each hand<gray> to strike faster:"),
                     Ui.mm("<white>" + fmt(singleSpeed) + "<gray> → <white>" + fmt(pairSpeed) + "<gray> attacks a second"),
+                    Ui.mm("<gray>Another sword in your off hand: <white>" + fmt(mixedSpeed)),
                     Ui.mm("<gray>Short reach, no sweep: <white>one target<gray> per hit"),
                     Ui.mm("<gray>Hits from <white>behind<gray> do only <white>" + Math.round(behindDamage * 100) + "%<gray> damage"),
                     Ui.mm(""),
                     Ui.mm("<dark_gray>BlackForgeMC PvP item")));
             m.setMaxStackSize(1);
+            // its own texture from the start, so copies ItemSkins never sees (the Arena wall frame) aren't plain flint
+            if (packLive) m.setItemModel(new NamespacedKey("blackforge", "nightrend"));
             m.addAttributeModifier(Attribute.ATTACK_DAMAGE, new AttributeModifier(damageKey,
                     NightrendMath.damageModifier(damage), AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.MAINHAND));
             m.addAttributeModifier(Attribute.ATTACK_SPEED, new AttributeModifier(speedKey,
@@ -178,6 +191,7 @@ public final class Nightrend implements Listener, Hackable {
         boolean here = enabled && allowedAt.test(p.getLocation());
         boolean hacked = hackedUntil.getOrDefault(p.getUniqueId(), 0L) > now;
         setPair(p, here && main && off && !hacked && !p.isDead());
+        setMixed(p, here && main && !off && isOtherSword(inv.getItemInOffHand()) && !hacked && !p.isDead());
         if (!main) hits.remove(p.getUniqueId());
         if (auraNow && here && (main || off) && !flipping.contains(p.getUniqueId()) && visible(p)) aura(p, main, off);
     }
@@ -232,6 +246,25 @@ public final class Nightrend implements Listener, Hackable {
             pairOn.remove(id);
             hits.remove(id);
         }
+    }
+
+    /** Any sword that isn't a Nightrend. */
+    private boolean isOtherSword(ItemStack it) {
+        return it != null && it.getType().name().endsWith("_SWORD") && !isNightrend(it);
+    }
+
+    /** The smaller bonus for a Nightrend with a different sword in the off hand: speed only, no flip or slashes. */
+    private void setMixed(Player p, boolean on) {
+        UUID id = p.getUniqueId();
+        if (on == mixedOn.contains(id)) return;
+        AttributeInstance ai = p.getAttribute(Attribute.ATTACK_SPEED);
+        if (ai == null) return;
+        ai.removeModifier(mixedKey);
+        if (on) {
+            ai.addTransientModifier(new AttributeModifier(mixedKey, NightrendMath.pairBonus(singleSpeed, mixedSpeed),
+                    AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.ANY));
+            mixedOn.add(id);
+        } else mixedOn.remove(id);
     }
 
     /** Nobody sees the aura of a player who shouldn't be seen. */
@@ -363,28 +396,67 @@ public final class Nightrend implements Listener, Hackable {
         }
 
         if (!pairOn.contains(p.getUniqueId())) return;
-        // both blades: the main-hand slash now, the off-hand one a beat later (its arm swing comes from onSwing)
-        slash(p, false);
-        Bukkit.getScheduler().runTaskLater(plugin, () -> slash(p, true), offHandDelay);
+        // the slash comes off the blade whose arm swings this time: the client sends the attack before the swing,
+        // so the swing usually hasn't been decided yet and we use the arm that's next; if it already has, use that
+        UUID id = p.getUniqueId();
+        boolean off = swingTick.getOrDefault(id, -1) == Bukkit.getCurrentTick()
+                ? swingWasOff.getOrDefault(id, false) : nextOff.getOrDefault(id, false);
+        slash(p, off);
     }
 
     /**
-     * Every left-click swing with the pair, hit or miss: the right arm swings as normal, then the left arm follows
-     * {@code off-hand-delay-ticks} later. Fired by the client's swing, so swings at the air count too.
+     * Every left-click swing with the pair, hit or miss, uses one arm: right, left, right... and now and then
+     * ({@code repeat-side-chance}) the same arm twice. On a left-arm turn the right-arm swing is cancelled, so other
+     * players see only the left arm. Your own first-person view always shows the right arm too: the game draws that
+     * itself before the server hears about it.
      */
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onSwing(PlayerAnimationEvent e) {
         if (e.getAnimationType() != PlayerAnimationType.ARM_SWING) return;
         Player p = e.getPlayer();
-        if (!pairOn.contains(p.getUniqueId()) || !isNightrend(p.getInventory().getItemInMainHand())) return;
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (p.isOnline() && !p.isDead() && pairOn.contains(p.getUniqueId())) p.swingOffHand();
-        }, offHandDelay);
+        UUID id = p.getUniqueId();
+        if (!pairOn.contains(id) || !isNightrend(p.getInventory().getItemInMainHand())) return;
+        boolean off = nextOff.getOrDefault(id, false);
+        if (off) {
+            e.setCancelled(true);   // others don't see the right arm this time
+            p.swingOffHand();
+        }
+        Boolean prev = swingWasOff.get(id);
+        if (prev != null && prev == off) bloodSurge(p, off);   // the same arm twice: its blade flares
+        swingTick.put(id, Bukkit.getCurrentTick());
+        swingWasOff.put(id, off);
+        nextOff.put(id, NightrendMath.nextIsOffHand(off, rnd.nextDouble(), repeatChance));
+    }
+
+    /**
+     * Blood surge: when the same arm swings twice in a row, that blade's red glow swells to about double and an aura
+     * of embers wraps the blade for {@link NightrendMath#GLOW_TICKS} ticks, then settles. Cosmetic only. It follows the
+     * hand by body facing, and stops early if the pair is put away.
+     */
+    private void bloodSurge(Player p, boolean offHand) {
+        if (!visible(p)) return;
+        World w = p.getWorld();
+        double mainSide = p.getMainHand() == org.bukkit.inventory.MainHand.LEFT ? -1 : 1;
+        double side = offHand ? -mainSide : mainSide;
+        w.playSound(p.getLocation(), Sound.PARTICLE_SOUL_ESCAPE, 0.9f, 0.7f);   // a low, hungry whisper
+        w.playSound(p.getLocation(), Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 0.25f, 1.8f);
+        int[] t = {0};
+        Bukkit.getScheduler().runTaskTimer(plugin, run -> {
+            if (++t[0] > NightrendMath.GLOW_TICKS || !p.isOnline() || p.isDead() || p.getWorld() != w
+                    || !pairOn.contains(p.getUniqueId())) { run.cancel(); return; }
+            float size = (float) NightrendMath.glowSize(t[0]);
+            Particle.DustTransition glow = new Particle.DustTransition(Color.fromRGB(0xE23048), BLOOD, size);
+            Location h = hand(p, side, 0);
+            // a column of glow up the blade, from the grip to the tip, and a looser aura round it
+            for (int i = 0; i < 4; i++)
+                w.spawnParticle(Particle.DUST_COLOR_TRANSITION, h.clone().add(0, 0.12 + i * 0.16, 0), 1, 0.02, 0.02, 0.02, 0, glow);
+            w.spawnParticle(Particle.DUST_COLOR_TRANSITION, h.clone().add(0, 0.35, 0), 3, 0.18, 0.3, 0.18, 0, EMBER);
+        }, 0L, 1L);
     }
 
     /**
      * One blade's slash: a thin red arc sweeps across in front of you, starting on that blade's side. Particles only;
-     * the arms are swung by the client (right) and {@link #onSwing} (left). Left-handed players are mirrored.
+     * {@link #onSwing} decides which arm swings. Left-handed players are mirrored.
      */
     private void slash(Player p, boolean offHand) {
         if (!p.isOnline() || p.isDead() || !pairOn.contains(p.getUniqueId())) return;
@@ -418,11 +490,14 @@ public final class Nightrend implements Listener, Hackable {
     public int hack(Location center, double radius, Player caster) {
         int n = 0;
         long until = System.currentTimeMillis() + empMillis;
-        for (UUID id : new ArrayList<>(pairOn)) {
+        Set<UUID> boosted = new HashSet<>(pairOn);
+        boosted.addAll(mixedOn);
+        for (UUID id : boosted) {
             Player p = Bukkit.getPlayer(id);
             if (p == null || id.equals(caster.getUniqueId()) || !EmpWave.reaches(center, p.getLocation(), radius)) continue;
             hackedUntil.put(id, until);
             setPair(p, false);
+            setMixed(p, false);
             p.getWorld().spawnParticle(Particle.SMOKE, p.getLocation().add(0, 0.8, 0), 10, 0.35, 0.3, 0.35, 0.01);
             p.playSound(p.getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 0.5f, 1.4f);
             p.sendActionBar(Ui.mm("<#B6FF3B>⚡ <gray>Your " + NAME + " <gray>pair bonus was <white>shut down <gray>by an EMP"));
@@ -445,8 +520,10 @@ public final class Nightrend implements Listener, Hackable {
 
     private void forget(Player p) {
         setPair(p, false);
+        setMixed(p, false);
         AttributeInstance ai = p.getAttribute(Attribute.ATTACK_SPEED);
-        if (ai != null) ai.removeModifier(pairKey);   // belt and braces: never leave the bonus behind
+        if (ai != null) { ai.removeModifier(pairKey); ai.removeModifier(mixedKey); }   // belt and braces: never leave a bonus behind
+        nextOff.remove(p.getUniqueId()); swingTick.remove(p.getUniqueId()); swingWasOff.remove(p.getUniqueId());
         hits.remove(p.getUniqueId());
         if (!p.isOnline()) lastFlip.remove(p.getUniqueId());
         if (!p.isOnline() || p.isDead()) hackedUntil.remove(p.getUniqueId());
