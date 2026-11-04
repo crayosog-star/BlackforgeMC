@@ -30,7 +30,7 @@ def open_prs():
     req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/pulls?state=open&base=main&sort=created&direction=asc",
                                  headers={"User-Agent": "blackforge-automerge", "Accept": "application/vnd.github+json"})
     with urllib.request.urlopen(req, timeout=30) as r:
-        return [p for p in json.load(r) if p["user"]["login"].lower() == AUTHOR and not p.get("draft")]
+        return [p for p in json.load(r) if p["user"]["login"].lower() in (AUTHOR, "steven-t0764") and not p.get("draft")]
 
 
 def full_check():
