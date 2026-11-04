@@ -129,13 +129,46 @@ final class GroveTrader implements Listener {
         return taken;
     }
 
+    /** Writes the day's totals. Sales made away from the menu call this now and then, not once a sale. */
+    void saveSales() {
+        for (String k : new ArrayList<>(data.getKeys(false))) if (!k.equals(String.valueOf(today()))) data.set(k, null);   // only today counts
+        try { data.save(file); } catch (Exception ex) { plugin.getLogger().warning("grove shop save: " + ex); }
+    }
+
+    private Offer offerFor(Material m) {
+        for (Offer o : offers) if (o.material() == m) return o;
+        return null;
+    }
+
+    /** Does the Trader buy this right now? */
+    boolean buys(Material m) { return enabled && offerFor(m) != null; }
+
+    /** What this many are worth to this owner today, counting what they've already sold. 0 if the Trader doesn't buy it. */
+    double saleValue(UUID owner, Material m, int amount) {
+        Offer o = offerFor(m);
+        return o == null ? 0 : saleValue(owner, o, amount);
+    }
+
+    /** Counts a sale towards this owner's daily total, the same total the Trader's menu uses. */
+    void recordSale(UUID owner, Material m, int amount) {
+        Offer o = offerFor(m);
+        if (o != null) recordSale(owner, o, amount);
+    }
+
+    private double saleValue(UUID owner, Offer o, int amount) {
+        return SellCatalog.payout(o.price(), sold(owner, o.item().id()), amount, softCap, overRate);
+    }
+
+    private void recordSale(UUID owner, Offer o, int amount) {
+        data.set(key(owner, o.item().id()), sold(owner, o.item().id()) + amount);
+    }
+
     /** Removes the items, pays once, records the day's total. Returns the money paid; if payment fails the items go back. */
     private double sell(Player p, Offer o, int limit) {
         int taken = take(p.getInventory(), o.material(), limit);
         if (taken == 0) return 0;
         UUID id = p.getUniqueId();
-        int soldToday = sold(id, o.item().id());
-        double pay = SellCatalog.payout(o.price(), soldToday, taken, softCap, overRate);
+        double pay = saleValue(id, o, taken);
         if (!plugin.economy().deposit(p, pay)) {
             int left = taken;
             while (left > 0) {
@@ -146,15 +179,14 @@ final class GroveTrader implements Listener {
             p.sendMessage(Ui.mm("<red>The sale failed, so your items were returned."));
             return 0;
         }
-        data.set(key(id, o.item().id()), soldToday + taken);
+        recordSale(id, o, taken);
         plugin.getLogger().info("grove shop: " + p.getName() + " sold " + taken + " " + o.item().id() + " for " + pay);
         return pay;
     }
 
     private void finish(Player p, double total) {
         if (total <= 0) { p.sendMessage(Ui.mm("<gray>You have nothing of that to sell.")); p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.8f, 1f); return; }
-        for (String k : new ArrayList<>(data.getKeys(false))) if (!k.equals(String.valueOf(today()))) data.set(k, null);   // only today counts
-        try { data.save(file); } catch (Exception ex) { plugin.getLogger().warning("grove shop save: " + ex); }
+        saveSales();
         p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_YES, 0.8f, 1.2f);
         p.sendMessage(Ui.mm("<green>Sold for <gold>" + NetEconomy.money(total) + "<green>."));
     }

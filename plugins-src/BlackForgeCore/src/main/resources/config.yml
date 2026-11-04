@@ -137,6 +137,25 @@ hopper-upgrades:
   essence: 128             # per Hopper Upgrade
   max-per-chunk: 16
 
+# Forge Allays: a base upgrade that stays at the Base Station and moves items (plan: docs/plans/forge-allays.md).
+# Survival and the Foundry only. Lists are per tier I, II, III. With enabled and preview-staff both false, no allays fly and tiers are kept.
+allays:
+  enabled: false
+  preview-staff: true             # staff get the Forge's allay menu on Survival with real money, before enabled is on
+  flock: [1, 2, 3]                # allays per base
+  leash: [12, 20, 28]             # blocks from the Station, and never outside the claim
+  price: [75000, 250000, 750000]  # to reach each tier
+  essence: [256, 1024, 4096]      # to reach each tier
+  carry: 16                       # items per trip
+  speed: 6.0                      # blocks a second
+  pause-seconds: 1.0              # pause after each trip
+  min-drop-age-ticks: 60          # leaves newer drops alone, so players can pick up their own
+  scan-seconds: 5                 # how often a base looks for work
+  link-scan-seconds: 30           # how often a base looks for framed chests
+  max-scans-per-tick: 4           # bases scanned per tick across the server
+  sell-fee: 0.10                  # Steward's cut of a sale
+  sausage-flip: true              # an allay named Smoked Sausage flies upside down
+
 # Agents, called robots in the code and saves (Survival + Skyblock copper golems). NOT read by the plugin yet - a later task wires these up.
 # fish-seconds (per robot tier I..V) and fisher-burn match the built-in values in RobotRules; the rest are for the
 # upcoming chest trips (radius in blocks, store when any item reaches store-threshold, fetch fuel at 2 minutes left).
@@ -202,6 +221,7 @@ foundry:
   max-agents-per-player: 20
   max-agents-total: 60
   max-upgraded-hoppers-per-chunk: 64
+  max-allays-total: 12
 
 # Black Forge hub (hub server only). Commands: /blackforge setspawn | reload | dragons | effects | portals | info
 hub:
