@@ -42,3 +42,5 @@ plugins-src/AlloyCore/previews/live/
 plugins-src/AlloyCore/previews/trailer/
 tools/graveyard/out/
 tools/autoupdate_state.json
+plugins-src/AlloyCore/previews/
+tools/*.out
