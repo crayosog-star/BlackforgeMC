@@ -41,6 +41,7 @@ final class FoundryLab {
     private final List<Lane> lanes = new ArrayList<>();
     private final List<TextDisplay> labels = new ArrayList<>();
     private final List<Husk> mobs = new ArrayList<>();
+    private final java.util.Random rnd = new java.util.Random();
 
     FoundryLab(BlackForgeCore plugin, World world, HopperUpgrades hoppers, BaseStation station, Predicate<Location> zone, Layout layout) {
         this.world = world; this.hoppers = hoppers; this.station = station; this.zone = zone; this.layout = layout;
@@ -60,7 +61,9 @@ final class FoundryLab {
         if (!occupied && layout.forge().getBlock().getState(false) instanceof Barrel b) b.getInventory().clear();   // shared storage, so it resets too
         for (Lane l : lanes) runLane(l);
         mobs.removeIf(m -> !m.isValid());
-        while (mobs.size() < layout.mobs()) mobs.add(world.spawn(layout.penMobs(), Husk.class, h -> { h.setPersistent(false); h.setRemoveWhenFarAway(false); h.setSilent(true); }));
+        // spread out and standing still, so they stay in the pen and an agent placed beside one always reaches it
+        while (mobs.size() < layout.mobs()) mobs.add(world.spawn(layout.penMobs().clone().add(rnd.nextInt(7) - 3, 0, rnd.nextInt(7) - 3), Husk.class,
+                h -> { h.setPersistent(false); h.setRemoveWhenFarAway(false); h.setSilent(true); h.setAware(false); }));
     }
 
     /** Fills the source chest, empties the sink and shows what really came through over the last 5 seconds. */

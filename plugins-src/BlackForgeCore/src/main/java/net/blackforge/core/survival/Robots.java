@@ -74,6 +74,7 @@ public final class Robots implements Listener {
     static final String[] FUEL_COLOR = {"<gray>", "<gold>", "<yellow>", "<aqua>", "<light_purple>"};
     static final long MAX_TANK = 48L * 3600_000;
     public static final int ROBOT_PRICE = 7_500;
+    static final long SANDBOX_START_FUEL = 3600_000L;
 
     private static final NamespacedKey ROBOT = new NamespacedKey(BlackForgeCore.NS, "robot_id");
     private static final NamespacedKey ITEM = new NamespacedKey(BlackForgeCore.NS, "robot_item");
@@ -91,6 +92,8 @@ public final class Robots implements Listener {
         String name;
         /** The last Grinder log line, so an unchanged cycle isn't logged again. Not saved. */
         String lastGrindLog;
+        /** What the Grinder's name tag says after its last cycle. Not saved. */
+        String grindStatus = "";
         /** What's already been warned about, so one fault can't flood the log every second. Not saved. */
         final Set<String> warned = new HashSet<>();
         Bot(String id) { this.id = id; }
@@ -245,6 +248,7 @@ public final class Robots implements Listener {
         b.fuelTier = Integer.parseInt(d[4]);
         if (d.length > 5 && RobotRules.validName(d[5])) b.name = d[5];   // older items have no name
         b.fixRate();   // the item has no rate: derive it from fuelTier (see itemFuelTier)
+        if (sandbox && b.fuel <= 0) b.fuel = SANDBOX_START_FUEL;   // the Foundry's chest agents are empty: placed ones work straight away
         // face the way the player is looking, snapped to N/E/S/W, so a Miner mines what you clicked toward
         float yaw = Math.round(p.getYaw() / 90f) * 90f;
         b.loc = at.getLocation().add(0.5, 0, 0.5);
@@ -284,6 +288,7 @@ public final class Robots implements Listener {
                 WeatheringCopperState.UNAFFECTED, WeatheringCopperState.UNAFFECTED};
         String st = b.fuel <= 0 ? "<red>No fuel" : b.status.isEmpty() ? "<white>" + time(b.fuel) : b.status;
         // each part on its own: a failure in one must not cost the agent its name tag or stop the others
+        stylePart(b, "name", () -> g.setCustomNameVisible(true));
         stylePart(b, "name", () -> g.customName(Ui.mm(b.job.color + "⚙ " + (b.name != null ? "Agent " + b.name + " <dark_gray>• " + b.job.color + b.job.label : b.title()) + " " + Spawners.roman(b.tier) + " <dark_gray>• " + st)));
         stylePart(b, "hand", () -> g.getEquipment().setItemInMainHand(new ItemStack(b.job.icon)));
         stylePart(b, "copper", () -> g.setWeatheringState(look[b.tier - 1]));
@@ -376,7 +381,7 @@ public final class Robots implements Listener {
         if (b.fuel <= 0) { logGrinder(b, g, "idle: no fuel"); if (++b.timer % 5 == 0) style(b, g); return; }
         boolean full = b.storage.firstEmpty() < 0 && (stations == null || !stations.hasRoom(b.loc));
         boolean dry = !full && b.job == Job.FISHERMAN && !nearWater(b);
-        b.status = full ? "<red>Storage full" : dry ? "<red>Needs water" : "";
+        b.status = full ? "<red>Storage full" : dry ? "<red>Needs water" : b.job == Job.GRINDER ? b.grindStatus : "";
         if (full) logGrinder(b, g, "idle: storage full");
         if (!full && !dry) {
             // Fishermen burn fuel and build Charge at a quarter of the normal rate
@@ -507,13 +512,17 @@ public final class Robots implements Listener {
             double before = m.getHealth();
             killedBy.put(m.getUniqueId(), b.id);
             m.damage(DAMAGE[b.tier - 1]);
-            if (m.isDead()) kills++;
-            else {
-                killedBy.remove(m.getUniqueId());
-                if (m.getHealth() >= before) noEffect++;   // something cancelled or absorbed the hit
+            if (!m.isDead() && m.getHealth() >= before) {
+                noEffect++;   // something cancelled or absorbed the hit
+                if (sandbox) m.setHealth(Math.max(0, before - DAMAGE[b.tier - 1]));   // the Foundry's bench must always work
             }
+            if (m.isDead()) kills++;
+            else killedBy.remove(m.getUniqueId());
             hits++;
+            m.getWorld().spawnParticle(Particle.DAMAGE_INDICATOR, m.getLocation().add(0, 1, 0), 6, 0.25, 0.3, 0.25, 0.05);
+            m.getWorld().playSound(m.getLocation(), Sound.ENTITY_HUSK_HURT, 0.6f, 1f);
         }
+        b.grindStatus = RobotRules.grindStatus(mobs, hits);
         logGrinder(b, g, RobotRules.grindSummary(mobs, skipped, hits, noEffect, kills));
         if (hits > 0) { g.swingMainHand(); b.loc.getWorld().playSound(b.loc, Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.4f, 1.2f); }
     }
@@ -689,6 +698,7 @@ public final class Robots implements Listener {
                     b.job = Job.values()[i];
                     b.timer = 0;
                     b.lastGrindLog = null;
+                    b.grindStatus = "";
                     CopperGolem g = entity(b);
                     if (g != null) style(b, g);
                     p.sendMessage(Ui.mm("<green>Your agent is now a " + b.job.color + b.job.label + "<green>."));

@@ -393,7 +393,8 @@ public final class TestArenaBuilder {
             for (int z = FoundryZone.PEN_Z1; z <= FoundryZone.PEN_Z2; z++) {
                 c.set(x, Y, z, "minecraft:coarse_dirt");
                 if (x == FoundryZone.PEN_X1 || x == FoundryZone.PEN_X2 || z == FoundryZone.PEN_Z1 || z == FoundryZone.PEN_Z2)
-                    c.set(x, Y + 1, z, "minecraft:dark_oak_fence");
+                    c.set(x, Y + 1, z, x == (FoundryZone.PEN_X1 + FoundryZone.PEN_X2) / 2 && z == FoundryZone.PEN_Z2
+                            ? "minecraft:dark_oak_fence_gate[facing=south]" : "minecraft:dark_oak_fence");   // the gate faces the rest of the island
             }
     }
 
