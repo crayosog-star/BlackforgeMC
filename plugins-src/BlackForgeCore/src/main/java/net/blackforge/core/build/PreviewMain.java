@@ -21,14 +21,14 @@ public final class PreviewMain {
         System.out.println("hub blocks: " + hub.size());
         render(hub, new File(out, "hub_southeast.png"), 0, 7);
         render(hub, new File(out, "hub_southwest.png"), 1, 7);
-        pov(hub, new File(out, "hub_spawn_view.png"), 0.5, 104.62, 0.5, 180, -10, 1280, 720);
+        pov(hub, new File(out, "hub_spawn_view.png"), 0.5, 104.62, 40.5, 180, -4, 1600, 900);
         pov(hub, new File(out, "hub_spawn_view_east.png"), 0.5, 104.62, 0.5, -90, -2, 1280, 720);
         pov(hub, new File(out, "hub_spawn_view_south.png"), 0.5, 104.62, 0.5, 0, -2, 1280, 720);
         pov(hub, new File(out, "hub_view_from_arcade_gate.png"), 0.5, 103.6, 40.5, 180, -4, 1280, 720);
         pov(hub, new File(out, "hub_view_side.png"), 44.5, 112, 30.5, 125, -14, 1280, 720);
         topDown(hub, new File(out, "hub_top.png"), 6);
-        pov(hub, new File(out, "hub_keep_front.png"), 0.5, 110, 20.5, 180, 8, 1600, 900);
-        pov(hub, new File(out, "hub_keep_aerial.png"), 0.5, 200, 60.5, 180, 28, 1600, 900);
+        pov(hub, new File(out, "hub_keep_front.png"), 0.5, 140, 100.5, 180, 14, 1600, 900);
+        pov(hub, new File(out, "hub_keep_aerial.png"), 0.5, 230, 190.5, 180, 30, 1600, 900);
         pov(hub, new File(out, "hub_castle_aerial.png"), 0.5, 240, 300.5, 180, 32, 1600, 900);
         // the island on its own (no castle ring), for the website's hero image
         Canvas island = new Canvas();

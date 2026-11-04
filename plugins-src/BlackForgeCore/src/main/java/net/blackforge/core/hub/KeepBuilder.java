@@ -36,14 +36,13 @@ public final class KeepBuilder {
 
     static void addTo(Canvas c) {
         KeepBuilder b = new KeepBuilder(c);
-        b.foundation();
         b.frontWall();
         b.keep();
         b.towers();
         b.anvil();
         b.banners();
-        b.airship(-82, Y + 22, -52, 0.0, "minecraft:dark_oak_planks");
-        b.airship(84, Y + 40, -60, Math.PI, "minecraft:spruce_planks");
+        b.airship(-112, Y + 34, -52, Math.PI / 2, "minecraft:dark_oak_planks");
+        b.airship(112, Y + 52, -20, -Math.PI / 2, "minecraft:spruce_planks");
     }
 
     private String stone(int x, int y, int z) {
@@ -75,7 +74,7 @@ public final class KeepBuilder {
 
     private void frontWall() {
         int top = Y + 20;
-        for (int x = -58; x <= 58; x++)
+        for (int x = -70; x <= 70; x++)
             for (int y = Y + 1; y <= top + 2; y++)
                 for (int z = FRONT; z >= FRONT - 2; z--) {
                     int dy = y - Y - 1;
@@ -189,7 +188,7 @@ public final class KeepBuilder {
         int[][] t = {
                 {-26, FRONT - 6, 5, Y + 62}, {26, FRONT - 6, 5, Y + 62}, {-26, FRONT - 34, 5, Y + 62}, {26, FRONT - 34, 5, Y + 62},
                 {-42, FRONT - 20, 7, Y + 48}, {42, FRONT - 20, 7, Y + 48},
-                {-58, FRONT - 1, 6, Y + 34}, {58, FRONT - 1, 6, Y + 34}, {-30, FRONT - 1, 5, Y + 30}, {30, FRONT - 1, 5, Y + 30}
+                {-70, FRONT - 1, 7, Y + 38}, {70, FRONT - 1, 7, Y + 38}, {-50, FRONT - 1, 5, Y + 30}, {50, FRONT - 1, 5, Y + 30}, {-30, FRONT - 1, 5, Y + 30}, {30, FRONT - 1, 5, Y + 30}
         };
         for (int[] a : t) tower(a[0], a[1], a[2], a[3]);
     }
@@ -219,7 +218,7 @@ public final class KeepBuilder {
     // ------------------------------------------------------------------ giant glowing anvil
 
     private void anvil() {
-        int z = FRONT - 6 + 3, y0 = Y + 40;
+        int z = FRONT - 10 + 1, y0 = Y + 54;
         // halo
         for (int x = -15; x <= 15; x++)
             for (int y = -15; y <= 15; y++) {

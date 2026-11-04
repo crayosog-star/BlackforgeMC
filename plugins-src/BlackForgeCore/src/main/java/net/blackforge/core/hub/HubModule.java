@@ -73,12 +73,11 @@ public final class HubModule implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         registerJoinCommand();   // the clickable links in the first-join guide run /bfjoin
         // keep the whole hub loaded: holograms survive, lava keeps flowing, first joins are instant
-        for (int cx = -6; cx <= 5; cx++) for (int cz = -6; cz <= 5; cz++) world.addPluginChunkTicket(cx, cz, plugin);
-        if (!new File(plugin.getDataFolder(), "hub-built").exists()) build(Bukkit.getConsoleSender());
+        for (int cx = -6; cx <= 5; cx++) for (int cz = -9; cz <= 5; cz++) world.addPluginChunkTicket(cx, cz, plugin);
+        if (!new File(plugin.getDataFolder(), "hub-built").exists() || !new File(plugin.getDataFolder(), "hub-forge-v1").exists()) build(Bukkit.getConsoleSender());   // hub-forge-v1: the Black Forge redesign
         else {
             if (!new File(plugin.getDataFolder(), "hub-biome-v2").exists()) applyBiome();
             if (!new File(plugin.getDataFolder(), "hub-castle-v1").exists()) addCastle();
-            else if (!new File(plugin.getDataFolder(), "hub-keep-v1").exists()) addKeep();
             if (new File(plugin.getDataFolder(), "hub-dragons-v1").exists() && !new File(plugin.getDataFolder(), "hub-dragons-flying").exists()) removeStatues();
         }
         Bukkit.getScheduler().runTaskLater(plugin, this::spawnHolograms, 40L);
@@ -247,7 +246,7 @@ public final class HubModule implements Listener {
     private void pasteHub(CommandSender who, net.blackforge.core.build.Canvas canvas, long t) {
         Paster.paste(plugin, world, canvas, 6000, () -> {
             try { new File(plugin.getDataFolder(), "hub-built").createNewFile(); } catch (Exception ignored) { }
-            try { new File(plugin.getDataFolder(), "hub-castle-v1").createNewFile(); new File(plugin.getDataFolder(), "hub-keep-v1").createNewFile(); } catch (Exception ignored) { }
+            try { new File(plugin.getDataFolder(), "hub-castle-v1").createNewFile(); new File(plugin.getDataFolder(), "hub-keep-v1").createNewFile(); new File(plugin.getDataFolder(), "hub-forge-v1").createNewFile(); } catch (Exception ignored) { }
             applyBiome();
             who.sendMessage(Component.text("Hub built: " + canvas.size() + " blocks in " + (System.currentTimeMillis() - t) / 1000 + "s"));
             for (Player p : Bukkit.getOnlinePlayers()) toSpawn(p);
@@ -623,7 +622,7 @@ public final class HubModule implements Listener {
             if (portalCooldown.getOrDefault(p.getUniqueId(), 0L) > now) return;
             portalCooldown.put(p.getUniqueId(), now + 3000);
             // bounce back out so a failed connect doesn't leave them standing in the portal
-            Vector back = new Vector(-g.cx(), 0, -g.cz()).normalize().multiply(0.9).setY(0.35);
+            Vector back = new Vector(0, 0, 1).multiply(0.9).setY(0.35);
             p.setVelocity(back);
             connect(p, g.server());
             return;
@@ -722,15 +721,6 @@ public final class HubModule implements Listener {
         Paster.paste(plugin, world, castle, 4000, () -> {
             try { new File(plugin.getDataFolder(), "hub-castle-v1").createNewFile(); } catch (Exception ignored) { }
             plugin.getLogger().info("Hub castle built: " + castle.size() + " blocks");
-        });
-    }
-
-    /** Raises the Black Forge fortress and the airships behind the sign of a hub built before they existed. */
-    private void addKeep() {
-        var keep = KeepBuilder.build();
-        Paster.paste(plugin, world, keep, 4000, () -> {
-            try { new File(plugin.getDataFolder(), "hub-keep-v1").createNewFile(); } catch (Exception ignored) { }
-            plugin.getLogger().info("Hub fortress built: " + keep.size() + " blocks");
         });
     }
 

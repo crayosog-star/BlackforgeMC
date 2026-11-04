@@ -101,7 +101,7 @@ public final class DragonFlight {
         for (int tries = 0; tries < 80; tries++) {
             double a = rnd.nextDouble() * Math.PI * 2, r, py;
             // now and then dive down past the edge and sweep along the cliffs, just outside the island
-            if ((low ? rnd.nextDouble() < 0.55 : rnd.nextDouble() < 0.3)) { r = OUTER + rnd.nextDouble() * 4; py = Y - 14 + rnd.nextDouble() * 20; }
+            if ((low ? rnd.nextDouble() < 0.55 : rnd.nextDouble() < 0.3)) { r = OUTER + rnd.nextDouble() * 4; py = Y + 31 + rnd.nextDouble() * 14; }
             else { r = 24 + rnd.nextDouble() * 66; py = (r < 60 ? Y + 34 : Y + 32) + rnd.nextDouble() * 20; }
             double px = 0.5 + Math.cos(a) * r, pz = 0.5 + Math.sin(a) * r;
             if (pz < -10) continue;                                  // keep clear of the BLACKFORGE sign in the north
