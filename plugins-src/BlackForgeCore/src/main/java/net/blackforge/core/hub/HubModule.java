@@ -42,6 +42,7 @@ public final class HubModule implements Listener {
     private final net.blackforge.core.survival.AshenChain chain;   // Ashen Chain, Arena only: drag yourself to a block or a player to you
     private final net.blackforge.core.survival.AshenBonfire bonfire;   // Ashen Bonfire, Arena only: a breakable healing ring
     private final net.blackforge.core.survival.Emp emp;   // EMP, Arena only: launch up, shut down every ability in 10 blocks
+    private final net.blackforge.core.survival.Nightrend nightrend;   // Nightrend daggers, Arena only: a pair, one in each hand
     private final Map<UUID, Long> portalCooldown = new HashMap<>();
     private final Set<UUID> hidingPlayers = new HashSet<>();
     private final List<TextDisplay> holograms = new ArrayList<>();
@@ -109,9 +110,12 @@ public final class HubModule implements Listener {
         arena.addTestItem(chain::item, chain::isChain);
         bonfire = new net.blackforge.core.survival.AshenBonfire(plugin, l -> l.getWorld() == arena.world());   // Arena only; never used up
         arena.addTestItem(bonfire::item, bonfire::isBonfire);
+        nightrend = new net.blackforge.core.survival.Nightrend(plugin, l -> l.getWorld() == arena.world());   // Arena only; registered on the wall after the EMP
         emp = new net.blackforge.core.survival.Emp(plugin, l -> l.getWorld() == arena.world(), true);   // Arena only; staff: no cooldown in the Arena
-        emp.hackable(surge, cage, eye, chain, bonfire, gaia, rite, darkness);   // everything the EMP shuts down
+        emp.hackable(surge, cage, eye, chain, bonfire, gaia, rite, darkness, nightrend);   // everything the EMP shuts down
         arena.addTestItem(emp::item, emp::isEmp);
+        arena.addTestItem(nightrend::item, nightrend::isMainBlade);                       // the pair: one in the kit...
+        arena.addTestItem(nightrend::offItem, nightrend::isOffBlade, it -> false, true);  // ...and one straight into the off hand
         // staff test commands, Arena only: one item each
         // Display only: they work in Survival and Skyblock, where hoppers, claims and Essence exist.
         arena.addTestItem(net.blackforge.core.survival.BaseStation::item, net.blackforge.core.survival.BaseStation::isStationItem);
@@ -126,6 +130,7 @@ public final class HubModule implements Listener {
         testCommand("ashenchain", List.of("chain", "tether"), () -> chain.item());
         testCommand("bonfire", List.of("ashenbonfire", "totem"), () -> bonfire.item());
         testCommand("emp", List.of(), () -> emp.item());
+        testCommand("nightrend", List.of("daggers"), () -> nightrend.item());   // one per use: run it twice for a pair
         testCommand("basestation", List.of("station"), net.blackforge.core.survival.BaseStation::item);
         testCommand("hopperupgrade", List.of(), net.blackforge.core.survival.HopperUpgrades::upgradeItem);
     }
@@ -172,7 +177,7 @@ public final class HubModule implements Listener {
 
     private DragonAnimator dragons;
 
-    public void shutdown() { gaia.shutdown(); surge.shutdown(); rite.shutdown(); cage.shutdown(); eye.shutdown(); chain.shutdown(); bonfire.shutdown(); emp.shutdown(); holograms.forEach(TextDisplay::remove); boards.forEach(TextDisplay::remove); if (parkour != null) parkour.shutdown(); if (dragons != null) dragons.remove(); arena.shutdown(); }
+    public void shutdown() { gaia.shutdown(); surge.shutdown(); rite.shutdown(); cage.shutdown(); eye.shutdown(); chain.shutdown(); bonfire.shutdown(); emp.shutdown(); nightrend.shutdown(); holograms.forEach(TextDisplay::remove); boards.forEach(TextDisplay::remove); if (parkour != null) parkour.shutdown(); if (dragons != null) dragons.remove(); arena.shutdown(); }
     // ------------------------------------------------------------------ leaderboards
 
     private final List<TextDisplay> boards = new ArrayList<>();

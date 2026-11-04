@@ -44,6 +44,23 @@ emp:
   radius: 10
   cooldown-seconds: 45
 
+# Nightrend (hub Arena only for now): dual-wielded daggers, left-click melee only, no sweep. One in your main hand hits
+# for `damage` at `attack-speed` a second, with `reach-change` blocks of reach (normal reach is 3). A Nightrend in each
+# hand raises that to `pair-attack-speed` and every second hit the off-hand blade slashes too (cosmetic). Hits from the
+# `behind-arc-degrees` arc behind the target (centred on its back) do `behind-damage` of normal damage (0.6 = 60%).
+# An EMP turns the pair bonus off for `emp-seconds`. Equipping the pair flips both blades up into your hands, at most
+# once per `flip-cooldown-seconds`. Staff: /nightrend (/daggers). Set enabled false to stop it.
+nightrend:
+  enabled: true
+  damage: 5
+  attack-speed: 2.0
+  pair-attack-speed: 2.6
+  reach-change: -0.5
+  behind-arc-degrees: 120
+  behind-damage: 0.6
+  emp-seconds: 4
+  flip-cooldown-seconds: 3
+
 # Rimelock (hub Arena only for now): leap, slam, and a 16-block-tall, 6-block-radius cage holds for 10 s. Nobody
 # inside can leave, mobs included, except the caster (and their team, once teams exist); anyone can walk in; no hits
 # cross the wall either way. The caster's side sees it blue, everyone else red. Staff: /rimelock (/cage).
