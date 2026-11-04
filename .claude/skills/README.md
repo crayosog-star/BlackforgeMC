@@ -11,6 +11,7 @@ They're plain Markdown, so they're also readable straight from GitHub by anyone 
 | Skill | What it covers |
 |---|---|
 | `blackforge-render-shot` | Getting a picture of a build, map, boss or scene without launching a server: which of the six renderers to use, how to aim the camera, and what a render can't show. |
+| `blackforge-plan-large` | Planning a very large concept across 4+ phases: one document with every task in order, proof for each task, phase gates and rules of engagement. |
 
 ## What is deliberately not here
 
