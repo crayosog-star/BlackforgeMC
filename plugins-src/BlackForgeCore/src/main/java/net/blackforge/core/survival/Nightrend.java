@@ -16,11 +16,15 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlotGroup;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.components.CustomModelDataComponent;
 import org.bukkit.metadata.MetadataValue;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffectType;
@@ -47,7 +51,8 @@ import java.util.function.Predicate;
  *   <li>A slight aura: a few dark-red embers drift off each blade while you hold it. Off while invisible or vanished.</li>
  *   <li>The EMP shuts the pair bonus off for {@code emp-seconds} (4); the daggers still hit at the single speed.</li>
  *   <li>Equip flourish: the moment you hold the pair, both blades flip up out of your hands and settle in your grip
- *   (display entities everyone can see; at most once per {@code flip-cooldown-seconds}).</li>
+ *   (display entities everyone can see; at most once per {@code flip-cooldown-seconds}). The held daggers are hidden
+ *   while it plays (the pack's empty model, custom_model_data flag 0) and come back the tick the copies go.</li>
  * </ul>
  *
  * Two variants are the same dagger: {@link #item()} and {@link #offItem()} differ only in a tag the Arena kit uses
@@ -76,6 +81,7 @@ public final class Nightrend implements Listener, Hackable {
     private final Map<UUID, Integer> hits = new HashMap<>();
     private final Map<UUID, Long> hackedUntil = new HashMap<>(), lastFlip = new HashMap<>();
     private final Set<ItemDisplay> live = new HashSet<>();
+    private final Set<UUID> flipping = new HashSet<>();   // their held daggers are hidden while the flip plays
     private final BukkitTask task;
     private long tick;
 
@@ -157,16 +163,66 @@ public final class Nightrend implements Listener, Hackable {
         tick += TICK_EVERY;
         long now = System.currentTimeMillis();
         boolean auraNow = tick % AURA_EVERY == 0;
-        for (Player p : Bukkit.getOnlinePlayers()) {
-            var inv = p.getInventory();
-            boolean main = isNightrend(inv.getItemInMainHand()), off = isNightrend(inv.getItemInOffHand());
-            boolean here = enabled && allowedAt.test(p.getLocation());
-            boolean hacked = hackedUntil.getOrDefault(p.getUniqueId(), 0L) > now;
-            setPair(p, here && main && off && !hacked && !p.isDead());
-            if (!main) hits.remove(p.getUniqueId());
-            if (auraNow && here && (main || off) && visible(p)) aura(p, main, off);
-        }
+        for (Player p : Bukkit.getOnlinePlayers()) refresh(p, now, auraNow);
         hackedUntil.values().removeIf(t -> t <= now);
+    }
+
+    private void refresh(Player p, long now, boolean auraNow) {
+        var inv = p.getInventory();
+        boolean main = isNightrend(inv.getItemInMainHand()), off = isNightrend(inv.getItemInOffHand());
+        if (!flipping.contains(p.getUniqueId())) unhideHands(p);   // never leave a held dagger invisible (a crash, a swap mid-flip)
+        boolean here = enabled && allowedAt.test(p.getLocation());
+        boolean hacked = hackedUntil.getOrDefault(p.getUniqueId(), 0L) > now;
+        setPair(p, here && main && off && !hacked && !p.isDead());
+        if (!main) hits.remove(p.getUniqueId());
+        if (auraNow && here && (main || off) && !flipping.contains(p.getUniqueId()) && visible(p)) aura(p, main, off);
+    }
+
+    /** Equipping reacts on the very next tick instead of waiting for the 2-tick check, so the flip starts at once. */
+    private void soon(Player p) { Bukkit.getScheduler().runTask(plugin, () -> { if (p.isOnline()) refresh(p, System.currentTimeMillis(), false); }); }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true) public void onHeld(PlayerItemHeldEvent e) { soon(e.getPlayer()); }
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true) public void onSwap(PlayerSwapHandItemsEvent e) { soon(e.getPlayer()); }
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onClick(InventoryClickEvent e) { if (e.getWhoClicked() instanceof Player p) soon(p); }
+
+    // ------------------------------------------------------------------ hiding the held daggers during the flip
+
+    /** Flag 0 of custom_model_data switches the pack's nightrend model to "empty" (resourcepack items/nightrend.json). */
+    private boolean hidden(ItemStack it) {
+        if (!isNightrend(it)) return false;
+        List<Boolean> f = it.getItemMeta().getCustomModelDataComponent().getFlags();
+        return !f.isEmpty() && Boolean.TRUE.equals(f.getFirst());
+    }
+
+    private ItemStack withHidden(ItemStack it, boolean hide) {
+        ItemStack c = it.clone();
+        c.editMeta(m -> {
+            CustomModelDataComponent cmd = m.getCustomModelDataComponent();
+            cmd.setFlags(hide ? List.of(true) : List.of());
+            m.setCustomModelDataComponent(cmd);
+        });
+        return c;
+    }
+
+    private void hide(Player p) {
+        var inv = p.getInventory();
+        if (isNightrend(inv.getItemInMainHand())) inv.setItemInMainHand(withHidden(inv.getItemInMainHand(), true));
+        if (isNightrend(inv.getItemInOffHand())) inv.setItemInOffHand(withHidden(inv.getItemInOffHand(), true));
+    }
+
+    /** The cheap check every tick: just the two hands. */
+    private void unhideHands(Player p) {
+        var inv = p.getInventory();
+        if (hidden(inv.getItemInMainHand())) inv.setItemInMainHand(withHidden(inv.getItemInMainHand(), false));
+        if (hidden(inv.getItemInOffHand())) inv.setItemInOffHand(withHidden(inv.getItemInOffHand(), false));
+    }
+
+    /** Shows every hidden Nightrend the player carries again (hands, inventory, cursor): after a flip, and on cleanup. */
+    private void unhide(Player p) {
+        var inv = p.getInventory();
+        for (int i = 0; i < inv.getSize(); i++) { ItemStack it = inv.getItem(i); if (hidden(it)) inv.setItem(i, withHidden(it, false)); }
+        if (hidden(p.getItemOnCursor())) p.setItemOnCursor(withHidden(p.getItemOnCursor(), false));
     }
 
     private void setPair(Player p, boolean on) {
@@ -247,14 +303,19 @@ public final class Nightrend implements Listener, Hackable {
             });
             live.add(d[i]);
         }
+        flipping.add(p.getUniqueId());
+        hide(p);   // the real daggers vanish while their copies flip, so you never see two
         World w = p.getWorld();
         w.playSound(p.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.3f, 1.8f);
         int[] t = {0};
         Bukkit.getScheduler().runTaskTimer(plugin, run -> {
             t[0]++;
             boolean gone = !p.isOnline() || p.isDead() || p.getWorld() != w || !d[0].isValid() || !d[1].isValid();
-            if (gone || t[0] > NightrendMath.FLIP_TOTAL) {
+            if (gone || t[0] >= NightrendMath.FLIP_TOTAL) {
+                // the handover, all in one tick: copies gone, real daggers back
                 for (ItemDisplay x : d) { if (x.isValid()) x.remove(); live.remove(x); }
+                flipping.remove(p.getUniqueId());
+                if (p.isOnline()) unhide(p);
                 run.cancel();
                 return;
             }
@@ -381,6 +442,8 @@ public final class Nightrend implements Listener, Hackable {
         AttributeInstance ai = p.getAttribute(Attribute.ATTACK_SPEED);
         if (ai != null) ai.removeModifier(pairKey);   // belt and braces: never leave the bonus behind
         hits.remove(p.getUniqueId());
+        flipping.remove(p.getUniqueId());
+        unhide(p);
         if (!p.isOnline()) lastFlip.remove(p.getUniqueId());
         if (!p.isOnline() || p.isDead()) hackedUntil.remove(p.getUniqueId());
     }
@@ -390,6 +453,7 @@ public final class Nightrend implements Listener, Hackable {
         task.cancel();
         for (ItemDisplay x : live) if (x.isValid()) x.remove();
         live.clear();
+        flipping.clear();
         for (Player p : Bukkit.getOnlinePlayers()) forget(p);
     }
 }

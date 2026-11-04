@@ -98,10 +98,10 @@ class NightrendTest {
             assertTrue(NightrendMath.flipLift(t) > NightrendMath.flipLift(t - 1));
     }
 
-    @Test void scaleGrowsInAndShrinksOutWithoutPopping() {
+    @Test void scaleGrowsInWithoutPoppingThenHoldsForTheHandover() {
         assertEquals(0, NightrendMath.flipScale(0), EPS);
         assertEquals(1, NightrendMath.flipScale(NightrendMath.FLIP_TICKS), EPS);
-        assertEquals(0, NightrendMath.flipScale(NightrendMath.FLIP_TOTAL), EPS);
+        assertEquals(1, NightrendMath.flipScale(NightrendMath.FLIP_TOTAL), EPS);   // full size when the real daggers take over
         for (int t = 1; t <= NightrendMath.FLIP_TOTAL; t++)
             assertTrue(Math.abs(NightrendMath.flipScale(t) - NightrendMath.flipScale(t - 1)) <= 0.34, "tick " + t);
     }
