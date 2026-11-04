@@ -37,6 +37,7 @@ public final class FoundrySystems {
         station.setRegion(l -> zone.test(l) ? "foundry:" + (l.getBlockX() >> 4) + ":" + (l.getBlockZ() >> 4) : null);
         allays = new Allays(plugin, station, zone, true);
         station.setAllays(allays);
+        allays.setRobots(robots);
         allays.setSandboxLimit(c.getInt("foundry.max-allays-total", 12));
         Bukkit.getPluginManager().registerEvents(new FoundrySupply(supplyAt, hoppers), plugin);
         lab = new FoundryLab(plugin, world, hoppers, station, zone, new FoundryLab.Layout(at.laneZ(), at.laneX(), at.y(), at.forge(), at.penMobs(), at.mobs(), at.title(), at.supply(), at.allayBench()));

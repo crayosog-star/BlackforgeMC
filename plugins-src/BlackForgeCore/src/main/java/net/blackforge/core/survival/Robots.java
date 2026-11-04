@@ -885,11 +885,19 @@ public final class Robots implements Listener {
         return out;
     }
 
-    /** This owner's agents within this many blocks of a spot. */
+    /** Is this agent still placed? It can be picked up while something's on its way to it. */
+    boolean isPlaced(Bot b) { return bots.get(b.id) == b; }
+
+    /** Is this agent nearly out of fuel, by the same rule a Fisherman's slower burn already follows? */
+    boolean wantsFuel(Bot b) {
+        return RobotRules.shouldFetchFuel(b.fuel, b.job == Job.FISHERMAN ? (long) (1000 * RobotRules.FISHER_BURN) : 1000);
+    }
+
+    /** Agents within this many blocks of a spot, this owner's only unless {@code owner} is null. */
     List<Bot> agentsNear(Location at, int radius, UUID owner) {
         List<Bot> out = new ArrayList<>();
         for (Bot b : bots.values())
-            if (b.owner.equals(owner) && b.loc.getWorld() == at.getWorld() && b.loc.distanceSquared(at) <= (double) radius * radius) out.add(b);
+            if ((owner == null || b.owner.equals(owner)) && b.loc.getWorld() == at.getWorld() && b.loc.distanceSquared(at) <= (double) radius * radius) out.add(b);
         return out;
     }
 

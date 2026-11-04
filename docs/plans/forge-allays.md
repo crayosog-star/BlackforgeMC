@@ -1,6 +1,6 @@
 # Forge Allays
 **Status:** In progress. Approved by Colin on 2026-11-04 with the recommended defaults
-**Next task:** P3.T2
+**Next task:** P4.T1, once the Phase 3 gate is confirmed (rule 9)
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -221,7 +221,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** an Agent picked up mid-trip (return the cell); the tank's 48-hour cap (`S/Robots.java:73`); Academy fuel perks unaffected, since the tank logic is shared; a Fisherman's slower burn.
 - **Done when:** in the Foundry, an Agent run down to under 2 minutes is refilled by a Courier with no click. No cell is lost when the Agent is removed mid-trip.
 - **Leaves ready:** Tier II complete.
-- **Evidence:**
+- **Evidence:** Untested in game: refuelling, and a cell returning when its Agent is picked up. The build runs before merge.
 
 ## Phase 4: Tier III, Steward (Foundry only, then staff on Survival)
 - **Goal:** a Steward sells raw goods from a sell chest, using the Trader's prices and daily cap, without creating money in the Foundry.
