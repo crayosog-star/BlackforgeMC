@@ -12,6 +12,9 @@ import java.util.Optional;
 final class RobotRules {
     private RobotRules() {}
 
+    /** The most agents one player can place, whatever their rank. Anyone already over it keeps theirs. */
+    static final int MAX_AGENTS = 5;
+
     /** Charge multiplier per Fuel Cell tier I..V (moved from Robots.FUEL_CHARGE, values unchanged). */
     static final double[] FUEL_CHARGE = {1.0, 1.25, 1.5, 2.0, 3.0};
     /** Milliseconds per fish, per robot tier I..V. */

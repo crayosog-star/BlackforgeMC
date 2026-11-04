@@ -132,7 +132,7 @@ public final class Robots implements Listener {
     int limit(Player p) {
         Ranks.Rank r = ranks == null ? null : ranks.of(p);
         if (r == null) return 2;
-        return switch (r.id()) { case "copper" -> 3; case "iron" -> 4; case "gold" -> 5; case "diamond" -> 6; default -> 8; };
+        return Math.min(RobotRules.MAX_AGENTS, switch (r.id()) { case "copper" -> 3; case "iron" -> 4; default -> 5; });
     }
 
     int owned(UUID u) { int n = 0; for (Bot b : bots.values()) if (b.owner.equals(u)) n++; return n; }
@@ -709,10 +709,11 @@ public final class Robots implements Listener {
 
     // ------------------------------------------------------------------ Base Station
 
-    /** Placed agents within range of a spot, in the same world. */
-    List<Bot> near(Location at, int radius) {
+    /** This player's agents, the highest tier first. */
+    List<Bot> agentsOf(UUID owner) {
         List<Bot> out = new ArrayList<>();
-        for (Bot b : bots.values()) if (b.loc.getWorld() == at.getWorld() && b.loc.distanceSquared(at) <= radius * radius) out.add(b);
+        for (Bot b : bots.values()) if (b.owner.equals(owner)) out.add(b);
+        out.sort(Comparator.comparingInt((Bot b) -> b.tier).reversed());
         return out;
     }
 
@@ -720,16 +721,22 @@ public final class Robots implements Listener {
         return b.owner.equals(p.getUniqueId()) || canUse.test(p, b.loc) || p.hasPermission("blackforge.admin");
     }
 
-    ItemStack stationIcon(Bot b) {
-        List<String> lore = new ArrayList<>(List.of("<gray>Job: " + b.job.color + b.job.label, "<gray>Fuel: <white>" + time(b.fuel), "<gray>Charge: <white>" + time(b.charge), ""));
-        if (b.tier >= MAX_TIER) lore.add("<gold>Max tier");
+    /** An agent's card in the Forge: its tier and the price of the next one, and nothing from its storage. */
+    ItemStack forgeIcon(Bot b) {
+        List<String> lore = new ArrayList<>(List.of("<gray>Job: " + b.job.color + b.job.label, "<gray>Tier: <white>" + Spawners.roman(b.tier), ""));
+        if (b.tier >= MAX_TIER) lore.add("<gold><bold>Max tier");
         else {
             int t = b.tier - 1;
-            lore.add("<gray>Next tier: <white>" + UP_CHARGE_HOURS[t] + "h <gray>Charge, <#9d7bff>" + UP_ESSENCE[t] + " Essence<gray>, <green>" + NetEconomy.money(UP_MONEY[t]));
-            lore.add("<yellow>Left-click to upgrade");
+            lore.add("<gray>Upgrade to Tier <white>" + Spawners.roman(b.tier + 1) + "<gray>:");
+            lore.add("<green>" + NetEconomy.money(UP_MONEY[t]));
+            lore.add("<#9d7bff>" + UP_ESSENCE[t] + " Mob Essence");
+            lore.add("<gray>Charge: <white>" + time(b.charge) + " <dark_gray>/ " + UP_CHARGE_HOURS[t] + "h");
+            lore.add("");
+            lore.add("<yellow>Click to upgrade");
         }
-        lore.add("<yellow>Right-click to open");
-        return Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, b.job.color + "<bold>" + b.title() + " " + Spawners.roman(b.tier), lore.toArray(String[]::new));
+        ItemStack it = Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, b.job.color + "<bold>" + b.title(), lore.toArray(String[]::new));
+        it.setAmount(b.tier);
+        return it;
     }
 
     void upgradeFromStation(Player p, String id) {
@@ -737,11 +744,6 @@ public final class Robots implements Listener {
         if (b == null) return;
         if (!mayUse(p, b)) { p.sendMessage(Ui.mm("<red>That's " + Bukkit.getOfflinePlayer(b.owner).getName() + "'s agent.")); return; }
         upgrade(p, b);   // same rules and costs as the agent's own menu
-    }
-
-    void openFromStation(Player p, String id) {
-        Bot b = bots.get(id);
-        if (b != null && mayUse(p, b)) open(p, b);
     }
 
     @EventHandler

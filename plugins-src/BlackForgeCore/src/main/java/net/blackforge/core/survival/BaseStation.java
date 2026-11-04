@@ -45,14 +45,12 @@ import java.util.function.BiPredicate;
 import java.util.function.Function;
 
 /**
- * Base Station: one per claim or island. Sells Hopper Upgrades, upgrades nearby Agents and collects what they make.
+ * Base Station: one per claim or island. Its Forge menu upgrades your agents and sells Hopper Upgrades. It also collects
+ * what agents in range make.
  * It's a real barrel with a marker, so hoppers feed and drain it with no special code.
  */
 public final class BaseStation implements Listener {
     private static final NamespacedKey ITEM = new NamespacedKey(BlackForgeCore.NS, "base_station");
-    private static final int STORAGE = 11, HOPPERS = 13, AGENTS = 15, BACK = 22, BUY_ONE = 15, BUY_TEN = 16;
-    private static final int[] TIER_SLOTS = {10, 11, 12};
-    private static final int[] AGENT_SLOTS = {10, 11, 12, 13, 14, 15, 16, 4};
 
     private record Spot(String world, int x, int y, int z) {
         static Spot of(Location l) { return new Spot(l.getWorld().getName(), l.getBlockX(), l.getBlockY(), l.getBlockZ()); }
@@ -85,7 +83,7 @@ public final class BaseStation implements Listener {
         essence = c.getInt("base-station.essence", 128);
         radius = c.getInt("base-station.agent-radius", 16);
         enabled = c.getBoolean("base-station.enabled", true);
-        StationUi.setArt(c.getBoolean("base-station.custom-ui", false));
+        StationUi.setArt(c.getBoolean("base-station.custom-ui", true));
         load();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         robots.setStations(this);
@@ -100,7 +98,7 @@ public final class BaseStation implements Listener {
     public static ItemStack item() {
         ItemStack it = Ui.item(Material.BARREL, "<gradient:#ffb347:#ff5a1a><bold>Base Station</bold></gradient>",
                 "<gray>Place one in your claim or island.", "<gray>Agents within range deliver to it, and",
-                "<gray>it sells Hopper Upgrades.", "", "<dark_gray>One per claim or island");
+                "<gray>it upgrades your agents and hoppers.", "", "<dark_gray>Sneak and right-click for its storage", "<dark_gray>One per claim or island");
         it.editMeta(m -> m.getPersistentDataContainer().set(ITEM, PersistentDataType.BYTE, (byte) 1));
         return it;
     }
@@ -257,39 +255,59 @@ public final class BaseStation implements Listener {
         Player p = e.getPlayer();
         Location l = e.getClickedBlock().getLocation();
         if (!access.test(p, l)) { p.sendActionBar(Ui.mm("<red>That's someone else's Base Station.")); return; }
-        home(p, l);
+        if (p.isSneaking()) openStorage(p, l);   // the forge menu is upgrades only
+        else forge(p, l);
     }
 
-    private Menu menu(String kind, Location at, StationUi.Screen screen, String title) {
-        Menu m = new Menu(kind, at);
-        m.inv = Bukkit.createInventory(m, 27, StationUi.title(screen, title));
+    /** Card columns: an agent's card is its well on the top row plus the two rows of text under it. */
+    private static final int[] CARD_COLS = {0, 2, 4, 6, 8};
+    private static final int[] CARD_X = {18, 52, 88, 124, 158};
+    private static final int HOPPER_INFO = 31, FORGE_SIZE = 36;
+    private static final int[] BUY_SLOTS = {32, 33};
+
+    private void forge(Player p, Location at) {
+        List<Robots.Bot> agents = robots.agentsOf(p.getUniqueId());
+        int allowed = robots.limit(p);
+        int shown = Math.min(agents.size(), RobotRules.MAX_AGENTS);
+        Menu m = new Menu("forge", at);
+        StationUi.Canvas title = new StationUi.Canvas().art(StationUi.Screen.FORGE);
+        title.text("title", 40, "THE FORGE", 0xFFD9A0);
+        title.pips(142, shown, RobotRules.MAX_AGENTS, StationUi.COUNT_ON, StationUi.COUNT_OFF, 8);
+        title.text("title", 104, shown + "/" + RobotRules.MAX_AGENTS, 0xFFB347);
+        for (int i = 0; i < CARD_X.length; i++) {
+            if (i < shown) {
+                Robots.Bot b = agents.get(i);
+                title.pips(CARD_X[i], b.tier, Robots.MAX_TIER, StationUi.PIP_ON, StationUi.PIP_OFF, 4);
+                title.text("gui_l1", CARD_X[i], "T " + Spawners.roman(b.tier), 0xFFD25E);
+                if (b.tier < Robots.MAX_TIER) {
+                    title.text("gui_l2", CARD_X[i], StationText.money(Robots.UP_MONEY[b.tier - 1]), 0x7ED957);
+                    title.text("gui_l3", CARD_X[i], String.valueOf(Robots.UP_ESSENCE[b.tier - 1]), 0x9D7BFF);
+                } else title.text("gui_l2", CARD_X[i], "MAX", 0xFF7A1A);
+            } else title.text("gui_l1", CARD_X[i], i < allowed ? "EMPTY" : "RANK", i < allowed ? 0x8A8078 : 0x6E3A1C);
+        }
+        title.text("gui_l4", 40, "HOPPERS", 0xFFD9A0);
+        title.text("gui_l4", 143, StationText.money(hoppers.price) + " EACH", 0x7ED957);
+        m.inv = Bukkit.createInventory(m, FORGE_SIZE, StationUi.art() ? title.done() : Ui.mm("<dark_gray>The Forge " + shown + "/" + RobotRules.MAX_AGENTS));
         if (!StationUi.art()) {
             ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
-            for (int i = 0; i < 27; i++) m.inv.setItem(i, pane);
+            for (int i = 0; i < FORGE_SIZE; i++) m.inv.setItem(i, pane);
         }
-        return m;
-    }
-
-    private void home(Player p, Location at) {
-        Menu m = menu("home", at, StationUi.Screen.HOME, "Base Station");
-        m.inv.setItem(STORAGE, Ui.item(Material.BARREL, "<gold><bold>Storage", "<gray>What your Agents delivered.", "<gray>Hoppers can feed and drain it too."));
-        m.inv.setItem(HOPPERS, Ui.item(Material.HOPPER, "<gold><bold>Hopper Upgrades", "<gray>Make your hoppers faster."));
-        m.inv.setItem(AGENTS, Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, "<gold><bold>Agents", "<gray>Upgrade Agents within " + radius + " blocks."));
-        p.openInventory(m.inv);
-    }
-
-    private void hopperScreen(Player p, Location at) {
-        Menu m = menu("hoppers", at, StationUi.Screen.HOPPERS, "Hopper Upgrades");
-        String[] names = {"I", "II", "III"};
-        for (int t = 1; t <= HopperTiers.MAX_TIER; t++) {
-            int needed = t == 1 ? 0 : hoppers.needed(t - 1);
-            m.inv.setItem(TIER_SLOTS[t - 1], Ui.item(t == 1 ? Material.IRON_INGOT : t == 2 ? Material.GOLD_INGOT : Material.NETHERITE_INGOT,
-                    "<gold><bold>Tier " + names[t - 1], "<gray>Moves <white>" + hoppers.rate(t) + "<gray> items a second",
-                    t == 1 ? "<dark_gray>A normal hopper" : "<gray>Takes <white>" + needed + "<gray> Hopper Upgrade" + (needed == 1 ? "" : "s")));
+        for (int i = 0; i < CARD_COLS.length; i++) {
+            int col = CARD_COLS[i];
+            if (i < shown) {
+                m.inv.setItem(col, robots.forgeIcon(agents.get(i)));
+                for (int slot : new int[]{col, col + 9, col + 18}) m.agents.put(slot, agents.get(i).id);
+            } else m.inv.setItem(col, i < allowed
+                    ? Ui.item(Material.LIGHT_GRAY_DYE, "<gray><bold>Empty Slot", "<gray>Get an agent at <white>/agents<gray> and place it.")
+                    : Ui.item(Material.IRON_BARS, "<dark_gray><bold>Locked", "<gray>Ranks unlock more agents, up to <white>" + RobotRules.MAX_AGENTS + "<gray>."));
         }
-        m.inv.setItem(BUY_ONE, buyIcon(1));
-        m.inv.setItem(BUY_TEN, buyIcon(10));
-        m.inv.setItem(BACK, Ui.item(Material.ARROW, "<white>Back"));
+        m.inv.setItem(HOPPER_INFO, Ui.item(Material.HOPPER, "<gold><bold>Hopper Tiers",
+                "<gray>Tier I: <white>" + hoppers.rate(1) + "<gray> items a second",
+                "<gray>Tier II: <white>" + hoppers.rate(2) + "<gray> a second, takes <white>" + hoppers.needed(1) + "<gray> upgrade",
+                "<gray>Tier III: <white>" + hoppers.rate(3) + "<gray> a second, takes <white>" + hoppers.needed(2) + "<gray> upgrades",
+                "", "<dark_gray>Sneak and right-click a hopper to apply"));
+        m.inv.setItem(BUY_SLOTS[0], buyIcon(1));
+        m.inv.setItem(BUY_SLOTS[1], buyIcon(10));
         p.openInventory(m.inv);
     }
 
@@ -300,18 +318,6 @@ public final class BaseStation implements Listener {
                 Ui.mm("<green>" + NetEconomy.money((double) hoppers.price * n) + " <dark_gray>+ <#9d7bff>" + (hoppers.essence * n) + " Mob Essence"),
                 Ui.mm("<yellow>Click to buy " + n))));
         return it;
-    }
-
-    private void agentScreen(Player p, Location at) {
-        Menu m = menu("agents", at, StationUi.Screen.AGENTS, "Agents");
-        List<Robots.Bot> near = robots.near(at, radius);
-        if (near.isEmpty()) m.inv.setItem(13, Ui.item(Material.BARRIER, "<red>No Agents nearby", "<gray>Place one within " + radius + " blocks."));
-        for (int i = 0; i < near.size() && i < AGENT_SLOTS.length; i++) {
-            m.inv.setItem(AGENT_SLOTS[i], robots.stationIcon(near.get(i)));
-            m.agents.put(AGENT_SLOTS[i], near.get(i).id);
-        }
-        m.inv.setItem(BACK, Ui.item(Material.ARROW, "<white>Back"));
-        p.openInventory(m.inv);
     }
 
     private void openStorage(Player p, Location at) {
@@ -329,25 +335,11 @@ public final class BaseStation implements Listener {
         // the station can be broken, or the player's access lost, while a menu stays open
         if (!isStation(m.at.getBlock()) || !access.test(p, m.at)) { p.closeInventory(); return; }
         int slot = e.getRawSlot();
-        switch (m.kind) {
-            case "home" -> {
-                if (slot == STORAGE) openStorage(p, m.at);
-                else if (slot == HOPPERS) hopperScreen(p, m.at);
-                else if (slot == AGENTS) agentScreen(p, m.at);
-            }
-            case "hoppers" -> {
-                if (slot == BACK) home(p, m.at);
-                else if (slot == BUY_ONE || slot == BUY_TEN) buyUpgrades(p, slot == BUY_ONE ? 1 : 10);
-            }
-            case "agents" -> {
-                if (slot == BACK) { home(p, m.at); return; }
-                String id = m.agents.get(slot);
-                if (id == null) return;
-                if (e.isRightClick()) robots.openFromStation(p, id);
-                else { robots.upgradeFromStation(p, id); agentScreen(p, m.at); }
-            }
-            default -> { }
-        }
+        if (slot == BUY_SLOTS[0] || slot == BUY_SLOTS[1]) { buyUpgrades(p, slot == BUY_SLOTS[0] ? 1 : 10); return; }
+        String id = m.agents.get(slot);
+        if (id == null) return;
+        robots.upgradeFromStation(p, id);
+        forge(p, m.at);
     }
 
     private void buyUpgrades(Player p, int n) {

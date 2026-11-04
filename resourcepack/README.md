@@ -37,3 +37,5 @@ Servers turn textures on with `resource-pack-live: true` in BlackForgeCore's con
 puts each item's `blackforge:<id>` model on it by its plugin tag, old copies included; add new items to its list.
 
 Without the pack the Gale Bellows still works; it just looks like a named breeze rod.
+
+Menu art: `tools/gui_art.py` draws `textures/gui/` and `font/gui*.json` (the Forge, station storage, agent menu, workshop). Item textures added for the Base Station and Hopper Upgrade.
