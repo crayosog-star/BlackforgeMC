@@ -32,6 +32,7 @@ public final class SurvivalModule implements Listener {
     private final World world;
     private final Claims claims;
     private final KingdomStaging staging;
+    private final AbyssPirate pirate;
     private final net.blackforge.core.abyss.AbyssWorld abyss;
     private final Crates crates;
     private final Koth koth;
@@ -192,6 +193,7 @@ public final class SurvivalModule implements Listener {
         new net.blackforge.core.SpawnSafety(plugin, l -> l.getWorld() == world && inSpawn(l.getX(), l.getY(), l.getZ()), p -> spawn());
         new TradingHall(plugin, world, ranks);
         districts = new DistrictLife(plugin, world);
+        pirate = new AbyssPirate(plugin, world, abyss);   // Captain Salt-Eye: the quest that opens the way to the Abyssal Sea
         new SpawnLife(plugin, world, crates, this::spawn);
         gladiators = new Gladiators(plugin, world, this::spawn);
         plugin.discord().setGladiator(gladiators::discordRole);
@@ -228,6 +230,7 @@ public final class SurvivalModule implements Listener {
 
     public void shutdown() {
         staging.shutdown();
+        pirate.shutdown();
         abyss.shutdown();
         boss.stop(null);
         districts.shutdown();
@@ -382,7 +385,7 @@ public final class SurvivalModule implements Listener {
                 return true;
             }
             @Override public List<String> tabComplete(CommandSender s, String alias, String[] args) {
-                if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "abyss", "sundering", "koth", "worldboss", "pvp", "wild", "market", "smithy", "merchant", "wilds", "hall", "sell");
+                if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "sundering", "koth", "worldboss", "pvp", "wild", "market", "smithy", "merchant", "wilds", "hall", "sell");
                 if (name.equals("ah") && args.length == 1) return List.of("sell", "listings", "collect", "help");
                 if (name.equals("claim") && args.length == 1) return List.of("map", "show", "info", "list", "trust", "untrust", "unclaimall", "help");
                 return super.tabComplete(s, alias, args);
@@ -639,7 +642,6 @@ public final class SurvivalModule implements Listener {
         }
         switch (a[0].toLowerCase()) {
             case "spawn" -> teleportSafe(p, spawn(), "spawn");
-            case "abyss", "abyssal", "sea" -> abyss.enter(p);
             case "crates", "crate" -> teleportSafe(p, DistrictLife.cratesWarp(world), "the crates");
             case "sundering", "boss", "worldboss", "worldbosses", "graveyard" -> {
                 if (boss.arena().ready()) teleportSafe(p, boss.arena().arrival(), "the Dragon's Graveyard");

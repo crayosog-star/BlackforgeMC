@@ -75,7 +75,7 @@ public final class AbyssWorld {
         }
         for (Entity e : world.getEntitiesByClass(TextDisplay.class)) if (e.getScoreboardTags().contains(HOLO_TAG)) e.remove();
         holo = Ui.hologram(new Location(world, 44.5, AbyssGenerator.SEA + 5, 0.5),
-                "<dark_aqua><bold>THE ABYSSAL SEA</bold><newline><red>Here be monsters<newline><gray>Sail far enough and something will find you<newline><dark_gray>High risk • high reward", 1.8f);
+                "<dark_aqua><bold>THE ABYSSAL SEA</bold><newline><red>Here be monsters<newline><gray>Sail far enough and something will find you<newline><dark_gray>High risk • high reward<newline><dark_gray>/spawn to go home", 1.8f);
         holo.addScoreboardTag(HOLO_TAG);
         holo.setPersistent(false);
     }
@@ -106,15 +106,18 @@ public final class AbyssWorld {
 
     // ------------------------------------------------------------------ entering and staff commands
 
-    /** /warp abyss. */
+    /** Whether this player may go there yet: everyone once abyss.public is true, staff before that. */
+    public boolean open(Player p) { return plugin.getConfig().getBoolean("abyss.public", false) || p.hasPermission("blackforge.admin"); }
+
+    /** Puts a player on the dock (Captain Salt-Eye's sailing, or /blackforge abyss tp for staff). There is no warp for players. */
     public void enter(Player p) {
-        if (!plugin.getConfig().getBoolean("abyss.public", false) && !p.hasPermission("blackforge.admin")) {
+        if (!open(p)) {
             p.sendMessage(Ui.mm("<dark_aqua>The Abyssal Sea is still being charted. <gray>Soon."));
             return;
         }
         World w = load();
         if (w == null) { p.sendMessage(Ui.mm("<red>The sea could not be reached right now.")); return; }
-        p.sendMessage(Ui.mm("<dark_aqua><bold>The Abyssal Sea.</bold> <gray>Gear lost out there stays out there. Something very large lives past the lights."));
+        p.sendMessage(Ui.mm("<dark_aqua><bold>The Abyssal Sea.</bold> <gray>Gear lost out there stays out there. Something very large lives past the lights. <white>/spawn <gray>brings you home."));
         p.teleport(new Location(w, 7.5, AbyssGenerator.SEA + 1, 0.5, 90f, 0f));
     }
 
