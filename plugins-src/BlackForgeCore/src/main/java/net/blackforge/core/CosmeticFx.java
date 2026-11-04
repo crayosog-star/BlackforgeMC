@@ -92,16 +92,14 @@ final class CosmeticFx implements Listener {
         if (enabled) {
             orangeCompanions.computeIfAbsent(u, id -> new OrangeCompanion());
             removePet(u);
-        } else if (disableOrangeCompanion(u)) {
-            p.stopSound(OrangeCompanion.VOICE, SoundCategory.PLAYERS);
+        } else {
+            disableOrangeCompanion(u);
         }
     }
 
-    private boolean disableOrangeCompanion(UUID u) {
+    private void disableOrangeCompanion(UUID u) {
         OrangeCompanion companion = orangeCompanions.remove(u);
-        if (companion == null) return false;
-        companion.removeModel();
-        return true;
+        if (companion != null) companion.removeModel();
     }
 
     private void hideOrangeCompanion(UUID u) {
@@ -182,12 +180,22 @@ public void onCatch(org.bukkit.event.player.PlayerFishEvent e) {
         OrangeCompanion companion = orangeCompanions.get(u);
         if (companion != null) {
             if (p.isInvisible() || p.getMetadata("vanished").stream().anyMatch(MetadataValue::asBoolean)) companion.removeModel();
-            else companion.follow(p, now, display -> hideFromOptedOut(display, u));
+            else companion.follow(now, display -> hideFromOptedOut(display, u), (at, voice) -> playOrangeCompanionVoice(p, at, voice));
         }
         if (trail != null && speed > 0.02 && !p.isFlying() && !p.isGliding()) trail(trail, p, now);
         if (aura != null) aura(aura, p, now);
         if (cape == null || p.isGliding() || p.isSwimming() || p.isSleeping() || p.isRiptiding()) removeCape(u);
         else cape(p, cape, speed);
+    }
+
+    private void playOrangeCompanionVoice(Player owner, Location at, String voice) {
+        owner.playSound(at, voice, SoundCategory.PLAYERS, 1f, 1f);
+        double range = 16;
+        for (Player listener : at.getWorld().getNearbyPlayers(at, range)) {
+            if (listener.equals(owner) || cos.hidesOthers(listener) || !listener.canSee(owner)) continue;
+            if (listener.getLocation().distanceSquared(at) > range * range) continue;
+            listener.playSound(at, voice, SoundCategory.PLAYERS, 1f, 1f);
+        }
     }
 
     // trails ---------------------------------------------------------------

@@ -2,12 +2,10 @@ package net.blackforge.core;
 
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.SoundCategory;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.BlockDisplay;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
 import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Transformation;
 import org.joml.Quaternionf;
@@ -17,14 +15,21 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /** One player session. The model is built entirely from displays, so it has no mob AI or interactive hitbox. */
 final class OrangeCompanion {
     static final String TAG = "bf_orange_companion";
-    static final String VOICE = "blackforge:pet.orange_companion";
-    private static final long VOICE_DELAY = Duration.ofSeconds(10).toNanos();
+    static final String INTRO = "blackforge:pet.orange_companion";
     private static final int HOP_FRAMES = 8;
+
+    private record VoiceCue(long delayNanos, String sound) {}
+    private static final List<VoiceCue> VOICE_CUES = List.of(
+            new VoiceCue(Duration.ofSeconds(10).toNanos(), INTRO),
+            new VoiceCue(Duration.ofSeconds(30).toNanos(), "blackforge:pet.vickie"),
+            new VoiceCue(Duration.ofSeconds(40).toNanos(), "blackforge:pet.hesitant_gulp")
+    );
 
     enum Toggle {
         ON, OFF;
@@ -58,19 +63,26 @@ final class OrangeCompanion {
     private Location anchor;
     private float facing;
     private int hopFrame, blockedFrames;
-    private Long spawnedAt;
-    private boolean spoke;
+    private Long firstSpawnAt;
+    private int nextVoiceCue;
 
     List<BlockDisplay> displays() { return displays; }
 
     void startVoiceClock(long now) {
-        if (spawnedAt == null) spawnedAt = now;
+        if (firstSpawnAt == null) firstSpawnAt = now;
     }
 
-    boolean voiceDue(long now) {
-        if (spoke || spawnedAt == null || now - spawnedAt < VOICE_DELAY) return false;
-        spoke = true;
-        return true;
+    String voiceDue(long now) {
+        if (firstSpawnAt == null || nextVoiceCue == VOICE_CUES.size()) return null;
+        long elapsed = now - firstSpawnAt;
+        if (elapsed < VOICE_CUES.get(nextVoiceCue).delayNanos()) return null;
+
+        // If the pet was hidden across multiple cues, only play the latest one.
+        while (nextVoiceCue + 1 < VOICE_CUES.size()
+                && elapsed >= VOICE_CUES.get(nextVoiceCue + 1).delayNanos()) {
+            nextVoiceCue++;
+        }
+        return VOICE_CUES.get(nextVoiceCue++).sound();
     }
 
     static int nextHopFrame(int frame, boolean moving) {
@@ -82,7 +94,7 @@ final class OrangeCompanion {
     }
 
     /** Called by the cosmetics loop every two ticks while the owner is eligible to show a pet. */
-    void follow(Player owner, Location ownerAt, Consumer<BlockDisplay> hideFromOptedOut) {
+    void follow(Location ownerAt, Consumer<BlockDisplay> hideFromOptedOut, BiConsumer<Location, String> playVoice) {
         double yaw = Math.toRadians(ownerAt.getYaw());
         Location behind = ownerAt.clone().add(1.55 * Math.sin(yaw), 0, -1.55 * Math.cos(yaw));
         Location target = grounded(behind, 2.2);
@@ -109,8 +121,9 @@ final class OrangeCompanion {
 
         int nextFrame = nextHopFrame(hopFrame, step != null);
         float nextFacing = face(step == null ? anchor : step, ownerAt);
-        if (voiceDue(System.nanoTime())) {
-            owner.playSound(anchor.clone().add(0, .5, 0), VOICE, SoundCategory.PLAYERS, 1f, 1f);
+        String voice = voiceDue(System.nanoTime());
+        if (voice != null) {
+            playVoice.accept(anchor.clone().add(0, .5, 0), voice);
             if (nextFrame == 0) nextFrame = 1;
         }
         if (step == null && nextFrame == hopFrame && nextFacing == facing) return;
