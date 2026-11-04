@@ -35,6 +35,21 @@ final class AcademyRules {
         return level;
     }
 
+    boolean isMaxLevel(int level) { return level >= maxLevel; }
+
+    /** How far these points are from this level to the next, 0..1. At max level it's a full bar. */
+    double progressToNext(long points) {
+        int level = levelFor(points);
+        if (isMaxLevel(level)) return 1;
+        long from = pointsFor(level), to = pointsFor(level + 1);
+        return (double) (Math.max(0, points) - from) / (to - from);
+    }
+
+    /** Apprentice (0-9), Journeyman (10-19), Artisan (20-29), Master (30 and up). */
+    static String rankFor(int level) {
+        return level >= 30 ? "Master" : level >= 20 ? "Artisan" : level >= 10 ? "Journeyman" : "Apprentice";
+    }
+
     /** How many perks a job at this level may have picked. */
     static int perkPicksAt(int level) {
         int picks = 0;

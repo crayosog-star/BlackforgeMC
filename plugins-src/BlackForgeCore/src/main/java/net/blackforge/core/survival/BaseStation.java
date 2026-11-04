@@ -272,6 +272,7 @@ public final class BaseStation implements Listener {
     private static final int HOPPER_INFO = 31, FORGE_SIZE = 36;
     private static final int[] BUY_SLOTS = {32, 33};
     private static final int NEXT_PAGE = 27;
+    private static final int ACADEMY_ICON = 35;
 
     /** The Foundry's prebuilt Forge: marks the barrel a station. It's in its own chunk's region, like any other. */
     void adopt(Block b) {
@@ -336,6 +337,7 @@ public final class BaseStation implements Listener {
         if (pages > 1) m.inv.setItem(NEXT_PAGE, Ui.item(Material.ARROW, "<yellow><bold>Next Agents", "<gray>Page <white>" + (page + 1) + "<gray> of <white>" + pages));
         m.inv.setItem(BUY_SLOTS[0], buyIcon(1));
         m.inv.setItem(BUY_SLOTS[1], buyIcon(10));
+        if (robots.academyOn()) m.inv.setItem(ACADEMY_ICON, Ui.item(Material.BOOK, Academy.BRASS + "<bold>The Academy", "<gray>See your Agents' Mastery and rank.", "", "<yellow>Click to view"));
         p.openInventory(m.inv);
     }
 
@@ -366,6 +368,12 @@ public final class BaseStation implements Listener {
         int slot = e.getRawSlot();
         if (slot == NEXT_PAGE && m.pages > 1) { forge(p, m.at, m.page + 1); return; }
         if (slot == BUY_SLOTS[0] || slot == BUY_SLOTS[1]) { buyUpgrades(p, slot == BUY_SLOTS[0] ? 1 : 10); return; }
+        if (slot == ACADEMY_ICON && robots.academyOn()) {
+            Location at = m.at;
+            int page = m.page;
+            robots.openAcademyList(p, () -> forge(p, at, page), () -> isStation(at.getBlock()) && access.test(p, at));
+            return;
+        }
         String id = m.agents.get(slot);
         if (id == null) return;
         robots.upgradeFromStation(p, id);

@@ -164,6 +164,30 @@ class AcademyRulesTest {
         assertEquals(0, RULES.earn(t, 100, DAY1, 1500, 0.25));
     }
 
+    // ---------------------------------------------------------------- menu values
+
+    @Test
+    void rankBoundaries() {
+        assertEquals("Apprentice", AcademyRules.rankFor(0));
+        assertEquals("Apprentice", AcademyRules.rankFor(9));
+        assertEquals("Journeyman", AcademyRules.rankFor(10));
+        assertEquals("Journeyman", AcademyRules.rankFor(19));
+        assertEquals("Artisan", AcademyRules.rankFor(20));
+        assertEquals("Artisan", AcademyRules.rankFor(29));
+        assertEquals("Master", AcademyRules.rankFor(30));
+    }
+
+    @Test
+    void progressRunsFromZeroToOneWithinALevel() {
+        assertEquals(0.0, RULES.progressToNext(0));
+        assertEquals(0.5, RULES.progressToNext(RULES.pointsFor(1) / 2));
+        assertEquals(0.0, RULES.progressToNext(RULES.pointsFor(10)));
+        assertEquals(1.0, RULES.progressToNext(RULES.pointsFor(30)));
+        assertEquals(1.0, RULES.progressToNext(Long.MAX_VALUE));
+        assertFalse(RULES.isMaxLevel(29));
+        assertTrue(RULES.isMaxLevel(30));
+    }
+
     // ---------------------------------------------------------------- levels
 
     @Test

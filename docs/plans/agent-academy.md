@@ -227,7 +227,10 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Edge cases:** Agent picked up while its menu is open, access lost while open, a Station broken while open (`S/BaseStation.java:359` checks this), `OwnerView` read-only viewers.
 - **Done when:** in the Foundry, a tester opens The Academy both ways and confirms the icons line up with the art, and no item can be moved in or out by click, shift-click, number key or drag. On Survival, slots 14 and 35 stay empty. Update Verified facts with the art result.
 - **Leaves ready:** the menu that Phase 3 adds choices to.
-- **Evidence:**
+- **Evidence:** not ticked; prepared on a branch with no PR, because the Phase 1 gate isn't confirmed.
+  - Verified: rank and progress unit tests passed with `javac` 21 and a local stand-in for JUnit. `rankFor` is here rather than P2.T3 because this menu shows the rank.
+  - Untested: the Paper compile, click and drag blocking, how the icons line up with the art, and both ways in.
+  - Note: `minutesWorked` starts counting here, for the lifetime stat.
 
 ### [ ] P2.T3: Show rank and level-ups
 - **Needs:** `S/Academy.java` from P2.T2; `S/Robots.java:286`, `194`.

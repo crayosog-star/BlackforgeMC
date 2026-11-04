@@ -91,6 +91,8 @@ public final class Robots implements Listener {
         double workProgress;
         /** The fraction of a Mastery point left over after a cycle. Not saved. */
         double pointsCarry;
+        /** Seconds toward the next lifetime minute worked. Not saved. */
+        int secondsWorked;
         Location loc; Inventory storage; UUID entity; int timer; String status = "";
         /** The name the player gave it, or null. */
         String name;
@@ -134,6 +136,7 @@ public final class Robots implements Listener {
     /** Whether Agents earn Mastery here. See academyOn(). */
     private final boolean academyOn;
     private final AcademyRules academy;
+    private Academy academyMenu;
 
     Robots(BlackForgeCore plugin) { this(plugin, false); }
 
@@ -144,6 +147,7 @@ public final class Robots implements Listener {
         this.academyOn = sandbox || plugin.getConfig().getStringList("academy.live-modes").contains(plugin.getConfig().getString("mode", "backend"));
         this.academy = new AcademyRules(plugin.getConfig().getDouble("academy.level-base", 20), plugin.getConfig().getDouble("academy.level-exponent", 2.0),
                 plugin.getConfig().getInt("academy.max-level", 30));
+        if (academyOn) this.academyMenu = new Academy(plugin, this);
         this.file = new File(plugin.getDataFolder(), "robots.yml");
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 40L, 20L);
@@ -434,6 +438,7 @@ public final class Robots implements Listener {
             long whole = (long) b.chargeCarry;
             b.charge += whole;
             b.chargeCarry -= whole;
+            if (academyOn() && ++b.secondsWorked >= 60) { b.secondsWorked = 0; b.record.minutesWorked++; }
             b.timer++;   // only for the name tag refresh now
             b.workProgress += stats.speedMult();
             if (b.workProgress >= stats.intervalSeconds()) {
@@ -473,11 +478,24 @@ public final class Robots implements Listener {
         long whole = (long) b.pointsCarry;
         b.pointsCarry -= whole;
         b.record.workDone += done;
-        academy.earn(b.record.jobs.computeIfAbsent(job, k -> new AgentRecord.JobTrack()), whole, java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString(),
-                plugin.getConfig().getLong("academy.daily-soft-cap", 1500), plugin.getConfig().getDouble("academy.over-cap-rate", 0.25));
+        academy.earn(b.record.jobs.computeIfAbsent(job, k -> new AgentRecord.JobTrack()), whole, academyToday(),
+                academySoftCap(), plugin.getConfig().getDouble("academy.over-cap-rate", 0.25));
     }
 
-    private static String jobKey(Bot b) { return b.job.name().toLowerCase(Locale.ROOT); }
+    static String jobKey(Bot b) { return b.job.name().toLowerCase(Locale.ROOT); }
+
+    static String academyToday() { return java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString(); }
+
+    AcademyRules academyRules() { return academy; }
+
+    long academySoftCap() { return plugin.getConfig().getLong("academy.daily-soft-cap", 1500); }
+
+    Bot agent(String id) { return bots.get(id); }
+
+    /** The Forge's way in: a list of this player's Agents. Does nothing if the Academy is off. */
+    void openAcademyList(Player p, Runnable back, java.util.function.BooleanSupplier stillAllowed) {
+        if (academyOn()) academyMenu.openList(p, back, stillAllowed);
+    }
 
     /** Staff: /agents academy points <player> <amount> adds to each placed Agent's current job, skipping the daily limit. 0 just reads them. */
     private void academyPoints(CommandSender s, String[] a) {
@@ -675,7 +693,7 @@ public final class Robots implements Listener {
 
     // row 1: job selector; row 2: actions; rows 3-6: storage
     private static final int[] JOB_SLOTS = {1, 3, 5, 7};
-    private static final int SLOT_COLLECT = 9, SLOT_XP = 10, SLOT_FUEL = 11, SLOT_INFO = 13, SLOT_UPGRADE = 15, SLOT_RENAME = 16, SLOT_PICKUP = 17;
+    private static final int SLOT_COLLECT = 9, SLOT_XP = 10, SLOT_FUEL = 11, SLOT_INFO = 13, SLOT_ACADEMY = 14, SLOT_UPGRADE = 15, SLOT_RENAME = 16, SLOT_PICKUP = 17;
     private static final int STORAGE_START = 18;
 
     /** "▮▮▮▮▯▯▯": lit segments coloured red/yellow/green by position, unlit ones dark grey. */
@@ -734,6 +752,7 @@ public final class Robots implements Listener {
             m.inv.setItem(JOB_SLOTS[i], icon);
         }
         for (int i = 0; i < b.storage.getSize() && STORAGE_START + i < 54; i++) m.inv.setItem(STORAGE_START + i, b.storage.getItem(i));
+        if (academyOn()) m.inv.setItem(SLOT_ACADEMY, Ui.item(Material.BOOK, Academy.BRASS + "<bold>The Academy", "<gray>Mastery, rank and lifetime work.", "", "<yellow>Click to view"));
         if (readOnly) {
             ItemStack locked = Ui.item(Material.BARRIER, "<red><bold>Read-only", "<gray>You can look, but not change anything.");
             m.inv.setItem(SLOT_COLLECT, Ui.item(Material.CHEST, "<green><bold>Storage", "<gray>" + used + "/" + b.storage.getSize() + " slots used"));
@@ -750,6 +769,13 @@ public final class Robots implements Listener {
         // the player's own inventory, so nothing can be moved into the menu (the menu is a copy, not the real storage).
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
+        // before the read-only check, because looking is all this does
+        if (academyOn() && m.kind.equals("robot") && e.getRawSlot() == SLOT_ACADEMY) {
+            Bot viewed = bots.get(m.id);
+            if (viewed != null && (m.readOnly || mayUse(p, viewed)))
+                academyMenu.openAgent(p, viewed, () -> open(p, viewed, m.readOnly), () -> m.readOnly || mayUse(p, viewed));
+            return;
+        }
         if (m.readOnly) { p.sendActionBar(Ui.mm("<red>Read-only: you can look, but not change anything.")); return; }
         if (m.kind.equals("shop")) { shopClick(p, e.getRawSlot()); return; }
         Bot b = bots.get(m.id);
