@@ -32,7 +32,7 @@ class AcademyRulesTest {
     void roundTripKeepsEveryField() {
         AgentRecord in = sample();
         String text = in.encode();
-        assertTrue(text.startsWith("2|"));
+        assertTrue(text.startsWith("3|"));
         AgentRecord out = AgentRecord.decode(text);
         assertEquals("6f1c-uid", out.uid);
         assertEquals(1234, out.workDone);
@@ -115,13 +115,32 @@ class AcademyRulesTest {
         assertEquals(List.of("efficient", "keen"), r.jobs.get("miner").perks);
         assertEquals(0, r.jobs.get("miner").todayPoints);
         assertNull(r.jobs.get("miner").todayDate);
-        assertTrue(r.encode().startsWith("2|"));
+        assertTrue(r.encode().startsWith("3|"));
     }
 
     @Test
     void wrongFieldCountForItsVersionIsCorrupt() {
         assertEquals("", AgentRecord.decode("1|u|0|0||miner:1::x:y").uid);
         assertEquals("", AgentRecord.decode("2|u|0|0||miner:1::").uid);
+        assertEquals("", AgentRecord.decode("3|u|0|0||miner:1:::0:").uid);
+    }
+
+    @Test
+    void respecCountRoundTripsAndOlderVersionsReadAsZero() {
+        AgentRecord in = sample();
+        in.jobs.get("miner").respecs = 3;
+        assertEquals(3, AgentRecord.decode(in.encode()).jobs.get("miner").respecs);
+        AgentRecord two = AgentRecord.decode("2|u|0|0||miner:5:::9:2026-11-04");
+        assertEquals(0, two.jobs.get("miner").respecs);
+        assertEquals(9, two.jobs.get("miner").todayPoints);
+    }
+
+    @Test
+    void pricesEscalateThenStopAtTheLimit() {
+        assertEquals(new AcademyRules.Price(25000, 128), AcademyRules.escalatingPrice(0, 25000, 128, 1.5, 500000));
+        assertEquals(new AcademyRules.Price(37500, 192), AcademyRules.escalatingPrice(1, 25000, 128, 1.5, 500000));
+        assertEquals(new AcademyRules.Price(500000, 2560), AcademyRules.escalatingPrice(50, 25000, 128, 1.5, 500000));
+        assertEquals(new AcademyRules.Price(25000, 128), AcademyRules.escalatingPrice(-1, 25000, 128, 1.5, 500000));
     }
 
     // ---------------------------------------------------------------- earning

@@ -554,6 +554,30 @@ public final class Robots implements Listener {
 
     AgentStats.Tuning tuning() { return tuning; }
 
+    /** The next reset's price for one job. */
+    AcademyRules.Price respecPrice(AgentRecord.JobTrack track) {
+        var c = plugin.getConfig();
+        return AcademyRules.escalatingPrice(track.respecs, c.getLong("academy.respec.money", 25000), c.getLong("academy.respec.essence", 128),
+                c.getDouble("academy.respec.mult-per-use", 1.5), c.getLong("academy.respec.max-money", 500000));
+    }
+
+    /** Takes both or neither. Free only in the Foundry, and it says why if the player can't pay. */
+    boolean payAcademy(Player p, AcademyRules.Price price) {
+        if (sandbox) return true;
+        int essence = (int) price.essence();
+        if (eco == null) { p.sendMessage(Ui.mm("<red>Payments aren't available right now.")); return false; }
+        if (Spawners.countEssence(p) < essence) { p.sendMessage(Ui.mm("<red>You need " + essence + " Mob Essence.")); return false; }
+        if (eco.getBalance(p) < price.money()) { p.sendMessage(Ui.mm("<red>You need " + NetEconomy.money(price.money()) + ".")); return false; }
+        if (!eco.withdrawPlayer(p, price.money()).transactionSuccess()) { p.sendMessage(Ui.mm("<red>The payment failed.")); return false; }
+        Spawners.takeEssence(p, essence);
+        return true;
+    }
+
+    /** "$25,000 + 128 Mob Essence", or free in the Foundry. */
+    String priceText(AcademyRules.Price price) {
+        return sandbox ? "Free in the Foundry" : NetEconomy.money(price.money()) + " + " + price.essence() + " Mob Essence";
+    }
+
     boolean isSandbox() { return sandbox; }
 
     /** The Foundry's fast-level button. It refuses outside the sandbox, whatever calls it. */

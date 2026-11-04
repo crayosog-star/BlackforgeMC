@@ -22,7 +22,7 @@ import java.util.function.BooleanSupplier;
 public final class Academy implements Listener {
     static final String BRASS = "<#C9A227>";
     private static final String VERDIGRIS = "<#4FA08B>";
-    private static final int SIZE = 54, RANK = 4, PROGRESS = 20, LIFETIME = 22, TODAY = 24, PERKS = 38, ADD_LEVELS = 40, SPEC = 42, BACK = 49;
+    private static final int SIZE = 54, RANK = 4, PROGRESS = 20, LIFETIME = 22, TODAY = 24, PERKS = 38, ADD_LEVELS = 40, SPEC = 42, BACK = 49, RESPEC = 51;
     private static final int CONFIRM_YES = 29, CONFIRM_NO = 33;
     private static final int[] PERK_SLOTS = {20, 21, 22, 23, 24};
     private static final int[] JOB_SLOTS = {28, 30, 32, 34};
@@ -110,6 +110,11 @@ public final class Academy implements Listener {
             v.inv.setItem(SPEC, Ui.item(Material.NETHER_STAR, VERDIGRIS + "<bold>Specialization", "<gray>Chosen at job level <white>10<gray>.",
                     "<gray>Path: <white>" + (spec == null ? "none" : specName(spec)), "", "<yellow>Click to view"));
             v.actions.put(SPEC, () -> openSpecs(p, b, back, stillAllowed));
+            if (track != null && (track.spec != null || !track.perks.isEmpty())) {
+                v.inv.setItem(RESPEC, Ui.item(Material.GRINDSTONE, BRASS + "<bold>Reset Choices", "<gray>Clears this job's perks and path.", "<gray>Its Mastery stays.",
+                        "<gray>Price: <white>" + robots.priceText(robots.respecPrice(track)), "", "<yellow>Click to reset"));
+                v.actions.put(RESPEC, () -> confirmRespec(p, b, back, stillAllowed));
+            }
         }
         if (robots.isSandbox() && !maxed) v.inv.setItem(ADD_LEVELS, Ui.item(Material.ANVIL, BRASS + "<bold>Add 10 Levels", "<gray>Foundry only: raises this job's level for free.", "", "<yellow>Click to add"));
         p.openInventory(v.inv);
@@ -178,6 +183,23 @@ public final class Academy implements Listener {
             case AcademyRules.DIVER -> "Trove: treasure chance x" + t.troveMult();
             default -> "";
         };
+    }
+
+    private void confirmRespec(Player p, Robots.Bot b, Runnable agentBack, BooleanSupplier stillAllowed) {
+        Runnable toAgent = () -> openAgent(p, b, false, agentBack, stillAllowed);
+        AgentRecord.JobTrack shown = b.record.jobs.get(Robots.jobKey(b));
+        if (shown == null) { toAgent.run(); return; }
+        confirm(p, b, "Reset this job's choices?", robots.priceText(robots.respecPrice(shown)), () -> {
+            AgentRecord.JobTrack now = b.record.jobs.get(Robots.jobKey(b));   // re-read: a double-click or job switch may have changed it
+            if (now != null && (now.spec != null || !now.perks.isEmpty()) && robots.payAcademy(p, robots.respecPrice(now))) {
+                now.perks.clear();
+                now.spec = null;
+                now.respecs++;
+                robots.save();
+                p.sendMessage(Ui.mm(BRASS + b.title() + " <gray>can choose again. Its Mastery is unchanged."));
+            }
+            toAgent.run();
+        }, toAgent, stillAllowed);
     }
 
     private static long percent(double chance) { return Math.round(chance * 100); }

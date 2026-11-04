@@ -81,6 +81,15 @@ final class AcademyRules {
         return lines;
     }
 
+    record Price(long money, long essence) {}
+
+    /** The price after this many uses: base x mult^uses. Essence stops rising when money reaches its limit, so the two stay in step. */
+    static Price escalatingPrice(int uses, long baseMoney, long baseEssence, double mult, long maxMoney) {
+        double factor = Math.pow(Math.max(1, mult), Math.max(0, uses));
+        if (baseMoney > 0) factor = Math.min(factor, Math.max(1, (double) maxMoney / baseMoney));
+        return new Price(Math.round(baseMoney * factor), Math.round(baseEssence * factor));
+    }
+
     /** A job's two specialization paths. */
     static java.util.List<String> specsFor(String job) {
         return switch (job) {

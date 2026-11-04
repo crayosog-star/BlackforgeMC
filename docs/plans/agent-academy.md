@@ -341,7 +341,11 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Edge cases:** too little Essence or money, double-clicks, offline economy (`eco == null`), no choices to reset, multiplier reaching the cap.
 - **Done when:** unit tests cover escalating and capped prices. In the Foundry, a tester resets one job's choices, confirms other jobs are untouched, and confirms the free path doesn't appear in the code path for non-sandbox servers.
 - **Leaves ready:** a working Essence and money sink pattern for reroll.
-- **Evidence:**
+- **Evidence:** not ticked; prepared on a branch with no PR, because earlier phase gates aren't confirmed.
+  - Verified: escalating and capped prices and the saved count passed unit tests with `javac` 21 and a local stand-in for JUnit.
+  - Verified: reading the code, the free path is only `payAcademy`'s `sandbox` check.
+  - Untested: the Paper compile, the reset in the Foundry, and real payment, which P4.T3 checks.
+  - Note: the format moves to `3|`, and `1|` and `2|` still read.
 
 ---
 
