@@ -17,6 +17,8 @@ import org.bukkit.block.Block;
 import org.bukkit.block.Chest;
 import org.bukkit.block.Container;
 import org.bukkit.command.Command;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Allay;
 import org.bukkit.entity.Entity;
@@ -43,6 +45,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Vector;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -79,6 +82,7 @@ public final class Allays implements Listener {
     private static final int DRAIN_REACH = 20;
     private static final long DRAIN_TO_MS = 60_000L;
     private static final double TAG_HEIGHT = 0.9;
+    private static final int SAVE_TICKS = 1200;
 
     /** A test allay flying back and forth between two points. */
     private static final class Flyer {
@@ -151,6 +155,8 @@ public final class Allays implements Listener {
     private GroveTrader trader;
     private Function<String, UUID> ownerOf;
     private final double sellFee;
+    private final boolean enabled, previewStaff;
+    private final File file;
 
     /** {@code zone}: where staff may test flight. {@code sandbox}: the Arena's Foundry, where everything is free and nothing is saved. */
     Allays(BlackForgeCore plugin, BaseStation station, Predicate<Location> zone, boolean sandbox) {
@@ -168,6 +174,10 @@ public final class Allays implements Listener {
         this.scanTicks = Math.max(20, c.getInt("allays.scan-seconds", 5) * 20);
         this.maxScans = Math.max(1, c.getInt("allays.max-scans-per-tick", 4));
         this.sellFee = c.getDouble("allays.sell-fee", 0.10);
+        this.enabled = c.getBoolean("allays.enabled", false);
+        this.previewStaff = c.getBoolean("allays.preview-staff", false);
+        this.file = new File(plugin.getDataFolder(), "allays.yml");
+        if (!sandbox) load();
         this.linkScanTicks = Math.max(20, c.getInt("allays.link-scan-seconds", 30) * 20);
         this.speed = Math.max(0.5, c.getDouble("allays.speed", 6.0));
         this.pauseTicks = (int) Math.max(0, Math.round(c.getDouble("allays.pause-seconds", 1.0) * 20));
@@ -255,6 +265,7 @@ public final class Allays implements Listener {
         if (!AllayRules.validName(name)) { p.sendActionBar(Ui.mm("<red>Allay names are up to 16 letters, numbers and spaces.")); return false; }
         w.name = name;
         w.label = null;
+        save(false);
         p.playSound(w.entity.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1f);
         p.sendActionBar(Ui.mm("<#4fd1b5>Named your allay <white>" + name + "<#4fd1b5>."));
         return true;
@@ -270,8 +281,62 @@ public final class Allays implements Listener {
 
     void shutdown() {
         stop();
-        for (Base b : bases.values()) sleep(b);
-        bases.clear();
+        if (sandbox) {
+            for (Base b : bases.values()) sleep(b);
+            bases.clear();
+            return;
+        }
+        // a clean stop saves what they're holding, so nothing has to land on the ground
+        save(true);
+        if (trader != null) trader.saveSales();
+        for (Base b : bases.values()) for (Worker w : b.workers) {
+            if (w.entity != null) w.entity.remove();
+            removeTag(w);
+        }
+    }
+
+    // ------------------------------------------------------------------ saving
+
+    /**
+     * Loads are only written on a clean stop. The minute-by-minute save leaves them out, because a load delivered after that
+     * save would come back after a crash and be doubled. A crash can lose a load instead.
+     */
+    private void save(boolean withLoads) {
+        if (sandbox) return;
+        YamlConfiguration y = new YamlConfiguration();
+        int i = 0;
+        for (Base b : bases.values()) {
+            String k = "bases." + i++ + ".";
+            y.set(k + "region", b.region);
+            y.set(k + "tier", b.tier);
+            y.set(k + "buyer", b.buyer.toString());
+            for (Worker w : b.workers) {
+                if (w.name != null) y.set(k + "names." + w.index, w.name);
+                if (withLoads && w.carried != null) y.set(k + "loads." + w.index, w.carried);
+            }
+        }
+        try { y.save(file); } catch (Exception e) { plugin.getLogger().warning("allay save failed: " + e.getMessage()); }
+    }
+
+    private void load() {
+        ConfigurationSection all = YamlConfiguration.loadConfiguration(file).getConfigurationSection("bases");
+        if (all == null) return;
+        for (String i : all.getKeys(false)) {
+            ConfigurationSection s = all.getConfigurationSection(i);
+            if (s == null) continue;
+            String region = s.getString("region"), buyer = s.getString("buyer");
+            int tier = s.getInt("tier");
+            if (region == null || buyer == null || tier < 1 || tier > AllayRules.MAX_TIER) continue;
+            Base b = new Base(region, UUID.fromString(buyer));
+            b.tier = tier;
+            for (int n = 0; n < table.flock(tier); n++) {
+                Worker w = new Worker(n);
+                w.name = s.getString("names." + n);
+                w.carried = s.getItemStack("loads." + n);
+                b.workers.add(w);
+            }
+            bases.put(region, b);
+        }
     }
 
     /** The Foundry, when someone leaves: their purchases go with them. */
@@ -353,7 +418,7 @@ public final class Allays implements Listener {
     // ------------------------------------------------------------------ the Forge's Allay menu
 
     /** Should the Forge offer this player the Allay menu? */
-    boolean available(Player p) { return sandbox; }
+    boolean available(Player p) { return sandbox || enabled || previewStaff && p.hasPermission("blackforge.admin"); }
 
     ItemStack forgeIcon(String region) {
         Base b = bases.get(region);
@@ -422,6 +487,7 @@ public final class Allays implements Listener {
         if (!station.pay(p, cost.money(), cost.essence())) return;
         if (b == null) { b = new Base(region, p.getUniqueId()); bases.put(region, b); }
         b.tier = t;
+        save(false);
         p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_RESONATE, 1f, 1.2f);
         p.sendMessage(Ui.mm("<#4fd1b5>Your base now has a Tier " + Spawners.roman(t) + " " + TIER_NAME[t - 1] + ". <gray>" + TIER_JOB[t - 1] + "."));
         openMenu(p, at);
@@ -438,6 +504,11 @@ public final class Allays implements Listener {
             step(f);
             return false;
         });
+        if (!sandbox && now % SAVE_TICKS == 0) {
+            save(false);
+            if (trader != null) trader.saveSales();
+        }
+        if (!sandbox && !enabled && !previewStaff) return;   // switched off: no allays fly, and every tier is kept
         for (Base b : bases.values()) tickBase(b);
     }
 
