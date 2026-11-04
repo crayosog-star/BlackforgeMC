@@ -277,6 +277,11 @@ public final class Robots implements Listener {
         if (b == null) { if (!pending.containsKey(g.getPersistentDataContainer().get(ROBOT, PersistentDataType.STRING))) g.remove(); return; }   // orphan
         b.entity = g.getUniqueId();
         Player p = e.getPlayer();
+        if (!b.owner.equals(p.getUniqueId()) && net.blackforge.core.Titles.isOwner(p)
+                && (OwnerView.viewing(p, g.getLocation()) || !canUse.test(p, g.getLocation()))) {
+            open(p, b, true);   // the OWNER title looks but doesn't touch, even with admin permission
+            return;
+        }
         if (!b.owner.equals(p.getUniqueId()) && !canUse.test(p, g.getLocation()) && !p.hasPermission("blackforge.admin")) {
             p.sendMessage(Ui.mm("<red>That's " + Bukkit.getOfflinePlayer(b.owner).getName() + "'s agent.")); return;
         }
@@ -493,7 +498,7 @@ public final class Robots implements Listener {
     // ------------------------------------------------------------------ robot menu
 
     private static final class Menu implements InventoryHolder {
-        final String id; final String kind; Inventory inv;
+        final String id; final String kind; Inventory inv; boolean readOnly;
         Menu(String id, String kind) { this.id = id; this.kind = kind; }
         public Inventory getInventory() { return inv; }
     }
@@ -514,8 +519,11 @@ public final class Robots implements Listener {
         return sb.toString();
     }
 
-    void open(Player p, Bot b) {
+    void open(Player p, Bot b) { open(p, b, false); }
+
+    private void open(Player p, Bot b, boolean readOnly) {
         Menu m = new Menu(b.id, "robot");
+        m.readOnly = readOnly;
         m.inv = Bukkit.createInventory(m, 54, StationUi.title(StationUi.Screen.AGENT, "⚙ " + b.title() + " " + Spawners.roman(b.tier)));
         if (!StationUi.art()) {
             ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
@@ -555,6 +563,12 @@ public final class Robots implements Listener {
             m.inv.setItem(JOB_SLOTS[i], icon);
         }
         for (int i = 0; i < b.storage.getSize() && STORAGE_START + i < 54; i++) m.inv.setItem(STORAGE_START + i, b.storage.getItem(i));
+        if (readOnly) {
+            ItemStack locked = Ui.item(Material.BARRIER, "<red><bold>Read-only", "<gray>You can look, but not change anything.");
+            m.inv.setItem(SLOT_COLLECT, Ui.item(Material.CHEST, "<green><bold>Storage", "<gray>" + used + "/" + b.storage.getSize() + " slots used"));
+            m.inv.setItem(SLOT_RENAME, locked);
+            m.inv.setItem(SLOT_PICKUP, locked);
+        }
         p.openInventory(m.inv);
     }
 
@@ -565,6 +579,7 @@ public final class Robots implements Listener {
         // the player's own inventory, so nothing can be moved into the menu (the menu is a copy, not the real storage).
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
+        if (m.readOnly) { p.sendActionBar(Ui.mm("<red>Read-only: you can look, but not change anything.")); return; }
         if (m.kind.equals("shop")) { shopClick(p, e.getRawSlot()); return; }
         Bot b = bots.get(m.id);
         if (b == null) { p.closeInventory(); return; }

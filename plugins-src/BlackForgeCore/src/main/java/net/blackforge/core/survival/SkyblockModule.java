@@ -110,6 +110,7 @@ public final class SkyblockModule implements Listener {
         spawners = new Spawners(plugin);
         spawners.setAccess(this::islandMember);
         oneblockExtras = new OneBlockExtras(plugin, spawners);
+        OwnerView.install(plugin, this::onOthersIsland);
         robots = new Robots(plugin);
         robots.setAccess(this::islandMember);
         robots.setRanks(ranks);
@@ -185,6 +186,20 @@ public final class SkyblockModule implements Listener {
     private World islandWorld() { return Bukkit.getWorld("bskyblock_world"); }
 
     /** Is this spot on an island the player belongs to? (staff may use anything) */
+    /** On an island this player isn't a member of. Unlike islandMember, staff permission doesn't count as membership. */
+    private boolean onOthersIsland(Player p, Location l) {
+        try {
+            Object im = islands();
+            if (im == null) return false;
+            Optional<?> island = (Optional<?>) im.getClass().getMethod("getIslandAt", Location.class).invoke(im, l);
+            if (island.isEmpty()) return false;
+            @SuppressWarnings("unchecked") Set<UUID> members = (Set<UUID>) island.get().getClass().getMethod("getMemberSet").invoke(island.get());
+            return !members.contains(p.getUniqueId());
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
     private boolean islandMember(Player p, Location l) {
         if (p.hasPermission("blackforge.admin")) return true;
         try {

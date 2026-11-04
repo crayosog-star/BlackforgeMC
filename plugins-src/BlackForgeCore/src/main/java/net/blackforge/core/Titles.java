@@ -45,6 +45,9 @@ public final class Titles {
         return t == null || t.isBlank() ? null : t;
     }
 
+    /** Holds the OWNER title itself: an explicit list, unlike the blackforge.admin permission. */
+    public static boolean isOwner(Player p) { return "OWNER".equalsIgnoreCase(of(p)); }
+
     /** "👑 OWNER " in shimmering molten gold, at the current point of the shimmer. Empty if no title. */
     public static String badge(Player p) {
         String t = of(p);

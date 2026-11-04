@@ -146,6 +146,7 @@ public final class SurvivalModule implements Listener {
         rankKits = new RankKits(plugin, ranks, tags, crates);
         spawners = new Spawners(plugin);
         spawners.setAccess((p, l) -> p.hasPermission("blackforge.admin") || claims.ownerAt(l) != null && claims.canUse(p, l));
+        OwnerView.install(plugin, (p, l) -> claims.ownerAt(l) != null && !claims.canUse(p, l));
         robots = new Robots(plugin);
         robots.setAccess((p, l) -> p.getUniqueId().equals(claims.ownerAt(l)));   // only in your own claim, where it can work
         robots.setWorkArea((owner, l) -> owner.equals(claims.ownerAt(l)));
