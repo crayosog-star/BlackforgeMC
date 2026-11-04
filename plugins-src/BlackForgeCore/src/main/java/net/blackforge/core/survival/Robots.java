@@ -568,6 +568,7 @@ public final class Robots implements Listener {
         if (!b.status.isEmpty()) info.add(b.status);
         m.inv.setItem(SLOT_INFO, Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, b.job.color + "<bold>" + b.title() + " " + Spawners.roman(b.tier), info.toArray(String[]::new)));
         if (b.tier >= MAX_TIER) m.inv.setItem(SLOT_UPGRADE, Ui.item(Material.NETHER_STAR, "<gold><bold>MAX TIER"));
+        else if (sandbox) m.inv.setItem(SLOT_UPGRADE, Ui.item(Material.ANVIL, "<aqua><bold>Upgrade to Tier " + Spawners.roman(b.tier + 1), "<green>Free in the Foundry", "", "<yellow>Click to upgrade"));
         else {
             int t = b.tier - 1;
             long need = UP_CHARGE_HOURS[t] * 3600_000L;
@@ -683,7 +684,7 @@ public final class Robots implements Listener {
             if (!all) break;
         }
         p.getInventory().setStorageContents(inv);
-        if (added == 0) p.sendMessage(Ui.mm(b.fuel >= MAX_TANK - 30 * 60_000L ? "<red>The tank is full." : "<red>You have no Fuel Cells. Buy them at <white>/agents<red> or the Scrap Shop."));
+        if (added == 0) p.sendMessage(Ui.mm(b.fuel >= MAX_TANK - 30 * 60_000L ? "<red>The tank is full." : sandbox ? "<red>You have no Fuel Cells. Take some from the Fuel chest." : "<red>You have no Fuel Cells. Buy them at <white>/agents<red> or the Scrap Shop."));
         else { p.sendMessage(Ui.mm("<green>Added " + added + " Fuel Cell" + (added > 1 ? "s" : "") + ". Fuel: <white>" + time(b.fuel))); p.playSound(p.getLocation(), Sound.ITEM_BUCKET_FILL_LAVA, 0.6f, 1.2f); }
     }
 
@@ -769,9 +770,12 @@ public final class Robots implements Listener {
         else {
             int t = b.tier - 1;
             lore.add("<gray>Upgrade to Tier <white>" + Spawners.roman(b.tier + 1) + "<gray>:");
+            if (sandbox) lore.add("<green>Free in the Foundry");
+            else {
             lore.add("<green>" + NetEconomy.money(UP_MONEY[t]));
             lore.add("<#9d7bff>" + UP_ESSENCE[t] + " Mob Essence");
             lore.add("<gray>Charge: <white>" + time(b.charge) + " <dark_gray>/ " + UP_CHARGE_HOURS[t] + "h");
+            }
             lore.add("");
             lore.add("<yellow>Click to upgrade");
         }

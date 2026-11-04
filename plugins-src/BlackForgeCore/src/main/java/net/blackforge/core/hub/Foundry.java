@@ -28,14 +28,24 @@ import java.util.UUID;
  * PvP stay off (LobbyRules and TestArena.onPvp).
  */
 public final class Foundry implements Listener {
+    private final BlackForgeCore plugin;
     private final TestArena arena;
     private final PlacedBlocks placed = new PlacedBlocks();
     private final Set<UUID> inside = new HashSet<>();
     private final FoundrySystems systems;
 
     public Foundry(BlackForgeCore plugin, TestArena arena) {
+        this.plugin = plugin;
         this.arena = arena;
-        this.systems = new FoundrySystems(plugin, this::inZone,
+        org.bukkit.World w = arena.world();
+        int y = TestArenaBuilder.Y;
+        Location[] supply = new Location[FoundryZone.SUPPLY_X.length];
+        for (int i = 0; i < supply.length; i++) supply[i] = new Location(w, FoundryZone.SUPPLY_X[i], y + 1, FoundryZone.SUPPLY_Z);
+        this.systems = new FoundrySystems(plugin, w, new FoundrySystems.Layout(FoundryZone.LANE_Z, FoundryZone.LANE_X, y + 1,
+                new Location(w, FoundryZone.FORGE_X, y + 1, FoundryZone.FORGE_Z),
+                new Location(w, (FoundryZone.PEN_X1 + FoundryZone.PEN_X2) / 2 + 0.5, y + 1, (FoundryZone.PEN_Z1 + FoundryZone.PEN_Z2) / 2 + 0.5), FoundryZone.PEN_MOBS,
+                new Location(w, 0.5, y + 7.5, FoundryZone.GATE_Z + 0.5), supply),
+                l -> l.getWorld() == w ? FoundryZone.supplyAt(l.getBlockX(), l.getBlockY(), l.getBlockZ()) : -1, this::inZone,
                 (p, l) -> inZone(l) && (placed.owner(pos(l.getBlock())) == null || p.getUniqueId().equals(placed.owner(pos(l.getBlock())))));
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::poll, 20L, 5L);
@@ -62,6 +72,7 @@ public final class Foundry implements Listener {
             if (now) {
                 inside.add(p.getUniqueId());
                 if (!builder(p)) p.setGameMode(GameMode.SURVIVAL);
+                p.sendMessage(net.blackforge.core.Ui.mm("<#ffb347><bold>The Foundry</bold> <dark_gray>· <gray>chests never run out and the Forge is free. Everything you place or carry from here goes when you leave."));
             } else {
                 left(p);
                 if (!builder(p)) p.setGameMode(GameMode.ADVENTURE);
@@ -101,6 +112,7 @@ public final class Foundry implements Listener {
     public void shutdown() {
         for (UUID who : placed.everyone()) wipe(who);
         for (UUID who : inside) systems.clear(who);
+        systems.shutdown();
     }
 
     // ------------------------------------------------------------------ blocks
@@ -110,11 +122,18 @@ public final class Foundry implements Listener {
     public void onBreak(BlockBreakEvent e) {
         Block b = e.getBlock();
         if (builder(e.getPlayer()) || !inZone(b.getLocation())) return;
-        if (!placed.mayBreak(pos(b), e.getPlayer().getUniqueId())) e.setCancelled(true);
+        if (!FoundryZone.inMineWall(b.getX(), b.getY(), b.getZ()) && !placed.mayBreak(pos(b), e.getPlayer().getUniqueId())) e.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onBroken(BlockBreakEvent e) { placed.remove(pos(e.getBlock())); }
+    public void onBroken(BlockBreakEvent e) {
+        Block b = e.getBlock();
+        if (b.getWorld() != arena.world()) return;
+        placed.remove(pos(b));
+        if (!FoundryZone.inMineWall(b.getX(), b.getY(), b.getZ())) return;
+        org.bukkit.Material ore = b.getType();
+        Bukkit.getScheduler().runTaskLater(plugin, () -> { if (b.getType().isAir()) b.setType(ore); }, 60L);   // the Miner's wall grows back
+    }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlace(BlockPlaceEvent e) {

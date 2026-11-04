@@ -57,7 +57,7 @@ public final class BaseStation implements Listener {
     }
 
     private static final class Menu implements InventoryHolder {
-        final String kind; final Location at; Inventory inv; final Map<Integer, String> agents = new HashMap<>();
+        final String kind; final Location at; Inventory inv; final Map<Integer, String> agents = new HashMap<>(); int page, pages = 1;
         Menu(String kind, Location at) { this.kind = kind; this.at = at; }
         public Inventory getInventory() { return inv; }
     }
@@ -271,12 +271,31 @@ public final class BaseStation implements Listener {
     private static final int[] CARD_X = {18, 52, 88, 124, 158};
     private static final int HOPPER_INFO = 31, FORGE_SIZE = 36;
     private static final int[] BUY_SLOTS = {32, 33};
+    private static final int NEXT_PAGE = 27;
 
-    private void forge(Player p, Location at) {
-        List<Robots.Bot> agents = robots.agentsOf(p.getUniqueId());
+    /** The Foundry's prebuilt Forge: marks the barrel a station. It's in its own chunk's region, like any other. */
+    void adopt(Block b) {
+        if (!isStation(b)) {
+            if (!(b.getState() instanceof Barrel br)) return;
+            br.getPersistentDataContainer().set(ITEM, PersistentDataType.BYTE, (byte) 1);
+            br.update(true, false);
+        }
+        stations.put(regionOf.apply(b.getLocation()), Spot.of(b.getLocation()));
+    }
+
+    private void forge(Player p, Location at) { forge(p, at, 0); }
+
+    private void forge(Player p, Location at, int page) {
+        List<Robots.Bot> all = robots.agentsOf(p.getUniqueId());
+        int pages = Math.max(1, (all.size() + CARD_COLS.length - 1) / CARD_COLS.length);
+        page = Math.floorMod(page, pages);
+        // only the Foundry goes past one page: everywhere else the limit is one page's worth
+        List<Robots.Bot> agents = sandbox ? all.subList(page * CARD_COLS.length, Math.min(all.size(), (page + 1) * CARD_COLS.length)) : all;
         int allowed = robots.limit(p);
         int shown = Math.min(agents.size(), RobotRules.MAX_AGENTS);
         Menu m = new Menu("forge", at);
+        m.page = page;
+        m.pages = pages;
         StationUi.Canvas title = new StationUi.Canvas().art(StationUi.Screen.FORGE);
         title.text("title", 40, "THE FORGE", 0xFFD9A0);
         title.pips(142, shown, RobotRules.MAX_AGENTS, StationUi.COUNT_ON, StationUi.COUNT_OFF, 8);
@@ -286,14 +305,15 @@ public final class BaseStation implements Listener {
                 Robots.Bot b = agents.get(i);
                 title.pips(CARD_X[i], b.tier, Robots.MAX_TIER, StationUi.PIP_ON, StationUi.PIP_OFF, 4);
                 title.text("gui_l1", CARD_X[i], "T " + Spawners.roman(b.tier), 0xFFD25E);
-                if (b.tier < Robots.MAX_TIER) {
+                if (b.tier < Robots.MAX_TIER && sandbox) title.text("gui_l2", CARD_X[i], "FREE", 0x7ED957);
+                else if (b.tier < Robots.MAX_TIER) {
                     title.text("gui_l2", CARD_X[i], StationText.money(Robots.UP_MONEY[b.tier - 1]), 0x7ED957);
                     title.text("gui_l3", CARD_X[i], String.valueOf(Robots.UP_ESSENCE[b.tier - 1]), 0x9D7BFF);
                 } else title.text("gui_l2", CARD_X[i], "MAX", 0xFF7A1A);
             } else title.text("gui_l1", CARD_X[i], i < allowed ? "EMPTY" : "RANK", i < allowed ? 0x8A8078 : 0x6E3A1C);
         }
         title.text("gui_l4", 40, "HOPPERS", 0xFFD9A0);
-        title.text("gui_l4", 143, StationText.money(hoppers.price) + " EACH", 0x7ED957);
+        title.text("gui_l4", 143, sandbox ? "FREE" : StationText.money(hoppers.price) + " EACH", 0x7ED957);
         m.inv = Bukkit.createInventory(m, FORGE_SIZE, StationUi.art() ? title.done() : Ui.mm("<dark_gray>The Forge " + shown + "/" + RobotRules.MAX_AGENTS));
         if (!StationUi.art()) {
             ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
@@ -305,7 +325,7 @@ public final class BaseStation implements Listener {
                 m.inv.setItem(col, robots.forgeIcon(agents.get(i)));
                 for (int slot : new int[]{col, col + 9, col + 18}) m.agents.put(slot, agents.get(i).id);
             } else m.inv.setItem(col, i < allowed
-                    ? Ui.item(Material.LIGHT_GRAY_DYE, "<gray><bold>Empty Slot", "<gray>Get an agent at <white>/agents<gray> and place it.")
+                    ? Ui.item(Material.LIGHT_GRAY_DYE, "<gray><bold>Empty Slot", sandbox ? "<gray>Take an agent from the Agents chest and place it." : "<gray>Get an agent at <white>/agents<gray> and place it.")
                     : Ui.item(Material.IRON_BARS, "<dark_gray><bold>Locked", "<gray>Ranks unlock more agents, up to <white>" + RobotRules.MAX_AGENTS + "<gray>."));
         }
         m.inv.setItem(HOPPER_INFO, Ui.item(Material.HOPPER, "<gold><bold>Hopper Tiers",
@@ -313,6 +333,7 @@ public final class BaseStation implements Listener {
                 "<gray>Tier II: <white>" + hoppers.rate(2) + "<gray> a second, takes <white>" + hoppers.needed(1) + "<gray> upgrade",
                 "<gray>Tier III: <white>" + hoppers.rate(3) + "<gray> a second, takes <white>" + hoppers.needed(2) + "<gray> upgrades",
                 "", "<dark_gray>Sneak and right-click a hopper to apply"));
+        if (pages > 1) m.inv.setItem(NEXT_PAGE, Ui.item(Material.ARROW, "<yellow><bold>Next Agents", "<gray>Page <white>" + (page + 1) + "<gray> of <white>" + pages));
         m.inv.setItem(BUY_SLOTS[0], buyIcon(1));
         m.inv.setItem(BUY_SLOTS[1], buyIcon(10));
         p.openInventory(m.inv);
@@ -322,7 +343,7 @@ public final class BaseStation implements Listener {
         ItemStack it = HopperUpgrades.upgradeItem();
         it.setAmount(n);
         it.editMeta(m -> m.lore(List.of(
-                Ui.mm("<green>" + NetEconomy.money((double) hoppers.price * n) + " <dark_gray>+ <#9d7bff>" + (hoppers.essence * n) + " Mob Essence"),
+                Ui.mm(sandbox ? "<green>Free in the Foundry" : "<green>" + NetEconomy.money((double) hoppers.price * n) + " <dark_gray>+ <#9d7bff>" + (hoppers.essence * n) + " Mob Essence"),
                 Ui.mm("<yellow>Click to buy " + n))));
         return it;
     }
@@ -342,11 +363,12 @@ public final class BaseStation implements Listener {
         // the station can be broken, or the player's access lost, while a menu stays open
         if (!isStation(m.at.getBlock()) || !access.test(p, m.at)) { p.closeInventory(); return; }
         int slot = e.getRawSlot();
+        if (slot == NEXT_PAGE && m.pages > 1) { forge(p, m.at, m.page + 1); return; }
         if (slot == BUY_SLOTS[0] || slot == BUY_SLOTS[1]) { buyUpgrades(p, slot == BUY_SLOTS[0] ? 1 : 10); return; }
         String id = m.agents.get(slot);
         if (id == null) return;
         robots.upgradeFromStation(p, id);
-        forge(p, m.at);
+        forge(p, m.at, m.page);
     }
 
     private void buyUpgrades(Player p, int n) {

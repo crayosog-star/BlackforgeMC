@@ -29,6 +29,23 @@ class FoundryRulesTest {
         assertTrue(FoundryZone.MIN_CHUNK_Z * 16 <= FoundryZone.MIN_Z);
     }
 
+    @Test void everyBenchIsOnTheIsland() {
+        for (int[] at : new int[][]{{FoundryZone.FORGE_X, FoundryZone.FORGE_Z}, {FoundryZone.LANE_X + 1, FoundryZone.LANE_Z[0]}, {FoundryZone.LANE_X + 2, FoundryZone.LANE_Z[2]},
+                {FoundryZone.FARM_X1, FoundryZone.FARM_Z2}, {FoundryZone.FARM_X1, FoundryZone.FARM_Z1}, {FoundryZone.POND_X1, FoundryZone.POND_Z1}, {FoundryZone.MINE_X2, FoundryZone.MINE_Z},
+                {FoundryZone.PEN_X1, FoundryZone.PEN_Z1}, {FoundryZone.PEN_X2, FoundryZone.PEN_Z1}, {FoundryZone.SUPPLY_X[0], FoundryZone.SUPPLY_Z}, {FoundryZone.SUPPLY_X[4], FoundryZone.SUPPLY_Z}})
+            assertTrue(Math.hypot(at[0] - FoundryZone.ISLAND_X, at[1] - FoundryZone.ISLAND_Z) < FoundryZone.ISLAND_R - 1, at[0] + "," + at[1]);
+        assertTrue(FoundryZone.contains(FoundryZone.ISLAND_X - FoundryZone.ISLAND_R, FoundryZone.ISLAND_Z));
+        assertTrue(FoundryZone.contains(FoundryZone.ISLAND_X, FoundryZone.ISLAND_Z - FoundryZone.ISLAND_R));
+    }
+
+    @Test void supplyChestsAndMineWallAreFoundAtTheirSpots() {
+        assertEquals(2, FoundryZone.supplyAt(0, TestArenaBuilder.Y + 1, FoundryZone.SUPPLY_Z));
+        assertEquals(-1, FoundryZone.supplyAt(1, TestArenaBuilder.Y + 1, FoundryZone.SUPPLY_Z));
+        assertEquals(-1, FoundryZone.supplyAt(0, TestArenaBuilder.Y, FoundryZone.SUPPLY_Z));
+        assertTrue(FoundryZone.inMineWall(FoundryZone.MINE_X1, TestArenaBuilder.Y + 1, FoundryZone.MINE_Z));
+        assertFalse(FoundryZone.inMineWall(FoundryZone.MINE_X1, TestArenaBuilder.Y, FoundryZone.MINE_Z));
+    }
+
     @Test void onlyTheOwnerMayBreakAndTheIslandIsNobodys() {
         PlacedBlocks p = new PlacedBlocks();
         UUID a = UUID.randomUUID(), b = UUID.randomUUID();

@@ -100,7 +100,10 @@ public final class HopperUpgrades implements Listener {
     void setSandbox(int maxPerChunk) { this.sandbox = true; this.maxPerChunk = maxPerChunk; }
     boolean enabled() { return enabled; }
     int delay(int tier) { return delays[HopperTiers.clampTier(tier) - 1]; }
-    int needed(int tier) { return HopperTiers.upgradesToLeave(tier, needed); }
+    int needed(int tier) { return sandbox && tier < HopperTiers.MAX_TIER ? 1 : HopperTiers.upgradesToLeave(tier, needed); }
+
+    /** Sets a fixed test hopper's tier, if it isn't already. */
+    void applyTier(Block b, int tier) { if (tier > 1 && tierAt(b) != tier) setTier(b, tier); }
 
     // ------------------------------------------------------------------ items
 
@@ -117,7 +120,7 @@ public final class HopperUpgrades implements Listener {
         return it != null && it.hasItemMeta() && it.getItemMeta().getPersistentDataContainer().has(UPGRADE);
     }
 
-    private ItemStack hopperItem(int tier) {
+    ItemStack hopperItem(int tier) {
         ItemStack it = Ui.item(Material.HOPPER, "<gold><bold>Hopper Tier " + ROMAN[tier],
                 "<gray>Moves <white>" + rate(tier) + "<gray> items a second.", "<dark_gray>Keeps its tier when broken.");
         it.editMeta(m -> m.getPersistentDataContainer().set(TIER, PersistentDataType.INTEGER, tier));
@@ -219,7 +222,7 @@ public final class HopperUpgrades implements Listener {
         if (!access.test(p, b.getLocation())) { p.sendActionBar(Ui.mm("<red>You can only upgrade hoppers on your own land.")); return; }
         int tier = tierAt(b);
         if (tier >= HopperTiers.MAX_TIER) { p.sendActionBar(Ui.mm("<gold>This hopper is already Tier " + ROMAN[tier] + ".")); return; }
-        int need = sandbox ? 1 : needed(tier);
+        int need = needed(tier);
         int have = count(p);
         if (have < need) { p.sendActionBar(Ui.mm("<red>Tier " + ROMAN[tier + 1] + " takes " + need + " Hopper Upgrades. You have " + have + ".")); return; }
         if (tier == 1 && countInChunk(b) >= maxPerChunk) { p.sendActionBar(Ui.mm("<red>This chunk already has " + maxPerChunk + " upgraded hoppers.")); return; }
