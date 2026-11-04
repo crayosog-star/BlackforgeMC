@@ -1,6 +1,6 @@
 # Agent Academy
-**Status:** In progress: P1.T1 built, waiting on its live checks
-**Next task:** P1.T1
+**Status:** In progress: P1.T1 and P1.T2 built, both waiting on their live checks
+**Next task:** P1.T3 (P1.T1 and P1.T2 stay unticked until their checks pass; see Blockers log)
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -66,10 +66,11 @@ Checked against `origin/main` at `acadd54`. `S` means `plugins-src/BlackForgeCor
 - Each server keeps its own `robots.yml` in its plugin folder (`S/Robots.java`, constructor), so this feature needs no shared file or lock. Agent items can't leave Survival, because items don't move between servers.
 - `tools/backup.py:42` backs up the `plugins` folder, which includes `robots.yml`.
 - Menu art comes from `tools/gui_art.py` and `S/StationUi.java`. First-use tips use `hub/FoundryTips.java:52`.
+- Crate rewards run console commands (`S/Crates.java:303`). `robots give` builds an item with no record (`S/Robots.java`, command `give`), so crate, shop and Foundry Agents are fresh and get their record and UID when placed.
 - Test bots rely on Agent menu slots 11 and 17 (`tools/testbot/survival_robots.js:16`). This plan doesn't move them.
 
 **Unverified**
-- How crates hand out Agents. They should arrive with no record, which this plan treats as a fresh Agent. P1.T2 checks it.
+- Which crate rewards the live server has. The repo's default `crates.yml` lists no Agents, and the live file isn't in the repo. The Survival test bot reads `robots give {player} ...` reward commands from it (`tools/testbot/survival_robots.js:49-50`).
 - Whether the Forge and Agent menu art looks right with new icons in slots 35 and 14. P2.T2 checks it.
 - The default-config fallback described above. P1.T1 checks it on a live server.
 
@@ -162,7 +163,11 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Edge cases:** stacks of old items placed one at a time, an Agent in a world that isn't loaded (`pending` must keep its record), Foundry agents (records exist but aren't saved), restart between pickup and place, crash restoring a placed item.
 - **Done when:** on a test or live server, a staff member records: an old Agent keeps working after restart; picking up and placing keeps its UID in `robots.yml`; placing a second copy of a UID (staff-created with `/give` or by editing the test save) is refused. Old items still place.
 - **Leaves ready:** every Agent has a saved record for P1.T3.
-- **Evidence:**
+- **Evidence:** not ticked, because every **Done when** check needs a staff member on a running server.
+  - Crates (step 6): reward commands go through `robots give`, which builds an item with no record, so a crate Agent gets its record and UID when placed. The live `crates.yml` wasn't read.
+  - Verified: `Robots.java` parses under `javac` 21. It wasn't compiled against Paper, since Gradle isn't run locally.
+  - Untested: the automerge build, and everything in game: restart, pickup and place, duplicate refusal and old items.
+  - Note: `uidInUse` also checks Agents waiting for their world to load, so a copy can't be placed while the original is unloaded.
 
 ### [ ] P1.T3: Add the work signal and stat layer with no behaviour change
 - **Needs:** record on `Bot` from P1.T2; `S/Robots.java:370`, `388`, `403`, `423`, `464`, `496`, `531`, `548`.
@@ -427,8 +432,10 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 
 ## Blockers log
 - 2026-11-04, P1.T1 (open): rule 7 ticks a task in the same PR as its work, but two **Done when** checks need that PR merged first: the automerge build and the Survival startup log. The task stays unticked and **Next task** stays P1.T1. Colin to supply the startup log line; ticking then needs a small follow-up PR.
+- 2026-11-04, P1.T2 (open): needs a staff member's in-game checks; steps are in the PR. Colin chose to keep building Phase 1 meanwhile.
 
 ## Change log
+- 2026-11-04: Colin told the build to continue while P1.T1's live check is open, so P1.T2 and P1.T3 go ahead. The Phase 1 gate still has to pass before Phase 2.
 - 2026-11-04: plan written. Field Exams dropped and Survival-only scope set by Colin.
 - 2026-11-04: Colin approved the plan.
 
