@@ -2,11 +2,11 @@
 
 **Status**
 
-Design approved November 4, 2026. P1.T1 passed local review and staging. The feature branch is ready for the PR gate. Live deployment and later tasks remain pending.
+Design approved November 4, 2026. P1.T1 passed local review and staging. P1.T1 is verified for the merge gate. Live deployment and later tasks remain pending.
 
 **Next task**
 
-Finish **P1.T1 — Revalidate Base Station delivery after land changes** through a separately approved PR and merge. Recheck the current main integration, including the shared Forge and Foundry paths, before merging. Start P1.T2 only after P1.T1 merges.
+Start **P1.T2 — Reuse claim eligibility and report save outcomes** after verifying that P1.T1 has merged into upstream main.
 
 ## Rules of engagement
 
@@ -113,7 +113,7 @@ Keep existing YAML schemas and block tags. A targeted revert can restore the cla
 
 Approve after stale delivery is blocked, baseline trust and transfer checks pass or are explicitly triaged, and claim write failures leave durable and in-memory state consistent.
 
-#### [ ] P1.T1 — Revalidate Base Station delivery after land changes
+#### [x] P1.T1 — Revalidate Base Station delivery after land changes
 
 - **Needs** — Current main, approved ownership decision, and the staging fixture. Start by reproducing the old-owner delivery gap before patching.
 - **Files** — `BaseStation.java#stationFor,deliver,hasRoom`, Survival opt-in in `SurvivalModule.java`, focused verification alongside the plan entry.
@@ -131,7 +131,7 @@ Approve after stale delivery is blocked, baseline trust and transfer checks pass
   | Trust revoked with barrel open | Paper cancelled B's shift-click and two-slot drag and closed the barrel in both runs. The barrel kept all 6 diamonds and the 8 cursor sticks returned to B. |
   | Skyblock and Foundry | A's BentoBox island station and the real Foundry Forge each received 3 diamonds with zero fallback. |
 
-  Two connected headless clients exercised the command and inventory gestures. A local fixture supplied a counted stack through the production Agent delivery path. Agent job scheduling and a rendered client were outside this check. All three local runners exited 0. The later upstream Forge Allays changes were outside this staging run.
+  Two connected headless clients exercised the command and inventory gestures. A local fixture supplied a counted stack through the production Agent delivery path. Agent job scheduling and a rendered client were outside this check. All three local runners exited 0. After integrating upstream Forge Allays changes from main a9a9013, candidate a3d8026 compiled all 276 production sources and passed the same Survival ownership and trust-revocation checks, Skyblock delivery, and Foundry delivery on isolated Paper. All three runners exited 0. Integrated jar SHA-256 was A2B9147AA5B1F4CE26BD0C50AE9EAC04079A068ADA14567C8B6C36BDBE721CEC.
 
 #### [ ] P1.T2 — Reuse claim eligibility and report save outcomes
 
@@ -319,6 +319,7 @@ Colin approves the candidate, activation method and window after seeing the evid
 - 2026-11-04 — Created the five-phase, nine-task plan from pinned main and verified #90 ancestry.
 - 2026-11-04 — Colin approved the defaults. P1.T1 passed code review and local Survival, Skyblock and Foundry staging. The task stays open through the PR gate.
 - 2026-11-04 — Colin approved the full claim guide and one-time first-claim tip. Added the copy, trigger and staging checks to P2.T1.
+- 2026-11-04 — Resolved the P1.T1 wiring overlap with upstream Forge Allays and repeated the local staging checks before opening the PR.
 
 ## Later ideas
 
