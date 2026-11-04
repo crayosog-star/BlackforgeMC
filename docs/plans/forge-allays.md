@@ -1,6 +1,6 @@
 # Forge Allays
 **Status:** In progress. Approved by Colin on 2026-11-04 with the recommended defaults
-**Next task:** P1.T3
+**Next task:** P2.T1, which can't start until the Phase 1 gate is confirmed (rule 9; see Blockers log)
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -145,7 +145,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** a player leaving the Foundry; a server restart (the marker removes stragglers on entity load, using the pattern at `S/Robots.java:382`); a jukebox beside it; a held item.
 - **Done when:** the Phase 1 gate checks pass in game. If flight is visibly jerky or the allay can't be fully controlled, stop and record it in the Blockers log, because the design then needs Colin's decision.
 - **Leaves ready:** a controllable allay and `Allays` class.
-- **Evidence:**
+- **Evidence:** Verified: the `BlackForgeCore` build and strict walkcheck pass, so the Allay calls compile against the pinned Paper build, and all 7 `AllayFlightTest` tests pass. Untested: nobody has flown one in game yet, so this stays unticked until the Phase 1 gate is checked.
 
 ## Phase 2: Tier I, Gatherer (Foundry only)
 - **Goal:** in the Foundry, a player can summon a Gatherer in the Forge and watch it carry loose drops to the Station.
@@ -311,6 +311,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Blockers log
 | Date | Task | Problem | Decision |
 |---|---|---|---|
+| 2026-11-04 | Phase 1 gate | The in-game checks for P1.T2 and P1.T3 need a tester, so Phase 2 can't start (rule 9) | Waiting on Colin or a tester |
 
 ## Change log
 | Date | Change | Approved by |
