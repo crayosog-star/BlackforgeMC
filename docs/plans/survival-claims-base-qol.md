@@ -2,11 +2,11 @@
 
 **Status**
 
-Phase 1 tasks passed local staging. Phase 2 awaits the phase gate. Live deployment remains unverified.
+Phase 2 approved and underway. P2.T1 passed two-player staging. The Survival QoL flag remains off by default. Live deployment remains unverified.
 
 **Next task**
 
-After Colin confirms the Phase 1 gate, start **P2.T1 — Preview, confirm, and manage land in the existing commands** from fresh upstream main. Implement the approved claim guide and first eligible RTP tip as part of that task.
+Start **P2.T2 — Toggle nearby borders and explain denials** from fresh upstream main after verifying P2.T1 has landed.
 
 ## Rules of engagement
 
@@ -161,7 +161,7 @@ Disable the Survival QoL flag and restart through the approved process. Valid cl
 
 Two ordinary players complete first claim, expansion, trust and safe removal. Overlay cleanup and packet budgets pass.
 
-#### [ ] P2.T1 — Preview, confirm, and manage land in the existing commands
+#### [x] P2.T1 — Preview, confirm, and manage land in the existing commands
 
 - **Needs** — P1.T2 and approval of the command behavior.
 - **Files** — `Claims.java#command,show,map`, `SurvivalModule.java#registerCommands,reg,tryRtp,spawnHolograms`, config flag.
@@ -169,7 +169,7 @@ Two ordinary players complete first claim, expansion, trust and safe removal. Ov
 - **Edge cases** — `/claims`, namespaced aliases, stale link, quit/death/world change, another player wins the chunk, rank change, wrong chunk, exact negative chunk bounds, staff removing someone else's chunk, unclaiming a chunk with machines.
 - **Done when** — At staging spawn `/claim` explains the protected area and points to `/rtp`. After RTP, invoke `/claim` on free land and verify allowance and all four edges, with zero changes until confirm. Confirm once, then replay and verify exactly one saved claim. Open a different preview and replay the first link again. The new preview must remain pending. Cross into neighboring wilderness and confirm another chunk, checking allowance decrements once. Have B claim a previewed chunk first, then confirm as A and expect zero ownership changes. Test timed-out and cross-world confirmation, trust/untrust in two A-owned chunks, and both single and bulk unclaim aliases. Confirm bulk only after a fresh list if any claim changed. As a fresh player, open `/claim help` and follow the full guide. Cancel an RTP and simulate a target becoming claimed before arrival. Expect zero tips and onboarding still pending. Complete an eligible RTP and expect the short tip once. Repeat after reconnect and restart and expect no duplicate. Verify an established player and a newcomer who already made a claim receive no first-claim tip. Confirm the guide lists `/claim show` and `/claim map` before P2.T2, and adds `/claim borders` only when that toggle is available. With the flag off, verify legacy command behavior and no new tip.
 - **Leaves ready** — A complete command-only first-claim loop that requires neither a station nor a pack.
-- **Evidence** — Two-player command transcript, before/after counts, exact edge screenshots, save/reload evidence, and chat captures for the full guide and the first qualifying RTP.
+- **Evidence** — November 4, 2026, isolated Paper 26.3 build 222. Candidate c315a73 includes upstream 33bcdd7. Java 25 compiled all 280 production sources. Jar SHA-256 F3B03C9DE54F6D07CA405D96EBAA4C02C2C7C433883F013554147FAB0132DEF9. Two headless clients verified clickable confirmation actions, typed codes, negative-coordinate bounds, all four preview corners visible only to the claimant, one-chunk expansion and remaining allowance. Stale, replayed, expired, moved and cross-world requests were refused. A concurrent claimant won the chunk, trust changes worked, and single and bulk release required confirmation. A stale bulk snapshot was refused after an admin removed one chunk. Cancelled RTP and a landing claimed after target selection left the tip pending. The first eligible landing after reconnect showed it once. After restart, the existing claim loaded and the tip stayed dismissed. With the flag off, legacy help, immediate claim and unclaim, and RTP without the new tip all passed. Enabled, reload and disabled staging runners exited 0. The fixture used server commands and observed particle packets. No rendered client was used.
 
 ##### Approved `/claim help` guide
 
@@ -323,6 +323,7 @@ Colin approves the candidate, activation method and window after seeing the evid
 
 - 2026-11-04 — Colin authorized the direct main push for P1.T1. Integrated candidate 22ae1c4 on main dbe03d1 compiled all 280 production Java sources and passed the isolated Survival, Skyblock and Foundry staging matrix again.
 - 2026-11-04 — P1.T1 landed at e38c01f. P1.T2 passed the save failure, race, boundary and restart checks. Phase 2 stays at the approval gate.
+- 2026-11-04 — Colin approved Phase 2 and the P2.T1 push. Implemented and staged claim previews, confirmations, expanded help and the one-time eligible RTP tip behind the default-off Survival flag.
 
 ## Later ideas
 
