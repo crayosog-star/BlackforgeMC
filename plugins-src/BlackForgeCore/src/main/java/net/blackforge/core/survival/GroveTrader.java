@@ -129,6 +129,12 @@ final class GroveTrader implements Listener {
         return taken;
     }
 
+    /** Writes the day's totals. Sales made away from the menu call this now and then, not once a sale. */
+    void saveSales() {
+        for (String k : new ArrayList<>(data.getKeys(false))) if (!k.equals(String.valueOf(today()))) data.set(k, null);   // only today counts
+        try { data.save(file); } catch (Exception ex) { plugin.getLogger().warning("grove shop save: " + ex); }
+    }
+
     private Offer offerFor(Material m) {
         for (Offer o : offers) if (o.material() == m) return o;
         return null;
@@ -180,8 +186,7 @@ final class GroveTrader implements Listener {
 
     private void finish(Player p, double total) {
         if (total <= 0) { p.sendMessage(Ui.mm("<gray>You have nothing of that to sell.")); p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.8f, 1f); return; }
-        for (String k : new ArrayList<>(data.getKeys(false))) if (!k.equals(String.valueOf(today()))) data.set(k, null);   // only today counts
-        try { data.save(file); } catch (Exception ex) { plugin.getLogger().warning("grove shop save: " + ex); }
+        saveSales();
         p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_YES, 0.8f, 1.2f);
         p.sendMessage(Ui.mm("<green>Sold for <gold>" + NetEconomy.money(total) + "<green>."));
     }

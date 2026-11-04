@@ -1,6 +1,6 @@
 # Forge Allays
 **Status:** In progress. Approved by Colin on 2026-11-04 with the recommended defaults
-**Next task:** P4.T1, once the Phase 3 gate is confirmed (rule 9)
+**Next task:** P4.T2
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -239,7 +239,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** a sale crossing the soft cap mid-carry (handled by `payout`); midnight rollover; the owner logging out mid-trip (load returns); a full chest on return (drop into the Station); a sell chest beside a hopper (fine, since it's just a chest).
 - **Done when:** a unit test covers fee and the cap crossing. In the Foundry, the sell chest empties of catalog goods only and no balance changes.
 - **Leaves ready:** Tier III job on the Foundry.
-- **Evidence:**
+- **Evidence:** Verified: the fee and cap-crossing test passes when run alone, and the build runs before merge. Untested in game: all selling checks.
 
 ### [ ] P4.T2: Add saving and a staff preview on Survival
 - **Needs:** P4.T1; `S/BaseStation.java:403-423` as the save pattern; `S/SurvivalModule.java:162`.
@@ -316,6 +316,8 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | Phase 4 started after Colin said "looks great, keep going". He didn't list which checks he played, so the Phase 1-3 gates aren't recorded as individually confirmed | Colin, in chat |
+| 2026-11-04 | Added a sell chest to the Courier Bench so P4.T1 can be tested with no setup | Testing rule; flagged to Colin in the PR |
 | 2026-11-04 | Phase 3 started with the Phase 1 and 2 in-game gates still unplayed; those checks carry forward | Colin, in chat |
 | 2026-11-04 | Added a Courier Bench to P3.T1, so sorting can be tested with no setup. Fuel Cells are never sorted, so they stay for refuelling | Testing rule; flagged to Colin in the PR |
 | 2026-11-04 | Added allay naming with Name Tags, and an easter egg: an allay named Smoked Sausage flies upside down. P4.T2 must also save each allay's name | Colin, in chat |
