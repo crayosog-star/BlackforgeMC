@@ -188,6 +188,8 @@ allays:
   scan-seconds: 5                 # how often a base looks for work
   link-scan-seconds: 30           # how often a base looks for framed chests
   max-scans-per-tick: 4           # bases scanned per tick across the server
+  path-max-nodes: 2000            # blocks searched for a way round walls before it gives up and flies straight
+  max-path-searches-per-tick: 2   # across the server, so a busy moment means a short wait
   sell-fee: 0.10                  # Steward's cut of a sale
   sausage-flip: true              # an allay named Smoked Sausage flies upside down
 
