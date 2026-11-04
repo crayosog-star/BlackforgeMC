@@ -386,6 +386,44 @@ public final class Allays implements Listener {
         if (b != null) sleep(b);
     }
 
+    int sharedTier() {
+        Base b = sharedRegion == null ? null : bases.get(sharedRegion);
+        return b == null ? 0 : b.tier;
+    }
+
+    /** Sets the shared flock's tier for free, from /foundry. 0 sends it away. False if that would pass the Foundry's limit. */
+    boolean setSharedTier(UUID by, int tier) {
+        if (tier == 0) { resetShared(); return true; }
+        if (tier < 0 || tier > BUILT_TIER) return false;
+        int others = 0;
+        for (Base o : bases.values()) if (!shared(o)) others += o.workers.size();
+        if (others + table.flock(tier) > sandboxLimit) return false;
+        Base b = bases.get(sharedRegion);
+        if (b == null) { b = new Base(sharedRegion, by); bases.put(sharedRegion, b); }
+        else { sleep(b); b.workers.clear(); }
+        b.tier = tier;
+        b.lastScan = b.lastLinkScan = Long.MIN_VALUE / 2;
+        return true;
+    }
+
+    /** "Tier II Courier", and what it does. */
+    String tierText(int tier) { return tier == 0 ? "off" : "Tier " + Spawners.roman(tier) + " " + TIER_NAME[tier - 1] + ": " + TIER_JOB[tier - 1] + "."; }
+
+    /** The shared flock, for /foundry status. */
+    List<String> sharedStatus() {
+        Base b = sharedRegion == null ? null : bases.get(sharedRegion);
+        if (b == null) return List.of("<gray>Allays: <white>off <dark_gray>· <white>/foundry allays 1<gray> starts them");
+        Map<String, Integer> doing = new java.util.TreeMap<>();
+        int flying = 0, carrying = 0;
+        for (Worker w : b.workers) {
+            if (w.entity != null && w.entity.isValid()) flying++;
+            if (w.carried != null) carrying++;
+            doing.merge(w.state.name().toLowerCase(java.util.Locale.ROOT), 1, Integer::sum);
+        }
+        return List.of("<gray>Allays: <white>Tier " + Spawners.roman(b.tier) + " " + TIER_NAME[b.tier - 1] + "<gray>, <white>" + flying + "/" + table.flock(b.tier) + "<gray> flying, <white>" + carrying + "<gray> carrying " + doing,
+                "<gray>They see: <white>" + b.jobs.size() + "<gray> loose drops, <white>" + b.links.size() + "<gray> framed chests, <white>" + b.sellChests.size() + "<gray> sell chests, <white>" + b.thirsty.size() + "<gray> Agents low on fuel");
+    }
+
     private static double[] xyz(Location l) { return new double[]{l.getX(), l.getY(), l.getZ()}; }
 
     // ------------------------------------------------------------------ the entity

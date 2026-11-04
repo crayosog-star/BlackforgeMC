@@ -17,6 +17,7 @@ import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.ItemStack;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,6 +40,8 @@ public final class Foundry implements Listener {
     /** Players who stepped out, and when their test gets cleared if they don't come back. */
     private final Map<UUID, Long> outUntil = new HashMap<>();
     private final long graceMs;
+    private final Set<UUID> demoed = new HashSet<>();
+    private final ItemStack[] bar;
 
     public Foundry(BlackForgeCore plugin, TestArena arena) {
         this.plugin = plugin;
@@ -52,10 +55,13 @@ public final class Foundry implements Listener {
                 new Location(w, FoundryZone.FORGE_X, y + 1, FoundryZone.FORGE_Z),
                 new Location(w, (FoundryZone.PEN_X1 + FoundryZone.PEN_X2) / 2 + 0.5, y + 1, (FoundryZone.PEN_Z1 + FoundryZone.PEN_Z2) / 2 + 0.5), FoundryZone.PEN_MOBS,
                 new Location(w, 0.5, y + 7.5, FoundryZone.GATE_Z + 0.5), supply,
-                new Location(w, FoundryZone.ALLAY_BENCH_X + 0.5, y + 1, FoundryZone.ALLAY_BENCH_Z + 0.5)),
+                new Location(w, FoundryZone.ALLAY_BENCH_X + 0.5, y + 1, FoundryZone.ALLAY_BENCH_Z + 0.5), demoSpots(w)),
                 l -> l.getWorld() == w ? FoundryZone.supplyAt(l.getBlockX(), l.getBlockY(), l.getBlockZ()) : -1, this::inZone,
                 l -> FoundryZone.regionAt(l.getBlockX(), l.getBlockZ()), FoundryZone.SHARED_REGION,
                 (p, l) -> inZone(l) && (placed.owner(pos(l.getBlock())) == null || p.getUniqueId().equals(placed.owner(pos(l.getBlock())))));
+        this.bar = systems.hotbar();
+        arena.setFoundryKit(p -> inside.contains(p.getUniqueId()) && !builder(p), systems::hotbar, systems::extras);
+        new FoundryCommand(this, arena);
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getPluginManager().registerEvents(new FoundryTips(plugin, this::inZone), plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::poll, 20L, 5L);
@@ -63,6 +69,12 @@ public final class Foundry implements Listener {
             Location entry = new Location(arena.world(), FoundryZone.ENTRY_X, FoundryZone.ENTRY_Y, FoundryZone.ENTRY_Z, 180f, 0f);
             return inside.contains(p.getUniqueId()) && entry.clone().subtract(0, 1, 0).getBlock().getType().isSolid() ? entry : arena.spawn();
         });
+    }
+
+    private static Location[] demoSpots(org.bukkit.World w) {
+        Location[] out = new Location[FoundryZone.DEMO.length];
+        for (int i = 0; i < out.length; i++) out[i] = new Location(w, FoundryZone.DEMO[i][0], TestArenaBuilder.Y + 1, FoundryZone.DEMO[i][1]);
+        return out;
     }
 
     private boolean inZone(Location l) { return l.getWorld() == arena.world() && FoundryZone.contains(l.getX(), l.getZ()); }
@@ -83,8 +95,13 @@ public final class Foundry implements Listener {
             Long until = outUntil.get(id);
             if (now && !was) {
                 inside.add(id);
-                if (!builder(p)) p.setGameMode(GameMode.SURVIVAL);
-                p.sendMessage(net.blackforge.core.Ui.mm("<#ffb347><bold>The Foundry</bold> <dark_gray>· <gray>chests never run out and the Forge is free. Everything you place or carry from here goes when you leave."));
+                if (inside.size() == 1 && systems.allayTier() == 0) systems.setAllayTier(id, 1);
+                if (builder(p)) p.sendMessage(net.blackforge.core.Ui.mm("<gray>You're building in Creative, so blocks you place here stay. <white>/foundry start<gray> tests as a player."));
+                else {
+                    p.setGameMode(GameMode.SURVIVAL);
+                    arena.kit(p);
+                }
+                p.sendMessage(net.blackforge.core.Ui.mm("<#ffb347><bold>The Foundry</bold> <dark_gray>· <gray>chests never run out and the Forge is free. Everything you place or carry from here goes when you leave. <click:run_command:'/foundry'><white><u>/foundry</u></white></click><gray> lists every test command."));
             } else if (now && until != null) {
                 outUntil.remove(id);
                 if (!builder(p)) p.setGameMode(GameMode.SURVIVAL);
@@ -102,7 +119,61 @@ public final class Foundry implements Listener {
                     p.sendMessage(net.blackforge.core.Ui.mm("<gray>Your Foundry test was cleared."));
                 } else p.sendActionBar(net.blackforge.core.Ui.mm("<yellow>Back to the Foundry in <white>" + ((until - time) / 1000 + 1) + "s<yellow> to keep your test"));
             }
+            if (inside.contains(id) && !builder(p) && p.getItemOnCursor().getType().isAir()) restock(p);
         }
+    }
+
+    /** The hotbar's test tools come straight back when used. An empty slot stays free, so a hand can open the Forge's storage. */
+    private void restock(Player p) {
+        var inv = p.getInventory();
+        for (int i = 0; i < bar.length; i++) {
+            if (bar[i] == null) continue;
+            ItemStack now = inv.getItem(i);
+            if (now == null || now.getType().isAir()) inv.setItem(i, bar[i].clone());
+        }
+    }
+
+    // ------------------------------------------------------------------ what /foundry uses
+
+    FoundrySystems systems() { return systems; }
+    boolean testing(Player p) { return inside.contains(p.getUniqueId()) && arena.inArena(p); }
+    int testers() { return inside.size(); }
+
+    void tell(String text) {
+        for (UUID id : inside) {
+            Player p = Bukkit.getPlayer(id);
+            if (p != null) p.sendMessage(net.blackforge.core.Ui.mm(text));
+        }
+    }
+
+    /** Starts a test for anyone in the Arena, including staff in Creative: they test as a player does. */
+    void begin(Player p) {
+        p.teleport(new Location(arena.world(), FoundryZone.ENTRY_X, FoundryZone.ENTRY_Y, FoundryZone.ENTRY_Z, 180f, 0f));
+        p.setFallDistance(0);
+        p.setGameMode(GameMode.SURVIVAL);
+        p.setFlying(false);
+        p.setAllowFlight(false);
+        inside.add(p.getUniqueId());
+        outUntil.remove(p.getUniqueId());
+        arena.kit(p);
+        if (systems.allayTier() == 0) systems.setAllayTier(p.getUniqueId(), 1);
+    }
+
+    /** False if there was nothing to stop. */
+    boolean end(Player p) {
+        if (!inside.contains(p.getUniqueId())) return false;
+        left(p);
+        p.teleport(arena.spawn());
+        p.setGameMode(GameMode.ADVENTURE);
+        arena.kit(p);
+        return true;
+    }
+
+    /** One set per test, so running it twice doesn't stack agents on the same spots. */
+    String demo(Player p) {
+        if (!demoed.add(p.getUniqueId())) return "<gray>Your demo agents are already running. <white>/foundry status<gray> shows them.";
+        int n = systems.demo(p);
+        return "<green>" + n + " demo agents placed at the benches. <gray>What they make goes to the Forge. <white>/foundry status<gray> shows where each one delivers.";
     }
 
     private void left(Player p) {
@@ -112,6 +183,7 @@ public final class Foundry implements Listener {
     }
 
     private void wipe(UUID who) {
+        demoed.remove(who);
         for (PlacedBlocks.Pos at : placed.removeAll(who)) {
             Block b = arena.world().getBlockAt(at.x(), at.y(), at.z());
             if (b.getState(false) instanceof Container c) c.getInventory().clear();

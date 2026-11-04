@@ -84,6 +84,20 @@ class FoundryRulesTest {
         assertEquals(FoundryZone.regionAt(FoundryZone.PLOT_X1, FoundryZone.PLOT_Z1), FoundryZone.regionAt(FoundryZone.PLOT_X1 + 1, FoundryZone.PLOT_Z1 + 1));
     }
 
+    @Test void everyTeleportSpotIsOpenFloorOnTheIsland() {
+        for (var e : FoundryZone.SPOTS.entrySet()) {
+            int x = e.getValue()[0], z = e.getValue()[1];
+            assertTrue(Math.hypot(x - FoundryZone.ISLAND_X, z - FoundryZone.ISLAND_Z) < FoundryZone.ISLAND_R - 1, e.getKey());
+            assertNull(FoundryZone.benchAt(x, TestArenaBuilder.Y + 1, z), e.getKey());
+        }
+    }
+
+    @Test void demoAgentsStandBesideTheirBenches() {
+        assertEquals(4, FoundryZone.DEMO.length);
+        for (int[] at : FoundryZone.DEMO) assertNull(FoundryZone.benchAt(at[0], TestArenaBuilder.Y + 1, at[1]), at[0] + "," + at[1]);
+        assertTrue(FoundryZone.inMineWall(FoundryZone.DEMO[0][0], TestArenaBuilder.Y + 1, FoundryZone.DEMO[0][1] - 1), "the Miner faces the wall");
+    }
+
     @Test void onlyTheOwnerMayBreakAndTheIslandIsNobodys() {
         PlacedBlocks p = new PlacedBlocks();
         UUID a = UUID.randomUUID(), b = UUID.randomUUID();

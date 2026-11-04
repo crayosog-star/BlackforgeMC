@@ -174,6 +174,9 @@ public final class BaseStation implements Listener {
         return null;
     }
 
+    /** Would an agent here deliver to a station? */
+    boolean delivers(Location agentAt) { return stationFor(agentAt) != null; }
+
     /** Puts what fits in the station. Returns what's left, or null if it all went in. */
     ItemStack deliver(Location agentAt, ItemStack item) {
         Barrel b = stationFor(agentAt);

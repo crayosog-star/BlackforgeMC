@@ -238,7 +238,7 @@ public final class TestArena implements Listener {
         wallHolo = Ui.hologram(new Location(world, TestArenaBuilder.WALL_X + 1.6, TestArenaBuilder.Y + 10.2, 0.5), "", 1.4f);
         spawnHolo = Ui.hologram(new Location(world, TestArenaBuilder.SPAWN_X, TestArenaBuilder.Y + 3.4, TestArenaBuilder.SPAWN_Z - 3),
                 "<gradient:#7bd88f:#2e9e5b><bold>THE ARENA</bold></gradient><newline><gray>Test your gear on the <white>dummy"
-                        + "<newline><gray>Pull and knock around the <red>practice zombie <gray>(east)<newline><gray>Grab new items from the <light_purple>showcase wall <gray>(west)<newline><gray>Flip the <white>lever <gray>to armour the dummy<newline><gray>Run north past the targets for <#ffb347>the Foundry<newline><gray>/arena kit <dark_gray>· <gray>/hub to leave", 1.1f);
+                        + "<newline><gray>Pull and knock around the <red>practice zombie <gray>(east)<newline><gray>Grab new items from the <light_purple>showcase wall <gray>(west)<newline><gray>Flip the <white>lever <gray>to armour the dummy<newline><#ffb347>/foundry start <gray>tests agents, hoppers and allays<newline><gray>/arena kit <dark_gray>· <gray>/hub to leave", 1.1f);
         armorHolo = Ui.hologram(new Location(world, TestArenaBuilder.LEVER_X + 0.5, TestArenaBuilder.LEVER_Y + 0.9, TestArenaBuilder.LEVER_Z + 0.5), "", 0.8f);
         archeryHolo = Ui.hologram(new Location(world, 0.5, TestArenaBuilder.Y + 4.4, TestArenaBuilder.TARGET_Z + 0.5), "", 1.1f);
         for (TextDisplay td : List.of(dummyHolo, wallHolo, spawnHolo, armorHolo, archeryHolo)) mark(td);
@@ -408,14 +408,55 @@ public final class TestArena implements Listener {
         p.setAllowFlight(p.getGameMode() == GameMode.CREATIVE);
         kit(p);
         p.sendMessage(Ui.mm("<#7bd88f><bold>Arena test items</bold> <dark_gray>· <gray>they never run out here"));
+        p.sendMessage(Ui.mm("<#ffb347>Agents, hoppers and allays: <click:run_command:'/foundry start'><white><u>/foundry start</u></white></click> <dark_gray>· <click:run_command:'/foundry'><white><u>/foundry</u></white></click> <gray>lists every test command"));
         if (p.hasPermission("blackforge.admin"))
-            p.sendMessage(Ui.mm("<gray>Staff: <white>/jbello /gaia /darkness /surge /lastrite /rimelock /godseye /chain /bonfire /emp /nightrend <gray>give one each · Surge has no cooldown here"));
+            p.sendMessage(Ui.mm("<gray>Staff: <white>/jbello /gaia /darkness /surge /lastrite /rimelock /godseye /chain /bonfire /emp /nightrend /basestation /hopperupgrade <gray>give one each · Surge has no cooldown here"));
         p.showTitle(Title.title(Ui.mm("<gradient:#7bd88f:#2e9e5b><bold>THE ARENA</bold></gradient>"), Ui.mm("<gray>Break things. Responsibly."),
                 Title.Times.times(Duration.ofMillis(250), Duration.ofSeconds(2), Duration.ofMillis(600))));
         p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.2f);
     }
 
+    private java.util.function.Predicate<Player> foundryKitFor = p -> false;
+    private java.util.function.Supplier<ItemStack[]> foundryBar, foundryExtras;
+    /** Where each test item sits in the Foundry's kit, so refills go back to the same place. */
+    private int[] foundrySlots;
+
+    /** Who gets the Foundry's test tools on the hotbar instead of the combat kit, and what those tools are. */
+    void setFoundryKit(java.util.function.Predicate<Player> who, java.util.function.Supplier<ItemStack[]> hotbar, java.util.function.Supplier<ItemStack[]> extras) {
+        this.foundryKitFor = who; this.foundryBar = hotbar; this.foundryExtras = extras;
+    }
+
+    /** The test tools on the hotbar. Every test item is still here and still refills, in the rows above. */
+    private void foundryKit(Player p) {
+        var inv = p.getInventory();
+        inv.clear();
+        ItemStack[] bar = foundryBar.get();
+        for (int i = 0; i < bar.length; i++) if (bar[i] != null) inv.setItem(i, bar[i]);
+        int[] slots = new int[testItems.size()];
+        int next = 9;
+        for (int i = 0; i < slots.length; i++) {
+            TestItem t = testItems.get(i);
+            slots[i] = -1;
+            if (t.offHand()) { inv.setItemInOffHand(t.make().get()); continue; }
+            for (int s = 0; s < bar.length && slots[i] < 0; s++) if (bar[s] != null && t.is().test(bar[s])) slots[i] = s;
+            if (slots[i] >= 0) continue;
+            slots[i] = next++;
+            inv.setItem(slots[i], t.make().get());
+        }
+        for (ItemStack extra : foundryExtras.get()) inv.setItem(next++, extra);
+        foundrySlots = slots;
+        inv.setItem(8, leaveItem());
+        inv.setHeldItemSlot(0);
+    }
+
+    private ItemStack leaveItem() {
+        ItemStack leave = Ui.item(Material.RED_BED, "<red><bold>Back to the Hub</bold> <gray>(right-click)");
+        leave.editMeta(m -> m.getPersistentDataContainer().set(leaveKey, PersistentDataType.BYTE, (byte) 1));
+        return leave;
+    }
+
     public void kit(Player p) {
+        if (foundryKitFor.test(p)) { foundryKit(p); return; }
         var inv = p.getInventory();
         inv.clear();
         // only the BlackForgeMC test items, in the order they were added: the hotbar first, then the top inventory row
@@ -425,9 +466,7 @@ public final class TestArena implements Listener {
             if (t.offHand()) inv.setItemInOffHand(t.make().get());
             else inv.setItem(kitSlot(i), t.make().get());
         }
-        ItemStack leave = Ui.item(Material.RED_BED, "<red><bold>Back to the Hub</bold> <gray>(right-click)");
-        leave.editMeta(m -> m.getPersistentDataContainer().set(leaveKey, PersistentDataType.BYTE, (byte) 1));
-        inv.setItem(8, leave);
+        inv.setItem(8, leaveItem());
         inv.setHeldItemSlot(0);
     }
 
@@ -863,8 +902,10 @@ public final class TestArena implements Listener {
         for (Player p : world.getPlayers()) {
             if (p.isDead()) continue;
             var inv = p.getInventory();
+            boolean foundry = foundryKitFor.test(p) && foundrySlots != null;
             for (int i = 0; i < testItems.size(); i++) {
                 TestItem t = testItems.get(i);
+                int home = foundry && foundrySlots[i] >= 0 ? foundrySlots[i] : kitSlot(i);
                 if (t.is().test(p.getItemOnCursor())) continue;
                 int at = -1;
                 for (int s = 0; s < inv.getSize() && at < 0; s++) { ItemStack it = inv.getItem(s); if (it != null && t.is().test(it)) at = s; }
@@ -872,7 +913,7 @@ public final class TestArena implements Listener {
                 ItemStack fresh = t.make().get();
                 if (at >= 0) inv.setItem(at, fresh);                          // worn: swap for a fresh one in place
                 else if (t.offHand() && inv.getItemInOffHand().getType().isAir()) inv.setItemInOffHand(fresh);
-                else if (inv.getItem(kitSlot(i)) == null || inv.getItem(kitSlot(i)).getType().isAir()) inv.setItem(kitSlot(i), fresh);
+                else if (inv.getItem(home) == null || inv.getItem(home).getType().isAir()) inv.setItem(home, fresh);
                 else inv.addItem(fresh);
                 if (at < 0) p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_STEP, 0.35f, 1.8f);
             }
