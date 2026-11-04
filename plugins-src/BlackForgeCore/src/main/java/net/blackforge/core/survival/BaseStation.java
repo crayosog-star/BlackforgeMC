@@ -250,6 +250,7 @@ public final class BaseStation implements Listener {
     public void onOpen(PlayerInteractEvent e) {
         if (e.getAction() != Action.RIGHT_CLICK_BLOCK || !isStation(e.getClickedBlock())) return;
         if (e.getPlayer().isSneaking() && e.getItem() != null) return;   // building against it
+        if (OwnerView.viewing(e.getPlayer(), e.getClickedBlock().getLocation())) return;   // OwnerView shows its storage read-only
         e.setCancelled(true);
         if (e.getHand() != EquipmentSlot.HAND) return;
         Player p = e.getPlayer();
