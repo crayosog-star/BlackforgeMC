@@ -36,6 +36,19 @@ public final class FoundryZone {
     /** Grinder bench: a fenced pen of mobs. */
     public static final int PEN_X1 = -5, PEN_X2 = 5, PEN_Z1 = -90, PEN_Z2 = -80, PEN_MOBS = 4;
 
+    /** The Build Plot: open floor for your own Base Station, in squares of 8 so each square is its own little base. */
+    public static final int PLOT_X1 = 3, PLOT_X2 = 15, PLOT_Z1 = -79, PLOT_Z2 = -68;
+    /** Everywhere else on the island is one base: the shared Forge's. */
+    public static final String SHARED_REGION = "foundry";
+
+    public static boolean inPlot(int x, int z) { return x >= PLOT_X1 && x <= PLOT_X2 && z >= PLOT_Z1 && z <= PLOT_Z2; }
+
+    /** Which base this spot counts as part of, or null outside the Foundry. */
+    public static String regionAt(int x, int z) {
+        if (!contains(x, z)) return null;
+        return inPlot(x, z) ? SHARED_REGION + ":plot:" + (x >> 3) + ":" + (z >> 3) : SHARED_REGION;
+    }
+
     public static boolean inMineWall(int x, int y, int z) {
         return z == MINE_Z && x >= MINE_X1 && x <= MINE_X2 && y > TestArenaBuilder.Y && y <= TestArenaBuilder.Y + MINE_HEIGHT;
     }

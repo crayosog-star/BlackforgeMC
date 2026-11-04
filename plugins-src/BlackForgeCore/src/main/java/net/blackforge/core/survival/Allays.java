@@ -86,6 +86,8 @@ public final class Allays implements Listener {
     private static final String FLIP_NAME = "Dinnerbone";
     private static final int NAME_REACH = 8;
     private static final int DRAIN_REACH = 20;
+    /** Every bench on the Foundry's island, so refuelling can be tried at any of them. */
+    private static final int SHARED_FUEL_REACH = 40;
     private static final long DRAIN_TO_MS = 60_000L;
     private static final double TAG_HEIGHT = 0.9;
     private static final int SAVE_TICKS = 1200, GRAB_HOLD_TICKS = 6;
@@ -174,6 +176,9 @@ public final class Allays implements Listener {
     private Robots robots;
     private GroveTrader trader;
     private Function<String, UUID> ownerOf;
+    /** The Foundry's Forge: its flock belongs to the island, not to whoever got there first. */
+    private String sharedRegion;
+    private java.util.function.Supplier<UUID> sharedOwner = () -> null;
     private final double sellFee;
     private final boolean enabled, previewStaff, customSkins;
     private final ItemStack[][] skinItems = buildSkinItems();
@@ -215,6 +220,8 @@ public final class Allays implements Listener {
     void setTrader(GroveTrader t) { this.trader = t; }
     /** Who a region's sales pay. Without this, the Foundry's case, it's whoever bought the upgrade. */
     void setOwnerOf(Function<String, UUID> rule) { this.ownerOf = rule; }
+    void setShared(String region, java.util.function.Supplier<UUID> owner) { this.sharedRegion = region; this.sharedOwner = owner; }
+    private boolean shared(Base b) { return b.region.equals(sharedRegion); }
 
     private static AllayRules.Table table(org.bukkit.configuration.file.FileConfiguration c) {
         AllayRules.Table d = AllayRules.Table.DEFAULT;
@@ -367,10 +374,16 @@ public final class Allays implements Listener {
     /** The Foundry, when someone leaves: their purchases go with them. */
     void clear(UUID buyer) {
         bases.values().removeIf(b -> {
-            if (!b.buyer.equals(buyer)) return false;
+            if (!b.buyer.equals(buyer) || shared(b)) return false;
             sleep(b);
             return true;
         });
+    }
+
+    /** The island is empty: the shared flock goes, and the next tester starts fresh. */
+    void resetShared() {
+        Base b = sharedRegion == null ? null : bases.remove(sharedRegion);
+        if (b != null) sleep(b);
     }
 
     private static double[] xyz(Location l) { return new double[]{l.getX(), l.getY(), l.getZ()}; }
@@ -820,7 +833,10 @@ public final class Allays implements Listener {
 
     // ------------------------------------------------------------------ selling
 
-    private UUID owner(Base b) { return ownerOf == null ? b.buyer : ownerOf.apply(b.region); }
+    private UUID owner(Base b) {
+        if (shared(b)) return sharedOwner.get();
+        return ownerOf == null ? b.buyer : ownerOf.apply(b.region);
+    }
 
     private static boolean plain(ItemStack it) { return it != null && !it.getType().isAir() && it.isSimilar(new ItemStack(it.getType())); }
 
@@ -1081,7 +1097,7 @@ public final class Allays implements Listener {
         }
         b.thirsty.clear();
         if (robots != null && AllayRules.canRefuel(b.tier))
-            for (Robots.Bot agent : robots.agentsNear(at, leash, sandbox ? b.buyer : null))
+            for (Robots.Bot agent : robots.agentsNear(at, shared(b) ? Math.max(leash, SHARED_FUEL_REACH) : leash, sandbox && !shared(b) ? b.buyer : null))
                 if (inBase(agent.loc, b.region) && robots.wantsFuel(agent)) b.thirsty.add(agent);
     }
 

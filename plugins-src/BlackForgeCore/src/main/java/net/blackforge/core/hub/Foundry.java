@@ -18,14 +18,17 @@ import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
 /**
- * The Foundry's rules: inside its bounds you're in Survival and can build, only you can break what you placed, and
- * leaving takes away everything you placed, your agents and anything you picked up in there. Fall damage, hunger and
- * PvP stay off (LobbyRules and TestArena.onPvp).
+ * The Foundry's rules: inside its bounds you're in Survival and can build, and only you can break what you placed.
+ * Leaving takes away everything you placed, your agents and anything you picked up in there, but stepping out gives you
+ * a short grace period first, so a knockback or a walk to the bridge doesn't cost you a test. Leaving the Arena is
+ * immediate. Fall damage, hunger and PvP stay off (LobbyRules and TestArena.onPvp).
  */
 public final class Foundry implements Listener {
     private final BlackForgeCore plugin;
@@ -33,10 +36,14 @@ public final class Foundry implements Listener {
     private final PlacedBlocks placed = new PlacedBlocks();
     private final Set<UUID> inside = new HashSet<>();
     private final FoundrySystems systems;
+    /** Players who stepped out, and when their test gets cleared if they don't come back. */
+    private final Map<UUID, Long> outUntil = new HashMap<>();
+    private final long graceMs;
 
     public Foundry(BlackForgeCore plugin, TestArena arena) {
         this.plugin = plugin;
         this.arena = arena;
+        this.graceMs = Math.max(0, plugin.getConfig().getInt("foundry.leave-grace-seconds", 15)) * 1000L;
         org.bukkit.World w = arena.world();
         int y = TestArenaBuilder.Y;
         Location[] supply = new Location[FoundryZone.SUPPLY_X.length];
@@ -47,6 +54,7 @@ public final class Foundry implements Listener {
                 new Location(w, 0.5, y + 7.5, FoundryZone.GATE_Z + 0.5), supply,
                 new Location(w, FoundryZone.ALLAY_BENCH_X + 0.5, y + 1, FoundryZone.ALLAY_BENCH_Z + 0.5)),
                 l -> l.getWorld() == w ? FoundryZone.supplyAt(l.getBlockX(), l.getBlockY(), l.getBlockZ()) : -1, this::inZone,
+                l -> FoundryZone.regionAt(l.getBlockX(), l.getBlockZ()), FoundryZone.SHARED_REGION,
                 (p, l) -> inZone(l) && (placed.owner(pos(l.getBlock())) == null || p.getUniqueId().equals(placed.owner(pos(l.getBlock())))));
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getPluginManager().registerEvents(new FoundryTips(plugin, this::inZone), plugin);
@@ -69,22 +77,37 @@ public final class Foundry implements Listener {
     /** A poll rather than move events, so teleports, knockback and abilities all count. */
     private void poll() {
         for (Player p : arena.world().getPlayers()) {
-            boolean now = inZone(p.getLocation()), was = inside.contains(p.getUniqueId());
-            if (now == was || p.isDead()) continue;
-            if (now) {
-                inside.add(p.getUniqueId());
+            UUID id = p.getUniqueId();
+            if (p.isDead()) continue;
+            boolean now = inZone(p.getLocation()), was = inside.contains(id);
+            Long until = outUntil.get(id);
+            if (now && !was) {
+                inside.add(id);
                 if (!builder(p)) p.setGameMode(GameMode.SURVIVAL);
                 p.sendMessage(net.blackforge.core.Ui.mm("<#ffb347><bold>The Foundry</bold> <dark_gray>· <gray>chests never run out and the Forge is free. Everything you place or carry from here goes when you leave."));
-            } else {
-                left(p);
-                if (!builder(p)) p.setGameMode(GameMode.ADVENTURE);
-                arena.kit(p);
+            } else if (now && until != null) {
+                outUntil.remove(id);
+                if (!builder(p)) p.setGameMode(GameMode.SURVIVAL);
+                p.sendActionBar(net.blackforge.core.Ui.mm("<green>Back in the Foundry. Your test is still running."));
+            } else if (!now && was) {
+                long time = System.currentTimeMillis();
+                if (until == null) {
+                    outUntil.put(id, time + graceMs);
+                    if (!builder(p)) p.setGameMode(GameMode.ADVENTURE);   // no building out here, and the wipe waits
+                    p.sendMessage(net.blackforge.core.Ui.mm("<yellow>You stepped out of the Foundry. <gray>Come back within <white>" + graceMs / 1000 + " seconds<gray> or your builds, agents and Foundry items are cleared."));
+                } else if (time >= until) {
+                    left(p);
+                    if (!builder(p)) p.setGameMode(GameMode.ADVENTURE);
+                    arena.kit(p);
+                    p.sendMessage(net.blackforge.core.Ui.mm("<gray>Your Foundry test was cleared."));
+                } else p.sendActionBar(net.blackforge.core.Ui.mm("<yellow>Back to the Foundry in <white>" + ((until - time) / 1000 + 1) + "s<yellow> to keep your test"));
             }
         }
     }
 
     private void left(Player p) {
         inside.remove(p.getUniqueId());
+        outUntil.remove(p.getUniqueId());
         wipe(p.getUniqueId());
     }
 

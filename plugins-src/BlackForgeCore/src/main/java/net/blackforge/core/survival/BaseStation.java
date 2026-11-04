@@ -68,7 +68,8 @@ public final class BaseStation implements Listener {
     private final HopperUpgrades hoppers;
     private final File file;
     private final Map<String, Spot> stations = new HashMap<>();   // region -> station
-    private final int price, essence, radius;
+    private final int price, essence;
+    private int radius;
     private final boolean enabled;
     private BiPredicate<Player, Location> access = (p, l) -> false;
     private Function<Location, String> regionOf = l -> null;
@@ -98,6 +99,8 @@ public final class BaseStation implements Listener {
 
     void setAccess(BiPredicate<Player, Location> rule) { this.access = rule; }
     void setRegion(Function<Location, String> rule) { this.regionOf = rule; }
+    /** How far an agent can deliver from. The Foundry's benches are spread out across one shared base. */
+    void setRadius(int blocks) { this.radius = blocks; }
     void requireLiveDeliveryRegion() { requireLiveDeliveryRegion = true; }
     void setEconomy(Economy e) { this.eco = e; }
     void setAllays(Allays a) { this.allays = a; }
@@ -214,7 +217,7 @@ public final class BaseStation implements Listener {
         String region = regionOf.apply(l);
         String refuse = !enabled ? "<gray>Base Stations are switched off right now."
                 : region == null || !access.test(p, l) ? "<red>A Base Station can only go in your own claim or island."
-                : standing(region) ? "<red>This claim or island already has a Base Station." : null;
+                : standing(region) ? (sandbox ? "<red>In the Foundry, Base Stations go on the Build Plot, one per marked square." : "<red>This claim or island already has a Base Station.") : null;
         if (refuse == null) return;
         e.setCancelled(true);
         p.sendActionBar(Ui.mm(refuse));

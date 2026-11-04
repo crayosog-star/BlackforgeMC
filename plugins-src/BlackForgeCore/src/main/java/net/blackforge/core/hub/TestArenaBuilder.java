@@ -333,6 +333,7 @@ public final class TestArenaBuilder {
         foundryPond();
         foundryMine();
         foundryPen();
+        foundryPlot();
     }
 
     private void foundrySupply() {
@@ -386,6 +387,13 @@ public final class TestArenaBuilder {
         for (int x = FoundryZone.MINE_X1; x <= FoundryZone.MINE_X2; x++)
             for (int y = 1; y <= FoundryZone.MINE_HEIGHT; y++)
                 c.set(x, Y + y, FoundryZone.MINE_Z, "minecraft:" + ores[Math.floorMod(x * 3 + y * 5, ores.length)]);
+    }
+
+    /** Open floor for your own Base Station. The squares show which spots count as one base. */
+    private void foundryPlot() {
+        for (int x = FoundryZone.PLOT_X1; x <= FoundryZone.PLOT_X2; x++)
+            for (int z = FoundryZone.PLOT_Z1; z <= FoundryZone.PLOT_Z2; z++)
+                c.set(x, Y, z, (((x >> 3) + (z >> 3)) & 1) == 0 ? "minecraft:calcite" : "minecraft:polished_diorite");
     }
 
     private void foundryPen() {
