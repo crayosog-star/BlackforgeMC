@@ -72,6 +72,7 @@ public final class BaseStation implements Listener {
     private final boolean enabled;
     private BiPredicate<Player, Location> access = (p, l) -> false;
     private Function<Location, String> regionOf = l -> null;
+    private boolean requireLiveDeliveryRegion;
     private Economy eco;
 
     BaseStation(BlackForgeCore plugin, Robots robots, HopperUpgrades hoppers) { this(plugin, robots, hoppers, false); }
@@ -96,6 +97,7 @@ public final class BaseStation implements Listener {
 
     void setAccess(BiPredicate<Player, Location> rule) { this.access = rule; }
     void setRegion(Function<Location, String> rule) { this.regionOf = rule; }
+    void requireLiveDeliveryRegion() { requireLiveDeliveryRegion = true; }
     void setEconomy(Economy e) { this.eco = e; }
 
     // ------------------------------------------------------------------ items
@@ -156,8 +158,13 @@ public final class BaseStation implements Listener {
             if (!w.getName().equals(s.world())) continue;
             int dx = s.x() - at.getBlockX(), dy = s.y() - at.getBlockY(), dz = s.z() - at.getBlockZ();
             if (dx * dx + dy * dy + dz * dz > radius * radius || !w.isChunkLoaded(s.x() >> 4, s.z() >> 4)) continue;
-            if (en.getKey().equals(regionOf.apply(at)) && isStation(w.getBlockAt(s.x(), s.y(), s.z())))
-                return (Barrel) w.getBlockAt(s.x(), s.y(), s.z()).getState(false);
+            String region = en.getKey();
+            if (!region.equals(regionOf.apply(at))) continue;
+            Block block = w.getBlockAt(s.x(), s.y(), s.z());
+            if (!isStation(block)) continue;
+            // A marked barrel can outlive the claim it was placed in.
+            if (requireLiveDeliveryRegion && !region.equals(regionOf.apply(block.getLocation()))) continue;
+            return (Barrel) block.getState(false);
         }
         return null;
     }

@@ -162,6 +162,7 @@ public final class SurvivalModule implements Listener {
         station = new BaseStation(plugin, robots, hoppers);
         station.setAccess((p, l) -> p.hasPermission("blackforge.admin") || claims.ownerAt(l) != null && claims.canUse(p, l));
         station.setRegion(l -> { UUID stationOwner = claims.ownerAt(l); return stationOwner == null ? null : "claim:" + stationOwner; });
+        station.requireLiveDeliveryRegion();
         koth.setScrap(scrap);
         pvp.setScrap(scrap);
         borderSize = plugin.getConfig().getInt("rtp.border-size", 10000);
