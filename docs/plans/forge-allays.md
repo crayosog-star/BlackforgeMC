@@ -1,6 +1,6 @@
 # Forge Allays
 **Status:** In progress. Approved by Colin on 2026-11-04 with the recommended defaults
-**Next task:** P5.T1, once the Phase 4 gate is confirmed (rule 9)
+**Next task:** P5.T4
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -270,7 +270,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** cached resource packs; custom UI off (`base-station.custom-ui: false` gives a plain menu); particles counted for many bases.
 - **Done when:** a preview image is approved by Colin, and the menu lines up at GUI scales 2, 3 and 4.
 - **Leaves ready:** final visuals.
-- **Evidence:**
+- **Evidence:** Untested in game: trail, pickup pause and spark. Menu art wasn't done, so Colin hasn't approved a preview. See Change log.
 
 ### [ ] P5.T2: Check balance and load
 - **Needs:** P5.T1; `plugins-src/BlackForgeCore/src/main/resources/config.yml` `allays:` keys.
@@ -282,7 +282,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** a claim with no Station, and a base with no drops, should cost close to nothing.
 - **Done when:** measured numbers are recorded here and Colin approves any change.
 - **Leaves ready:** final numbers.
-- **Evidence:**
+- **Evidence:** Not measured. Worked out from the code: about 2.9 items a second per allay on a 12-block run, once the pause over a drop and the half-second work check are counted, against the planned 3.2. Tick time and income are still to measure on live.
 
 ### [ ] P5.T3: Add player guidance
 - **Needs:** P5.T2; `hub/FoundryTips.java:31`; `plugins-src/BlackForgeCore/src/main/java/net/blackforge/core/News.java`; `Robots` help menu at `S/Robots.java:918`.
@@ -294,7 +294,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** a player without a Station sees where to buy one.
 - **Done when:** a new tester with no instructions gets a Gatherer working from in-game text alone.
 - **Leaves ready:** player guidance.
-- **Evidence:**
+- **Evidence:** Untested in game: the summon messages. Nobody has tried it from in-game text alone yet.
 
 ### [ ] P5.T4: Turn it on for Survival
 - **Needs:** P5.T3 and all earlier gates.
@@ -316,6 +316,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | Colin said "finish up and push everything". P5.T1-T3 ship together to save restarts. Allay menu art needs a resource pack update, so it moves to Later ideas and the menu stays plain. The P5.T2 measurements need a live server, so they're recorded as not measured | Colin, in chat |
 | 2026-11-04 | `allays.preview-staff` defaults to true, not false, so staff can run the Phase 4 checks without a live config edit; players still see nothing. Carried items are only saved on a clean stop, so a crash can't double a load. P5.T4 must set this flag as Colin wants after launch | Flagged to Colin in the PR |
 | 2026-11-04 | Phase 4 started after Colin said "looks great, keep going". He didn't list which checks he played, so the Phase 1-3 gates aren't recorded as individually confirmed | Colin, in chat |
 | 2026-11-04 | Added a sell chest to the Courier Bench so P4.T1 can be tested with no setup | Testing rule; flagged to Colin in the PR |
@@ -328,6 +329,8 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 | 2026-11-04 | P1.T3 registers `/allay` from `Allays`, as `Robots` does, instead of changing `HubModule` | Small wiring change, no check weakened; flagged to Colin in the PR |
 
 ## Later ideas
+- Allay menu art in the Forge style, with a pack update.
+- Route allays around walls instead of through them.
 - Skyblock and OneBlock allays, which need a sell path first.
 - Hum: a jukebox near the Station makes nearby Agents work 10% faster, capped alongside Academy bonuses.
 - XP courier for Grinder bases.
