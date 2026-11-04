@@ -376,7 +376,7 @@ public final class SurvivalModule implements Listener {
                 return true;
             }
             @Override public List<String> tabComplete(CommandSender s, String alias, String[] args) {
-                if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "sundering", "koth", "pvp", "wild", "market", "smithy", "merchant", "wilds", "hall", "sell");
+                if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "sundering", "koth", "worldboss", "pvp", "wild", "market", "smithy", "merchant", "wilds", "hall", "sell");
                 if (name.equals("ah") && args.length == 1) return List.of("sell", "listings", "collect", "help");
                 if (name.equals("claim") && args.length == 1) return List.of("map", "show", "info", "list", "trust", "untrust", "unclaimall", "help");
                 return super.tabComplete(s, alias, args);
@@ -625,7 +625,7 @@ public final class SurvivalModule implements Listener {
 
     private void warp(Player p, String[] a) {
         if (a.length == 0) {
-            p.sendMessage(Ui.mm("<gold><bold>Warps</bold> <dark_gray>» <yellow>spawn <gray>• <yellow>crates <gray>• <yellow>sundering <gray>• <yellow>market <gray>• <yellow>smithy <gray>• <yellow>merchant <gray>• <yellow>wilds <gray>• <yellow>hall <gray>• <yellow>sell <gray>• <yellow>koth <gray>• <yellow>pvp <gray>• <yellow>wild"));
+            p.sendMessage(Ui.mm("<gold><bold>Warps</bold> <dark_gray>» <yellow>spawn <gray>• <yellow>crates <gray>• <yellow>sundering <gray>• <yellow>market <gray>• <yellow>smithy <gray>• <yellow>merchant <gray>• <yellow>wilds <gray>• <yellow>hall <gray>• <yellow>sell <gray>• <yellow>koth <gray>• <yellow>worldboss <gray>• <yellow>pvp <gray>• <yellow>wild"));
             p.sendMessage(Ui.mm("<gray>Use <white>/warp <name>"));
             return;
         }
@@ -636,6 +636,7 @@ public final class SurvivalModule implements Listener {
                 if (boss.arena().ready()) teleportSafe(p, boss.arena().plaza(), "The Sundering");
                 else p.sendMessage(Ui.mm("<gold>The Sundering's arena is still being built."));
             }
+            case "worldboss", "worldbosses", "graveyard" -> teleportSafe(p, new Location(world, 8000.5, 121, 8154.5, 180f, 0f), "the Dragon's Graveyard");
             case "koth", "arena" -> dropInto(p, koth.arrival(), "the KOTH arena - PvP is on!");
             case "pvp", "scrapyard" -> { dropInto(p, pvp.arrival(), "the Scrapyard - PvP is on!"); }
             case "market", "ah", "auction" -> teleportSafe(p, DistrictLife.marketWarp(world), "the market");
