@@ -126,7 +126,7 @@ public final class Robots implements Listener {
 
     /** The Arena's Foundry: upgrades are free, nothing is saved, there's no /agents shop, and only the owner can open an agent. */
     private final boolean sandbox;
-    private int sandboxPerPlayer, sandboxTotal;
+    private int sandboxPerPlayer, sandboxTotal, sandboxFishSeconds = 10;
     /** Logs what each Grinder does when that changes. On by default in the Foundry only. */
     private final boolean grinderLog;
 
@@ -146,6 +146,7 @@ public final class Robots implements Listener {
     }
 
     void setSandboxLimits(int perPlayer, int total) { this.sandboxPerPlayer = perPlayer; this.sandboxTotal = total; }
+    void setSandboxFishSeconds(int seconds) { this.sandboxFishSeconds = Math.max(1, seconds); }
 
     /** Removes this player's agents and whatever they held. */
     void removeOwnedBy(UUID owner) {
@@ -434,9 +435,11 @@ public final class Robots implements Listener {
             b.chargeCarry -= whole;
             b.timer++;   // only for the name tag refresh now
             b.workProgress += stats.speedMult();
-            if (b.workProgress >= stats.intervalSeconds()) {
+            // the Foundry's Fisherman would otherwise take minutes to show anything
+            int interval = sandbox && b.job == Job.FISHERMAN ? Math.min(stats.intervalSeconds(), sandboxFishSeconds) : stats.intervalSeconds();
+            if (b.workProgress >= interval) {
                 b.timer = 0;
-                b.workProgress %= stats.intervalSeconds();   // keeps a fraction, but one cycle at most after a job switch or idle time
+                b.workProgress %= interval;   // keeps a fraction, but one cycle at most after a job switch or idle time
                 try { work(b, g, stats); } catch (Exception ex) { plugin.getLogger().warning("robot " + b.id + " " + b.job + ": " + ex); }
             }
         }

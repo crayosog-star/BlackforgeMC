@@ -98,6 +98,29 @@ class FoundryRulesTest {
         assertTrue(FoundryZone.inMineWall(FoundryZone.DEMO[0][0], TestArenaBuilder.Y + 1, FoundryZone.DEMO[0][1] - 1), "the Miner faces the wall");
     }
 
+    @Test void aTierOneGrinderAgainstAnyFenceReachesAMob() {
+        double midX = (FoundryZone.PEN_X1 + FoundryZone.PEN_X2) / 2 + 0.5, midZ = (FoundryZone.PEN_Z1 + FoundryZone.PEN_Z2) / 2 + 0.5;
+        int reach = 2;
+        for (int[] s : FoundryZone.PEN_SPOTS) {   // inside the fence
+            assertTrue(midX + s[0] > FoundryZone.PEN_X1 + 1 && midX + s[0] < FoundryZone.PEN_X2, "x " + s[0]);
+            assertTrue(midZ + s[1] > FoundryZone.PEN_Z1 + 1 && midZ + s[1] < FoundryZone.PEN_Z2, "z " + s[1]);
+        }
+        for (int i = FoundryZone.PEN_X1; i <= FoundryZone.PEN_X2; i++) {   // the north and south sides, then east and west
+            assertTrue(reaches(i + 0.5, FoundryZone.PEN_Z2 + 1.5, midX, midZ, reach), "south at " + i);
+            assertTrue(reaches(i + 0.5, FoundryZone.PEN_Z1 - 0.5, midX, midZ, reach), "north at " + i);
+        }
+        for (int i = FoundryZone.PEN_Z1; i <= FoundryZone.PEN_Z2; i++) {
+            assertTrue(reaches(FoundryZone.PEN_X2 + 1.5, i + 0.5, midX, midZ, reach), "east at " + i);
+            assertTrue(reaches(FoundryZone.PEN_X1 - 0.5, i + 0.5, midX, midZ, reach), "west at " + i);
+        }
+    }
+
+    private static boolean reaches(double x, double z, double midX, double midZ, int reach) {
+        for (int[] s : FoundryZone.PEN_SPOTS)
+            if (Math.abs(midX + s[0] - x) <= reach && Math.abs(midZ + s[1] - z) <= reach) return true;
+        return false;
+    }
+
     @Test void onlyTheOwnerMayBreakAndTheIslandIsNobodys() {
         PlacedBlocks p = new PlacedBlocks();
         UUID a = UUID.randomUUID(), b = UUID.randomUUID();

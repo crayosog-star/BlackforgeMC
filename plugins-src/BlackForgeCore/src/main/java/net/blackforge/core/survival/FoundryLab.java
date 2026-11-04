@@ -12,6 +12,7 @@ import org.bukkit.block.Container;
 import org.bukkit.entity.Husk;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayDeque;
@@ -26,7 +27,7 @@ import java.util.function.Predicate;
  */
 final class FoundryLab {
     /** Where the hub's layout says everything is. */
-    record Layout(int[] laneZ, int laneX, int y, Location forge, Location penMobs, int mobs, Location title, Location[] supply, Location allayBench) {}
+    record Layout(int[] laneZ, int laneX, int y, Location forge, Location penMobs, int[][] mobs, Location title, Location[] supply, Location allayBench, int[] farm, FoundrySystems.Sign[] signs) {}
 
     private static final class Lane {
         final int tier; final Block source, hopper, sink; final Deque<Integer> counts = new ArrayDeque<>(); TextDisplay holo;
@@ -40,9 +41,11 @@ final class FoundryLab {
     private final Predicate<Location> zone;
     private final List<Lane> lanes = new ArrayList<>();
     private final List<TextDisplay> labels = new ArrayList<>();
-    private final List<Husk> mobs = new ArrayList<>();
+    private final Husk[] mobs;
     private final java.util.Random rnd = new java.util.Random();
     private final Runnable onEmpty;
+    private static final int WHEAT_SECONDS = 30;
+    private int wheatTimer;
     private boolean wasOccupied;
     private static final Material[] BENCH_ITEMS = {Material.COBBLESTONE, Material.WHEAT, Material.BONE, Material.ROTTEN_FLESH, Material.OAK_LOG, Material.RAW_IRON};
     private static final int BENCH_MAX = 6, BENCH_SECONDS = 5;
@@ -57,6 +60,7 @@ final class FoundryLab {
 
     FoundryLab(BlackForgeCore plugin, World world, HopperUpgrades hoppers, BaseStation station, Predicate<Location> zone, Layout layout, Runnable onEmpty) {
         this.onEmpty = onEmpty;
+        this.mobs = new Husk[layout.mobs().length];
         this.world = world; this.hoppers = hoppers; this.station = station; this.zone = zone; this.layout = layout;
         for (int i = 0; i < layout.laneZ().length; i++) {
             int z = layout.laneZ()[i], x = layout.laneX(), y = layout.y();
@@ -71,16 +75,41 @@ final class FoundryLab {
         if (labels.isEmpty()) spawnLabels();
         boolean occupied = false;
         for (Player p : world.getPlayers()) if (zone.test(p.getLocation())) occupied = true;
-        if (!occupied && layout.forge().getBlock().getState(false) instanceof Barrel b) b.getInventory().clear();   // shared storage, so it resets too
+        if (layout.forge().getBlock().getState(false) instanceof Barrel b) {
+            if (!occupied) b.getInventory().clear();   // shared storage, so it resets too
+            else if (b.getInventory().firstEmpty() < 0) clearGoods(b);   // a full Forge would stop every bench; a plot's own Station can still fill up
+        }
         if (wasOccupied && !occupied) onEmpty.run();
         wasOccupied = occupied;
         for (Lane l : lanes) runLane(l);
         runAllayBench(occupied);
         runCourierBench(occupied);
-        mobs.removeIf(m -> !m.isValid());
-        // spread out and standing still, so they stay in the pen and an agent placed beside one always reaches it
-        while (mobs.size() < layout.mobs()) mobs.add(world.spawn(layout.penMobs().clone().add(rnd.nextInt(7) - 3, 0, rnd.nextInt(7) - 3), Husk.class,
-                h -> { h.setPersistent(false); h.setRemoveWhenFarAway(false); h.setSilent(true); h.setAware(false); }));
+        if (occupied && ++wheatTimer >= WHEAT_SECONDS) { wheatTimer = 0; regrowWheat(); }
+        // along the inside of the fence and standing still, so an agent placed against any side always reaches one
+        for (int i = 0; i < mobs.length; i++) {
+            if (mobs[i] != null && mobs[i].isValid()) continue;
+            mobs[i] = world.spawn(layout.penMobs().clone().add(layout.mobs()[i][0], 0, layout.mobs()[i][1]), Husk.class,
+                    h -> { h.setPersistent(false); h.setRemoveWhenFarAway(false); h.setSilent(true); h.setAware(false); });
+        }
+    }
+
+    /** Keeps the Fuel Cells, since a Courier may be counting on them. */
+    private static void clearGoods(Barrel b) {
+        Inventory inv = b.getInventory();
+        for (int i = 0; i < inv.getSize(); i++) if (Robots.fuelTier(inv.getItem(i)) <= 0) inv.setItem(i, null);
+    }
+
+    /** Natural growth takes far too long for a test, so the Farm Bench ripens itself. */
+    private void regrowWheat() {
+        int[] f = layout.farm();
+        int y = layout.y();   // the floor's top is y - 1, and the wheat stands on it
+        for (int x = f[0]; x <= f[1]; x++) for (int z = f[2]; z <= f[3]; z++) {
+            Block b = world.getBlockAt(x, y, z);
+            if (b.getBlockData() instanceof org.bukkit.block.data.Ageable a && a.getAge() < a.getMaximumAge() && b.getType() == Material.WHEAT) {
+                a.setAge(a.getMaximumAge());
+                b.setBlockData(a);
+            }
+        }
     }
 
     /** Back to how it started: the Forge's storage, the courier chests, the drops, the counters and the pen. */
@@ -91,8 +120,8 @@ final class FoundryLab {
         benchDrops.forEach(org.bukkit.entity.Item::remove);
         benchDrops.clear();
         for (Lane l : lanes) l.counts.clear();
-        mobs.forEach(Husk::remove);
-        mobs.clear();
+        for (Husk m : mobs) if (m != null) m.remove();
+        regrowWheat();
     }
 
     /** What each lane is really moving, for /foundry status. */
@@ -136,6 +165,7 @@ final class FoundryLab {
                 courierFrames[i] = world.spawn(chest.getRelative(org.bukkit.block.BlockFace.SOUTH).getLocation(), org.bukkit.entity.ItemFrame.class, f -> {
                     f.setFacingDirection(org.bukkit.block.BlockFace.SOUTH, true);
                     f.setItem(shown, false);
+                    f.setFixed(true);   // part of the bench, so it can't be knocked off or turned
                     f.setPersistent(false);
                 });
             } catch (IllegalArgumentException ex) {
@@ -165,9 +195,10 @@ final class FoundryLab {
 
     private void spawnLabels() {
         label(layout.title(), "<gradient:#ffb347:#ff5a1a><bold>THE FOUNDRY</bold></gradient><newline><gray>Build and test anything<newline><dark_gray>It all goes when you leave", 1.3f);
-        label(layout.forge().clone().add(0.5, 2.3, 0.5), "<gold><bold>The Forge</bold><newline><gray>Upgrades are free here", 1f);
-        label(layout.allayBench().clone().add(COURIER_SPACING, 1.6, COURIER_Z_OFFSET), "<#4fd1b5><bold>Courier Bench</bold><newline><gray>Tier II sorts into these framed chests<newline><gray>Tier III sells from the emerald one", 1f);
-        label(layout.allayBench().clone().add(0, 1.8, 0), "<#4fd1b5><bold>Allay Bench</bold><newline><gray>Summon a Forge Allay from slot 34<newline><gray>of the Forge to clear these drops", 1f);
+        label(layout.forge().clone().add(0.5, 2.3, 0.5), "<gold><bold>The Forge</bold><newline><gray>Right-click: free upgrades, allays in slot 34<newline><gray>Sneak with an empty hand: its storage", 1f);
+        label(layout.allayBench().clone().add(COURIER_SPACING, 1.6, COURIER_Z_OFFSET), "<#4fd1b5><bold>Courier Bench</bold><newline><white>/foundry allays 2<gray> sorts into these framed chests<newline><white>/foundry allays 3<gray> sells from the emerald one", 1f);
+        label(layout.allayBench().clone().add(0, 1.8, 0), "<#4fd1b5><bold>Allay Bench</bold><newline><gray>Allays carry these drops to the Forge<newline><white>/foundry status<gray> shows what they're doing", 1f);
+        for (FoundrySystems.Sign s : layout.signs()) label(s.at(), s.text(), 1f);
         for (int i = 0; i < layout.supply().length; i++)
             label(layout.supply()[i].clone().add(0.5, 1.5, 0.5), "<#ffb347><bold>" + FoundrySupply.NAMES[i] + "</bold><newline><gray>Never runs out", 0.9f);
     }
@@ -180,7 +211,7 @@ final class FoundryLab {
 
     void shutdown() {
         labels.forEach(TextDisplay::remove);
-        mobs.forEach(Husk::remove);
+        for (Husk m : mobs) if (m != null) m.remove();
         for (Lane l : lanes) if (l.holo != null) l.holo.remove();
     }
 }

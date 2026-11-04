@@ -197,7 +197,8 @@ public final class Allays implements Listener {
         this.sausageFlip = c.getBoolean("allays.sausage-flip", true);
         this.carry = Math.max(1, c.getInt("allays.carry", 16));
         this.minDropAge = c.getInt("allays.min-drop-age-ticks", 60);
-        this.scanTicks = Math.max(20, c.getInt("allays.scan-seconds", 5) * 20);
+        // the Foundry looks more often, so a tester isn't left wondering if it worked
+        this.scanTicks = Math.max(20, (sandbox ? c.getInt("foundry.allay-scan-seconds", 2) : c.getInt("allays.scan-seconds", 5)) * 20);
         this.maxScans = Math.max(1, c.getInt("allays.max-scans-per-tick", 4));
         this.sellFee = c.getDouble("allays.sell-fee", 0.10);
         this.customSkins = c.getBoolean("resource-pack-live", false) && c.getBoolean("allays.custom-skins", true);
@@ -207,7 +208,7 @@ public final class Allays implements Listener {
         this.previewStaff = c.getBoolean("allays.preview-staff", false);
         this.file = new File(plugin.getDataFolder(), "allays.yml");
         if (!sandbox) load();
-        this.linkScanTicks = Math.max(20, c.getInt("allays.link-scan-seconds", 30) * 20);
+        this.linkScanTicks = Math.max(20, (sandbox ? c.getInt("foundry.allay-link-scan-seconds", 5) : c.getInt("allays.link-scan-seconds", 30)) * 20);
         this.speed = Math.max(0.5, c.getDouble("allays.speed", 6.0));
         this.pauseTicks = (int) Math.max(0, Math.round(c.getDouble("allays.pause-seconds", 1.0) * 20));
         Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -275,7 +276,7 @@ public final class Allays implements Listener {
             agent.fuel = Math.min(agent.fuel, DRAIN_TO_MS);
             n++;
         }
-        p.sendMessage(Ui.mm(n == 0 ? "<gray>You have no Agents within " + DRAIN_REACH + " blocks." : "<green>" + n + " Agent" + (n == 1 ? "" : "s") + " down to a minute of fuel. <gray>A Courier should come within 30 seconds if the Forge has Fuel Cells."));
+        p.sendMessage(Ui.mm(n == 0 ? "<gray>You have no Agents within " + DRAIN_REACH + " blocks." : "<green>" + n + " Agent" + (n == 1 ? "" : "s") + " down to a minute of fuel. <gray>A Courier should come within a few seconds if the Forge has Fuel Cells."));
     }
 
     /** Staff test for naming, so nobody needs an anvil: the nearest summoned allay in reach. */

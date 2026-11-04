@@ -30,7 +30,9 @@ public final class FoundrySystems {
     private final Location[] demoSpots;
 
     /** Where the fixed benches are, from the hub's layout. */
-    public record Layout(int[] laneZ, int laneX, int y, Location forge, Location penMobs, int mobs, Location title, Location[] supply, Location allayBench, Location[] demo) {}
+    public record Layout(int[] laneZ, int laneX, int y, Location forge, Location penMobs, int[][] mobs, Location title, Location[] supply, Location allayBench, Location[] demo, int[] farm, Sign[] signs) {}
+    /** A bench's fixed label. */
+    public record Sign(Location at, String text) {}
 
     /** {@code region}: which base a spot counts as part of. {@code sharedRegion}: the Forge's, which belongs to nobody. */
     public FoundrySystems(BlackForgeCore plugin, World world, Layout at, java.util.function.ToIntFunction<Location> supplyAt, Predicate<Location> zone,
@@ -44,6 +46,7 @@ public final class FoundrySystems {
         hoppers.setAccess(access);
         robots = new Robots(plugin, true);
         robots.setSandboxLimits(c.getInt("foundry.max-agents-per-player", 20), c.getInt("foundry.max-agents-total", 60));
+        robots.setSandboxFishSeconds(c.getInt("foundry.fisherman-seconds", 10));
         robots.setAccess(access);
         robots.setWorkArea((owner, l) -> zone.test(l));
         station = new BaseStation(plugin, robots, hoppers, true);
@@ -60,7 +63,7 @@ public final class FoundrySystems {
             return null;
         });
         Bukkit.getPluginManager().registerEvents(new FoundrySupply(supplyAt, hoppers), plugin);
-        lab = new FoundryLab(plugin, world, hoppers, station, zone, new FoundryLab.Layout(at.laneZ(), at.laneX(), at.y(), at.forge(), at.penMobs(), at.mobs(), at.title(), at.supply(), at.allayBench()), allays::resetShared);
+        lab = new FoundryLab(plugin, world, hoppers, station, zone, new FoundryLab.Layout(at.laneZ(), at.laneX(), at.y(), at.forge(), at.penMobs(), at.mobs(), at.title(), at.supply(), at.allayBench(), at.farm(), at.signs()), allays::resetShared);
     }
 
     // ------------------------------------------------------------------ what /foundry uses
