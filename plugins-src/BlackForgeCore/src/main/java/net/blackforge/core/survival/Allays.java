@@ -82,7 +82,9 @@ public final class Allays implements Listener {
     private static final int DRAIN_REACH = 20;
     private static final long DRAIN_TO_MS = 60_000L;
     private static final double TAG_HEIGHT = 0.9;
-    private static final int SAVE_TICKS = 1200;
+    private static final int SAVE_TICKS = 1200, GRAB_HOLD_TICKS = 6;
+    private static final float TAG_VIEW_RANGE = 0.2f;
+    private static final org.bukkit.Color COPPER = org.bukkit.Color.fromRGB(0xC8743A), VERDIGRIS = org.bukkit.Color.fromRGB(0x4FD1B5);
 
     /** A test allay flying back and forth between two points. */
     private static final class Flyer {
@@ -99,7 +101,7 @@ public final class Allays implements Listener {
         double[] from, to; int tick, ticks;
         /** What it's fetching, and what it's holding. Holding is kept in memory, because the item has left the world. */
         UUID job; ItemStack carried;
-        int rest; String label;
+        int rest, hold; String label; float trail = 0.8f;
         /** Where a load is going, other than the Station: a chest or an Agent. */
         Block dest; Robots.Bot agent;
         /** Set when a load is from the sell chest, so the Station end of the trip is a sale. */
@@ -364,7 +366,6 @@ public final class Allays implements Listener {
             x.setPersistent(false);      // a crash or restart can't leave one behind
             x.setRemoveWhenFarAway(false);
             x.customName(Ui.mm(NAME));
-            x.setCustomNameVisible(true);
             x.getPersistentDataContainer().set(marker, PersistentDataType.BYTE, (byte) 1);
         });
     }
@@ -490,6 +491,11 @@ public final class Allays implements Listener {
         save(false);
         p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_RESONATE, 1f, 1.2f);
         p.sendMessage(Ui.mm("<#4fd1b5>Your base now has a Tier " + Spawners.roman(t) + " " + TIER_NAME[t - 1] + ". <gray>" + TIER_JOB[t - 1] + "."));
+        p.sendMessage(Ui.mm(switch (t) {
+            case 1 -> "<gray>It works while the base is loaded, within <white>" + table.leash(t) + "<gray> blocks of your Station and inside your claim.";
+            case 2 -> "<gray>Hang an item frame on a chest and put an item in it. Couriers bring that item there, and keep Agents fuelled from Fuel Cells in the Station.";
+            default -> "<gray>Hang a frame on a chest and put an <white>emerald<gray> in it. Stewards sell plain goods from that chest at Trader prices, less <white>" + Math.round(sellFee * 100) + "%<gray>, while the owner's online. It shares the Trader's daily limit.";
+        }));
         openMenu(p, at);
     }
 
@@ -541,6 +547,7 @@ public final class Allays implements Listener {
         for (Worker w : b.workers) if (w.job != null) taken.add(w.job);
         for (Worker w : b.workers) {
             if (w.entity == null || !w.entity.isValid()) wake(w, at, flock);
+            w.trail = 0.6f + 0.2f * b.tier;   // a higher tier burns brighter
             work(b, w, at, flock, taken);
             label(w, b.tier, w.state == State.WAIT ? "<red>Station full" : null);
             moveTag(w);
@@ -591,6 +598,8 @@ public final class Allays implements Listener {
             }
             case FETCH -> {
                 if (!advance(w, at, flock)) return;
+                if (++w.hold < GRAB_HOLD_TICKS) return;   // a short pause over the drop, so the pickup reads
+                w.hold = 0;
                 grab(b, w);
                 goHome(w, at, flock);
             }
@@ -821,6 +830,8 @@ public final class Allays implements Listener {
             return false;
         }
         moveTo(w.entity, p, w.to[0] - w.from[0], w.to[2] - w.from[2]);
+        if (w.tick % 2 == 0 && w.tick < w.ticks)
+            world.spawnParticle(Particle.DUST_COLOR_TRANSITION, p[0], p[1] + 0.3, p[2], 1, 0.08, 0.08, 0.08, 0, new Particle.DustTransition(COPPER, VERDIGRIS, w.trail));
         return w.tick >= w.ticks;
     }
 
@@ -846,6 +857,7 @@ public final class Allays implements Listener {
         if (left.isEmpty()) {
             w.carried = null;
             at.getWorld().playSound(at, Sound.BLOCK_AMETHYST_CLUSTER_PLACE, 0.4f, 1.6f);
+            at.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, at.clone().add(0.5, 1.2, 0.5), 6, 0.25, 0.2, 0.25, 0.01);
             rest(w);
         } else {
             w.carried = left.values().iterator().next();
@@ -871,11 +883,12 @@ public final class Allays implements Listener {
             if (w.tag == null || !w.tag.isValid()) {
                 w.tag = Ui.hologram(w.entity.getLocation().add(0, TAG_HEIGHT, 0), text, 1f);
                 w.tag.setTeleportDuration(1);
+                w.tag.setViewRange(TAG_VIEW_RANGE);
             } else w.tag.text(Ui.mm(text));
         } else {
             removeTag(w);
             w.entity.customName(Ui.mm(text));
-            w.entity.setCustomNameVisible(true);
+            w.entity.setCustomNameVisible(status != null);   // otherwise it shows only when you look right at it, so a base isn't covered in tags
         }
     }
 
