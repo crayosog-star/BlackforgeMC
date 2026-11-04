@@ -44,7 +44,8 @@ public final class DragonFlight {
      * height, flight radius, how far north targets may be, and an optional keep-out circle (a tower cluster to fly round).
      */
     public record Region(double cx, double cz, double baseY, double outer, double targetNorth, double turnNorth, double homeZ, double keepX, double keepZ, double keepR) {
-        public static final Region HUB = new Region(0.5, 0.5, Y, 108, -10, -40, 30.5, 0, 0, 0);
+        // The rebuilt keep reaches Y + 113. Lift the whole flight band so even the lowest wing tips clear it.
+        public static final Region HUB = new Region(0.5, 0.5, Y + 104, 108, -10, -40, 30.5, 0, 0, 0);
     }
 
     private final Region reg;
