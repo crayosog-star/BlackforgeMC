@@ -28,24 +28,27 @@ import java.util.*;
 import static net.blackforge.core.abyss.AbyssGenerator.SEA;
 
 /**
- * Jörmungandr, the World Serpent. A 360-block-long thing of dark scales that rises from the Abyssal Sea: first only its coils,
+ * Jörmungandr, the World Serpent. A 400-block-long thing of dark scales that rises from the Abyssal Sea: first only its coils,
  * far off, breaking the surface in a great ring; then the ring closes, slowly, a little tighter each lap; then it strikes,
  * out of the dark water under whoever it has chosen, again and again, faster as it is hurt.
  *
- * Built from block displays that follow a path of the head (a few hundred, teleported every other tick while it lives), with
+ * Drawn from the resource pack's custom serpent models (blackforge:boss/serpent_head, _jaw, _seg_a, _seg_b, _tail, made by
+ * tools/gen_boss_models.py) as item displays that follow a trail of the head, teleported every other tick while it lives, with
  * one invisible slime as the hitbox of the head. It exists only while players are near, one at a time per world.
  */
 final class Leviathan implements Listener {
     private static final String TAG = "leviathan_part";
-    private static final int SEG = 72, SEND = 2;
-    private static final double SPACING = 5.0;
+    private static final int SEG = 110, SEND = 2;
+    private static final float SCALE = 8f;            // the pack's serpent models: 16 model units = 8 blocks
+    private static final double BODY_W = 9.0;         // how wide the pack's body segment is, in blocks
 
     private enum State { APPEAR, CIRCLE, TENSION, DIVE, LUNGE, RECOVER, DYING }
 
     private final BlackForgeCore plugin;
     private final World world;
     private final Random rnd = new Random();
-    private final List<BlockDisplay> body = new ArrayList<>(), spine = new ArrayList<>(), headParts = new ArrayList<>();
+    private final List<ItemDisplay> body = new ArrayList<>();
+    private ItemDisplay headD, jawD, glowD, tailD;
     private final ArrayDeque<double[]> path = new ArrayDeque<>();
     private final Map<UUID, Double> damage = new HashMap<>();
     private final Map<UUID, Integer> contactCooldown = new HashMap<>();
@@ -75,7 +78,7 @@ final class Leviathan implements Listener {
         theta = rnd.nextDouble() * Math.PI * 2;
         hx = cx + Math.cos(theta) * 150; hz = cz + Math.sin(theta) * 150; hy = SEA - 6;
         double a = theta + Math.PI / 2;
-        for (int i = 0; i < 480; i++) path.addLast(new double[]{hx - Math.cos(a) * i, SEA - 6, hz - Math.sin(a) * i});
+        for (int i = 0; i < 700; i++) path.addLast(new double[]{hx - Math.cos(a) * i, SEA - 6, hz - Math.sin(a) * i});
         int near = 0;
         for (Player p : world.getPlayers()) if (p.getLocation().distance(l) < 140) near++;
         maxHp = hp = 2400 + 900 * Math.max(0, near - 1);
@@ -95,12 +98,15 @@ final class Leviathan implements Listener {
 
     // ------------------------------------------------------------------ the displays
 
-    private BlockDisplay part(String block, int light) {
-        return world.spawn(new Location(world, hx, hy, hz), BlockDisplay.class, d -> {
+    private ItemDisplay part(String model, int light) {
+        ItemStack is = new ItemStack(Material.PAPER);
+        is.editMeta(m -> m.setItemModel(new NamespacedKey("blackforge", "boss/serpent_" + model)));
+        return world.spawn(new Location(world, hx, hy, hz), ItemDisplay.class, d -> {
+            d.setItemStack(is);
+            d.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
             d.setPersistent(false);
             d.addScoreboardTag(TAG);
-            d.setBlock(Bukkit.createBlockData(block));
-            d.setBrightness(new Display.Brightness(light, Math.min(15, light + 4)));
+            d.setBrightness(new Display.Brightness(light, light));
             d.setViewRange(8f);
             d.setShadowRadius(0);
             d.setInterpolationDuration(SEND);
@@ -109,18 +115,17 @@ final class Leviathan implements Listener {
     }
 
     private void buildDisplays() {
-        for (int i = 0; i < SEG; i++) {
-            body.add(part(i % 5 == 4 ? "minecraft:warped_wart_block" : "minecraft:dark_prismarine", 3));
-            if (i % 2 == 0) spine.add(part("minecraft:prismarine_bricks", 5));
-        }
-        headParts.add(part("minecraft:dark_prismarine", 4));              // 0 skull
-        headParts.add(part("minecraft:prismarine_bricks", 4));            // 1 jaw
-        headParts.add(part("minecraft:verdant_froglight", 15));           // 2 eye
-        headParts.add(part("minecraft:verdant_froglight", 15));           // 3 eye
-        headParts.add(part("minecraft:bone_block", 6));                   // 4 horn
-        headParts.add(part("minecraft:bone_block", 6));                   // 5 horn
-        for (int i = 0; i < 10; i++) headParts.add(part("minecraft:calcite", 8));   // 6..15 teeth
-        headParts.add(part("minecraft:prismarine_bricks", 5));            // 16 brow
+        for (int i = 0; i < SEG; i++) body.add(part(i % 2 == 0 ? "seg_a" : "seg_b", 9));
+        tailD = part("tail", 9);
+        headD = part("head", 10);
+        jawD = part("jaw", 10);
+        glowD = part("head_glow", 15);
+    }
+
+    /** How big segment i is compared with the pack's body segment (9 blocks wide): fat behind the head, thin at the tail. */
+    private static double factor(int i) {
+        double w = 9.5 * Math.pow(Math.max(0, 1 - Math.pow(i / (double) (SEG + 10), 1.3)), 0.8) + 1.4;
+        return w / BODY_W;
     }
 
     private static double[] cross(double[] a, double[] b) { return new double[]{a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]}; }
@@ -128,30 +133,33 @@ final class Leviathan implements Listener {
     private static double[] add(double[] a, double[] b) { return new double[]{a[0] + b[0], a[1] + b[1], a[2] + b[2]}; }
     private static double[] mul(double[] a, double k) { return new double[]{a[0] * k, a[1] * k, a[2] * k}; }
 
-    /** A box centred on p, with local axes r (width), u (height), f (length). */
-    private void put(BlockDisplay d, double[] p, double[] r, double[] u, double[] f, double sx, double sy, double sz) {
+    /** An item-model display at p, its local axes turned to r (width), u (height), f (front), drawn k times the pack's size. */
+    private void put(ItemDisplay d, double[] p, double[] r, double[] u, double[] f, double k) {
         Matrix3f m = new Matrix3f((float) r[0], (float) r[1], (float) r[2], (float) u[0], (float) u[1], (float) u[2], (float) f[0], (float) f[1], (float) f[2]);
-        Quaternionf q = new Quaternionf().setFromNormalized(m);
-        Vector3f tr = new Vector3f((float) (-r[0] * sx / 2 - u[0] * sy / 2 - f[0] * sz / 2), (float) (-r[1] * sx / 2 - u[1] * sy / 2 - f[1] * sz / 2), (float) (-r[2] * sx / 2 - u[2] * sy / 2 - f[2] * sz / 2));
-        d.setTransformation(new Transformation(tr, q, new Vector3f((float) sx, (float) sy, (float) sz), new Quaternionf()));
+        Quaternionf q = new Quaternionf().setFromNormalized(m).rotateY((float) Math.PI);   // item models face the other way round
+        float sc = (float) (SCALE * k);
+        d.setTransformation(new Transformation(new Vector3f(), q, new Vector3f(sc, sc, sc), new Quaternionf()));
         d.setInterpolationDelay(0);
         d.setInterpolationDuration(SEND);
         d.teleport(new Location(world, p[0], p[1], p[2]));
     }
 
-    /** The arc positions of every segment along the head's trail. */
+    /** Where every segment centre is along the head's trail: index 0 the head, 1..SEG the segments, SEG+1 the tail tip. */
     private double[][] trail() {
         double[][] out = new double[SEG + 2][];
+        double[] want = new double[SEG + 2];
+        want[1] = 6 + 2.5 * factor(0);
+        for (int i = 1; i < SEG; i++) want[i + 1] = want[i] + 2.5 * (factor(i - 1) + factor(i));
+        want[SEG + 1] = want[SEG] + 2.5 * factor(SEG - 1) + 2.5;
         double[] prev = {hx, hy, hz};
-        double want = 7, acc = 0;
+        double acc = 0;
         int k = 0;
         out[k++] = prev;
         for (double[] p : path) {
             double d = Math.sqrt(Math.pow(p[0] - prev[0], 2) + Math.pow(p[1] - prev[1], 2) + Math.pow(p[2] - prev[2], 2));
-            while (acc + d >= want && k < out.length) {
-                double f = d < 1e-9 ? 0 : (want - acc) / d;
+            while (k < out.length && acc + d >= want[k]) {
+                double f = d < 1e-9 ? 0 : (want[k] - acc) / d;
                 out[k++] = new double[]{prev[0] + (p[0] - prev[0]) * f, prev[1] + (p[1] - prev[1]) * f, prev[2] + (p[2] - prev[2]) * f};
-                want += SPACING;
             }
             acc += d;
             prev = p;
@@ -165,41 +173,29 @@ final class Leviathan implements Listener {
         double[][] tr = trail();
         phase += 0.1 * SEND;
         double[] up = {0, 1, 0};
-        // body
         for (int i = 0; i < SEG; i++) {
-            double[] a = tr[i + 1], b = tr[i + 2], prevP = tr[i];
-            double[] f = norm(new double[]{prevP[0] - b[0], prevP[1] - b[1], prevP[2] - b[2]});
-            double w = 9.5 * Math.pow(Math.max(0, 1 - Math.pow(i / (double) (SEG + 8), 1.3)), 0.8) + 1.4;
-            double hump = hit(i);
-            double[] c = {a[0], a[1] + hump, a[2]};
+            double[] a = tr[i + 1], prevP = tr[i], nextP = tr[i + 2];
+            double[] f = norm(new double[]{prevP[0] - nextP[0], prevP[1] - nextP[1], prevP[2] - nextP[2]});
+            double[] c = {a[0], a[1] + hit(i), a[2]};
             double[] r = norm(cross(up, f)), u = norm(cross(f, r));
-            put(body.get(i), c, r, u, f, w, w * 0.9, SPACING * 1.35);
-            if (i % 2 == 0) {
-                double[] sp = add(c, mul(u, w * 0.45 + 1.2));
-                double h = 2.2 + w * 0.35;
-                put(spine.get(i / 2), sp, r, u, f, 1.0, h, SPACING * 0.7);
-            }
+            put(body.get(i), c, r, u, f, factor(i));
         }
-        // head
+        double[] tl = tr[SEG + 1], tp = tr[SEG];
+        double[] tf = norm(new double[]{tp[0] - tl[0], tp[1] - tl[1], tp[2] - tl[2]});
+        double[] tr0 = norm(cross(up, tf)), tu = norm(cross(tf, tr0));
+        put(tailD, new double[]{tl[0], tl[1] + hit(SEG), tl[2]}, tr0, tu, tf, factor(SEG - 1) * 1.05);
+        // head: the pack's skull, with the jaw hinged under it and the eyes drawn bright on top
         double[] f = norm(new double[]{vx, vy * 0.6, vz});
         if (Math.abs(vx) + Math.abs(vz) < 1e-6) f = norm(new double[]{hx - tr[1][0], 0.0, hz - tr[1][2]});
         double[] r = norm(cross(up, f)), u = norm(cross(f, r));
         double[] hp0 = {hx, hy, hz};
-        put(headParts.get(0), add(hp0, mul(f, 2)), r, u, f, 11, 7, 15);
-        double ja = jaw * 0.75, cs = Math.cos(ja), sn = Math.sin(ja);
+        double[] hc = add(hp0, mul(f, 1.0));
+        put(headD, hc, r, u, f, 1.0);
+        put(glowD, hc, r, u, f, 1.0);
+        double ja = jaw * 0.7, cs = Math.cos(ja), sn = Math.sin(ja);
         double[] jf = norm(add(mul(f, cs), mul(u, -sn))), ju = norm(add(mul(u, cs), mul(f, sn)));
-        put(headParts.get(1), add(add(hp0, mul(f, 1.5)), mul(u, -4.3)), r, ju, jf, 9, 2.4, 13);
-        for (int s = 0; s < 2; s++) {
-            double side = s == 0 ? -1 : 1;
-            put(headParts.get(2 + s), add(add(add(hp0, mul(f, 7)), mul(r, side * 5.4)), mul(u, 1.6)), r, u, f, 1.9, 1.9, 1.9);
-            double[] hf = norm(add(mul(f, -0.8), mul(u, 0.55))), hu = norm(add(mul(u, 0.8), mul(f, 0.55)));
-            put(headParts.get(4 + s), add(add(add(hp0, mul(f, -2)), mul(r, side * 3.5)), mul(u, 4.8)), r, hu, hf, 1.4, 1.4, 9);
-        }
-        for (int i = 0; i < 5; i++) for (int s = 0; s < 2; s++) {
-            double side = s == 0 ? -1 : 1;
-            put(headParts.get(6 + i * 2 + s), add(add(add(hp0, mul(f, 5.5 - i * 2.2)), mul(r, side * 4.6)), mul(u, -1.6 + jaw * -1.2)), r, ju, jf, 0.8, 2.4, 0.8);
-        }
-        put(headParts.get(16), add(add(hp0, mul(f, 6)), mul(u, 3.6)), r, u, f, 10.5, 1.2, 4);
+        double[] hinge = add(add(hc, mul(u, -3.0)), mul(f, -1.0));
+        put(jawD, hinge, r, ju, jf, 1.0);
     }
 
     private double hit(int i) {
@@ -254,7 +250,7 @@ final class Leviathan implements Listener {
         // move
         if (state != State.LUNGE) { hx += vx; hy += vy; hz += vz; }
         double[] last = path.peekFirst();
-        if (last == null || Math.hypot(hx - last[0], hz - last[2]) + Math.abs(hy - last[1]) >= 1.0) { path.addFirst(new double[]{hx, hy, hz}); if (path.size() > 520) path.removeLast(); }
+        if (last == null || Math.hypot(hx - last[0], hz - last[2]) + Math.abs(hy - last[1]) >= 1.0) { path.addFirst(new double[]{hx, hy, hz}); if (path.size() > 760) path.removeLast(); }
         jaw += ((state == State.LUNGE && stateT > 12 && stateT < 40 ? 1.0 : state == State.TENSION ? 0.35 : 0.08) - jaw) * 0.25;
         if (hitbox != null && hitbox.isValid()) hitbox.teleport(new Location(world, hx, hy - 3.5, hz));
         if (t % SEND == 0) send();
@@ -347,9 +343,9 @@ final class Leviathan implements Listener {
         for (Player p : world.getPlayers()) {
             Location l = p.getLocation();
             if (p.getGameMode() == GameMode.SPECTATOR) continue;
-            for (int i = 1; i < SEG; i += 2) {
+            for (int i = 1; i < SEG; i += 3) {
                 double[] a = tr[i + 1];
-                double w = 9.5 * Math.pow(Math.max(0, 1 - Math.pow(i / (double) (SEG + 8), 1.3)), 0.8) + 1.4;
+                double w = BODY_W * factor(i);
                 double dx = l.getX() - a[0], dz = l.getZ() - a[2];
                 if (Math.hypot(dx, dz) > w * 0.7 + 1.5 || Math.abs(l.getY() - (a[1] + hit(i))) > w * 0.7 + 2) continue;
                 int cd = contactCooldown.getOrDefault(p.getUniqueId(), 0);
@@ -440,8 +436,10 @@ final class Leviathan implements Listener {
         task = null;
         HandlerList.unregisterAll(this);
         bar.removeAll();
-        body.forEach(Entity::remove); spine.forEach(Entity::remove); headParts.forEach(Entity::remove);
-        body.clear(); spine.clear(); headParts.clear();
+        body.forEach(Entity::remove);
+        body.clear();
+        for (ItemDisplay d : new ItemDisplay[]{headD, jawD, glowD, tailD}) if (d != null) d.remove();
+        headD = jawD = glowD = tailD = null;
         if (hitbox != null) hitbox.remove();
         hitbox = null;
         if (!killed) for (Player p : world.getPlayers()) p.sendMessage(Ui.mm("<dark_aqua>The water settles. Whatever it was has gone back down."));
