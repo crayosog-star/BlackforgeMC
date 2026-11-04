@@ -72,6 +72,7 @@ public final class HopperUpgrades implements Listener {
     private final boolean enabled;
     private BiPredicate<Player, Location> access = (p, l) -> false;
     private int ticks;
+    private HopperLook look;
 
     HopperUpgrades(BlackForgeCore plugin) {
         var c = plugin.getConfig();
@@ -87,6 +88,8 @@ public final class HopperUpgrades implements Listener {
             for (World w : Bukkit.getWorlds()) for (Chunk ch : w.getLoadedChunks()) load(ch);
         });
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
+        look = new HopperLook(plugin);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::refreshLooks, 20L, 20L);
     }
 
     private static int[] ints(List<Integer> list, int[] fallback) {
@@ -194,6 +197,21 @@ public final class HopperUpgrades implements Listener {
         return l == null ? 0 : l.tiers.size();
     }
 
+    private static Block blockAt(Loaded l, int pos) {
+        return l.world.getBlockAt(l.cx << 4 | HopperTiers.localX(pos), HopperTiers.y(pos), l.cz << 4 | HopperTiers.localZ(pos));
+    }
+
+    /** Puts each upgraded hopper's skin on, and takes it off any that have gone. */
+    private void refreshLooks() {
+        if (look == null || !look.active()) return;
+        java.util.Set<Block> now = new java.util.HashSet<>();
+        for (Loaded l : loaded.values()) for (Map.Entry<Integer, Integer> e : l.tiers.entrySet()) {
+            Block b = blockAt(l, e.getKey());
+            if (b.getType() == Material.HOPPER && e.getValue() >= 2) { now.add(b); look.dress(b, e.getValue()); }
+        }
+        look.keepOnly(now);
+    }
+
     private void setTier(Block b, int tier) {
         if (!(b.getState() instanceof Hopper h)) return;
         h.getPersistentDataContainer().set(TIER, PersistentDataType.INTEGER, tier);
@@ -204,6 +222,7 @@ public final class HopperUpgrades implements Listener {
     }
 
     private void forget(Block b) {
+        if (look != null) look.remove(b);
         Loaded l = loaded.get(ChunkId.of(b.getWorld(), b.getX() >> 4, b.getZ() >> 4));
         if (l != null && l.tiers.remove(HopperTiers.pack(b.getX(), b.getY(), b.getZ())) != null) writeIndex(l);
     }

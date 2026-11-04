@@ -24,8 +24,8 @@ class RobotRulesTest {
         assertEquals(120_000, RobotRules.fishIntervalMs(3));
         assertEquals(90_000, RobotRules.fishIntervalMs(4));
         assertEquals(60_000, RobotRules.fishIntervalMs(5));
-        assertEquals(20, RobotRules.fishPerHour(1));
-        assertEquals(60, RobotRules.fishPerHour(5));
+        assertEquals(30, RobotRules.fishPerHour(1));
+        assertEquals(90, RobotRules.fishPerHour(5));
         assertThrows(IllegalArgumentException.class, () -> RobotRules.fishIntervalMs(0));
         assertThrows(IllegalArgumentException.class, () -> RobotRules.fishIntervalMs(6));
     }

@@ -82,6 +82,8 @@ public final class Robots implements Listener {
 
     /** One robot's state; the entity is found by robot id each tick (entities can reload with new UUIDs). */
     final class Bot {
+        /** What its last job touched, and what that was, for the animation. Not saved. */
+        Location lastTarget; Material lastMaterial;
         /** Jobs done since /foundry check started. Not saved. */
         int workCount;
         final String id; UUID owner; Job job; int tier; long fuel, charge; int fuelTier = 1; int xp;
@@ -128,6 +130,10 @@ public final class Robots implements Listener {
 
     /** The Arena's Foundry: upgrades are free, nothing is saved, there's no /agents shop, and only the owner can open an agent. */
     private final boolean sandbox;
+    private final AgentLook look;
+
+    Collection<Bot> allBots() { return bots.values(); }
+    CopperGolem golem(Bot b) { return entity(b); }
     private int sandboxPerPlayer, sandboxTotal, sandboxFishSeconds = 10;
     /** Logs what each Grinder does when that changes. On by default in the Foundry only. */
     private final boolean grinderLog;
@@ -141,6 +147,7 @@ public final class Robots implements Listener {
         this.file = new File(plugin.getDataFolder(), "robots.yml");
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 40L, 20L);
+        look = new AgentLook(plugin, this);
         if (sandbox) return;
         load();
         Bukkit.getScheduler().runTaskTimer(plugin, this::save, 1200L, 1200L);
@@ -333,6 +340,10 @@ public final class Robots implements Listener {
         // each part on its own: a failure in one must not cost the agent its name tag or stop the others
         stylePart(b, "name", () -> g.setCustomNameVisible(true));
         stylePart(b, "name", () -> g.customName(Ui.mm(b.job.color + "⚙ " + (b.name != null ? "Agent " + b.name + " <dark_gray>• " + b.job.color + b.job.label : b.title()) + " " + Spawners.roman(b.tier) + " <dark_gray>• " + st)));
+        if (this.look != null && this.look.active()) {   // it wears a skin and holds its own tool, so the golem underneath only carries the hitbox and name
+            stylePart(b, "skin", () -> { g.setInvisible(true); g.setGlowing(false); g.getEquipment().setItemInMainHand(null); });
+            return;
+        }
         stylePart(b, "hand", () -> g.getEquipment().setItemInMainHand(new ItemStack(b.job.icon)));
         stylePart(b, "copper", () -> g.setWeatheringState(look[b.tier - 1]));
         stylePart(b, "glow", () -> g.setGlowing(b.tier >= 5));
@@ -453,12 +464,15 @@ public final class Robots implements Listener {
     }
 
     private void work(Bot b, CopperGolem g, AgentStats stats) {
-        onWorked(b, switch (b.job) {
+        b.lastTarget = null;
+        int done = switch (b.job) {
             case MINER -> mine(b, g, stats);
             case FARMER -> farm(b, g, stats);
             case GRINDER -> grind(b, g, stats);
             case FISHERMAN -> fish(b, g, stats);
-        });
+        };
+        onWorked(b, done);
+        if (done > 0) look.play(b);
     }
 
     /** Called after every cycle with how much real work was done. The Academy earns Mastery here from Phase 2. */
@@ -482,6 +496,8 @@ public final class Robots implements Listener {
     private int mine(Bot b, CopperGolem g, AgentStats stats) {
         Block target = b.loc.getBlock().getRelative(facing(b.loc));
         Material t = target.getType();
+        b.lastTarget = target.getLocation().add(0.5, 0.5, 0.5);
+        b.lastMaterial = t;
         if (t.isAir() || target.isLiquid() || NO_MINE.contains(t) || t.getHardness() < 0 || target.getState() instanceof Container) return 0;
         if (!workArea.test(b.owner, target.getLocation())) return 0;
         Material[] picks = {Material.STONE_PICKAXE, Material.IRON_PICKAXE, Material.DIAMOND_PICKAXE, Material.NETHERITE_PICKAXE, Material.NETHERITE_PICKAXE};
@@ -539,6 +555,7 @@ public final class Robots implements Listener {
                         store(b, drops);
                         a.setAge(0);
                         bl.setBlockData(a);
+                        if (b.lastTarget == null) b.lastTarget = bl.getLocation().add(0.5, 0.2, 0.5);
                         done++;
                     } else if (t == Material.MELON || t == Material.PUMPKIN) {
                         store(b, bl.getDrops());
@@ -582,6 +599,7 @@ public final class Robots implements Listener {
             if (m.isDead()) kills++;
             else killedBy.remove(m.getUniqueId());
             hits++;
+            if (b.lastTarget == null) b.lastTarget = m.getLocation().add(0, 1, 0);
             m.getWorld().spawnParticle(Particle.DAMAGE_INDICATOR, m.getLocation().add(0, 1, 0), 6, 0.25, 0.3, 0.25, 0.05);
             m.getWorld().playSound(m.getLocation(), Sound.ENTITY_HUSK_HURT, 0.6f, 1f);
         }
@@ -605,7 +623,10 @@ public final class Robots implements Listener {
     private static boolean nearWater(Bot b) {
         Block c = b.loc.getBlock();
         for (int dx = -2; dx <= 2; dx++) for (int dy = -2; dy <= 0; dy++) for (int dz = -2; dz <= 2; dz++)
-            if (c.getRelative(dx, dy, dz).getType() == Material.WATER) return true;
+            if (c.getRelative(dx, dy, dz).getType() == Material.WATER) {
+                b.lastTarget = c.getRelative(dx, dy, dz).getLocation().add(0.5, 1, 0.5);
+                return true;
+            }
         return false;
     }
 

@@ -317,6 +317,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | Added Agent skins per tier, work animations and a buff, and upgraded hopper colours. They share the allay colours, with rainbow at the top | Colin, in chat |
 | 2026-11-04 | Foundry redesigned round a central Forge with coloured paths, and `/foundry check` added to test every agent, hopper and allay job | Colin, in chat |
 | 2026-11-04 | Added a glowing Tier II trail, Tier III ribbons, halo and burst, and separate flock paths. Fixed bugs from a code review | Colin, in chat |
 | 2026-11-04 | Colin saw allays showing double. Wings are now smaller and see-through with three flap steps, and a tight hover spreads the flock out | Colin, in chat |

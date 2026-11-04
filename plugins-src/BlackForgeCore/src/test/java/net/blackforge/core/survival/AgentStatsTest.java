@@ -7,12 +7,12 @@ import org.junit.jupiter.api.Test;
 class AgentStatsTest {
     private static final String[] JOBS = {"miner", "farmer", "grinder", "fisherman"};
     // today's values, written out so a change to the shared arrays fails here
-    private static final int[] WORK_INTERVAL = {8, 6, 4, 3, 2};
-    private static final int[] FISH_INTERVAL = {180, 150, 120, 90, 60};
-    private static final int[] RADIUS = {2, 3, 4, 5, 6};
-    private static final double[] DAMAGE = {8, 12, 16, 22, 30};
+    private static final int[] WORK_INTERVAL = {6, 4, 3, 2, 1};
+    private static final int[] FISH_INTERVAL = {120, 100, 80, 60, 40};
+    private static final int[] RADIUS = {3, 4, 5, 6, 7};
+    private static final double[] DAMAGE = {10, 15, 20, 28, 40};
     private static final int[] HITS = {2, 3, 4, 5, 6};
-    private static final int[] FORTUNE = {0, 0, 0, 2, 3};
+    private static final int[] FORTUNE = {0, 0, 1, 2, 3};
 
     private static AgentStats withSpeed(double speed) { return new AgentStats(8, speed, 2, 8, 2, 1, 0, 1, 1, 0, 1); }
 
@@ -29,7 +29,7 @@ class AgentStatsTest {
                 assertEquals(RADIUS[i], s.radius(), at);
                 assertEquals(DAMAGE[i], s.damage(), at);
                 assertEquals(HITS[i], s.hits(), at);
-                assertEquals(tier, s.harvests(), at);
+                assertEquals(tier * 2, s.harvests(), at);
                 assertEquals(FORTUNE[i], s.fortune(), at);
                 assertEquals(1.0, s.speedMult(), at);
                 assertEquals(1.0, s.fuelMult(), at);

@@ -198,6 +198,10 @@ allays:
   sausage-flip: true              # an allay named Smoked Sausage flies upside down
   custom-skins: true              # Tier II orange and Tier III rainbow, from the resource pack (needs resource-pack-live)
 
+# Skins and work animations for Agents, and skins for upgraded hoppers. Both need resource-pack-live.
+agent-looks: true
+hopper-looks: true
+
 # Agents, called robots in the code and saves (Survival + Skyblock copper golems). NOT read by the plugin yet - a later task wires these up.
 # fish-seconds (per robot tier I..V) and fisher-burn match the built-in values in RobotRules; the rest are for the
 # upcoming chest trips (radius in blocks, store when any item reaches store-threshold, fetch fuel at 2 minutes left).
