@@ -94,7 +94,10 @@ public final class Allays implements Listener {
     private static final float TAG_VIEW_RANGE = 0.2f;
     private static final Color COPPER = Color.fromRGB(0xC8743A), VERDIGRIS = Color.fromRGB(0x4FD1B5), ORANGE = Color.fromRGB(0xF28C2C), GOLD = Color.fromRGB(0xFFE096);
     private static final double SKIN_HEIGHT = 0.35, RAINBOW_SPEED = 0.01;
-    private static final int FLAP_TICKS = 3, SPARKLE_TICKS = 12;
+    private static final int FLAP_TICKS = 2, SPARKLE_TICKS = 12;
+    /** Closed, half, swept, half: it steps through each one, because a jump between two far-apart poses looks like two pairs of wings. */
+    private static final int[] FLAP_ORDER = {0, 1, 2, 1};
+    private static final double TIGHT_SPACING = 0.7;
 
     /** A test allay flying back and forth between two points. */
     private static final class Flyer {
@@ -119,7 +122,7 @@ public final class Allays implements Listener {
         int tier = 1;
         /** The Tier II or III look: the real allay goes invisible and this flies with it. */
         ItemDisplay skin;
-        int skinTier; boolean skinFlipped, wingsUp;
+        int skinTier, flap; boolean skinFlipped;
         /** Where a load is going, other than the Station: a chest or an Agent. */
         Block dest; Robots.Bot agent;
         /** Set when a load is from the sell chest, so the Station end of the trip is a sale. */
@@ -1052,8 +1055,8 @@ public final class Allays implements Listener {
                     new Vector3f(1, 1, 1), new AxisAngle4f()));
         }
         if ((now + w.index) % FLAP_TICKS == 0) {
-            w.wingsUp = !w.wingsUp;
-            w.skin.setItemStack(skinItem(w.tier, w.wingsUp ? 1 : 0));
+            w.flap = (w.flap + 1) % FLAP_ORDER.length;
+            w.skin.setItemStack(skinItem(w.tier, FLAP_ORDER[w.flap]));
         }
         // idle or not, the upgraded ones shimmer a little
         if ((now + w.index * 7) % SPARKLE_TICKS == 0) {
@@ -1062,13 +1065,13 @@ public final class Allays implements Listener {
         }
     }
 
-    /** One of a tier's two wing positions. Both tiers carry the enchantment shine. */
+    /** One of a tier's three wing positions. Both tiers carry the enchantment shine. */
     private ItemStack skinItem(int tier, int frame) {
         return skinItems[tier - 2][frame];
     }
 
     private ItemStack[][] buildSkinItems() {
-        String[] names = {"courier", "steward"}, frames = {"a", "b"};
+        String[] names = {"courier", "steward"}, frames = {"a", "b", "c"};
         ItemStack[][] out = new ItemStack[names.length][frames.length];
         for (int t = 0; t < names.length; t++) for (int f = 0; f < frames.length; f++) {
             NamespacedKey model = new NamespacedKey("blackforge", "allay/" + names[t] + "_" + frames[f]);
@@ -1169,7 +1172,8 @@ public final class Allays implements Listener {
     }
 
     private static double[] hover(Location station, Worker w, int flock, long tick) {
-        if (w.tight) return new double[]{station.getX() + 0.5, station.getY() + 1.3, station.getZ() + 0.5};
+        // no room to circle: side by side, so a flock can't stack up and look like one blurred allay
+        if (w.tight) return new double[]{station.getX() + 0.5 + (w.index - (flock - 1) / 2.0) * TIGHT_SPACING, station.getY() + 1.3, station.getZ() + 0.5};
         double[] h = AllayFlight.hover(w.index, flock, tick);
         return new double[]{station.getX() + 0.5 + h[0], station.getY() + 2.2 + h[1], station.getZ() + 0.5 + h[2]};
     }
