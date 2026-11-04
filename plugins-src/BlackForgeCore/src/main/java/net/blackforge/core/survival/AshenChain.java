@@ -364,7 +364,7 @@ public final class AshenChain implements Listener, Hackable {
     // ------------------------------------------------------------------ hooking a target
 
     private void hook(Player p, LivingEntity t) {
-        if (!t.isValid() || t.isDead() || t.getWorld() != p.getWorld()) { slack(p); return; }
+        if (!t.isValid() || t.getWorld() != p.getWorld() || !mayHitNow(p, t)) { slack(p); return; }
         if (t instanceof Player || alsoTarget.test(t)) { chainPlayer(p, t); return; }
         double dist = t.getLocation().distance(p.getLocation());
         if (dist > ChainPull.YANK_RANGE + 4) { slack(p); return; }   // they got away while the hook flew
@@ -377,7 +377,7 @@ public final class AshenChain implements Listener, Hackable {
         if (!dummy) {
             double[] v = ChainPull.yank(t.getX() - p.getX(), t.getZ() - p.getZ(), dist);
             // vanilla knocks them away from us for that hit, so set the drag on the next tick to replace it
-            Bukkit.getScheduler().runTask(plugin, () -> { if (t.isValid() && !t.isDead()) t.setVelocity(new Vector(v[0], v[1], v[2])); });
+            Bukkit.getScheduler().runTask(plugin, () -> { if (t.isValid() && t.getWorld() == p.getWorld() && mayHitNow(p, t)) t.setVelocity(new Vector(v[0], v[1], v[2])); });
         }
 
         // the soul is torn loose: a burst of souls and ash, a wail, and the chain stays taut while they're dragged in
@@ -469,7 +469,8 @@ public final class AshenChain implements Listener, Hackable {
             }
             if (k == pullAt) {   // too late to escape: yank
                 tether.pulling = true;
-                if (moves) pullOneBlock(caster, t);
+                if (!mayHitNow(caster, t)) { endTether(tid); return; }
+                if (moves) pullOneBlock(caster, t, tether);
                 w.playSound(c, Sound.ITEM_TRIDENT_RIPTIDE_1, SoundCategory.PLAYERS, 0.9f, 0.7f);
                 w.playSound(c, Sound.BLOCK_CHAIN_BREAK, SoundCategory.PLAYERS, 0.8f, 0.6f);
                 w.spawnParticle(Particle.WHITE_ASH, c, 12, 0.3, 0.4, 0.3, 0.03);
@@ -491,7 +492,7 @@ public final class AshenChain implements Listener, Hackable {
      * {@link #PULL_TICKS} so you see them being reeled in. Never into the caster (pullStep) and never into a wall: a
      * step that would hit something ends the pull there. Their view isn't turned.
      */
-    private void pullOneBlock(Player caster, LivingEntity t) {
+    private void pullOneBlock(Player caster, LivingEntity t, Tether tether) {
         Location start = t.getLocation();
         double dx = caster.getX() - start.getX(), dz = caster.getZ() - start.getZ();
         double h = Math.sqrt(dx * dx + dz * dz);
@@ -500,7 +501,8 @@ public final class AshenChain implements Listener, Hackable {
         double sx = dx / h * total / PULL_TICKS, sz = dz / h * total / PULL_TICKS;
         int[] n = {0};
         Bukkit.getScheduler().runTaskTimer(plugin, task -> {
-            if (n[0]++ >= PULL_TICKS || !t.isValid() || t.isDead() || !tethers.containsKey(t.getUniqueId())) { task.cancel(); return; }
+            if (n[0]++ >= PULL_TICKS || !caster.isOnline() || !t.isValid() || caster.getWorld() != t.getWorld()
+                    || tethers.get(t.getUniqueId()) != tether || !mayHitNow(caster, t)) { task.cancel(); return; }
             if (t.getWorld().hasCollisionsIn(t.getBoundingBox().shift(sx, 0, sz))) { task.cancel(); return; }
             Location now = t.getLocation();   // their latest position and view
             t.teleport(now.add(sx, 0, sz));
@@ -745,6 +747,11 @@ public final class AshenChain implements Listener, Hackable {
         for (NamespacedKey k : t.getPersistentDataContainer().getKeys())
             if (k.getNamespace().equals(tagKey.getNamespace())) return false;
         return true;
+    }
+
+    private boolean mayHitNow(Player caster, LivingEntity target) {
+        return allowedAt.test(caster.getLocation()) && canTarget(caster, target)
+                && (alsoTarget.test(target) || allowed(caster, target));
     }
 
     /** Ask the server's own damage rules whether the caster may hit this target here (same check as a sword hit). */

@@ -63,7 +63,15 @@ public final class ForgeArsenal {
     private ForgeArsenal(BlackForgeCore plugin, Arcade arcade) {
         Predicate<Location> inMatch = l -> inForgeWars(arcade, l);
         GaiaPotion gaia = new GaiaPotion(plugin, (p, l) -> inMatch.test(l));
-        DarknessPotion darkness = new DarknessPotion(plugin, inMatch);
+        java.util.function.BiPredicate<Player, Player> enemies = (caster, target) -> {
+            Match m = arcade.matches().matchOf(caster);
+            return m != null && m == arcade.matches().matchOf(target) && m.game.id.equals(ForgeWars.ID)
+                    && m.state() == MatchState.IN_PROGRESS && m.isAlive(caster) && m.isAlive(target)
+                    && m.inBounds(caster.getLocation()) && m.inBounds(target.getLocation())
+                    && m.team(caster) != null && m.team(target) != null
+                    && m.team(caster) != m.team(target);
+        };
+        DarknessPotion darkness = new DarknessPotion(plugin, inMatch, enemies);
         darkness.onHit(le -> {   // the Golem (or any non-player) caught in the splash: it picks this up on its next tick
             if (le instanceof Player) return;
             long now = System.currentTimeMillis();
@@ -72,7 +80,7 @@ public final class ForgeArsenal {
         });
         Surge surge = new Surge(plugin, inMatch);
         GaleBellows bellows = new GaleBellows(plugin);   // hits only where PvP works, so the match decides who can be hit
-        GodsEye eye = new GodsEye(plugin, inMatch);
+        GodsEye eye = new GodsEye(plugin, inMatch, enemies);
         AshenChain chain = new AshenChain(plugin, inMatch, e -> false, e -> false);
         AshenBonfire bonfire = new AshenBonfire(plugin, inMatch);
         Rimelock cage = new Rimelock(plugin, inMatch, (caster, p) -> sameTeam(arcade, caster, p));
