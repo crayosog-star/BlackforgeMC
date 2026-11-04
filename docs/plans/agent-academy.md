@@ -1,5 +1,5 @@
 # Agent Academy
-**Status:** Approved
+**Status:** In progress: P1.T1 built, waiting on its live checks
 **Next task:** P1.T1
 
 ## Rules of engagement
@@ -142,7 +142,12 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Edge cases:** corrupt saved text, unknown job or perk names (kept but ignored), negative points, levels above max.
 - **Done when:** `AcademyRulesTest` covers round-trip encoding, corrupt input, level boundaries at 0, 10 and 30, and daily cap splitting (two small gains equal one large one). The automerge build passes with tests. The Survival startup log shows `live-modes` as empty, which proves the config default reaches a live server.
 - **Leaves ready:** `AgentRecord`, `AcademyRules` and config keys for P1.T2.
-- **Evidence:**
+- **Evidence:** not ticked, because two checks can only run after this PR merges (see Blockers log).
+  - Verified: `AcademyRulesTest` (14 tests) passed against the two new classes, compiled with `javac` 21 and a small local stand-in for JUnit, since Gradle isn't run locally. This wasn't the real JUnit or the project's Java 25.
+  - Untested: the automerge build with tests, which is also the first compile of the `BlackForgeCore.java` log line.
+  - Untested: the Survival startup log. Expected: `Academy live-modes=[] source=jar-default`. `source` was added because an empty list reads the same as a missing key, so `live-modes=[]` alone wouldn't prove the default arrives. `source=missing` means it doesn't.
+  - Note: the log line needed one file beyond this task's list, `BlackForgeCore.java`, because nothing else runs at startup yet.
+  - For P2.T1: `dailyGain`'s `todaySoFar` is the day's raw gains, not awarded points, so `todayPoints` must store raw gains.
 
 ### [ ] P1.T2: Save, load and carry each Agent's record
 - **Needs:** `AgentRecord` from P1.T1; `S/Robots.java:84`, `194`, `231`, `764`, `943`, `974`.
@@ -421,7 +426,7 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Evidence:**
 
 ## Blockers log
-None yet.
+- 2026-11-04, P1.T1 (open): rule 7 ticks a task in the same PR as its work, but two **Done when** checks need that PR merged first: the automerge build and the Survival startup log. The task stays unticked and **Next task** stays P1.T1. Colin to supply the startup log line; ticking then needs a small follow-up PR.
 
 ## Change log
 - 2026-11-04: plan written. Field Exams dropped and Survival-only scope set by Colin.

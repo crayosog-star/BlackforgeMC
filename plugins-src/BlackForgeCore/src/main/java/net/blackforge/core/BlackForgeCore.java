@@ -47,6 +47,10 @@ public final class BlackForgeCore extends JavaPlugin implements Listener {
     public void onEnable() {
         saveDefaultConfig();
         mode = getConfig().getString("mode", "backend");
+        // source tells a value from a missing key: an empty list reads the same either way
+        getLogger().info("Academy live-modes=" + getConfig().getStringList("academy.live-modes") + " source="
+                + (getConfig().contains("academy.live-modes", true) ? "server-config"
+                : getConfig().contains("academy.live-modes") ? "jar-default" : "missing"));
         net = new Net(this);
         economy = new NetEconomy(this);
         new LocatorRange(this);
