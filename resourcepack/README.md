@@ -1,7 +1,7 @@
 # BlackForgeMC resource pack
 
 One network-wide pack with every BlackForgeMC custom item texture: Gale Bellows, Surge, Potion of Gaia, Potion of
-Darkness, God's Eye, Ashen Chain, Ashen Bonfire, Last Rite, Rimelock, Soul Candy, Nightrend.
+Darkness, God's Eye, Ashen Chain, Ashen Bonfire, Last Rite, Rimelock, Soul Candy, Nightrend, and the Forge Allay skins.
 Players get it when they join the hub; every server sends the same URL + SHA-1, so it downloads once.
 
 ## Build

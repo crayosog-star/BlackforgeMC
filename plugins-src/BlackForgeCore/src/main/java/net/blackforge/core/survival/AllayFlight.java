@@ -35,6 +35,22 @@ final class AllayFlight {
         return new double[]{Math.cos(angle) * 1.4, Math.sin(tick * 0.05 + index) * 0.25, Math.sin(angle) * 1.4};
     }
 
+    /** A colour around the rainbow as packed RGB, for a Steward's trail. {@code t} wraps, so it can just keep counting. */
+    static int rainbow(double t) {
+        double h = (t - Math.floor(t)) * 6;
+        int sector = (int) h;
+        double f = h - sector;
+        double[] rgb = switch (sector) {
+            case 0 -> new double[]{1, f, 0};
+            case 1 -> new double[]{1 - f, 1, 0};
+            case 2 -> new double[]{0, 1, f};
+            case 3 -> new double[]{0, 1 - f, 1};
+            case 4 -> new double[]{f, 0, 1};
+            default -> new double[]{1, 0, 1 - f};
+        };
+        return (int) Math.round(rgb[0] * 255) << 16 | (int) Math.round(rgb[1] * 255) << 8 | (int) Math.round(rgb[2] * 255);
+    }
+
     /** Where it is at this tick of the trip, as {x, y, z}. */
     static double[] at(double[] from, double[] to, int tick, int ticks) {
         double t = (double) tick / ticks, e = ease(t);
