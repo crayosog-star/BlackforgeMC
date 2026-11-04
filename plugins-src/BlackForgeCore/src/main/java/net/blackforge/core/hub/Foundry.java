@@ -48,6 +48,7 @@ public final class Foundry implements Listener {
                 l -> l.getWorld() == w ? FoundryZone.supplyAt(l.getBlockX(), l.getBlockY(), l.getBlockZ()) : -1, this::inZone,
                 (p, l) -> inZone(l) && (placed.owner(pos(l.getBlock())) == null || p.getUniqueId().equals(placed.owner(pos(l.getBlock())))));
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        Bukkit.getPluginManager().registerEvents(new FoundryTips(plugin, this::inZone), plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::poll, 20L, 5L);
         arena.setVoidReturn(p -> {
             Location entry = new Location(arena.world(), FoundryZone.ENTRY_X, FoundryZone.ENTRY_Y, FoundryZone.ENTRY_Z, 180f, 0f);

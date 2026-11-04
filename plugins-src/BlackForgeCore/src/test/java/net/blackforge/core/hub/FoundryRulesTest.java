@@ -46,6 +46,18 @@ class FoundryRulesTest {
         assertFalse(FoundryZone.inMineWall(FoundryZone.MINE_X1, TestArenaBuilder.Y, FoundryZone.MINE_Z));
     }
 
+    @Test void eachBenchIsRecognisedForItsTip() {
+        int y = TestArenaBuilder.Y;
+        assertEquals("supply", FoundryZone.benchAt(FoundryZone.SUPPLY_X[0], y + 1, FoundryZone.SUPPLY_Z));
+        assertEquals("forge", FoundryZone.benchAt(FoundryZone.FORGE_X, y + 1, FoundryZone.FORGE_Z));
+        assertEquals("lane", FoundryZone.benchAt(FoundryZone.LANE_X + 1, y + 1, FoundryZone.LANE_Z[1]));
+        assertEquals("mine", FoundryZone.benchAt(FoundryZone.MINE_X1, y + 2, FoundryZone.MINE_Z));
+        assertEquals("farm", FoundryZone.benchAt(FoundryZone.FARM_X1, y, FoundryZone.FARM_Z1));
+        assertEquals("pond", FoundryZone.benchAt(FoundryZone.POND_X2, y, FoundryZone.POND_Z2));
+        assertEquals("pen", FoundryZone.benchAt(FoundryZone.PEN_X1, y + 1, FoundryZone.PEN_Z1));
+        assertNull(FoundryZone.benchAt(0, y, -70));
+    }
+
     @Test void onlyTheOwnerMayBreakAndTheIslandIsNobodys() {
         PlacedBlocks p = new PlacedBlocks();
         UUID a = UUID.randomUUID(), b = UUID.randomUUID();
