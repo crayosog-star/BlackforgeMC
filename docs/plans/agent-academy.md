@@ -1,6 +1,6 @@
 # Agent Academy
-**Status:** In progress: P1.T1 and P1.T2 built, both waiting on their live checks
-**Next task:** P1.T3 (P1.T1 and P1.T2 stay unticked until their checks pass; see Blockers log)
+**Status:** In progress: Phase 1 is built, and P1.T1, P1.T2 and P1.T3 are waiting on their live checks
+**Next task:** P2.T1, which can't start until the Phase 1 gate is confirmed (rule 9; see Blockers log)
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -145,7 +145,7 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Leaves ready:** `AgentRecord`, `AcademyRules` and config keys for P1.T2.
 - **Evidence:** not ticked, because two checks can only run after this PR merges (see Blockers log).
   - Verified: `AcademyRulesTest` (14 tests) passed against the two new classes, compiled with `javac` 21 and a small local stand-in for JUnit, since Gradle isn't run locally. This wasn't the real JUnit or the project's Java 25.
-  - Untested: the automerge build with tests, which is also the first compile of the `BlackForgeCore.java` log line.
+  - Verified: PR #88 merged through automerge, which only merges after a build with tests. The build log itself wasn't read.
   - Untested: the Survival startup log. Expected: `Academy live-modes=[] source=jar-default`. `source` was added because an empty list reads the same as a missing key, so `live-modes=[]` alone wouldn't prove the default arrives. `source=missing` means it doesn't.
   - Note: the log line needed one file beyond this task's list, `BlackForgeCore.java`, because nothing else runs at startup yet.
   - For P2.T1: `dailyGain`'s `todaySoFar` is the day's raw gains, not awarded points, so `todayPoints` must store raw gains.
@@ -166,7 +166,8 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Evidence:** not ticked, because every **Done when** check needs a staff member on a running server.
   - Crates (step 6): reward commands go through `robots give`, which builds an item with no record, so a crate Agent gets its record and UID when placed. The live `crates.yml` wasn't read.
   - Verified: `Robots.java` parses under `javac` 21. It wasn't compiled against Paper, since Gradle isn't run locally.
-  - Untested: the automerge build, and everything in game: restart, pickup and place, duplicate refusal and old items.
+  - Verified: PR #91 merged through automerge, which only merges after a build with tests. The build log itself wasn't read.
+  - Untested: everything in game: restart, pickup and place, duplicate refusal and old items.
   - Note: `uidInUse` also checks Agents waiting for their world to load, so a copy can't be placed while the original is unloaded.
 
 ### [ ] P1.T3: Add the work signal and stat layer with no behaviour change
@@ -180,7 +181,12 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Edge cases:** Fisherman's quarter burn rate, fishing without water, full storage, a job switch mid-cycle, fuel running out mid-cycle, and speed values that could divide by zero.
 - **Done when:** `AgentStatsTest` proves that with an empty record, all values match today's `INTERVAL`, `RADIUS`, `DAMAGE`, hits and Fortune for every job and all 5 tiers. In the Foundry, a tester confirms all four benches produce at the usual pace.
 - **Leaves ready:** `onWorked` and `AgentStats` for Phase 2.
-- **Evidence:**
+- **Evidence:** not ticked, because the Foundry check needs a tester.
+  - Verified: `AgentStatsTest` (5 tests) and `AcademyRulesTest` passed, compiled with `javac` 21 and a small local stand-in for JUnit. This wasn't the real JUnit or the project's Java 25.
+  - Verified: `Robots.java` parses under `javac` 21. It wasn't compiled against Paper, since Gradle isn't run locally.
+  - Untested: the automerge build, and the four Foundry benches.
+  - Note: `onWorked` gets hits that landed, so a Foundry mob that can't be hit counts as no work, as P2.T1 needs.
+  - Note: Charge is built from the full burn, so a fuel-saving bonus won't cost Charge. `workProgress` copies `b.timer` while idle, so idle time affects the next cycle exactly as it did before.
 
 ---
 
@@ -431,8 +437,10 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Evidence:**
 
 ## Blockers log
-- 2026-11-04, P1.T1 (open): rule 7 ticks a task in the same PR as its work, but two **Done when** checks need that PR merged first: the automerge build and the Survival startup log. The task stays unticked and **Next task** stays P1.T1. Colin to supply the startup log line; ticking then needs a small follow-up PR.
-- 2026-11-04, P1.T2 (open): needs a staff member's in-game checks; steps are in the PR. Colin chose to keep building Phase 1 meanwhile.
+- 2026-11-04, P1.T1 (open): rule 7 ticks a task in the same PR as its work, but one **Done when** check still needs that PR live: the Survival startup log. The task stays unticked. Colin to supply the startup log line; ticking then needs a small follow-up PR.
+- 2026-11-04, P1.T2 (open): needs a staff member's in-game checks; steps are in PR #91. Colin chose to keep building Phase 1 meanwhile.
+- 2026-11-04, P1.T3 (open): needs a tester at the four Foundry benches.
+- 2026-11-04, Phase 2 (open): can't start until Colin or a tester confirms the Phase 1 gate.
 
 ## Change log
 - 2026-11-04: Colin told the build to continue while P1.T1's live check is open, so P1.T2 and P1.T3 go ahead. The Phase 1 gate still has to pass before Phase 2.
