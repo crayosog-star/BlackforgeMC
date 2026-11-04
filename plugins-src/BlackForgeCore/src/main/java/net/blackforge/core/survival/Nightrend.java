@@ -212,6 +212,48 @@ public final class Nightrend implements Listener, Hackable {
         }
     }
 
+    private void setPair(Player p, boolean on) {
+        UUID id = p.getUniqueId();
+        if (on == pairOn.contains(id)) return;
+        AttributeInstance ai = p.getAttribute(Attribute.ATTACK_SPEED);
+        if (ai == null) return;
+        ai.removeModifier(pairKey);
+        if (on) {
+            ai.addTransientModifier(new AttributeModifier(pairKey, NightrendMath.pairBonus(singleSpeed, pairSpeed),
+                    AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.ANY));
+            pairOn.add(id);
+            long now = System.currentTimeMillis();
+            if (now - lastFlip.getOrDefault(id, 0L) >= flipCooldownMillis && visible(p)) { lastFlip.put(id, now); flipUp(p); }
+        } else {
+            pairOn.remove(id);
+            hits.remove(id);
+        }
+    }
+
+    /** Nobody sees the aura of a player who shouldn't be seen. */
+    private static boolean visible(Player p) {
+        if (p.getGameMode() == GameMode.SPECTATOR || p.isInvisible() || p.hasPotionEffect(PotionEffectType.INVISIBILITY)) return false;
+        for (MetadataValue v : p.getMetadata("vanished")) if (v.asBoolean()) return false;   // common vanish plugins
+        return true;
+    }
+
+    /** A couple of dark-red embers off each held blade, drifting up and fading to black. */
+    private void aura(Player p, boolean main, boolean off) {
+        Location base = p.getLocation();
+        double yaw = Math.toRadians(base.getYaw());
+        Vector fwd = new Vector(-Math.sin(yaw), 0, Math.cos(yaw)), right = new Vector(-Math.cos(yaw), 0, -Math.sin(yaw));
+        double y = p.isSneaking() ? 0.55 : 0.75;
+        World w = p.getWorld();
+        // right hand is the main hand unless the player has set left-handed
+        double side = p.getMainHand() == org.bukkit.inventory.MainHand.LEFT ? -1 : 1;
+        if (main) puff(w, base.clone().add(0, y, 0).add(right.clone().multiply(0.38 * side)).add(fwd.clone().multiply(0.22)));
+        if (off) puff(w, base.clone().add(0, y, 0).add(right.clone().multiply(-0.38 * side)).add(fwd.clone().multiply(0.22)));
+    }
+
+    private static void puff(World w, Location at) {
+        w.spawnParticle(Particle.DUST_COLOR_TRANSITION, at, 2, 0.06, 0.12, 0.06, 0, EMBER);
+    }
+
     // ------------------------------------------------------------------ equip flip
 
     /** Where a hand is, from the body's facing (not the camera, so the blades don't swing round with the view). */
