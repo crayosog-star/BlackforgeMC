@@ -326,7 +326,10 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Edge cases:** a capstone replacing, not stacking with, its level 10 value where the table gives a higher replacement; every block-safety check from P3.T2 applying to extra Clearcut blocks.
 - **Done when:** unit tests check each capstone at level 29 and 30. In the Foundry, a tester confirms each one activates at 30 and shows as active.
 - **Leaves ready:** the complete build system for P3.T5.
-- **Evidence:**
+- **Evidence:** not ticked; prepared on a branch with no PR, because earlier phase gates aren't confirmed.
+  - Verified: every capstone at levels 29 and 30 passed unit tests with `javac` 21 and a local stand-in for JUnit.
+  - Untested: the Paper compile, and each capstone in the Foundry.
+  - Note: Clearcut's extra blocks go through `mineBlock`, so they get every P3.T2 safety check.
 
 ### [ ] P3.T5: Add respec
 - **Needs:** P3.T1-T4.

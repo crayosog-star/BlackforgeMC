@@ -606,6 +606,13 @@ public final class Robots implements Listener {
         if (left != null) b.storage.addItem(left).values().forEach(l -> b.loc.getWorld().dropItemNaturally(b.loc, l));
     }
 
+    /** Stores the drops, and a copy of the plain ones when a capstone's chance came up. */
+    private void storeBonus(Bot b, Collection<ItemStack> items, boolean doubled) {
+        List<ItemStack> all = new ArrayList<>(items);
+        if (doubled) for (ItemStack it : items) if (it != null && !it.getType().isAir() && isPlainDrop(it)) all.add(it.clone());
+        store(b, all);
+    }
+
     /** Bonuses only copy these, so Mob Essence and named or custom items are never copied. */
     private static boolean isPlainDrop(ItemStack it) { return !it.hasItemMeta(); }
 
@@ -618,17 +625,18 @@ public final class Robots implements Listener {
         Material[] picks = {Material.STONE_PICKAXE, Material.IRON_PICKAXE, Material.DIAMOND_PICKAXE, Material.NETHERITE_PICKAXE, Material.NETHERITE_PICKAXE};
         ItemStack tool = new ItemStack(picks[b.tier - 1]);
         if (stats.fortune() > 0) tool.addUnsafeEnchantment(Enchantment.FORTUNE, stats.fortune());
-        if (!mineBlock(b, target, tool)) return 0;
+        boolean motherlode = rnd.nextDouble() < stats.cycleDoubleChance();   // the whole cycle's drops, once per cycle
+        if (!mineBlock(b, target, tool, motherlode)) return 0;
         int mined = 1;
         // the blocks above are extras: each passes the same checks, and one being refused doesn't undo the rest
-        for (int up = 1; up <= stats.mineHeight(); up++) if (mineBlock(b, target.getRelative(0, up, 0), tool)) mined++;
+        for (int up = 1; up <= stats.mineHeight(); up++) if (mineBlock(b, target.getRelative(0, up, 0), tool, motherlode)) mined++;
         g.swingMainHand();
         target.getWorld().playSound(target.getLocation(), Sound.BLOCK_STONE_BREAK, 0.4f, 1f);
         return mined;
     }
 
     /** Mines one block if every safety check allows it. Containers, claim edges and protected blocks are left alone. */
-    private boolean mineBlock(Bot b, Block target, ItemStack tool) {
+    private boolean mineBlock(Bot b, Block target, ItemStack tool, boolean doubled) {
         Material t = target.getType();
         if (t.isAir() || target.isLiquid() || NO_MINE.contains(t) || t.getHardness() < 0 || target.getState() instanceof Container) return false;
         if (!workArea.test(b.owner, target.getLocation())) return false;
@@ -641,11 +649,11 @@ public final class Robots implements Listener {
             Material before = target.getType();
             Bukkit.getPluginManager().callEvent(ev);
             if (ev.isCancelled()) return false;
-            store(b, drops);
+            storeBonus(b, drops, doubled);
             if (target.getType() == before) target.setType(Material.AIR);
         } else {
             if (isMagicBlock(target)) return false;   // OneBlock needs its owner online to roll the next block
-            store(b, target.getDrops(tool));
+            storeBonus(b, target.getDrops(tool), doubled);
             target.setType(Material.AIR);
         }
         return true;
@@ -679,17 +687,17 @@ public final class Robots implements Listener {
                         List<ItemStack> drops = new ArrayList<>(bl.getDrops());
                         Material seed = SEEDS.get(t);
                         for (ItemStack d : drops) if (d.getType() == seed) { d.setAmount(d.getAmount() - 1); break; }
-                        store(b, drops);
+                        storeBonus(b, drops, rnd.nextDouble() < stats.harvestDoubleChance());
                         a.setAge(0);
                         bl.setBlockData(a);
                         done++;
                     } else if (t == Material.MELON || t == Material.PUMPKIN) {
-                        store(b, bl.getDrops());
+                        storeBonus(b, bl.getDrops(), rnd.nextDouble() < stats.harvestDoubleChance());
                         bl.setType(Material.AIR);
                         done++;
                     } else if ((t == Material.SUGAR_CANE || t == Material.CACTUS || t == Material.BAMBOO) && bl.getRelative(BlockFace.DOWN).getType() == t
                             && bl.getRelative(BlockFace.UP).getType() != t) {
-                        store(b, bl.getDrops());
+                        storeBonus(b, bl.getDrops(), rnd.nextDouble() < stats.harvestDoubleChance());
                         bl.setType(Material.AIR);
                         done++;
                     }

@@ -71,15 +71,17 @@ record AgentStats(int intervalSeconds, double speedMult, int radius, double dama
             }
             int level = rules.levelFor(track.points);
             if (track.spec != null && AcademyRules.specUnlocked(level) && AcademyRules.specFits(track.spec, job)) {
+                boolean capstone = AcademyRules.capstoneUnlocked(level);
+                // where the capstone gives a higher value, it replaces the level 10 one rather than stacking
                 switch (track.spec) {
-                    case AcademyRules.PROSPECTOR -> fortune += tune.prospectorFortune();
-                    case AcademyRules.EXCAVATOR -> mineHeight = tune.excavatorHeight();
-                    case AcademyRules.HARVESTER -> harvests += tune.harvesterExtra();
-                    case AcademyRules.BOTANIST -> grow = tune.botanistCrops();
-                    case AcademyRules.REAPER -> { damage *= tune.reaperDamage(); hits += tune.reaperHits(); }
-                    case AcademyRules.BUTCHER -> copyDrop = tune.butcherChance();
-                    case AcademyRules.ANGLER -> speed *= tune.anglerSpeed();
-                    case AcademyRules.DIVER -> treasure *= tune.diverMult();
+                    case AcademyRules.PROSPECTOR -> { fortune += tune.prospectorFortune(); if (capstone) cycleDouble = tune.motherlodeChance(); }
+                    case AcademyRules.EXCAVATOR -> mineHeight = capstone ? tune.clearcutHeight() : tune.excavatorHeight();
+                    case AcademyRules.HARVESTER -> { harvests += tune.harvesterExtra(); if (capstone) harvestDouble = tune.bumperChance(); }
+                    case AcademyRules.BOTANIST -> grow = capstone ? tune.verdantCrops() : tune.botanistCrops();
+                    case AcademyRules.REAPER -> { damage *= tune.reaperDamage(); hits += tune.reaperHits() + (capstone ? tune.cleaveHits() : 0); }
+                    case AcademyRules.BUTCHER -> copyDrop = capstone ? tune.primeChance() : tune.butcherChance();
+                    case AcademyRules.ANGLER -> speed *= capstone ? tune.quicklineSpeed() : tune.anglerSpeed();
+                    case AcademyRules.DIVER -> treasure *= capstone ? tune.troveMult() : tune.diverMult();
                     default -> { }
                 }
             }

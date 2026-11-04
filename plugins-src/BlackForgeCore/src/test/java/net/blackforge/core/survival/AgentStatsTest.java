@@ -169,4 +169,28 @@ class AgentStatsTest {
         double treasure = 0.02 * 5 * TUNE.troveMult();
         assertEquals(true, treasure + 0.05 < 1.0);
     }
+
+    // ---------------------------------------------------------------- capstones
+
+    @Test
+    void capstonesStartAtLevelThirtyAndReplaceWhereTheTableSays() {
+        assertEquals(0.0, spec("miner", LEVEL_29, "prospector").cycleDoubleChance());
+        assertEquals(0.02, spec("miner", LEVEL_30, "prospector").cycleDoubleChance());
+        assertEquals(1, spec("miner", LEVEL_30, "prospector").fortune());
+        assertEquals(1, spec("miner", LEVEL_29, "excavator").mineHeight());
+        assertEquals(2, spec("miner", LEVEL_30, "excavator").mineHeight());
+        assertEquals(0.0, spec("farmer", LEVEL_29, "harvester").harvestDoubleChance());
+        assertEquals(0.05, spec("farmer", LEVEL_30, "harvester").harvestDoubleChance());
+        assertEquals(3, spec("farmer", LEVEL_30, "harvester").harvests());
+        assertEquals(1, spec("farmer", LEVEL_29, "botanist").growCrops());
+        assertEquals(3, spec("farmer", LEVEL_30, "botanist").growCrops());
+        assertEquals(3, spec("grinder", LEVEL_29, "reaper").hits());
+        assertEquals(5, spec("grinder", LEVEL_30, "reaper").hits());
+        assertEquals(0.20, spec("grinder", LEVEL_29, "butcher").copyDropChance());
+        assertEquals(0.35, spec("grinder", LEVEL_30, "butcher").copyDropChance());
+        assertEquals(1.20, spec("fisherman", LEVEL_29, "angler").speedMult());
+        assertEquals(1.35, spec("fisherman", LEVEL_30, "angler").speedMult());
+        assertEquals(1.5, spec("fisherman", LEVEL_29, "diver").treasureMult());
+        assertEquals(2.0, spec("fisherman", LEVEL_30, "diver").treasureMult());
+    }
 }

@@ -165,6 +165,23 @@ public final class Academy implements Listener {
         };
     }
 
+    private String capstone(String spec) {
+        AgentStats.Tuning t = robots.tuning();
+        return switch (spec) {
+            case AcademyRules.PROSPECTOR -> "Motherlode: " + percent(t.motherlodeChance()) + "% chance to double a cycle's drops";
+            case AcademyRules.EXCAVATOR -> "Clearcut: mines " + t.clearcutHeight() + " blocks above its target";
+            case AcademyRules.HARVESTER -> "Bumper Crop: " + percent(t.bumperChance()) + "% chance to double a harvest";
+            case AcademyRules.BOTANIST -> "Verdant: grows " + t.verdantCrops() + " crops per cycle";
+            case AcademyRules.REAPER -> "Cleave: +" + t.cleaveHits() + " more hits";
+            case AcademyRules.BUTCHER -> "Prime Cuts: copy chance rises to " + percent(t.primeChance()) + "%";
+            case AcademyRules.ANGLER -> "Quick Line: fishes " + percentOn(t.quicklineSpeed()) + "% faster";
+            case AcademyRules.DIVER -> "Trove: treasure chance x" + t.troveMult();
+            default -> "";
+        };
+    }
+
+    private static long percent(double chance) { return Math.round(chance * 100); }
+
     private void openSpecs(Player p, Robots.Bot b, Runnable agentBack, BooleanSupplier stillAllowed) {
         View v = open(b.id, "Specialization", () -> openAgent(p, b, false, agentBack, stillAllowed), stillAllowed);
         String job = Robots.jobKey(b);
@@ -176,7 +193,8 @@ public final class Academy implements Listener {
             String spec = paths.get(i);
             boolean chosen = spec.equals(track.spec), can = AcademyRules.canPickSpec(track, spec, job, level);
             ItemStack icon = Ui.item(chosen ? Material.NETHER_STAR : Material.GLOWSTONE_DUST, (chosen ? "<green>" : can ? VERDIGRIS : "<gray>") + "<bold>" + specName(spec),
-                    "<gray>" + specEffect(spec), "", chosen ? "<green>Chosen" : can ? "<yellow>Click to choose" : "<dark_gray>" + (level < 10 ? "Unlocks at level 10" : "Another path is chosen"));
+                    "<gray>" + specEffect(spec), "", "<gray>" + capstone(spec),
+                    chosen && AcademyRules.capstoneUnlocked(level) ? "<green>Capstone active" : "<dark_gray>Capstone locked until level 30", "", chosen ? "<green>Chosen" : can ? "<yellow>Click to choose" : "<dark_gray>" + (level < 10 ? "Unlocks at level 10" : "Another path is chosen"));
             v.inv.setItem(slots[i], icon);
             if (can) v.actions.put(slots[i], () -> confirm(p, b, "Become a " + specName(spec) + "?", "Changing this later costs money.", () -> {
                 AgentRecord.JobTrack now = b.record.jobs.computeIfAbsent(Robots.jobKey(b), k -> new AgentRecord.JobTrack());
