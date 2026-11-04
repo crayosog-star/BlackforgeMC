@@ -50,6 +50,31 @@ final class AcademyRules {
         return level >= 30 ? "Master" : level >= 20 ? "Artisan" : level >= 10 ? "Journeyman" : "Apprentice";
     }
 
+    /** Whether going between these levels passed a graduation (10 or 30), even if several levels were gained at once. */
+    static boolean graduated(int before, int after) {
+        return (before < 10 && after >= 10) || (before < 30 && after >= 30);
+    }
+
+    /** The Service Record's item lore in MiniMessage text. Empty until the Agent has earned something, so untrained items keep today's lore. */
+    java.util.List<String> serviceRecord(AgentRecord r) {
+        java.util.List<String> lines = new java.util.ArrayList<>();
+        int best = 0;
+        for (AgentRecord.JobTrack t : r.jobs.values()) best = Math.max(best, levelFor(t.points));
+        if (r.jobs.values().stream().noneMatch(t -> t.points > 0)) return lines;
+        lines.add("");
+        lines.add("<#C9A227><bold>Service Record");
+        lines.add("<gray>Rank: <white>" + rankFor(best));
+        r.jobs.forEach((job, t) -> {
+            if (t.points <= 0) return;
+            lines.add("<gray>" + Character.toUpperCase(job.charAt(0)) + job.substring(1) + ": <white>Level " + levelFor(t.points)
+                    + (t.spec != null ? " <gray>(" + t.spec + ")" : ""));
+            if (!t.perks.isEmpty()) lines.add("<dark_gray>  Perks: " + String.join(", ", t.perks));
+        });
+        if (!r.traits.isEmpty()) lines.add("<gray>Traits: <white>" + String.join(", ", r.traits));
+        lines.add("<gray>Work done: <white>" + r.workDone);
+        return lines;
+    }
+
     /** How many perks a job at this level may have picked. */
     static int perkPicksAt(int level) {
         int picks = 0;

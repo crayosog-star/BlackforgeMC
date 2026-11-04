@@ -188,6 +188,38 @@ class AcademyRulesTest {
         assertTrue(RULES.isMaxLevel(30));
     }
 
+    @Test
+    void graduationsAreFoundEvenWhenLevelsAreSkipped() {
+        assertFalse(AcademyRules.graduated(8, 9));
+        assertTrue(AcademyRules.graduated(9, 10));
+        assertFalse(AcademyRules.graduated(10, 11));
+        assertTrue(AcademyRules.graduated(5, 15));
+        assertTrue(AcademyRules.graduated(29, 30));
+        assertTrue(AcademyRules.graduated(0, 30));
+        assertFalse(AcademyRules.graduated(30, 30));
+    }
+
+    @Test
+    void untrainedAgentsHaveNoServiceRecord() {
+        assertTrue(RULES.serviceRecord(new AgentRecord()).isEmpty());
+        AgentRecord r = new AgentRecord();
+        r.jobs.put("miner", new AgentRecord.JobTrack());
+        assertTrue(RULES.serviceRecord(r).isEmpty());
+    }
+
+    @Test
+    void serviceRecordShowsWhatWasEarned() {
+        List<String> lines = RULES.serviceRecord(sample());
+        String all = String.join("\n", lines);
+        assertTrue(all.contains("Service Record"));
+        assertTrue(all.contains("Rank: <white>Journeyman"));
+        assertTrue(all.contains("Miner: <white>Level 10 <gray>(prospector)"));
+        assertTrue(all.contains("efficient, keen"));
+        assertTrue(all.contains("swift, gilded"));
+        assertTrue(all.contains("Work done: <white>1234"));
+        assertFalse(all.contains("Farmer"));
+    }
+
     // ---------------------------------------------------------------- levels
 
     @Test

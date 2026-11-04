@@ -227,6 +227,18 @@ public final class Robots implements Listener {
         return it;
     }
 
+    /** Adds the Service Record to the item's lore. Untrained Agents have none, so their item looks the same as before. */
+    private ItemStack withServiceRecord(ItemStack it, AgentRecord record) {
+        List<String> lines = academy.serviceRecord(record);
+        if (lines.isEmpty()) return it;
+        it.editMeta(m -> {
+            List<net.kyori.adventure.text.Component> lore = new ArrayList<>(Optional.ofNullable(m.lore()).orElse(List.of()));
+            for (String line : lines) lore.add(Ui.mm(line));
+            m.lore(lore);
+        });
+        return it;
+    }
+
     /** Old saves, fresh items and unreadable records have no UID yet, so this is where an Agent gets its identity. */
     private static AgentRecord withUid(AgentRecord record) {
         if (record.uid.isBlank()) record.uid = UUID.randomUUID().toString();
@@ -335,10 +347,50 @@ public final class Robots implements Listener {
         String st = b.fuel <= 0 ? "<red>No fuel" : b.status.isEmpty() ? "<white>" + time(b.fuel) : b.status;
         // each part on its own: a failure in one must not cost the agent its name tag or stop the others
         stylePart(b, "name", () -> g.setCustomNameVisible(true));
-        stylePart(b, "name", () -> g.customName(Ui.mm(b.job.color + "⚙ " + (b.name != null ? "Agent " + b.name + " <dark_gray>• " + b.job.color + b.job.label : b.title()) + " " + Spawners.roman(b.tier) + " <dark_gray>• " + st)));
+        stylePart(b, "name", () -> g.customName(Ui.mm(b.job.color + "⚙ " + (b.name != null ? "Agent " + b.name + " <dark_gray>• " + b.job.color + b.job.label : b.title()) + " " + Spawners.roman(b.tier) + rankTag(b) + " <dark_gray>• " + st)));
         stylePart(b, "hand", () -> g.getEquipment().setItemInMainHand(new ItemStack(b.job.icon)));
         stylePart(b, "copper", () -> g.setWeatheringState(look[b.tier - 1]));
         stylePart(b, "glow", () -> g.setGlowing(b.tier >= 5));
+    }
+
+    /** Empty unless the Academy is on, so the name tag stays as it is everywhere else. */
+    private String rankTag(Bot b) {
+        if (!academyOn()) return "";
+        int level = jobLevel(b);
+        return " <dark_gray>• " + Academy.BRASS + AcademyRules.rankFor(level) + " " + level;
+    }
+
+    private int jobLevel(Bot b) {
+        AgentRecord.JobTrack t = b.record.jobs.get(jobKey(b));
+        return academy.levelFor(t == null ? 0 : t.points);
+    }
+
+    /** Effects for a level change. The Agent's chunk may be unloaded, and the owner offline; the level still counts either way. */
+    private void celebrate(Bot b, int before, int after) {
+        if (after <= before) return;
+        boolean graduated = AcademyRules.graduated(before, after);
+        World w = b.loc.getWorld();
+        if (w != null && w.isChunkLoaded(b.loc.getBlockX() >> 4, b.loc.getBlockZ() >> 4)) {
+            Location at = b.loc.clone().add(0, 1, 0);
+            w.spawnParticle(Particle.WAX_ON, at, 20, 0.35, 0.45, 0.35, 0.02);
+            w.playSound(at, Sound.BLOCK_ANVIL_LAND, 0.25f, 1.7f);
+            if (graduated) {
+                Particle.DustOptions brass = new Particle.DustOptions(org.bukkit.Color.fromRGB(0xC9A227), 1.2f);
+                for (int i = 0; i < 24; i++) {
+                    double angle = 2 * Math.PI * i / 24;
+                    w.spawnParticle(Particle.DUST, at.clone().add(Math.cos(angle), 0.1, Math.sin(angle)), 1, 0, 0, 0, 0, brass);
+                }
+            }
+            CopperGolem g = entity(b);
+            if (g != null) style(b, g);
+        }
+        Player owner = Bukkit.getPlayer(b.owner);
+        if (owner == null) return;
+        String rank = AcademyRules.rankFor(after);
+        if (graduated) {
+            owner.playSound(owner.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.7f, 1f);
+            owner.sendMessage(Ui.mm(Academy.BRASS + "<bold>" + b.title() + " graduated!</bold> <gray>It's now a <white>" + rank + "<gray>, level <white>" + after + "<gray>."));
+        } else owner.sendActionBar(Ui.mm(Academy.BRASS + b.title() + " <gray>reached level <white>" + after));
     }
 
     private void stylePart(Bot b, String part, Runnable apply) {
@@ -478,8 +530,10 @@ public final class Robots implements Listener {
         long whole = (long) b.pointsCarry;
         b.pointsCarry -= whole;
         b.record.workDone += done;
+        int before = jobLevel(b);
         academy.earn(b.record.jobs.computeIfAbsent(job, k -> new AgentRecord.JobTrack()), whole, academyToday(),
                 academySoftCap(), plugin.getConfig().getDouble("academy.over-cap-rate", 0.25));
+        celebrate(b, before, jobLevel(b));
     }
 
     static String jobKey(Bot b) { return b.job.name().toLowerCase(Locale.ROOT); }
@@ -509,7 +563,9 @@ public final class Robots implements Listener {
         long cap = academy.pointsFor(Integer.MAX_VALUE);
         for (Bot b : agents) {
             AgentRecord.JobTrack track = b.record.jobs.computeIfAbsent(jobKey(b), k -> new AgentRecord.JobTrack());
+            int before = academy.levelFor(track.points);
             track.points = Math.clamp(track.points + amount, 0, cap);
+            celebrate(b, before, academy.levelFor(track.points));
             s.sendMessage(Ui.mm("<gray>" + b.title() + " <dark_gray>(" + jobKey(b) + ")<gray>: <white>" + track.points + " <gray>points, level <white>"
                     + academy.levelFor(track.points) + "<gray>, today <white>" + track.todayPoints + " <dark_gray>raw"));
         }
@@ -897,7 +953,7 @@ public final class Robots implements Listener {
         bots.remove(b.id);
         for (ItemStack it : b.storage.getContents()) if (it != null) give(p, it);
         if (b.xp > 0) p.giveExp(b.xp);
-        give(p, robotItem(b.job, b.tier, b.charge, b.fuel, itemFuelTier(b.chargeRate), b.name, b.record));
+        give(p, withServiceRecord(robotItem(b.job, b.tier, b.charge, b.fuel, itemFuelTier(b.chargeRate), b.name, b.record), b.record));
         p.sendMessage(Ui.mm("<green>Agent picked up."));
         save();
     }

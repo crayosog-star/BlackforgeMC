@@ -243,7 +243,9 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Edge cases:** several levels gained at once (`/agents academy points`), name tag length with long Agent names, offline owner, Agent in an unloaded chunk.
 - **Done when:** in the Foundry, a tester sees the name tag update, the level-up and graduation effects, and correct lore on a picked-up Agent. Unit tests cover all rank boundaries.
 - **Leaves ready:** visible progress for P2.T4 and Phase 3.
-- **Evidence:**
+- **Evidence:** not ticked; prepared on a branch with no PR, because the Phase 1 gate isn't confirmed.
+  - Verified: rank boundaries, graduation skips and Service Record text passed unit tests with `javac` 21 and a local stand-in for JUnit.
+  - Untested: the Paper compile, and the name tag, effects and lore in the Foundry.
 
 ### [ ] P2.T4: Make the Academy easy to test in the Foundry
 - **Needs:** P2.T1-T3; `S/FoundrySupply.java`; `hub/FoundryTips.java:52`.
