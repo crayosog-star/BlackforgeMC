@@ -75,6 +75,8 @@ public final class Allays implements Listener {
     /** The game itself draws a mob with this exact name upside down, as it does on a name tag. */
     private static final String FLIP_NAME = "Dinnerbone";
     private static final int NAME_REACH = 8;
+    private static final int DRAIN_REACH = 20;
+    private static final long DRAIN_TO_MS = 60_000L;
     private static final double TAG_HEIGHT = 0.9;
 
     /** A test allay flying back and forth between two points. */
@@ -191,8 +193,9 @@ public final class Allays implements Listener {
                     int n = stop();
                     s.sendMessage(Ui.mm(n == 0 ? "<gray>No test allays were running." : "<green>Removed " + n + " test allay" + (n == 1 ? "" : "s") + "."));
                 } else if (what.equals("start") && s instanceof Player p) start(p);
+                else if (what.equals("drain") && s instanceof Player p) drain(p);
                 else if (what.equals("name") && a.length > 1 && s instanceof Player p) nameNearest(p, String.join(" ", java.util.Arrays.copyOfRange(a, 1, a.length)));
-                else s.sendMessage(Ui.mm("<gray>Stand in the Foundry and run <white>/allay start<gray>, then <white>/allay stop<gray>. <white>/allay name <text><gray> names the nearest summoned allay."));
+                else s.sendMessage(Ui.mm("<gray>Stand in the Foundry and run <white>/allay start<gray>, then <white>/allay stop<gray>. <white>/allay name <text><gray> names the nearest summoned allay, and <white>/allay drain<gray> runs your nearby Agents low on fuel."));
                 return true;
             }
         });
@@ -210,6 +213,17 @@ public final class Allays implements Listener {
         Location away = home.clone().add(look.clone().multiply(reach));
         flyers.add(new Flyer(spawn(home), xyz(home), xyz(away), AllayFlight.ticks(reach, speed)));
         p.sendMessage(Ui.mm("<green>Test allay started, flying " + reach + " blocks and back. <gray>Try right-clicking it, holding items near it and playing a jukebox. It should ignore all of that. <white>/allay stop<gray> removes it."));
+    }
+
+    /** Staff test for refuelling, so nobody waits an hour: your nearby Foundry Agents drop to one minute of fuel. */
+    private void drain(Player p) {
+        if (robots == null || !zone.test(p.getLocation())) { p.sendMessage(Ui.mm("<gray>Go to the Foundry first: <white>/arena<gray>, then over the bridge.")); return; }
+        int n = 0;
+        for (Robots.Bot agent : robots.agentsNear(p.getLocation(), DRAIN_REACH, p.getUniqueId())) {
+            agent.fuel = Math.min(agent.fuel, DRAIN_TO_MS);
+            n++;
+        }
+        p.sendMessage(Ui.mm(n == 0 ? "<gray>You have no Agents within " + DRAIN_REACH + " blocks." : "<green>" + n + " Agent" + (n == 1 ? "" : "s") + " down to a minute of fuel. <gray>A Courier should come within 30 seconds if the Forge has Fuel Cells."));
     }
 
     /** Staff test for naming, so nobody needs an anvil: the nearest summoned allay in reach. */
