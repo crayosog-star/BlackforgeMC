@@ -1,8 +1,8 @@
-# Builds AlloyCore on every pull request: compile, unit tests, then walkcheck (traps, lava, impossible jumps).
+# Builds BlackForgeCore (the live plugin) on every pull request: compile, unit tests, then walkcheck (traps, lava, impossible jumps).
 # Build + tests match what tools/automerge.py runs before it merges, so a red X there means automerge refuses the PR
 # too, but here the error shows on the PR. Walkcheck runs with --strict here, so a walkcheck problem also fails the
 # check (automerge only prints walkcheck results).
-name: AlloyCore build
+name: BlackForgeCore build
 
 on:
   pull_request:
@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: alloycore-build-${{ github.ref }}
+  group: blackforgecore-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
-        working-directory: plugins-src/AlloyCore
+        working-directory: plugins-src/BlackForgeCore
     steps:
       - uses: actions/checkout@v4
 
@@ -54,5 +54,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-report
-          path: plugins-src/AlloyCore/build/reports/tests/
+          path: plugins-src/BlackForgeCore/build/reports/tests/
           if-no-files-found: ignore
