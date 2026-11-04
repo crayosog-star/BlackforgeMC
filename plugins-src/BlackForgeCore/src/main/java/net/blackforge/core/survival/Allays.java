@@ -9,6 +9,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Barrel;
@@ -61,7 +62,7 @@ import java.util.function.Predicate;
 public final class Allays implements Listener {
     private static final String NAME = "<gradient:#c8743a:#4fd1b5><bold>Forge Allay</bold></gradient>";
     private static final String[] TIER_NAME = {"Gatherer", "Courier", "Steward"};
-    private static final String[] TIER_JOB = {"Carries loose drops to the Station", "Also sorts the Station into chests: put an item in a frame on a chest", "Sells from an emerald-framed chest, less a fee"};
+    private static final String[] TIER_JOB = {"Carries loose drops to the Station", "Also sorts the Station into chests with that item in a frame, and refuels Agents from Fuel Cells in the Station", "Sells from an emerald-framed chest, less a fee"};
     private static final int TRIP_BLOCKS = 12, MAX_TEST = 6, TEST_LIFE_TICKS = 5 * 60 * 20;
     /** The highest tier with its job built so far. Higher cards say so rather than sell nothing. */
     private static final int BUILT_TIER = 2;
@@ -74,6 +75,8 @@ public final class Allays implements Listener {
     /** The game itself draws a mob with this exact name upside down, as it does on a name tag. */
     private static final String FLIP_NAME = "Dinnerbone";
     private static final int NAME_REACH = 8;
+    private static final int DRAIN_REACH = 20;
+    private static final long DRAIN_TO_MS = 60_000L;
     private static final double TAG_HEIGHT = 0.9;
 
     /** A test allay flying back and forth between two points. */
@@ -92,8 +95,8 @@ public final class Allays implements Listener {
         /** What it's fetching, and what it's holding. Holding is kept in memory, because the item has left the world. */
         UUID job; ItemStack carried;
         int rest; String label;
-        /** Where a load is going, other than the Station. */
-        Block dest;
+        /** Where a load is going, other than the Station: a chest or an Agent. */
+        Block dest; Robots.Bot agent;
         /** What the player called it, or null. */
         String name;
         /** Shows the name of a flipped allay, whose real name has to be the one the game flips. */
@@ -112,6 +115,7 @@ public final class Allays implements Listener {
         final List<Worker> workers = new ArrayList<>();
         final List<AllayJobs.Job> jobs = new ArrayList<>();
         final List<Link> links = new ArrayList<>();
+        final List<Robots.Bot> thirsty = new ArrayList<>();
         long lastScan = Long.MIN_VALUE / 2, lastLinkScan = Long.MIN_VALUE / 2;
         Base(String region, UUID buyer) { this.region = region; this.buyer = buyer; }
     }
@@ -139,6 +143,7 @@ public final class Allays implements Listener {
     private long now;
     private int sandboxLimit = Integer.MAX_VALUE;
     private final boolean sausageFlip;
+    private Robots robots;
 
     /** {@code zone}: where staff may test flight. {@code sandbox}: the Arena's Foundry, where everything is free and nothing is saved. */
     Allays(BlackForgeCore plugin, BaseStation station, Predicate<Location> zone, boolean sandbox) {
@@ -164,6 +169,7 @@ public final class Allays implements Listener {
     }
 
     void setSandboxLimit(int total) { this.sandboxLimit = total; }
+    void setRobots(Robots r) { this.robots = r; }
 
     private static AllayRules.Table table(org.bukkit.configuration.file.FileConfiguration c) {
         AllayRules.Table d = AllayRules.Table.DEFAULT;
@@ -187,8 +193,9 @@ public final class Allays implements Listener {
                     int n = stop();
                     s.sendMessage(Ui.mm(n == 0 ? "<gray>No test allays were running." : "<green>Removed " + n + " test allay" + (n == 1 ? "" : "s") + "."));
                 } else if (what.equals("start") && s instanceof Player p) start(p);
+                else if (what.equals("drain") && s instanceof Player p) drain(p);
                 else if (what.equals("name") && a.length > 1 && s instanceof Player p) nameNearest(p, String.join(" ", java.util.Arrays.copyOfRange(a, 1, a.length)));
-                else s.sendMessage(Ui.mm("<gray>Stand in the Foundry and run <white>/allay start<gray>, then <white>/allay stop<gray>. <white>/allay name <text><gray> names the nearest summoned allay."));
+                else s.sendMessage(Ui.mm("<gray>Stand in the Foundry and run <white>/allay start<gray>, then <white>/allay stop<gray>. <white>/allay name <text><gray> names the nearest summoned allay, and <white>/allay drain<gray> runs your nearby Agents low on fuel."));
                 return true;
             }
         });
@@ -206,6 +213,17 @@ public final class Allays implements Listener {
         Location away = home.clone().add(look.clone().multiply(reach));
         flyers.add(new Flyer(spawn(home), xyz(home), xyz(away), AllayFlight.ticks(reach, speed)));
         p.sendMessage(Ui.mm("<green>Test allay started, flying " + reach + " blocks and back. <gray>Try right-clicking it, holding items near it and playing a jukebox. It should ignore all of that. <white>/allay stop<gray> removes it."));
+    }
+
+    /** Staff test for refuelling, so nobody waits an hour: your nearby Foundry Agents drop to one minute of fuel. */
+    private void drain(Player p) {
+        if (robots == null || !zone.test(p.getLocation())) { p.sendMessage(Ui.mm("<gray>Go to the Foundry first: <white>/arena<gray>, then over the bridge.")); return; }
+        int n = 0;
+        for (Robots.Bot agent : robots.agentsNear(p.getLocation(), DRAIN_REACH, p.getUniqueId())) {
+            agent.fuel = Math.min(agent.fuel, DRAIN_TO_MS);
+            n++;
+        }
+        p.sendMessage(Ui.mm(n == 0 ? "<gray>You have no Agents within " + DRAIN_REACH + " blocks." : "<green>" + n + " Agent" + (n == 1 ? "" : "s") + " down to a minute of fuel. <gray>A Courier should come within 30 seconds if the Forge has Fuel Cells."));
     }
 
     /** Staff test for naming, so nobody needs an anvil: the nearest summoned allay in reach. */
@@ -454,6 +472,7 @@ public final class Allays implements Listener {
         w.label = null;
         w.job = null;
         w.dest = null;
+        w.agent = null;
         if (w.carried != null) goHome(w, at, flock);
         else w.state = State.IDLE;
     }
@@ -465,6 +484,7 @@ public final class Allays implements Listener {
                 if ((now + w.index) % WORK_CHECK_TICKS != 0) return;
                 Inventory store = station.storageIn(b.region);
                 if (store == null) return;
+                if (AllayRules.canRefuel(b.tier) && startRefuel(b, w, store)) return;
                 if (AllayRules.canSort(b.tier) && startSort(b, w, store)) return;
                 var job = store.firstEmpty() < 0 ? Optional.<AllayJobs.Job>empty()
                         : AllayJobs.nearest(xyz(w.entity.getLocation()), b.jobs, taken);
@@ -477,7 +497,8 @@ public final class Allays implements Listener {
             }
             case DELIVER -> {
                 if (!advance(w, at, flock)) return;
-                dropOff(w);
+                if (w.agent != null) fuelAgent(w);
+                else dropOff(w);
                 goHome(w, at, flock);
             }
             case FETCH -> {
@@ -509,6 +530,46 @@ public final class Allays implements Listener {
         w.tick = 0;
         double dx = to[0] - w.from[0], dy = to[1] - w.from[1], dz = to[2] - w.from[2];
         w.ticks = AllayFlight.ticks(Math.sqrt(dx * dx + dy * dy + dz * dz), speed);
+    }
+
+    /** Takes the cheapest Fuel Cell in the Station to an Agent that's running low and that no other allay is already going to. */
+    private boolean startRefuel(Base b, Worker w, Inventory store) {
+        if (robots == null || b.thirsty.isEmpty()) return false;
+        ItemStack[] all = store.getContents();
+        int cell = -1;
+        for (int i = 0; i < all.length; i++) {
+            int t = Robots.fuelTier(all[i]);
+            if (t > 0 && (cell < 0 || t < Robots.fuelTier(all[cell]))) cell = i;
+        }
+        if (cell < 0) return false;
+        for (Robots.Bot agent : b.thirsty) {
+            Location l = agent.loc;
+            if (!robots.isPlaced(agent) || !robots.wantsFuel(agent) || l.getWorld() != w.entity.getWorld()
+                    || !l.getWorld().isChunkLoaded(l.getBlockX() >> 4, l.getBlockZ() >> 4)) continue;
+            boolean claimed = false;
+            for (Worker o : b.workers) if (o.agent == agent) claimed = true;
+            if (claimed) continue;
+            ItemStack stack = all[cell], one = stack.clone();
+            one.setAmount(1);
+            if (stack.getAmount() <= 1) store.setItem(cell, null);
+            else { stack.setAmount(stack.getAmount() - 1); store.setItem(cell, stack); }
+            w.carried = one;
+            w.agent = agent;
+            w.state = State.DELIVER;
+            fly(w, new double[]{l.getX(), l.getY() + 1.6, l.getZ()});
+            return true;
+        }
+        return false;
+    }
+
+    /** A cell that won't go in, because the Agent was picked up or filled meanwhile, goes back to the Station. */
+    private void fuelAgent(Worker w) {
+        Robots.Bot agent = w.agent;
+        w.agent = null;
+        if (w.carried == null || !robots.isPlaced(agent) || !robots.fuelFromItem(agent, w.carried)) return;
+        w.carried = null;
+        w.entity.getWorld().playSound(agent.loc, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.5f, 0.9f);
+        w.entity.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, agent.loc.clone().add(0, 1, 0), 8, 0.3, 0.3, 0.3, 0.02);
     }
 
     /** Takes a load out of the Station for the nearest linked chest with room. False if there's nothing to sort. */
@@ -565,6 +626,8 @@ public final class Allays implements Listener {
     /** Back to its place in the circle, aiming for where that will be when it arrives so it doesn't snap. */
     private void goHome(Worker w, Location at, int flock) {
         w.job = null;
+        w.dest = null;
+        w.agent = null;   // a trip that gave up mustn't keep its claim on an Agent
         w.state = State.RETURN;
         double[] here = xyz(w.entity.getLocation()), spot = hover(at, w.index, flock, now);
         int eta = AllayFlight.ticks(Math.sqrt(Math.pow(spot[0] - here[0], 2) + Math.pow(spot[1] - here[1], 2) + Math.pow(spot[2] - here[2], 2)), speed);
@@ -683,6 +746,10 @@ public final class Allays implements Listener {
             if (chest.equals(at.getBlock()) || !inBase(chest.getLocation(), b.region)) continue;
             if (chest.getState(false) instanceof Chest || chest.getState(false) instanceof Barrel) b.links.add(new Link(m, chest));
         }
+        b.thirsty.clear();
+        if (robots != null && AllayRules.canRefuel(b.tier))
+            for (Robots.Bot agent : robots.agentsNear(at, leash, sandbox ? b.buyer : null))
+                if (inBase(agent.loc, b.region) && robots.wantsFuel(agent)) b.thirsty.add(agent);
     }
 
     private boolean inBase(Location l, String region) {
@@ -721,6 +788,7 @@ public final class Allays implements Listener {
     /** No Station, or it's unloaded: the flock goes away until it's back, dropping what it holds. The tier stays. */
     private void sleep(Base b) {
         b.jobs.clear();
+        b.thirsty.clear();
         for (Worker w : b.workers) {
             if (w.entity != null && w.entity.isValid()) {
                 if (w.carried != null) { w.entity.getWorld().dropItem(w.entity.getLocation(), w.carried); w.carried = null; }
@@ -731,6 +799,7 @@ public final class Allays implements Listener {
             w.entity = null;
             w.job = null;
             w.dest = null;
+            w.agent = null;
             w.state = State.IDLE;
         }
     }
