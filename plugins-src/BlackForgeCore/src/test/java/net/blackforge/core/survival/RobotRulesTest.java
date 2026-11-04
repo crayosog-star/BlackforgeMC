@@ -19,11 +19,11 @@ class RobotRulesTest {
     private static final long MIN = 60_000L, HOUR = 60 * MIN;
 
     @Test void fishIntervalPerTier() {
-        assertEquals(180_000, RobotRules.fishIntervalMs(1));
-        assertEquals(150_000, RobotRules.fishIntervalMs(2));
-        assertEquals(120_000, RobotRules.fishIntervalMs(3));
-        assertEquals(90_000, RobotRules.fishIntervalMs(4));
-        assertEquals(60_000, RobotRules.fishIntervalMs(5));
+        assertEquals(120_000, RobotRules.fishIntervalMs(1));
+        assertEquals(100_000, RobotRules.fishIntervalMs(2));
+        assertEquals(80_000, RobotRules.fishIntervalMs(3));
+        assertEquals(60_000, RobotRules.fishIntervalMs(4));
+        assertEquals(40_000, RobotRules.fishIntervalMs(5));
         assertEquals(30, RobotRules.fishPerHour(1));
         assertEquals(90, RobotRules.fishPerHour(5));
         assertThrows(IllegalArgumentException.class, () -> RobotRules.fishIntervalMs(0));
