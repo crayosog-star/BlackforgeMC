@@ -79,6 +79,8 @@ public final class Robots implements Listener {
     private static final NamespacedKey ROBOT = new NamespacedKey(BlackForgeCore.NS, "robot_id");
     private static final NamespacedKey ITEM = new NamespacedKey(BlackForgeCore.NS, "robot_item");
     private static final NamespacedKey FUEL = new NamespacedKey(BlackForgeCore.NS, "fuel_tier");
+    /** An Agent item's Academy record. Fresh items have none and get a new record when placed. */
+    private static final NamespacedKey RECORD = new NamespacedKey(BlackForgeCore.NS, "agent_record");
 
     /** One robot's state; the entity is found by robot id each tick (entities can reload with new UUIDs). */
     final class Bot {
@@ -98,6 +100,8 @@ public final class Robots implements Listener {
         final Set<String> warned = new HashSet<>();
         Bot(String id) { this.id = id; }
         /** "Agent Bob", or "Miner Agent" until it's named. */
+        /** Academy data, including the UID that identifies this Agent. Foundry Agents have one too, but aren't saved. */
+        AgentRecord record = withUid(new AgentRecord());
         String title() { return name != null ? "Agent " + name : job.label + " Agent"; }
         int interval() { return job == Job.FISHERMAN ? (int) (RobotRules.fishIntervalMs(tier) / 1000) : INTERVAL[tier - 1]; }
         /** Old saves and robot items have no rate: fall back to the burning cell tier's rate. */
@@ -203,6 +207,26 @@ public final class Robots implements Listener {
         return it;
     }
 
+    /** An Agent picked up with its record. The UID in the record stops it stacking with other Agents. */
+    static ItemStack robotItem(Job job, int tier, long charge, long fuel, int fuelTier, String name, AgentRecord record) {
+        ItemStack it = robotItem(job, tier, charge, fuel, fuelTier, name);
+        it.editMeta(m -> m.getPersistentDataContainer().set(RECORD, PersistentDataType.STRING, record.encode()));
+        return it;
+    }
+
+    /** Old saves, fresh items and unreadable records have no UID yet, so this is where an Agent gets its identity. */
+    private static AgentRecord withUid(AgentRecord record) {
+        if (record.uid.isBlank()) record.uid = UUID.randomUUID().toString();
+        return record;
+    }
+
+    /** Includes Agents whose world isn't loaded yet: placing a copy now would clash when that world loads. */
+    private boolean uidInUse(String uid) {
+        for (Bot b : bots.values()) if (uid.equals(b.record.uid)) return true;
+        for (ConfigurationSection s : pending.values()) if (uid.equals(AgentRecord.decode(s.getString("academy")).uid)) return true;
+        return false;
+    }
+
     /**
      * The robot item only carries a fuel tier, and a placed robot burns at that tier's rate. Store the highest tier whose
      * rate doesn't exceed the blended rate, so pick up + place never raises the rate (it can only round down).
@@ -238,8 +262,17 @@ public final class Robots implements Listener {
         if (!canUse.test(p, at.getLocation())) { p.sendMessage(Ui.mm("<red>Agents can only go on your own island or claimed land.")); return; }
         if (sandbox && bots.size() >= sandboxTotal) { p.sendMessage(Ui.mm("<red>The Foundry is at its limit of " + sandboxTotal + " agents right now.")); return; }
         if (owned(p.getUniqueId()) >= limit(p)) { p.sendMessage(Ui.mm("<red>You have " + owned(p.getUniqueId()) + "/" + limit(p) + " agents placed. Ranks raise the limit.")); return; }
-        String[] d = e.getItem().getItemMeta().getPersistentDataContainer().get(ITEM, PersistentDataType.STRING).split(";");
+        PersistentDataContainer pdc = e.getItem().getItemMeta().getPersistentDataContainer();
+        AgentRecord record = withUid(AgentRecord.decode(pdc.get(RECORD, PersistentDataType.STRING)));
+        // e.g. a crash restored an Agent item whose Agent is still placed: a second copy would dupe a trained Agent
+        if (uidInUse(record.uid)) {
+            p.sendMessage(Ui.mm("<red>This Agent is already placed."));
+            plugin.getLogger().warning("Refused duplicate Agent " + record.uid + " placed by " + p.getName());
+            return;
+        }
+        String[] d = pdc.get(ITEM, PersistentDataType.STRING).split(";");
         Bot b = new Bot(UUID.randomUUID().toString());
+        b.record = record;
         b.owner = p.getUniqueId();
         b.job = Job.valueOf(d[0]);
         b.tier = Integer.parseInt(d[1]);
@@ -773,7 +806,7 @@ public final class Robots implements Listener {
         bots.remove(b.id);
         for (ItemStack it : b.storage.getContents()) if (it != null) give(p, it);
         if (b.xp > 0) p.giveExp(b.xp);
-        give(p, robotItem(b.job, b.tier, b.charge, b.fuel, itemFuelTier(b.chargeRate), b.name));
+        give(p, robotItem(b.job, b.tier, b.charge, b.fuel, itemFuelTier(b.chargeRate), b.name, b.record));
         p.sendMessage(Ui.mm("<green>Agent picked up."));
         save();
     }
@@ -965,6 +998,7 @@ public final class Robots implements Listener {
             b.charge = s.getLong("charge");
             b.xp = s.getInt("xp");
             b.name = s.getString("name");
+            b.record = withUid(AgentRecord.decode(s.getString("academy")));
             b.loc = new Location(w, s.getDouble("x"), s.getDouble("y"), s.getDouble("z"), (float) s.getDouble("yaw"), 0);
             b.storage = Bukkit.createInventory(null, STORAGE[b.tier - 1]);
             List<?> items = s.getList("storage", List.of());
@@ -991,6 +1025,7 @@ public final class Robots implements Listener {
             y.set(k + "charge", b.charge);
             y.set(k + "xp", b.xp);
             y.set(k + "name", b.name);
+            y.set(k + "academy", b.record.encode());
             y.set(k + "world", b.loc.getWorld().getName());
             y.set(k + "x", b.loc.getX()); y.set(k + "y", b.loc.getY()); y.set(k + "z", b.loc.getZ()); y.set(k + "yaw", b.loc.getYaw());
             y.set(k + "entity", b.entity == null ? null : b.entity.toString());
