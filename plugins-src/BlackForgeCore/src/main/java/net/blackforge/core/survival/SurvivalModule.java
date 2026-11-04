@@ -766,8 +766,10 @@ public final class SurvivalModule implements Listener {
 
     @EventHandler
     public void onMobSpawn(CreatureSpawnEvent e) {
-        if (e.getSpawnReason() != CreatureSpawnEvent.SpawnReason.CUSTOM && e.getEntity() instanceof Monster && protectedArea(e.getLocation())) e.setCancelled(true);
-        if (e.getSpawnReason() == CreatureSpawnEvent.SpawnReason.NATURAL && protectedArea(e.getLocation())) e.setCancelled(true);
+        Location l = e.getLocation();
+        boolean afk = l.getWorld() == world && Math.hypot(l.getX() - 1500.5, l.getZ() - 1500.5) <= 40 && l.getY() > 150;
+        boolean sundering = l.getWorld() != null && l.getWorld().getName().equals(SunderingArena.WORLD);   // only the bosses and their adds live there
+        if ((protectedArea(l) || afk || sundering) && net.blackforge.core.Shared.zoneBlocksSpawn(e.getSpawnReason())) e.setCancelled(true);
     }
 
     @EventHandler public void onFire(org.bukkit.event.block.BlockIgniteEvent e) { if (protectedArea(e.getBlock().getLocation()) && e.getPlayer() == null) e.setCancelled(true); }

@@ -466,8 +466,7 @@ public final class SkyblockModule implements Listener {
     @EventHandler public void onDamage(EntityDamageEvent e) { if (e.getEntity() instanceof Player p && protectedHere(p.getLocation())) e.setCancelled(true); }
     @EventHandler public void onHunger(FoodLevelChangeEvent e) { if (e.getEntity() instanceof Player p && protectedHere(p.getLocation()) && e.getFoodLevel() < p.getFoodLevel()) e.setCancelled(true); }
     @EventHandler public void onSpawnMob(CreatureSpawnEvent e) {
-        if (e.getSpawnReason() == CreatureSpawnEvent.SpawnReason.NATURAL && protectedHere(e.getLocation())) e.setCancelled(true);
-        if (e.getEntity() instanceof Monster && e.getSpawnReason() != CreatureSpawnEvent.SpawnReason.CUSTOM && protectedHere(e.getLocation())) e.setCancelled(true);
+        if (protectedHere(e.getLocation()) && net.blackforge.core.Shared.zoneBlocksSpawn(e.getSpawnReason())) e.setCancelled(true);
     }
     @EventHandler public void onPortal(PlayerPortalEvent e) { if (protectedHere(e.getFrom())) e.setCancelled(true); }
 
