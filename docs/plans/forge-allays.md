@@ -316,6 +316,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | Added after launch: allays route around walls, and hover low when there's no room to circle. Colin said "keep building" | Colin, in chat |
 | 2026-11-04 | Launch flag turned on with the gates unrecorded, because Colin said "finish up and push everything" | Colin, in chat |
 | 2026-11-04 | Colin said "finish up and push everything". P5.T1-T3 ship together to save restarts. Allay menu art needs a resource pack update, so it moves to Later ideas and the menu stays plain. The P5.T2 measurements need a live server, so they're recorded as not measured | Colin, in chat |
 | 2026-11-04 | `allays.preview-staff` defaults to true, not false, so staff can run the Phase 4 checks without a live config edit; players still see nothing. Carried items are only saved on a clean stop, so a crash can't double a load. P5.T4 must set this flag as Colin wants after launch | Flagged to Colin in the PR |
@@ -331,7 +332,6 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 
 ## Later ideas
 - Allay menu art in the Forge style, with a pack update.
-- Route allays around walls instead of through them.
 - Skyblock and OneBlock allays, which need a sell path first.
 - Hum: a jukebox near the Station makes nearby Agents work 10% faster, capped alongside Academy bonuses.
 - XP courier for Grinder bases.
