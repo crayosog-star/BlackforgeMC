@@ -153,3 +153,16 @@ grove-shop:
   daily-soft-cap: 1728
   over-cap-rate: 0.25
   prices: {}
+
+# The Sundering (Survival): five bosses chained in their own arena (/warp sundering). Every Saturday at 1pm Central one breaks free.
+# The day and time are in Events.WEEKLY. The damage split decides the loot; anyone under min-share gets nothing.
+boss:
+  size: 2.0                # how much bigger than the old world bosses
+  fight-seconds: 600       # the fight length to aim for, whatever the crowd size
+  player-dps: 12           # the damage per second one player is assumed to deal, used with fight-seconds
+  time-limit-seconds: 1200 # after this it retreats to its pit
+  money-pool: 25000
+  scrap-pool: 1500
+  min-share: 0.01
+  retreat-share: 0.25      # if it retreats, this much of the money and Scrap is still paid (no keys)
+  key-rolls: [netherite, gold, gold, iron, iron, iron]   # each key goes to one player; your damage share is your chance

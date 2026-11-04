@@ -31,9 +31,13 @@ public final class Events implements Listener {
     /** One kind of weekly event: starts on {@code day} at {@code hour}:00 and lasts {@code minutes}. */
     public record Weekly(String id, String name, String color, Material icon, String server, DayOfWeek day, int hour, int minutes, String what) {}
 
+    private static final String BOSS_NAME = "The Sundering";
+    /** The Sundering runs on Central time wherever the servers are hosted; everything else is server local time. */
+    private static final ZoneId BOSS_ZONE = ZoneId.of("America/Chicago");
+
     public static final List<Weekly> WEEKLY = List.of(
-            new Weekly("boss", "World Boss", "<#e5484d>", Material.WITHER_SKELETON_SKULL, "survival", DayOfWeek.SATURDAY, 20, 20,
-                    "A random world boss attacks the KOTH arena.|Everyone who hits it shares the loot."),
+            new Weekly("boss", BOSS_NAME, "<#e5484d>", Material.WITHER_SKELETON_SKULL, "survival", DayOfWeek.SATURDAY, 13, 20,
+                    "One of five chained bosses breaks free.|Your share of the damage is your share of the loot."),
             new Weekly("cup", "Weekend Cup", "<#ffc53d>", Material.GOLD_INGOT, "arcade", DayOfWeek.SATURDAY, 0, 48 * 60,
                     "Every Arcade game scores 1 point, every win 3.|Top 3 paid on Monday."),
             new Weekly("scrap_fri", "Double Scrap", "<#c6a15b>", Material.IRON_NUGGET, "all", DayOfWeek.FRIDAY, 18, 180,
@@ -82,11 +86,9 @@ public final class Events implements Listener {
     /** Events that are live now or start within {@code days} days, soonest first. */
     public static List<Slot> upcoming(long now, int days) {
         List<Slot> out = new ArrayList<>();
-        ZonedDateTime t = Instant.ofEpochMilli(now).atZone(ZONE);
         for (Weekly w : WEEKLY) {
             // the latest start at or before now (it may still be running), then the following weeks
-            ZonedDateTime start = t.with(java.time.temporal.TemporalAdjusters.previousOrSame(w.day())).toLocalDate().atTime(w.hour(), 0).atZone(ZONE);
-            if (start.isAfter(t)) start = start.minusWeeks(1);
+            ZonedDateTime start = latestStart(w, now);
             for (int i = 0; i <= days / 7 + 1; i++, start = start.plusWeeks(1)) {
                 long s = start.toInstant().toEpochMilli(), e = s + w.minutes() * 60_000L;
                 if (e <= now || s > now + days * 86_400_000L) continue;
@@ -101,13 +103,26 @@ public final class Events implements Listener {
                 if (live.getBoolean("koth-active")) out.add(new Slot("koth", "KOTH", "<#e5484d>", Material.GOLDEN_HELMET, "survival", now - 1, now + 20 * 60_000L, "Hold the hill in the KOTH arena|alone to win a crate key."));
                 else if (next > now) out.add(new Slot("koth", "KOTH", "<#e5484d>", Material.GOLDEN_HELMET, "survival", next, next + 20 * 60_000L, "Hold the hill in the KOTH arena|alone to win a crate key."));
                 if (live.getBoolean("boss-active")) out.removeIf(x -> x.id().equals("boss"));
-                if (live.getBoolean("boss-active")) out.add(new Slot("boss", "World Boss", "<#e5484d>", Material.WITHER_SKELETON_SKULL, "survival", now - 1, now + 20 * 60_000L, "A world boss is fighting in the KOTH arena!|Hit it to share the loot."));
+                if (live.getBoolean("boss-active")) out.add(new Slot("boss", BOSS_NAME, "<#e5484d>", Material.WITHER_SKELETON_SKULL, "survival", now - 1, now + 20 * 60_000L, "A chained boss has broken free!|/warp sundering to join the fight."));
             }
         }
         seasonal(out, now, "hallowforge", "Hallowforge", "<gradient:#ff9a1f:#9b4dff>", Material.JACK_O_LANTERN, "2026-10-28", "2026-11-10", "Soul Candy drops in every open world.|Trade it at /hallow.");
         seasonal(out, now, "frostforge", "Frostforge", "<gradient:#bfefff:#4fa3ff>", Material.SNOWBALL, "2026-12-01", "2027-01-06", "Frost Shards drop in every open world.|Trade them at /frost.");
         out.sort(Comparator.comparingLong(Slot::start));
         return out;
+    }
+
+    private static ZonedDateTime latestStart(Weekly w, long now) {
+        ZoneId zone = w.id().equals("boss") ? BOSS_ZONE : ZONE;
+        ZonedDateTime t = Instant.ofEpochMilli(now).atZone(zone);
+        ZonedDateTime start = t.with(java.time.temporal.TemporalAdjusters.previousOrSame(w.day())).toLocalDate().atTime(w.hour(), 0).atZone(zone);
+        return start.isAfter(t) ? start.minusWeeks(1) : start;
+    }
+
+    /** When The Sundering last started on the calendar (epoch ms), ignoring whether a fight is actually running. */
+    public static long bossSlot(long now) {
+        for (Weekly w : WEEKLY) if (w.id().equals("boss")) return latestStart(w, now).toInstant().toEpochMilli();
+        return 0;
     }
 
     private static void seasonal(List<Slot> out, long now, String id, String name, String color, Material icon, String from, String to, String what) {
@@ -163,6 +178,7 @@ public final class Events implements Listener {
             if (s.id().endsWith("forge")) continue;
             if (s.id().equals("koth") && server.equals("survival")) continue;   // Survival's KOTH warns its own players
             long until = s.start() - now;
+            if (s.id().equals("boss")) { bossAlerts(s, now, until); continue; }
             String key10 = s.id() + "@" + s.start() + ":10", key0 = s.id() + "@" + s.start() + ":0";
             String go = s.server().equals("all") || s.server().equals(server) ? ""
                     : " <u><click:run_command:'/go " + s.server() + "'><hover:show_text:'<gray>Go to " + where(s.server()) + "'><#4fd1c5>[Go]</hover></click></u>";
@@ -174,6 +190,24 @@ public final class Events implements Listener {
             }
         }
         if (warned.size() > 200) warned.clear();
+    }
+
+    /** The Sundering is the one everyone should hear about: a title and a sound on every server, at 10 and 2 minutes and at the start. */
+    private void bossAlerts(Slot s, long now, long until) {
+        if (until <= 0 && s.start() != bossSlot(now)) return;   // a live fight is published with a moving start time; only the calendar slot alerts
+        String key = s.id() + "@" + s.start() + ":";
+        String join = server.equals("survival") ? "<u><click:run_command:'/warp sundering'><hover:show_text:'<gray>Go to the arena'><#4fd1c5>[Join]</hover></click></u>"
+                : "<u><click:run_command:'/go survival'><hover:show_text:'<gray>Go to Survival'><#4fd1c5>[Go]</hover></click></u> <gray>then <white>/warp sundering";
+        String line = null, sub = null;
+        if (until > 2 * 60_000L && until <= 10 * 60_000L && warned.add(key + 10)) { line = "wakes in <white>" + in(until); sub = "<gray>Starts in <white>" + in(until); }
+        else if (until > 0 && until <= 2 * 60_000L && warned.add(key + 2)) { line = "wakes in <white>" + in(until); sub = "<gray>Starts in <white>" + in(until); }
+        else if (until <= 0 && now - s.start() < 2 * 60_000L && warned.add(key + 0)) { line = "<red>has begun!"; sub = "<gray>The chains are breaking"; }
+        if (line == null) return;
+        broadcast("<gold>⚑ " + s.color() + "<bold>" + s.name() + "</bold> <gray>" + line + "<gray>. " + join);
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            p.showTitle(net.kyori.adventure.title.Title.title(Ui.mm(s.color() + "<bold>" + s.name()), Ui.mm(sub)));
+            p.playSound(p.getLocation(), Sound.BLOCK_BELL_USE, 0.8f, 0.7f);
+        }
     }
 
     private void broadcast(String mm) { for (Player p : Bukkit.getOnlinePlayers()) p.sendMessage(Ui.mm(mm)); }

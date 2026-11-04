@@ -109,18 +109,18 @@ public final class SurvivalModule implements Listener {
         surge = new Surge(plugin, l -> l.getWorld() != world || !inSpawn(l.getX(), l.getY(), l.getZ()));   // anywhere but spawn
         darkness = new DarknessPotion(plugin, l -> l.getWorld() == world && (inArena(l.getX(), l.getY(), l.getZ()) || inPvp(l.getX(), l.getY(), l.getZ())));
         // Last Rite: read anywhere but spawn; who it can catch follows the PvP rules (KOTH + Scrapyard). A draw leaves both on 2 hearts here.
-        rite = new LastRite(plugin, l -> l.getWorld() != world || !inSpawn(l.getX(), l.getY(), l.getZ()), false, null, RiteChambers.Timeout.BOTH_WEAKENED);
+        rite = new LastRite(plugin, l -> !l.getWorld().getName().equals(SunderingArena.WORLD) && (l.getWorld() != world || !inSpawn(l.getX(), l.getY(), l.getZ())), false, null, RiteChambers.Timeout.BOTH_WEAKENED);
         // PvP-zone abilities (KOTH arena + Scrapyard): rare crate prizes, never used up, each on its own cooldown
         java.util.function.Predicate<Location> pvpZone = l -> l.getWorld() == world && (inArena(l.getX(), l.getY(), l.getZ()) || inPvp(l.getX(), l.getY(), l.getZ()));
         cage = new Rimelock(plugin, pvpZone);
         eye = new GodsEye(plugin, pvpZone);
-        chain = new AshenChain(plugin, pvpZone, en -> false, en -> false);
+        chain = new AshenChain(plugin, l -> pvpZone.test(l) || WorldBoss.liveAt(l), en -> false, en -> false);
         bonfire = new AshenBonfire(plugin, pvpZone);
         emp = new Emp(plugin, pvpZone, false);
         surge.onActivate(pl -> chain.breakFree(pl, "Surge"));   // Surge tears you loose from a burning chain
         emp.hackable(surge, cage, eye, chain, bonfire, gaia, rite, darkness);   // everything the EMP shuts down
         new SilkSpawners(plugin);
-        boss = new WorldBoss(plugin, world, crates, koth);   // five random world bosses in the KOTH arena, Saturdays
+        boss = new WorldBoss(plugin, world, crates);   // The Sundering: five chained bosses in their own world, one breaks free on Saturdays
         // no land in sight around spawn, KOTH and the Scrapyard: they float in empty sky
         upgrade = new SpawnUpgrade(plugin, world);   // the volcanic kingdom around spawn: /blackforge spawnupgrade
         voidOut = new VoidOut(plugin, world, "survival", List.of(new VoidOut.Area(-270, -620, 270, 790)),
@@ -376,7 +376,7 @@ public final class SurvivalModule implements Listener {
                 return true;
             }
             @Override public List<String> tabComplete(CommandSender s, String alias, String[] args) {
-                if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "koth", "pvp", "wild", "market", "smithy", "merchant", "wilds", "hall", "sell");
+                if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "sundering", "koth", "pvp", "wild", "market", "smithy", "merchant", "wilds", "hall", "sell");
                 if (name.equals("ah") && args.length == 1) return List.of("sell", "listings", "collect", "help");
                 if (name.equals("claim") && args.length == 1) return List.of("map", "show", "info", "list", "trust", "untrust", "unclaimall", "help");
                 return super.tabComplete(s, alias, args);
@@ -623,13 +623,17 @@ public final class SurvivalModule implements Listener {
 
     private void warp(Player p, String[] a) {
         if (a.length == 0) {
-            p.sendMessage(Ui.mm("<gold><bold>Warps</bold> <dark_gray>» <yellow>spawn <gray>• <yellow>crates <gray>• <yellow>market <gray>• <yellow>smithy <gray>• <yellow>merchant <gray>• <yellow>wilds <gray>• <yellow>hall <gray>• <yellow>sell <gray>• <yellow>koth <gray>• <yellow>pvp <gray>• <yellow>wild"));
+            p.sendMessage(Ui.mm("<gold><bold>Warps</bold> <dark_gray>» <yellow>spawn <gray>• <yellow>crates <gray>• <yellow>sundering <gray>• <yellow>market <gray>• <yellow>smithy <gray>• <yellow>merchant <gray>• <yellow>wilds <gray>• <yellow>hall <gray>• <yellow>sell <gray>• <yellow>koth <gray>• <yellow>pvp <gray>• <yellow>wild"));
             p.sendMessage(Ui.mm("<gray>Use <white>/warp <name>"));
             return;
         }
         switch (a[0].toLowerCase()) {
             case "spawn" -> teleportSafe(p, spawn(), "spawn");
             case "crates", "crate" -> teleportSafe(p, DistrictLife.cratesWarp(world), "the crates");
+            case "sundering", "boss" -> {
+                if (boss.arena().ready()) teleportSafe(p, boss.arena().plaza(), "The Sundering");
+                else p.sendMessage(Ui.mm("<gold>The Sundering's arena is still being built."));
+            }
             case "koth", "arena" -> dropInto(p, koth.arrival(), "the KOTH arena - PvP is on!");
             case "pvp", "scrapyard" -> { dropInto(p, pvp.arrival(), "the Scrapyard - PvP is on!"); }
             case "market", "ah", "auction" -> teleportSafe(p, DistrictLife.marketWarp(world), "the market");
@@ -899,6 +903,8 @@ public final class SurvivalModule implements Listener {
         if (holos.size() > 5) Ui.setText(holos.get(5), koth.status() + "<newline>" + pvp.status() + " <gray>• <white>/pvp");
         if (kothHolo != null && kothHolo.isValid()) Ui.setText(kothHolo, "<#e5484d><bold>KING OF THE HILL</bold><newline>" + (koth.active() ? "<green>LIVE - hold the gold pad!" : koth.status()));
         for (Player p : Bukkit.getOnlinePlayers()) {
+            List<String> bossBoard = boss.board(p);
+            if (bossBoard != null) { Ui.sidebar(p, bossBoard); continue; }
             Ui.sidebar(p, List.of(
                     "<dark_gray>" + "-".repeat(18),
                     "<gray>Balance: <green>" + (eco == null ? "?" : AuctionHouse.money(eco.getBalance(p))),
