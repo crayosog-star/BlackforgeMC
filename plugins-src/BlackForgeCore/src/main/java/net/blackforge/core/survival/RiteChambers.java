@@ -165,7 +165,16 @@ public final class RiteChambers implements Listener {
         LivingEntity foe = practice ? spawnDummy(tAt) : target;
         Duel d = new Duel(slot, caster, foe, practice, cs, ts, castSpot);
         duels[slot] = d;
-        persist();
+        if (!persist()) {
+            duels[slot] = null;
+            if (practice) foe.remove();
+            return false;
+        }
+        if (!caster.teleport(cAt) || caster.getWorld() != world
+                || (!practice && (!target.teleport(tAt) || target.getWorld() != world))) {
+            sendHome(d, null, null, true);
+            return false;
+        }
         raiseWalls(d);
         enter(caster, cAt);
         if (!practice) enter(target, tAt);
@@ -191,7 +200,6 @@ public final class RiteChambers implements Listener {
         for (PotionEffect e : p.getActivePotionEffects()) p.removePotionEffect(e.getType());
         p.setFireTicks(0);
         p.setFallDistance(0);
-        p.teleport(to);
         p.setHealth(maxHealth(p));
         p.setAbsorptionAmount(0);
         p.setFoodLevel(20);
@@ -462,13 +470,13 @@ public final class RiteChambers implements Listener {
         Location loc = y.getLocation(k + ".loc");
         double hp = y.getDouble(k + ".health", 20);
         int food = y.getInt(k + ".food", 20);
-        y.set(k, null);
-        try { y.save(store); } catch (Exception ignored) { }
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!p.isOnline() || loc == null || loc.getWorld() == null) return;
-            p.teleport(safe(loc));
+            Location home = safe(loc);
+            if (!p.teleport(home) || p.getWorld() != home.getWorld()) return;
             p.setHealth(Math.max(1, Math.min(maxHealth(p), hp)));
             p.setFoodLevel(food);
+            unpersist(p);
             p.sendMessage(Ui.mm("<#B66CFF>✦ <gray>The server restarted during your Last Rite. Nobody won; you're back where you were."));
         }, 5L);
     }
@@ -532,7 +540,6 @@ public final class RiteChambers implements Listener {
 
     private void sendHome(Duel d, LivingEntity winner, LivingEntity loser, boolean undo) {
         duels[d.slot] = null;
-        unpersist(d);
         d.wallSkins.forEach(Entity::remove);
         clearBarriers(d.slot);
         if (d.practice && d.foe.isValid()) d.foe.remove();
@@ -572,8 +579,11 @@ public final class RiteChambers implements Listener {
         if (s == null) return;
         boolean online = p.isOnline();
         Location home = safe(s.loc());
+        if (!p.isDead() && !p.getLocation().equals(s.loc()) && (!p.teleport(home) || p.getWorld() != home.getWorld())) {
+            p.sendMessage(Ui.mm("<red>The return teleport failed. Rejoin to retry returning from the Last Rite."));
+            return;   // keep the recovery record and never execute them in the chamber
+        }
         if (online && !p.isDead()) {
-            p.teleport(home);
             for (PotionEffect e : p.getActivePotionEffects()) p.removePotionEffect(e.getType());
             p.addPotionEffects(s.effects());
             p.setHealth(Math.max(0.5, Math.min(maxHealth(p), s.health())));
@@ -582,9 +592,8 @@ public final class RiteChambers implements Listener {
             p.setSaturation(s.saturation());
             p.setFireTicks(s.fire());
             p.setFallDistance(0);
-        } else if (!online) {
-            p.teleport(home);   // still possible during the quit event: their items drop at home, not in the void
         }
+        unpersist(p);
         if (undo) return;
         boolean dies = p.equals(loser) || (timeout && this.timeout == Timeout.BOTH_DIE);
         if (dies) {
@@ -637,14 +646,20 @@ public final class RiteChambers implements Listener {
 
     // ------------------------------------------------------------------ crash safety
 
-    private void persist() {
+    private boolean persist() {
         YamlConfiguration y = YamlConfiguration.loadConfiguration(store);
         for (Duel d : duels) {
             if (d == null) continue;
             write(y, d.caster, d.casterSave);
             if (d.foe instanceof Player t) write(y, t, d.foeSave);
         }
-        try { y.save(store); } catch (Exception ex) { plugin.getLogger().warning("Could not save rites.yml: " + ex.getMessage()); }
+        try {
+            y.save(store);
+            return true;
+        } catch (Exception ex) {
+            plugin.getLogger().warning("Could not save rites.yml: " + ex.getMessage());
+            return false;
+        }
     }
 
     private static void write(YamlConfiguration y, Player p, Saved s) {
@@ -654,10 +669,9 @@ public final class RiteChambers implements Listener {
         y.set(k + ".food", s.food());
     }
 
-    private void unpersist(Duel d) {
+    private void unpersist(Player p) {
         YamlConfiguration y = YamlConfiguration.loadConfiguration(store);
-        y.set(d.caster.getUniqueId().toString(), null);
-        if (d.foe instanceof Player t) y.set(t.getUniqueId().toString(), null);
+        y.set(p.getUniqueId().toString(), null);
         try { y.save(store); } catch (Exception ignored) { }
     }
 

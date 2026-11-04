@@ -73,8 +73,8 @@ public final class HubModule implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         registerJoinCommand();   // the clickable links in the first-join guide run /bfjoin
         // keep the whole hub loaded: holograms survive, lava keeps flowing, first joins are instant
-        for (int cx = -6; cx <= 5; cx++) for (int cz = -6; cz <= 5; cz++) world.addPluginChunkTicket(cx, cz, plugin);
-        if (!new File(plugin.getDataFolder(), "hub-built").exists()) build(Bukkit.getConsoleSender());
+        for (int cx = -6; cx <= 5; cx++) for (int cz = -9; cz <= 5; cz++) world.addPluginChunkTicket(cx, cz, plugin);
+        if (!new File(plugin.getDataFolder(), "hub-built").exists() || !new File(plugin.getDataFolder(), "hub-forge-v1").exists()) build(Bukkit.getConsoleSender());   // hub-forge-v1: the Black Forge redesign
         else {
             if (!new File(plugin.getDataFolder(), "hub-biome-v2").exists()) applyBiome();
             if (!new File(plugin.getDataFolder(), "hub-castle-v1").exists()) addCastle();
@@ -83,7 +83,8 @@ public final class HubModule implements Listener {
         Bukkit.getScheduler().runTaskLater(plugin, this::spawnHolograms, 40L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::refresh, 60L, 40L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::ambient, 20L, 10L);
-        dragons = new DragonAnimator(plugin, world);
+        DragonFlight.fireScale = Math.max(0.1, plugin.getConfig().getDouble("hub.dragons.fire-interval-scale", 1.0));
+        if (plugin.getConfig().getBoolean("hub.dragons.enabled", true)) dragons = new DragonAnimator(plugin, world);
         tutorial = new Tutorial(plugin);
         parkour = new HubParkour(plugin, this, world);
         Bukkit.getScheduler().runTaskTimer(plugin, this::leaderboards, 60L, 1200L);
@@ -214,6 +215,10 @@ public final class HubModule implements Listener {
 
 
     public Location spawn() {
+        var cfg = plugin.getConfig();
+        if (cfg.contains("hub.spawn.x"))
+            return new Location(world, cfg.getDouble("hub.spawn.x"), cfg.getDouble("hub.spawn.y"), cfg.getDouble("hub.spawn.z"),
+                    (float) cfg.getDouble("hub.spawn.yaw", HubLayout.SPAWN_YAW), (float) cfg.getDouble("hub.spawn.pitch", HubLayout.SPAWN_PITCH));
         return new Location(world, HubLayout.SPAWN_X, HubLayout.SPAWN_Y, HubLayout.SPAWN_Z, HubLayout.SPAWN_YAW, HubLayout.SPAWN_PITCH);
     }
 
@@ -228,7 +233,7 @@ public final class HubModule implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, task -> {
             for (int n = 0; n < 2 && x[0] <= e; n++, x[0]++)
                 for (int z = -e; z <= e; z++)
-                    for (int y = HubLayout.Y - 80; y <= HubLayout.Y + 70; y++) {
+                    for (int y = HubLayout.Y - 80; y <= HubLayout.Y + 120; y++) {
                         var b = world.getBlockAt(x[0], y, z);
                         if (!b.getType().isAir()) b.setType(Material.AIR, false);
                     }
@@ -241,7 +246,7 @@ public final class HubModule implements Listener {
     private void pasteHub(CommandSender who, net.blackforge.core.build.Canvas canvas, long t) {
         Paster.paste(plugin, world, canvas, 6000, () -> {
             try { new File(plugin.getDataFolder(), "hub-built").createNewFile(); } catch (Exception ignored) { }
-            try { new File(plugin.getDataFolder(), "hub-castle-v1").createNewFile(); } catch (Exception ignored) { }
+            try { new File(plugin.getDataFolder(), "hub-castle-v1").createNewFile(); new File(plugin.getDataFolder(), "hub-keep-v1").createNewFile(); new File(plugin.getDataFolder(), "hub-forge-v1").createNewFile(); } catch (Exception ignored) { }
             applyBiome();
             who.sendMessage(Component.text("Hub built: " + canvas.size() + " blocks in " + (System.currentTimeMillis() - t) / 1000 + "s"));
             for (Player p : Bukkit.getOnlinePlayers()) toSpawn(p);
@@ -303,9 +308,13 @@ public final class HubModule implements Listener {
             p.showTitle(Title.title(Ui.mm(Ui.TITLE), Ui.mm("<gray>Welcome back, <white>" + p.getName()),
                     Title.Times.times(Duration.ofMillis(300), Duration.ofSeconds(3), Duration.ofMillis(800))));
             p.playSound(p.getLocation(), Sound.BLOCK_ANVIL_LAND, 0.4f, 1.4f);
-            if (SHOW_EVERY_JOIN.contains(p.getUniqueId())) {
-                // after the loading screen, same delay as the first-join show
-                Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) WelcomeShow.play(plugin, p); }, 30L);
+            if (plugin.getConfig().getBoolean("hub.join.enabled", true)) {
+                if (SHOW_EVERY_JOIN.contains(p.getUniqueId()) || fullShowDue(p)) {
+                    // after the loading screen, same delay as the first-join show
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) { WelcomeShow.play(plugin, p); markShow(p); } }, 30L);
+                } else if (plugin.getConfig().getBoolean("hub.join.short-effects", true)) {
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) shortArrival(p); }, 20L);
+                }
             }
         }
         for (UUID id : hidingPlayers) { Player h = Bukkit.getPlayer(id); if (h != null) h.hidePlayer(plugin, p); }
@@ -324,7 +333,7 @@ public final class HubModule implements Listener {
             plugin.net().broadcastAll(p, Ui.mm("<gold>✦ <gray>Welcome <white><bold>" + p.getName() + "</bold> <gray>to " + Ui.TITLE + "<gray>! They're player <gold>#" + number + "<gray>. Say hi!"));
             // "The Forge Awakens" firework show, seen only by the new player (started after the
             // loading screen so the opening rune isn't missed)
-            WelcomeShow.play(plugin, p);
+            if (plugin.getConfig().getBoolean("hub.join.enabled", true)) { WelcomeShow.play(plugin, p); markShow(p); }
         }, 30L);
         // a short, clickable guide
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -448,7 +457,153 @@ public final class HubModule implements Listener {
         if (tutorial != null) tutorial.pickedGame(p);
         p.sendActionBar(Ui.mm("<gold>Sending you to <white>" + server + "<gold>..."));
         p.playSound(p.getLocation(), Sound.BLOCK_PORTAL_TRAVEL, 0.25f, 1.6f);
-        plugin.net().send(p, server);
+        plugin.net().send(p, plugin.getConfig().getString("hub.portals." + server, server));
+        // still standing here a few seconds later: the proxy couldn't reach it
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (p.isOnline() && p.getWorld() == world)
+                p.sendMessage(Ui.mm("<red>" + server.substring(0, 1).toUpperCase() + server.substring(1) + " isn't reachable right now. <gray>Give it a minute, or pick another game."));
+        }, 80L);
+    }
+
+    // ------------------------------------------------------------------ arrival effects
+
+    private File showsFile() { return new File(plugin.getDataFolder(), "hub-last-show.yml"); }
+
+    /** A returning player sees the full "Forge Awakens" show only after hub.join.full-show-cooldown-minutes away. */
+    private boolean fullShowDue(Player p) {
+        long mins = plugin.getConfig().getLong("hub.join.full-show-cooldown-minutes", 360);
+        long last = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(showsFile()).getLong(p.getUniqueId().toString(), 0);
+        return System.currentTimeMillis() - last >= mins * 60_000L;
+    }
+
+    private void markShow(Player p) {
+        try {
+            var y = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(showsFile());
+            y.set(p.getUniqueId().toString(), System.currentTimeMillis());
+            plugin.getDataFolder().mkdirs();
+            y.save(showsFile());
+        } catch (Exception ignored) { }
+    }
+
+    /** The short arrival for someone who was here recently: a ring of fire opening under their feet, embers rising, a soft chime. Only they see it. */
+    void shortArrival(Player p) {
+        Location at = p.getLocation().clone();
+        p.playSound(at, Sound.BLOCK_ENCHANTMENT_TABLE_USE, 0.7f, 1.2f);
+        p.playSound(at, Sound.BLOCK_ANVIL_PLACE, 0.35f, 0.7f);
+        if (rnd.nextDouble() < plugin.getConfig().getDouble("hub.join.roar-chance", 0.2)) p.playSound(at, Sound.ENTITY_ENDER_DRAGON_GROWL, 0.35f, 0.8f);
+        int[] t = {0};
+        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+            if (!p.isOnline() || ++t[0] > 14) { task.cancel(); return; }
+            double r = t[0] * 0.35;
+            for (int i = 0; i < 24; i++) {
+                double a = i * Math.PI / 12;
+                p.spawnParticle(i % 3 == 0 ? Particle.PORTAL : Particle.FLAME, at.getX() + Math.cos(a) * r, at.getY() + 0.1, at.getZ() + Math.sin(a) * r, 1, 0, 0.02, 0, 0.01);
+            }
+            p.spawnParticle(Particle.SMALL_FLAME, at.getX(), at.getY() + 0.3 + t[0] * 0.2, at.getZ(), 3, 0.4, 0.2, 0.4, 0.02);
+            if (t[0] % 4 == 0) p.spawnParticle(Particle.CAMPFIRE_COSY_SMOKE, at.getX(), at.getY() + 0.2, at.getZ(), 0, 0, 0.1, 0, 0.05);
+        }, 0L, 1L);
+    }
+
+    // ------------------------------------------------------------------ admin: /blackforge setspawn|reload|dragons|effects|portals|info
+
+    private final Random rnd = new Random();
+    private static final List<String> ADMIN = List.of("setspawn", "reload", "dragons", "effects", "portals", "info");
+
+    public static boolean isAdminSub(String s) { return ADMIN.contains(s.toLowerCase()); }
+
+    public List<String> adminTabs(String[] a) {
+        String s = a[0].toLowerCase();
+        if (a.length == 2 && s.equals("dragons")) return List.of("fire", "on", "off");
+        if (a.length == 2 && s.equals("effects")) return List.of("on", "off", "cooldown", "test");
+        if (a.length == 3 && s.equals("effects") && a[1].equalsIgnoreCase("test")) return List.of("short", "full");
+        if (a.length == 2 && s.equals("portals")) return List.of("set");
+        if (a.length == 3 && s.equals("portals") && a[1].equalsIgnoreCase("set")) return HubLayout.GATES.stream().map(HubLayout.Gate::server).toList();
+        if (a.length == 4 && s.equals("portals") && a[1].equalsIgnoreCase("set")) return List.of(net.blackforge.core.Net.SERVERS);
+        return List.of();
+    }
+
+    public boolean admin(CommandSender s, String[] a) {
+        if (a.length == 0 || !isAdminSub(a[0])) return false;
+        if (!s.hasPermission("blackforge.admin")) { s.sendMessage(Ui.mm("<red>You need blackforge.admin for that.")); return true; }
+        var cfg = plugin.getConfig();
+        switch (a[0].toLowerCase()) {
+            case "setspawn" -> {
+                if (!(s instanceof Player p) || p.getWorld() != world) { s.sendMessage(Ui.mm("<red>Stand in the hub to set its spawn.")); return true; }
+                Location l = p.getLocation();
+                cfg.set("hub.spawn.x", l.getX()); cfg.set("hub.spawn.y", l.getY()); cfg.set("hub.spawn.z", l.getZ());
+                cfg.set("hub.spawn.yaw", (double) l.getYaw()); cfg.set("hub.spawn.pitch", (double) l.getPitch());
+                plugin.saveConfig();
+                world.setSpawnLocation(l);
+                s.sendMessage(Ui.mm("<green>Hub spawn set to <white>" + String.format("%.1f %.1f %.1f", l.getX(), l.getY(), l.getZ())));
+            }
+            case "reload" -> {
+                plugin.reloadConfig();
+                DragonFlight.fireScale = Math.max(0.1, plugin.getConfig().getDouble("hub.dragons.fire-interval-scale", 1.0));
+                spawnHolograms();
+                s.sendMessage(Ui.mm("<green>Hub config reloaded. <gray>(Dragons on/off needs a restart.)"));
+            }
+            case "dragons" -> {
+                if (a.length >= 3 && a[1].equalsIgnoreCase("fire")) {
+                    try {
+                        double v = Math.max(0.1, Math.min(10, Double.parseDouble(a[2])));
+                        cfg.set("hub.dragons.fire-interval-scale", v); plugin.saveConfig(); DragonFlight.fireScale = v;
+                        s.sendMessage(Ui.mm("<green>Dragons wait <white>x" + v + "<green> as long between fire breaths."));
+                    } catch (NumberFormatException e) { s.sendMessage(Ui.mm("<red>/blackforge dragons fire <number>  (1 = normal, 2 = half as often)")); }
+                } else if (a.length >= 2 && (a[1].equalsIgnoreCase("on") || a[1].equalsIgnoreCase("off"))) {
+                    cfg.set("hub.dragons.enabled", a[1].equalsIgnoreCase("on")); plugin.saveConfig();
+                    s.sendMessage(Ui.mm("<green>Dragons " + a[1].toLowerCase() + " from the next hub restart."));
+                } else {
+                    s.sendMessage(Ui.mm("<gold>Dragons: <white>" + (dragons != null ? "4 flying (black, crimson, violet, serpent)" : "off")
+                            + "<gold>, fire interval x<white>" + DragonFlight.fireScale));
+                    s.sendMessage(Ui.mm("<gray>/blackforge dragons fire <scale> | on | off"));
+                }
+            }
+            case "effects" -> {
+                String sub = a.length > 1 ? a[1].toLowerCase() : "";
+                switch (sub) {
+                    case "on", "off" -> { cfg.set("hub.join.enabled", sub.equals("on")); plugin.saveConfig(); s.sendMessage(Ui.mm("<green>Join effects " + sub + ".")); }
+                    case "cooldown" -> {
+                        try {
+                            long m = Math.max(0, Long.parseLong(a[2]));
+                            cfg.set("hub.join.full-show-cooldown-minutes", m); plugin.saveConfig();
+                            s.sendMessage(Ui.mm("<green>Returning players see the full show after <white>" + m + "<green> minutes away."));
+                        } catch (Exception e) { s.sendMessage(Ui.mm("<red>/blackforge effects cooldown <minutes>")); }
+                    }
+                    case "test" -> {
+                        if (!(s instanceof Player p)) { s.sendMessage(Ui.mm("<red>Players only.")); return true; }
+                        if (a.length > 2 && a[2].equalsIgnoreCase("full")) WelcomeShow.play(plugin, p); else shortArrival(p);
+                    }
+                    default -> {
+                        s.sendMessage(Ui.mm("<gold>Join effects: <white>" + (cfg.getBoolean("hub.join.enabled", true) ? "on" : "off")
+                                + "<gold>, full show after <white>" + cfg.getLong("hub.join.full-show-cooldown-minutes", 360) + " min<gold> away, short effects <white>"
+                                + cfg.getBoolean("hub.join.short-effects", true) + "<gold>, roar chance <white>" + cfg.getDouble("hub.join.roar-chance", 0.2)));
+                        s.sendMessage(Ui.mm("<gray>/blackforge effects on|off|cooldown <min>|test [short|full]"));
+                    }
+                }
+            }
+            case "portals" -> {
+                if (a.length >= 4 && a[1].equalsIgnoreCase("set")) {
+                    if (HubLayout.GATES.stream().noneMatch(g -> g.server().equalsIgnoreCase(a[2]))) { s.sendMessage(Ui.mm("<red>No portal called " + a[2])); return true; }
+                    cfg.set("hub.portals." + a[2].toLowerCase(), a[3]); plugin.saveConfig();
+                    s.sendMessage(Ui.mm("<green>The " + a[2] + " portal now connects to <white>" + a[3] + "<green>."));
+                } else {
+                    s.sendMessage(Ui.mm("<gold>Portals:"));
+                    for (HubLayout.Gate g : HubLayout.GATES) {
+                        String dest = cfg.getString("hub.portals." + g.server(), g.server());
+                        s.sendMessage(Ui.mm(" <white>" + g.title() + " <gray>at " + g.cx() + ", " + g.cz() + " -> <white>" + dest + " <gray>(" + plugin.net().count(dest) + " online)"));
+                    }
+                    s.sendMessage(Ui.mm("<gray>/blackforge portals set <portal> <server>"));
+                }
+            }
+            default -> {
+                Location sp = spawn();
+                s.sendMessage(Ui.mm("<gold>Black Forge hub <gray>- spawn <white>" + String.format("%.0f %.0f %.0f", sp.getX(), sp.getY(), sp.getZ())
+                        + "<gray>, " + HubLayout.GATES.size() + " portals, dragons " + (dragons != null ? "on" : "off")
+                        + ", fortress " + (new File(plugin.getDataFolder(), "hub-keep-v1").exists() ? "built" : "not built")));
+                s.sendMessage(Ui.mm("<gray>/blackforge setspawn | reload | dragons | effects | portals | info   (config.yml, hub: section)"));
+            }
+        }
+        return true;
     }
 
     // ------------------------------------------------------------------ movement
@@ -467,7 +622,7 @@ public final class HubModule implements Listener {
             if (portalCooldown.getOrDefault(p.getUniqueId(), 0L) > now) return;
             portalCooldown.put(p.getUniqueId(), now + 3000);
             // bounce back out so a failed connect doesn't leave them standing in the portal
-            Vector back = new Vector(-g.cx(), 0, -g.cz()).normalize().multiply(0.9).setY(0.35);
+            Vector back = new Vector(0, 0, 1).multiply(0.9).setY(0.35);
             p.setVelocity(back);
             connect(p, g.server());
             return;

@@ -120,6 +120,41 @@ last-rite:
   allow-totems: true
   chamber-slots: 8         # rites at once per server
 
+# Night Thieves (Survival). Outside a claim you're trusted on, at night, every roll-seconds there's a chance a gang comes
+# for you. Solo: one thief in a copy of your gear, solo-multiplier stronger. A group within party-radius rolls once and
+# gets more, tougher thieves the more of them there are and the better their gear. One in mage-every is a mage who throws
+# Hex Bolts. A hit can steal: weapon-turn-chance of the time he takes your weapon and fights you with it, otherwise he
+# grabs your most valuable item and runs. Kill him to get it back. Staff: /blackforge thieves spawn <player> | clear | status
+thief-ambush:
+  enabled: true
+  roll-seconds: 60
+  chance: 0.05
+  cooldown-minutes: 10         # no second ambush this soon after one ends
+  min-playtime-minutes: 60     # brand-new players are left alone
+  party-radius: 24
+  max-thieves: 8
+  thieves-per-gear: 12         # groups: +1 thief per this much average gear score (iron kit ~16, netherite ~28)
+  solo-multiplier: 1.5         # health, damage and armour vs the gear they copy
+  per-extra-player: 0.08
+  per-gear-point: 0.015        # per point of average gear score above 10
+  max-multiplier: 2.5
+  mage-every: 3
+  steal-chance: 0.25           # per thief hit that lands
+  weapon-turn-chance: 0.5
+  speed: 0.3                   # movement speed (a zombie is 0.23)
+  flee-speed-boost: 0.05
+  escape-seconds: 30
+  escape-distance: 40
+  give-up-seconds: 180
+  hex-damage: 4.0              # times the multiplier
+  cast-gap-min-ticks: 60
+  cast-gap-max-ticks: 90
+  reward-coins: 150            # per thief killed, times the multiplier, split between the group
+  key-chance: 0.04
+  key-crate: iron
+  rare-key-chance: 0.01
+  rare-key-crate: gold
+
 # Base Station (Survival + Skyblock): one per claim or island. Sells Hopper Upgrades, upgrades Agents, collects their output.
 base-station:
   enabled: true
@@ -137,6 +172,25 @@ hopper-upgrades:
   essence: 128             # per Hopper Upgrade
   max-per-chunk: 16
 
+# Forge Allays: a base upgrade that stays at the Base Station and moves items (plan: docs/plans/forge-allays.md).
+# Survival and the Foundry only. Lists are per tier I, II, III. With enabled and preview-staff both false, no allays fly and tiers are kept.
+allays:
+  enabled: true
+  preview-staff: true             # staff get the Forge's allay menu on Survival with real money, before enabled is on
+  flock: [1, 2, 3]                # allays per base
+  leash: [12, 20, 28]             # blocks from the Station, and never outside the claim
+  price: [75000, 250000, 750000]  # to reach each tier
+  essence: [256, 1024, 4096]      # to reach each tier
+  carry: 16                       # items per trip
+  speed: 6.0                      # blocks a second
+  pause-seconds: 1.0              # pause after each trip
+  min-drop-age-ticks: 60          # leaves newer drops alone, so players can pick up their own
+  scan-seconds: 5                 # how often a base looks for work
+  link-scan-seconds: 30           # how often a base looks for framed chests
+  max-scans-per-tick: 4           # bases scanned per tick across the server
+  sell-fee: 0.10                  # Steward's cut of a sale
+  sausage-flip: true              # an allay named Smoked Sausage flies upside down
+
 # Agents, called robots in the code and saves (Survival + Skyblock copper golems). NOT read by the plugin yet - a later task wires these up.
 # fish-seconds (per robot tier I..V) and fisher-burn match the built-in values in RobotRules; the rest are for the
 # upcoming chest trips (radius in blocks, store when any item reaches store-threshold, fetch fuel at 2 minutes left).
@@ -151,6 +205,28 @@ robots:
   # Logs each Grinder's result when it changes (fuel, mobs found, skipped and why, hits, kills).
   # If this key is missing, it's on for the Arena's Foundry and off everywhere else.
   # grinder-debug-log: true
+
+# The Academy: Agents earn Mastery by working (Survival, once live). live-modes lists the server modes it's on for; the
+# Arena's Foundry always has it, for testing. Nothing reads these yet except the startup log line for live-modes.
+# level-base and level-exponent: total points for a level = base x level^exponent. Per job, per UTC day: full points up
+# to daily-soft-cap, then over-cap-rate of them. coach-mult applies while the owner is within coach-radius blocks.
+academy:
+  live-modes: []
+  points-per-work:
+    miner: 1
+    farmer: 1
+    grinder: 2
+    fisherman: 12
+  level-base: 20
+  level-exponent: 2.0
+  max-level: 30
+  daily-soft-cap: 1500
+  over-cap-rate: 0.25
+  coach-radius: 16
+  coach-mult: 1.25
+  perks: {}
+  specs: {}
+  traits: {}
 
 # The Trader in the Gilded Grove (Survival): sells raw farmed goods for the player's balance.
 # Per player, per item, per UTC day: full price up to daily-soft-cap, then over-cap-rate of the price.
@@ -180,3 +256,22 @@ foundry:
   max-agents-per-player: 20
   max-agents-total: 60
   max-upgraded-hoppers-per-chunk: 64
+  max-allays-total: 12
+
+# Black Forge hub (hub server only). Commands: /blackforge setspawn | reload | dragons | effects | portals | info
+hub:
+  # portal -> proxy server name (change if a backend is registered under another name in the proxy)
+  portals:
+    survival: survival
+    arcade: arcade
+    factions: factions
+    skyblock: skyblock
+  # spawn: set in-game with /blackforge setspawn (until set, the built-in spawn is used)
+  join:
+    enabled: true                     # false = no arrival effects at all
+    full-show-cooldown-minutes: 360   # a returning player sees the full "Forge Awakens" show only after this long away (first join always does)
+    short-effects: true               # the quick ring of fire + embers for everyone else
+    roar-chance: 0.2                  # chance of a soft dragon roar on the short arrival
+  dragons:
+    enabled: true                     # takes effect on hub restart
+    fire-interval-scale: 1.0          # 2 = dragons breathe fire half as often, 0.5 = twice as often

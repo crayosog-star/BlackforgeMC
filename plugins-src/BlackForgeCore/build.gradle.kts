@@ -88,3 +88,11 @@ tasks.register<JavaExec>("bosses") {
     maxHeapSize = "6g"
     args((project.findProperty("jar") ?: "").toString(), (project.findProperty("dir") ?: layout.projectDirectory.dir("previews/bosses").asFile.absolutePath).toString())
 }
+
+// Renders the Infernal Kingdom (survival spawn rebuild, staging): gradle kingdom
+tasks.register<JavaExec>("kingdom") {
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("net.blackforge.core.build.KingdomPreview")
+    jvmArgs("-Xmx6g")
+    args(layout.projectDirectory.dir("previews").asFile.absolutePath)
+}

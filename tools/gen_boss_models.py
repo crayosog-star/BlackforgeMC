@@ -145,6 +145,26 @@ def painter(key, face, w, hgt, seed):
     def flat(c):
         return lambda px, py: c
 
+    def scales(px, py, dark=(14, 40, 44), mid=(26, 66, 62), light=(70, 130, 112)):
+        # overlapping rows of scales, each a little different, with a bright lip along the lower edge
+        row = py // 3
+        off = (row % 2) * 2
+        cell = (px + off) // 4
+        lx, ly = (px + off) % 4, py % 3
+        n = h(cell, row, s + 11)
+        c = mix(dark, mid, 0.25 + 0.75 * n)
+        if ly == 2:
+            c = mix(c, light, 0.35 + 0.35 * h(cell, row, s + 12))
+        if lx == 0:
+            c = shade(c, 0.72)
+        return mix(c, shade(c, 1.12), fbm(px, py, s, 3) * 0.6)
+
+    def belly(px, py):
+        c = mix((120, 150, 128), (178, 198, 168), fbm(px, py, s, 4))
+        if py % 3 == 0:
+            c = shade(c, 0.8)
+        return c
+
     table = {
         "blackstone": stone,
         "obsidian": lambda px, py: mix((10, 6, 20), (44, 22, 78), fbm(px, py, s, 4)),
@@ -171,6 +191,11 @@ def painter(key, face, w, hgt, seed):
         "g_cyan": lambda px, py: mix((80, 230, 240), (230, 255, 255), fbm(px, py, s, 3)),
         "g_purple": lambda px, py: mix((170, 80, 255), (240, 200, 255), fbm(px, py, s, 3)),
         "g_yellow": lambda px, py: mix((255, 220, 40), (255, 255, 190), fbm(px, py, s, 3)),
+        "g_green": lambda px, py: mix((90, 255, 150), (230, 255, 200), fbm(px, py, s, 3)),
+        "scales": scales,
+        "scalesdark": lambda px, py: scales(px, py, (6, 18, 22), (14, 36, 38), (40, 82, 76)),
+        "scaleslight": lambda px, py: scales(px, py, (40, 84, 78), (70, 128, 112), (150, 196, 170)),
+        "belly": belly,
     }
     fn = table[base]
     decal = key.split(":")[1] if ":" in key else None
@@ -222,6 +247,13 @@ def decorate(kind, c, px, py, w, hgt):
                 return (30, 20, 14)
         if py < hgt * 0.28:
             return shade(c, 0.55)
+    elif kind == "serpenthead":
+        for sx in (-1, 1):
+            ex, ey = mx + sx * w * 0.16, hgt * 0.55
+            if abs(px + 0.5 - ex) < w * 0.07 and abs(py + 0.5 - ey) < hgt * 0.1:
+                return (4, 12, 12)
+        if py < hgt * 0.2:
+            return shade(c, 0.6)
     elif kind == "core":
         d = math.hypot(px + 0.5 - mx, py + 0.5 - hgt / 2) / (min(w, hgt) / 2)
         if d < 0.95:
@@ -245,6 +277,8 @@ class Boss:
         self.groups = []    # (name, parent, pivot)
         self.boxes = []
         self.seed = sum(ord(ch) for ch in bid)
+        self.scale = SCALE      # one display of this model is this many blocks per 16 model units
+        self.atlas = ATLAS
 
     def group(self, name, parent, pivot):
         self.groups.append((name, parent, pivot))
@@ -269,14 +303,16 @@ def clamp_units(v):
 
 def build(b):
     """Pack every face into the atlas, paint it, and write the models, item definitions, rig and texture."""
-    px = [[(0, 0, 0, 0)] * ATLAS for _ in range(ATLAS)]
+    U = 16.0 / b.scale
+    A = b.atlas
+    px = [[(0, 0, 0, 0)] * A for _ in range(A)]
     cx = cy = rowh = 0
 
     def alloc(w, hh):
         nonlocal cx, cy, rowh
-        if cx + w + 1 > ATLAS:
+        if cx + w + 1 > A:
             cx, cy, rowh = 0, cy + rowh + 1, 0
-        if cy + hh + 1 > ATLAS:
+        if cy + hh + 1 > A:
             raise SystemExit(f"{b.id}: atlas full")
         x, y = cx, cy
         cx += w + 1
@@ -308,7 +344,7 @@ def build(b):
                 for yy in range(hh):
                     for xx in range(w):
                         px[oy + yy][ox + xx] = f(xx, yy)
-                k = 16.0 / ATLAS
+                k = 16.0 / A
                 faces[fn] = {"uv": [ox * k, oy * k, (ox + w) * k, (oy + hh) * k], "texture": "#0"}
             el = {"from": [round(v, 3) for v in lo], "to": [round(v, 3) for v in hi], "faces": faces}
             if bx.rot:
@@ -316,7 +352,7 @@ def build(b):
                 el["rotation"] = {"angle": deg, "axis": axis, "origin": [round(8 + (bx.c[k] - pv[k]) * U, 3) for k in range(3)]}
             elements.append(el)
         models[gname] = {"textures": {"0": f"blackforge:item/boss/{b.id}", "particle": f"blackforge:item/boss/{b.id}"}, "elements": elements}
-    png(ASSETS / "textures" / "item" / "boss" / f"{b.id}.png", ATLAS, ATLAS, px)
+    png(ASSETS / "textures" / "item" / "boss" / f"{b.id}.png", A, A, px)
     for gname, m in models.items():
         out = ASSETS / "models" / "boss" / f"{b.id}_{gname.lower()}.json"
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -325,7 +361,7 @@ def build(b):
         item.parent.mkdir(parents=True, exist_ok=True)
         item.write_text(json.dumps({"model": {"type": "minecraft:model", "model": f"blackforge:boss/{b.id}_{gname.lower()}"}}))
     RIG.mkdir(parents=True, exist_ok=True)
-    rig = {"scale": SCALE,
+    rig = {"scale": b.scale,
            "groups": [{"name": n, "parent": p, "pivot": list(pv)} for n, p, pv in b.groups],
            "models": sorted(models)}
     (RIG / f"{b.id}.json").write_text(json.dumps(rig, indent=1))
@@ -514,8 +550,66 @@ def brute():
     return b
 
 
+def serpent():
+    """Jormungandr: a head with a hinged jaw, two body segments to alternate, and a tail tip. Models are in blocks at scale 8
+    (one display = 16 model units = 8 blocks); the plugin draws and bends them along the serpent's trail."""
+    b = Boss("serpent")
+    b.scale = 8.0
+    b.atlas = 256
+    b.group("head", None, (0, 0, 0)); b.group("jaw", "head", (0, -3, -1)); b.group("head_glow", "head", (0, 0, 0))
+    b.group("seg_a", None, (0, 0, 0)); b.group("seg_b", None, (0, 0, 0)); b.group("tail", None, (0, 0, 0))
+    bx = b.box
+    # skull, snout, brow and crest
+    bx("head", "scalesdark:serpenthead", (0, 0, 0.5), (11, 7.5, 13))
+    bx("head", "scales:serpenthead", (0, -0.8, 9), (8, 4.6, 6))
+    bx("head", "scaleslight", (0, 2.6, 8.5), (6, 1.2, 7))
+    for sgn in (-1, 1):
+        bx("head", "scalesdark", (sgn * 3.6, 4.1, 4.5), (3.4, 1.6, 7), ("z", -sgn * 12))
+        bx("head", "scaleslight", (sgn * 6.0, -0.5, -1), (1.4, 2.2, 5))
+        bx("head", "scales", (sgn * 6.3, 1.2, -3.2), (0.8, 5, 5))
+        bx("head", "bone", (sgn * 3.6, 4.8, -4.2), (1.8, 1.8, 6), ("x", -25))
+        bx("head", "bone", (sgn * 3.9, 7.4, -8.4), (1.2, 1.2, 5), ("x", -45))
+    for i in range(4):
+        bx("head", "scaleslight", (0, 4.4 + 0.2 * i, -1.5 - 2.0 * i), (1.0, 2.8, 1.2), ("x", -20))
+    for i in range(5):                                  # upper fangs and teeth
+        for sgn in (-1, 1):
+            bx("head", "bone", (sgn * 3.0, -4.2, 7.0 + i * 1.0), (0.7, 2.2 if i in (0, 4) else 1.6, 0.7))
+    # lower jaw, hinged near the back of the skull
+    bx("jaw", "belly", (0, -3.3, 5.5), (7.4, 1.8, 11))
+    bx("jaw", "scales", (0, -3.0, 5.5), (7.8, 1.0, 10))
+    bx("jaw", "bone", (0, -4.9, 9.8), (1.0, 1.4, 2.0))
+    for i in range(5):
+        for sgn in (-1, 1):
+            bx("jaw", "bone", (sgn * 2.9, -1.9, 4.6 + i * 1.4), (0.6, 2.0, 0.6))
+    # eyes and nostrils burn green
+    for sgn in (-1, 1):
+        bx("head_glow", "g_green", (sgn * 5.55, 1.4, 3.2), (0.5, 2.2, 3.0))
+        bx("head_glow", "g_green", (sgn * 1.2, -0.2, 11.8), (0.8, 0.8, 0.4))
+    # two body segments to alternate: an octagonal coil of scales, a pale belly, flank plates, a dorsal fin
+    for name, fin in (("seg_a", 1), ("seg_b", 2)):
+        bx(name, "scales", (0, 0, 0), (9, 7.2, 5.4))
+        bx(name, "scales", (0, 0, 0), (7.2, 9, 5.4))
+        bx(name, "scales", (0, 0, 0), (6.6, 6.6, 5.4), ("z", 45))
+        bx(name, "belly", (0, -4.6, 0), (5.4, 0.4, 5.4))
+        for sgn in (-1, 1):
+            bx(name, "scaleslight", (sgn * 4.7, 0.6, 0), (0.5, 3.8, 4.6))
+            bx(name, "g_green", (sgn * 4.98, 1.4, 0), (0.12, 0.5, 2.2))
+        if fin == 1:
+            bx(name, "scalesdark", (0, 5.3, 0), (1.0, 3.6, 3.8))
+        else:
+            bx(name, "scalesdark", (0, 5.0, 1.2), (1.0, 3.0, 2.0))
+            bx(name, "scalesdark", (0, 5.6, -1.4), (1.0, 4.2, 2.0))
+            for sgn in (-1, 1):
+                bx(name, "scaleslight", (sgn * 3.6, 3.9, 0), (0.7, 2.6, 0.7), ("z", sgn * 32))
+    # the tail's tip
+    bx("tail", "scales", (0, 0, 0), (5.5, 5.0, 5.4))
+    bx("tail", "scalesdark", (0, 0, -4.0), (0.8, 7.0, 6.0))
+    bx("tail", "scaleslight", (0, 0, -3.0), (0.6, 3.0, 3.0))
+    return b
+
+
 def main():
-    for make in (ravager, colossus, revenant, titan, brute):
+    for make in (ravager, colossus, revenant, titan, brute, serpent):
         build(make())
 
 

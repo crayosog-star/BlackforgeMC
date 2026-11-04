@@ -19,7 +19,7 @@ import java.util.*;
  * Fire, roars, fireballs, nostril smoke and ember trails are particles and sounds, all triggered at random by {@link DragonFlight}.
  * The displays are never saved with the world; any left over from a crash are removed by tag on start.
  */
-final class DragonAnimator {
+public final class DragonAnimator {
     private static final String TAG = "blackforge_hub_dragon", OLD_TAG = "alloy_hub_dragon";   // OLD_TAG: dragons spawned before the rename
     private static final int SEND_EVERY = 3;
 
@@ -31,6 +31,17 @@ final class DragonAnimator {
     private static final Palette SOUL = new Palette(Particle.SOUL_FIRE_FLAME,
             new Particle.DustTransition(Color.fromRGB(200, 255, 255), Color.fromRGB(60, 220, 230), 3.0f),
             new Particle.DustTransition(Color.fromRGB(70, 210, 230), Color.fromRGB(20, 80, 160), 3.6f), Particle.SOUL, Particle.SOUL);
+
+    private static final Palette CRIMSON = new Palette(Particle.FLAME,
+            new Particle.DustTransition(Color.fromRGB(255, 120, 90), Color.fromRGB(200, 20, 20), 3.0f),
+            new Particle.DustTransition(Color.fromRGB(220, 40, 30), Color.fromRGB(90, 0, 10), 3.6f), Particle.SMALL_FLAME, Particle.LAVA);
+    private static final Palette VIOLET = new Palette(Particle.DRAGON_BREATH,
+            new Particle.DustTransition(Color.fromRGB(235, 190, 255), Color.fromRGB(160, 60, 230), 3.0f),
+            new Particle.DustTransition(Color.fromRGB(170, 70, 240), Color.fromRGB(60, 10, 120), 3.6f), Particle.WITCH, Particle.REVERSE_PORTAL);
+
+    private static Palette palette(DragonFlight.Kind k) {
+        return switch (k) { case SERPENT -> SOUL; case CRIMSON -> CRIMSON; case VIOLET -> VIOLET; default -> FIRE; };
+    }
 
     private static final class Fireball {
         double x, y, z, vx, vy, vz;
@@ -48,14 +59,18 @@ final class DragonAnimator {
     private final Random rnd = new Random();
     private int tick;
 
-    DragonAnimator(Plugin plugin, World world) {
+    DragonAnimator(Plugin plugin, World world) { this(plugin, world, DragonFlight.Region.HUB, 4); }
+
+    /** Dragons flying over {@code region} (the Infernal Kingdom uses its own); {@code count} of them, black, crimson, violet, serpent in turn. */
+    public DragonAnimator(Plugin plugin, World world, DragonFlight.Region region, int count) {
         this.world = world;
-        this.anchor = new Location(world, 0.5, HubLayout.Y + 30, 0.5);
+        this.anchor = new Location(world, region.cx(), region.baseY() + 30, region.cz());
         for (Entity e : world.getEntitiesByClass(BlockDisplay.class)) if (e.getScoreboardTags().contains(TAG) || e.getScoreboardTags().contains(OLD_TAG)) e.remove();
         long seed = System.nanoTime();
-        DragonFlight.Kind[] kinds = {DragonFlight.Kind.BLACK, DragonFlight.Kind.SERPENT};
+        DragonFlight.Kind[] all = {DragonFlight.Kind.BLACK, DragonFlight.Kind.CRIMSON, DragonFlight.Kind.VIOLET, DragonFlight.Kind.SERPENT};
+        DragonFlight.Kind[] kinds = java.util.Arrays.copyOf(all, Math.max(1, Math.min(count, all.length)));
         for (int i = 0; i < kinds.length; i++) {
-            DragonFlight d = new DragonFlight(kinds[i], seed + i * 7919L, i * Math.PI + rnd.nextDouble());
+            DragonFlight d = new DragonFlight(kinds[i], seed + i * 7919L, i * Math.PI + rnd.nextDouble(), region);
             flights.add(d);
             List<BlockDisplay> list = new ArrayList<>();
             for (DragonFlight.Piece p : d.pose()) list.add(spawn(p));
@@ -65,7 +80,7 @@ final class DragonAnimator {
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 1L);
     }
 
-    void remove() {
+    public void remove() {
         displays.forEach(l -> l.forEach(Entity::remove));
         displays.clear();
     }
@@ -127,12 +142,12 @@ final class DragonAnimator {
     // ------------------------------------------------------------------ particles and sounds
 
     private void effects(DragonFlight d) {
-        Palette pal = d.kind == DragonFlight.Kind.SERPENT ? SOUL : FIRE;
+        Palette pal = palette(d.kind);
         double[] m = d.mouth(), f = d.breathDir(), fw = d.forward(), h = d.head();
         double v = d.speed();
         Location head = new Location(world, h[0], h[1], h[2]);
         // real dragon voices: the serpent's is higher and thinner, the blackstone dragon's deep
-        float voice = d.kind == DragonFlight.Kind.SERPENT ? 1.15f : 0.75f;
+        float voice = d.kind == DragonFlight.Kind.SERPENT ? 1.15f : d.kind == DragonFlight.Kind.VIOLET ? 0.9f : d.kind == DragonFlight.Kind.CRIMSON ? 0.65f : 0.75f;
         if (d.roared) {
             world.playSound(head, Sound.ENTITY_ENDER_DRAGON_GROWL, SoundCategory.AMBIENT, 4f, voice + rnd.nextFloat() * 0.15f);
             shockwave(m, fw);

@@ -25,6 +25,10 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.hanging.HangingBreakEvent;
+import org.bukkit.event.inventory.ClickType;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.*;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
@@ -861,6 +865,7 @@ public final class TestArena implements Listener {
             var inv = p.getInventory();
             for (int i = 0; i < testItems.size(); i++) {
                 TestItem t = testItems.get(i);
+                if (t.is().test(p.getItemOnCursor())) continue;
                 int at = -1;
                 for (int s = 0; s < inv.getSize() && at < 0; s++) { ItemStack it = inv.getItem(s); if (it != null && t.is().test(it)) at = s; }
                 if (at >= 0 && !t.worn().test(inv.getItem(at))) continue;      // still there and fresh
@@ -874,12 +879,50 @@ public final class TestArena implements Listener {
         }
     }
 
+    private boolean isKitItem(ItemStack item) {
+        return item != null && testItems.stream().anyMatch(t -> t.is().test(item));
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onKitClick(InventoryClickEvent e) {
+        if (!(e.getWhoClicked() instanceof Player p) || p.getWorld() != world) return;
+        int button = e.getHotbarButton();
+        boolean carriesKit = isKitItem(e.getCursor()) || isKitItem(e.getCurrentItem())
+                || (button >= 0 && isKitItem(p.getInventory().getItem(button)))
+                || (e.getClick() == ClickType.SWAP_OFFHAND && isKitItem(p.getInventory().getItemInOffHand()));
+        if (!carriesKit) return;
+        // Only rearrange kit items in player slots. Menus, crafting slots and outside clicks must not take them.
+        if (e.getView().getTopInventory().getType() != InventoryType.CRAFTING
+                || e.getClickedInventory() != p.getInventory() || e.isShiftClick()
+                || e.getClick() == ClickType.DOUBLE_CLICK) e.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onKitDrag(InventoryDragEvent e) {
+        if (!(e.getWhoClicked() instanceof Player p) || p.getWorld() != world || !isKitItem(e.getOldCursor())) return;
+        int topSize = e.getView().getTopInventory().getSize();
+        if (e.getRawSlots().stream().anyMatch(slot -> slot < topSize)) e.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onKitEquip(PlayerInteractEntityEvent e) {
+        if (e.getPlayer().getWorld() != world) return;
+        Entity target = e.getRightClicked();
+        if (!(target instanceof ArmorStand || target instanceof ItemFrame)) return;
+        if (isKitItem(e.getPlayer().getInventory().getItem(e.getHand()))) e.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onKitArmorStand(PlayerArmorStandManipulateEvent e) {
+        if (e.getPlayer().getWorld() == world && isKitItem(e.getPlayerItem())) e.setCancelled(true);
+    }
+
     /** Test items stay in your hands: with unlimited refills, dropping them would just litter the glade. */
     @EventHandler(ignoreCancelled = true)
     public void onDropTestItem(PlayerDropItemEvent e) {
         if (e.getPlayer().getWorld() != world) return;
         ItemStack it = e.getItemDrop().getItemStack();
-        for (TestItem t : testItems) if (t.is().test(it)) { e.setCancelled(true); return; }
+        if (isKitItem(it)) e.setCancelled(true);
     }
 
     /** Arrows, thrown tridents and dropped items don't pile up. */

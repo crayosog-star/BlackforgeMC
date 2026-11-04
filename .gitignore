@@ -45,3 +45,4 @@ tools/graveyard/out/
 tools/autoupdate_state.json
 plugins-src/AlloyCore/previews/
 tools/*.out
+plugins-src/BlackForgeCore/previews/

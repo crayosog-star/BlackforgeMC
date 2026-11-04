@@ -14,8 +14,8 @@ PERMANENT_OPS = [OWNER, {"uuid": "8c67e820-3611-42b8-9f5f-d355d31f9ca9", "name":
 ADDRESS = "blackforgemc.com"
 # served straight from GitHub (public repo, main branch): a merged pack is downloadable at once, no website re-upload.
 # The file name carries the SHA-1, so a new pack is a new file and clients never get a stale cached copy.
-PACK_URL = "https://raw.githubusercontent.com/crayosog-star/BlackforgeMC/main/website/pack/blackforge-pack-74ee14a6.zip"
-PACK_SHA1 = "74ee14a6090b2804a231371bc0de0b379d7a2b71"
+PACK_URL = "https://raw.githubusercontent.com/crayosog-star/BlackforgeMC/main/website/pack/blackforge-pack-44d2b2f5.zip"
+PACK_SHA1 = "44d2b2f52ddb5cb44705d3003f3d71570c1aa2fe"
 # local testing only: tools/pack_override.txt (line 1 URL, line 2 SHA-1) beats the two lines above. Delete it once the pack is on GitHub.
 _override = Path(__file__).with_name("pack_override.txt")
 if _override.exists():
@@ -83,12 +83,12 @@ for name, s in SERVERS.items():
         "koth:", "  interval-minutes: 300", "  first-after-minutes: 30",
         "  capture-seconds: 180", "  max-minutes: 20", "  reward-money: 5000",
         "pvp:", "  drop-interval-minutes: 180", "  first-drop-after-minutes: 60", "  crates-per-drop: 15",
-        "rtp:", "  border-size: 100000", "  range: 100000   # wild teleports land anywhere inside the border",
+        "rtp:", "  border-size: 1000000   # world border (the nether is this / 8)", "  range: 100000   # wild teleports land within this square, whatever the border",
         "votes:", "  party-every: 50", "  money: 250", "  sites: []",
         "store-url: 'Store coming soon!'",
         "gale-bellows:", "  enabled: true", "  custom-model: true   # the resource pack below is live, so the bellows can use its texture",
     ] if s["mode"] == "survival" else [
-        "rtp:", "  border-size: 12000",
+        "rtp:", "  border-size: 100000", "  range: 12000   # wild teleports land within this square, whatever the border",
         "season:", "  months: 3   # the factions map resets every this many months",
     ] if s["mode"] == "factions" else [
         "oneblock:",

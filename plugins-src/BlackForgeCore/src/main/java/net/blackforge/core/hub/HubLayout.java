@@ -7,7 +7,7 @@ public final class HubLayout {
     private HubLayout() {}
 
     public static final int Y = 100;            // plaza surface; players stand at Y+1
-    public static final double SPAWN_X = 0.5, SPAWN_Y = Y + 3, SPAWN_Z = 0.5;
+    public static final double SPAWN_X = 0.5, SPAWN_Y = Y + 3, SPAWN_Z = 40.5;
     public static final float SPAWN_YAW = 180f, SPAWN_PITCH = -10f;
     public static final int VOID_Y = 60;
 
@@ -26,11 +26,12 @@ public final class HubLayout {
         }
     }
 
-    public static final int GATE_DIST = 32;
+    /** Four gatehouses in a line across the forecourt, all facing south (towards spawn). */
+    public static final int GATE_Z = -46;
     public static final List<Gate> GATES = List.of(
-        new Gate("skyblock", "SKYBLOCK", "#4fd1c5", "oxidized", 0, -GATE_DIST, true),
-        new Gate("survival", "SURVIVAL", "#d9dde3", "iron", GATE_DIST, 0, false),
-        new Gate("factions", "FACTIONS", "#e5484d", "netherite", -GATE_DIST, 0, false),
-        new Gate("arcade", "ARCADE", "#ffc53d", "gold", 0, GATE_DIST, true)
+        new Gate("survival", "SURVIVAL", "#d9dde3", "iron", -58, GATE_Z, true),
+        new Gate("factions", "FACTIONS", "#e5484d", "netherite", -28, GATE_Z, true),
+        new Gate("arcade", "ARCADE", "#ffc53d", "gold", 28, GATE_Z, true),
+        new Gate("skyblock", "SKYBLOCK", "#4fd1c5", "oxidized", 58, GATE_Z, true)
     );
 }

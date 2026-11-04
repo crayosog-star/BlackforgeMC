@@ -34,6 +34,12 @@ public final class Shared {
     /** Throttled action-bar explanation for something the game just blocked ("why can't I?"): at most once every 2 s each. */
     private static final java.util.Map<java.util.UUID, Long> told = new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** Spawns a safe zone refuses: everything the game does by itself or players trigger (eggs, spawners, breeding, raids...), but not plugin-made or staff-commanded ones. */
+    public static boolean zoneBlocksSpawn(org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason r) {
+        return r != org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.CUSTOM && r != org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.DEFAULT
+            && r != org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.COMMAND;
+    }
+
     public static void why(Player p, String mm) {
         long now = System.currentTimeMillis();
         Long last = told.get(p.getUniqueId());

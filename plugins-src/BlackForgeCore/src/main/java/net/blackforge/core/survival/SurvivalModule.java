@@ -31,6 +31,9 @@ public final class SurvivalModule implements Listener {
     private final BlackForgeCore plugin;
     private final World world;
     private final Claims claims;
+    private final KingdomStaging staging;
+    private final AbyssPirate pirate;
+    private final net.blackforge.core.abyss.AbyssWorld abyss;
     private final Crates crates;
     private final Koth koth;
     private final PvpZone pvp;
@@ -68,6 +71,8 @@ public final class SurvivalModule implements Listener {
     private final Robots robots;
     private final HopperUpgrades hoppers;
     private final BaseStation station;
+    private final Allays allays;
+    private final ThiefAmbush thieves;
     private final Set<UUID> dropping = new HashSet<>(), landed = new HashSet<>();
     private final Set<UUID> warmupApproved = new HashSet<>();
     private final Map<UUID, Integer> warmups = new HashMap<>();
@@ -87,6 +92,8 @@ public final class SurvivalModule implements Listener {
         this.plugin = plugin;
         this.world = Bukkit.getWorlds().getFirst();
         claims = new Claims(plugin);
+        staging = new KingdomStaging(plugin);
+        abyss = new net.blackforge.core.abyss.AbyssWorld(plugin);
         crates = new Crates(plugin, world, DistrictLife.CRATE_SPOTS, Y + 2);   // in the Grand Hall
         koth = new Koth(plugin, world, crates);
         pvp = new PvpZone(plugin, world, crates);
@@ -130,8 +137,13 @@ public final class SurvivalModule implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, () -> net.blackforge.core.Events.publishLive(koth.nextStart(), koth.active(), boss.active()), 100L, 600L);
         bounties = new Bounties(plugin);
         jobs = new Jobs(plugin);
-        new ChestShops(plugin);
+        new ChestShops(plugin, claims);
         new AfkZone(plugin, world, new Location(world, 1500.5, 200, 1500.5), 6, crates, "afkzone-built");
+        // Night Thieves: outside your own claim at night, 5% a minute. Never at spawn, KOTH, the Scrapyard or the AFK zone,
+        // and they never appear inside any claim.
+        thieves = new ThiefAmbush(plugin, crates,
+                (p, l) -> l.getWorld() == world && !protectedArea(l) && !nearAfk(l) && !(claims.ownerAt(l) != null && claims.canUse(p, l)),
+                l -> l.getWorld() == world && !protectedArea(l) && !nearAfk(l) && claims.ownerAt(l) == null);
         new ResourceWorld(plugin);
         votes.setScrap(scrap);
         ranks = new Ranks(plugin, crates);
@@ -157,6 +169,10 @@ public final class SurvivalModule implements Listener {
         station = new BaseStation(plugin, robots, hoppers);
         station.setAccess((p, l) -> p.hasPermission("blackforge.admin") || claims.ownerAt(l) != null && claims.canUse(p, l));
         station.setRegion(l -> { UUID stationOwner = claims.ownerAt(l); return stationOwner == null ? null : "claim:" + stationOwner; });
+        allays = new Allays(plugin, station, l -> false, false);
+        allays.setRobots(robots);
+        allays.setOwnerOf(region -> UUID.fromString(region.substring("claim:".length())));
+        station.setAllays(allays);
         koth.setScrap(scrap);
         pvp.setScrap(scrap);
         borderSize = plugin.getConfig().getInt("rtp.border-size", 10000);
@@ -178,6 +194,7 @@ public final class SurvivalModule implements Listener {
             votes.setEconomy(eco);
             hall.setEconomy(eco);
             daily.setEconomy(eco);
+            thieves.setEconomy(eco);
             ah = new AuctionHouse(plugin, eco);
             refreshLeaderboard();
         });
@@ -188,12 +205,15 @@ public final class SurvivalModule implements Listener {
         new net.blackforge.core.SpawnSafety(plugin, l -> l.getWorld() == world && inSpawn(l.getX(), l.getY(), l.getZ()), p -> spawn());
         new TradingHall(plugin, world, ranks);
         districts = new DistrictLife(plugin, world);
+        pirate = new AbyssPirate(plugin, world, abyss);   // Captain Salt-Eye: the quest that opens the way to the Abyssal Sea
         new SpawnLife(plugin, world, crates, this::spawn);
         gladiators = new Gladiators(plugin, world, this::spawn);
         plugin.discord().setGladiator(gladiators::discordRole);
         collection = new CollectionBook(plugin);
         new DailyShop(plugin);
-        districts.setTrader(new GroveTrader(plugin));
+        GroveTrader trader = new GroveTrader(plugin);
+        districts.setTrader(trader);
+        allays.setTrader(trader);
         new ShowcaseWarp(plugin);
         new LagGuard(plugin, world, this::protectedArea);
         blockLog = new BlockLog(plugin);
@@ -223,6 +243,9 @@ public final class SurvivalModule implements Listener {
     }
 
     public void shutdown() {
+        staging.shutdown();
+        pirate.shutdown();
+        abyss.shutdown();
         boss.stop(null);
         districts.shutdown();
         gladiators.shutdown();
@@ -233,10 +256,12 @@ public final class SurvivalModule implements Listener {
         surge.shutdown();
         rite.shutdown();   // undoes any running rite: both duellists go home as they were
         cage.shutdown(); eye.shutdown(); chain.shutdown(); bonfire.shutdown(); emp.shutdown();
+        thieves.shutdown();   // hands back anything a thief is carrying
         holos.forEach(TextDisplay::remove);
         if (koth.active()) koth.stop(null);
         pvp.shutdown();
         scrap.save();
+        allays.shutdown();
         robots.save();
         hall.shutdown();
     }
@@ -388,7 +413,10 @@ public final class SurvivalModule implements Listener {
     /** Console/admin: /blackforge crate give <player> <crate> [amount], /blackforge koth start|stop, /blackforge buildsurvival */
     public boolean admin(CommandSender s, String[] a) {
         if (vaults.admin(s, a)) return true;   // /blackforge vault give <player> [amount]: crates and the store
+        if (thieves.admin(s, a)) return true;   // /blackforge thieves spawn <player> | clear | status: the Night Thieves
         if (rite.admin(s, a)) return true;   // /blackforge rite give <player> (for crates)
+        if (abyss.command(s, a)) return true;   // /blackforge abyss stage|tp|serpent|kill: the Abyssal Sea
+        if (staging.command(s, a)) return true;   // /blackforge kingdom stage|tp: the Infernal Kingdom in its own staging world
         if (upgrade.command(s, a)) return true;   // /blackforge spawnupgrade apply|undo|status 1: the volcanic kingdom (additive only)
         if (a.length >= 1 && a[0].equalsIgnoreCase("voidout")) {   // clear the land around spawn
             if (new File(plugin.getDataFolder(), "spawn-upgrade-phase1").exists()) { s.sendMessage(Component.text("The spawn upgrade is in place - voidout would remove it. Undo it first.")); return true; }
@@ -707,6 +735,11 @@ public final class SurvivalModule implements Listener {
         if (!e.isBedSpawn() && !e.isAnchorSpawn()) e.setRespawnLocation(spawn());
     }
 
+    /** The AFK platform high above (1500, 1500): never a place for thieves. */
+    private boolean nearAfk(Location l) {
+        return l.getWorld() == world && Math.abs(l.getY() - 200) < 12 && Math.hypot(l.getX() - 1500.5, l.getZ() - 1500.5) < 14;
+    }
+
     private boolean protectedArea(Location l) {
         return l.getWorld() == world && (inSpawn(l.getX(), l.getY(), l.getZ()) || inArena(l.getX(), l.getY(), l.getZ()) || inPvp(l.getX(), l.getY(), l.getZ()));
     }
@@ -766,8 +799,10 @@ public final class SurvivalModule implements Listener {
 
     @EventHandler
     public void onMobSpawn(CreatureSpawnEvent e) {
-        if (e.getSpawnReason() != CreatureSpawnEvent.SpawnReason.CUSTOM && e.getEntity() instanceof Monster && protectedArea(e.getLocation())) e.setCancelled(true);
-        if (e.getSpawnReason() == CreatureSpawnEvent.SpawnReason.NATURAL && protectedArea(e.getLocation())) e.setCancelled(true);
+        Location l = e.getLocation();
+        boolean afk = l.getWorld() == world && Math.hypot(l.getX() - 1500.5, l.getZ() - 1500.5) <= 40 && l.getY() > 150;
+        boolean sundering = l.getWorld() != null && l.getWorld().getName().equals(SunderingArena.WORLD);   // only the bosses and their adds live there
+        if ((protectedArea(l) || afk || sundering) && net.blackforge.core.Shared.zoneBlocksSpawn(e.getSpawnReason())) e.setCancelled(true);
     }
 
     @EventHandler public void onFire(org.bukkit.event.block.BlockIgniteEvent e) { if (protectedArea(e.getBlock().getLocation()) && e.getPlayer() == null) e.setCancelled(true); }

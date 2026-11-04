@@ -113,6 +113,6 @@ public final class LobbyRules implements Listener {
     @EventHandler public void onPortal(PlayerPortalEvent e) { e.setCancelled(true); }
     @EventHandler public void onEntityPortal(EntityPortalEvent e) { e.setCancelled(true); }
     @EventHandler public void onSpawn(CreatureSpawnEvent e) {
-        if (e.getSpawnReason() == CreatureSpawnEvent.SpawnReason.NATURAL) e.setCancelled(true);
+        if (Shared.zoneBlocksSpawn(e.getSpawnReason())) e.setCancelled(true);
     }
 }

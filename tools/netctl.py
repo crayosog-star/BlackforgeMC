@@ -49,7 +49,7 @@ def up(port):
 def start_server(name):
     port, xmx = SERVERS[name]
     if up(port): print(f"{name}: already running"); return
-    subprocess.Popen([JAVA, "-Xms1G", f"-Xmx{xmx}", *FLAGS, "-jar", "paper.jar", "--nogui"], cwd=ROOT / name,
+    subprocess.Popen([JAVA, f"-Xms{xmx}", f"-Xmx{xmx}", *FLAGS, "-jar", "paper.jar", "--nogui"], cwd=ROOT / name,
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
     print(f"{name}: starting")
 
@@ -57,7 +57,7 @@ def start_server(name):
 def start():
     for name, (port, xmx) in SERVERS.items():
         if up(port): print(f"{name}: already running"); continue
-        subprocess.Popen([JAVA, "-Xms1G", f"-Xmx{xmx}", *FLAGS, "-jar", "paper.jar", "--nogui"], cwd=ROOT / name,
+        subprocess.Popen([JAVA, f"-Xms{xmx}", f"-Xmx{xmx}", *FLAGS, "-jar", "paper.jar", "--nogui"], cwd=ROOT / name,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
         print(f"{name}: starting")
     if not up(PROXY_PORT):

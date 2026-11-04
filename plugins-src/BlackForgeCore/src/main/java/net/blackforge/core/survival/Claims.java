@@ -12,6 +12,10 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.*;
 import org.bukkit.event.entity.*;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
+import org.bukkit.event.inventory.InventoryMoveItemEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
+import org.bukkit.inventory.DoubleChestInventory;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.event.player.*;
 import org.bukkit.projectiles.ProjectileSource;
 
@@ -68,6 +72,31 @@ public final class Claims implements Listener {
         UUID owner = ownerAt(l);
         if (owner == null) return true;
         return owner.equals(p.getUniqueId()) || trusted.getOrDefault(owner, Set.of()).contains(p.getUniqueId());
+    }
+
+    private UUID stockOwner(Inventory inventory) {
+        Location at = inventory instanceof DoubleChestInventory chest ? chest.getLeftSide().getLocation() : inventory.getLocation();
+        return at == null ? null : ownerAt(at);
+    }
+
+    // Wilderness is a separate owner. An unclaimed half cannot authorize a claimed half.
+    boolean ownsStock(UUID owner, Inventory stock) {
+        if (stock instanceof DoubleChestInventory chest)
+            return ownsStock(owner, chest.getLeftSide()) && ownsStock(owner, chest.getRightSide());
+        return Objects.equals(owner, stockOwner(stock));
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onInventoryMove(InventoryMoveItemEvent e) {
+        UUID owner = stockOwner(e.getSource());
+        if (!ownsStock(owner, e.getSource()) || !ownsStock(owner, e.getDestination())) e.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onChestOpen(InventoryOpenEvent e) {
+        if (!(e.getPlayer() instanceof Player p) || !(e.getInventory() instanceof DoubleChestInventory chest)) return;
+        Location left = chest.getLeftSide().getLocation(), right = chest.getRightSide().getLocation();
+        if ((left != null && deny(p, left)) || (right != null && deny(p, right))) e.setCancelled(true);
     }
 
     int count(UUID owner) { int n = 0; for (UUID u : owners.values()) if (u.equals(owner)) n++; return n; }
