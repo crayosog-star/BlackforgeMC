@@ -66,12 +66,9 @@ final class NightrendMath {
 
     // ------------------------------------------------------------------ equip flip
 
-    /**
-     * The equip flourish: the blades flip up into your grip and hold for a beat; then, in the same tick, the flipping
-     * copies go and the real held daggers (hidden while it plays) come back, so there's never two of them on screen.
-     */
-    static final int FLIP_TICKS = 10, FLIP_HOLD = 3;
-    static final int FLIP_TOTAL = FLIP_TICKS + FLIP_HOLD;
+    /** The equip flourish: the blades flip up into your grip, hold, then fade into the held items. */
+    static final int FLIP_TICKS = 10, FLIP_HOLD = 3, FLIP_FADE = 4;
+    static final int FLIP_TOTAL = FLIP_TICKS + FLIP_HOLD + FLIP_FADE;
     /** How far the blades rise out of your hands, in blocks. */
     static final double FLIP_LIFT = 0.45;
 
@@ -92,9 +89,12 @@ final class NightrendMath {
         return FLIP_LIFT * (1 - Math.pow(1 - x, 3));
     }
 
-    /** Display scale at tick {@code t}: grows in over the first 3 ticks, then full size until it hands over. */
+    /** Display scale at tick {@code t}: grows in over the first 3 ticks, full while it flips and holds, shrinks out. */
     static double flipScale(int t) {
         if (t <= 0) return 0;
-        return t < 3 ? t / 3.0 : 1;
+        if (t < 3) return t / 3.0;
+        int fadeStart = FLIP_TICKS + FLIP_HOLD;
+        if (t <= fadeStart) return 1;
+        return Math.max(0, 1 - (t - fadeStart) / (double) FLIP_FADE);
     }
 }
