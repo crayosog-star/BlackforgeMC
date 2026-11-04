@@ -2,7 +2,8 @@
 """Forge Allay skins for Tier II and III: writes the textures, models and item definitions into resourcepack/.
 
 Tier II (courier): orange and copper, with a bright sparkle pattern. Tier III (steward): a flowing rainbow gradient, an
-animated texture. Each has two models, wings up and wings down, which the plugin swaps to flap. Run it from the repo root,
+animated texture. Each has three models, wings closed to swept back, which the plugin steps through to flap. Wings are
+pale, see-through and smaller than the body, so from behind it still reads as one allay with its head showing. Run it from the repo root,
 then build the pack as blackforge-skin-item describes. Output is stable, so re-running changes nothing.
 """
 import colorsys
@@ -34,7 +35,7 @@ def courier(x, y):
     if x >= WING_TOP and y >= WING_TOP:
         if not wing_shape(x, y):
             return (0, 0, 0, 0)
-        return (255, 196, 92, 255) if (x + y) % 5 == 0 else (240, 136, 40, 255)
+        return (255, 240, 205, 190) if (x + y) % 5 == 0 else (255, 214, 150, 150)
     if eyes(x, y) and x < 10 and y < 10:
         return (58, 24, 8, 255)
     # a soft orange fade from the top, with a repeating scatter of brighter pixels for the glimmer
@@ -44,13 +45,14 @@ def courier(x, y):
 
 
 def steward(x, y, frame):
-    if x >= WING_TOP and y >= WING_TOP and not wing_shape(x, y):
+    wing_part = x >= WING_TOP and y >= WING_TOP
+    if wing_part and not wing_shape(x, y):
         return (0, 0, 0, 0)
     if x < 10 and y < 10 and eyes(x, y):
         return (24, 16, 40, 255)
     hue = (y / SIZE + x / (SIZE * 2) + frame / FRAMES) % 1
-    r, g, b = colorsys.hsv_to_rgb(hue, 0.72, 1.0)
-    return (round(r * 255), round(g * 255), round(b * 255), 255)
+    r, g, b = colorsys.hsv_to_rgb(hue, 0.4 if wing_part else 0.72, 1.0)
+    return (round(r * 255), round(g * 255), round(b * 255), 150 if wing_part else 255)
 
 
 def face(u0, v0, u1, v1):
@@ -69,9 +71,9 @@ def box(frm, to, front=None, rotation=None):
 
 
 def wing(left, angle):
-    """A thin plate behind the body, hinged on its inner edge. The two frames differ only by this angle."""
+    """A thin plate behind the body, hinged on its inner edge. The frames differ only by this angle, and it only sweeps back."""
     hinge = 7.0 if left else 9.0
-    frm, to = ([1.0, 5.0, 9.0], [7.0, 12.0, 9.1]) if left else ([9.0, 5.0, 9.0], [15.0, 12.0, 9.1])
+    frm, to = ([2.5, 5.5, 9.0], [7.0, 10.5, 9.1]) if left else ([9.0, 5.5, 9.0], [13.5, 10.5, 9.1])
     uv = (8, 8, 16, 16) if left else (16, 8, 8, 16)
     return {"from": frm, "to": to,
             "rotation": {"origin": [hinge, 8.0, 9.0], "axis": "y", "angle": angle if left else -angle},
@@ -93,7 +95,7 @@ def model(name, wing_angle):
 
 
 def write_models(name):
-    for frame, angle in (("a", 22.5), ("b", -22.5)):
+    for frame, angle in (("a", 0.0), ("b", 22.5), ("c", 45.0)):
         (ROOT / "models/item/allay").mkdir(parents=True, exist_ok=True)
         (ROOT / "items/allay").mkdir(parents=True, exist_ok=True)
         (ROOT / f"models/item/allay/{name}_{frame}.json").write_text(json.dumps(model(name, angle), indent=2) + "\n")
