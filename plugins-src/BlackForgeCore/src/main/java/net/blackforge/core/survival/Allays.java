@@ -3,6 +3,8 @@ package net.blackforge.core.survival;
 import net.blackforge.core.BlackForgeCore;
 import net.blackforge.core.NetEconomy;
 import net.blackforge.core.Ui;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -15,6 +17,7 @@ import org.bukkit.entity.Allay;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -27,6 +30,7 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
@@ -60,6 +64,10 @@ public final class Allays implements Listener {
     private static final int BACK_SLOT = 22, MENU_SIZE = 27;
     private static final int RETRY_TICKS = 40, NEVER_PICKED_UP = 1000;
     private static final double REACH_SQ = 9;
+    /** The game itself draws a mob with this exact name upside down, as it does on a name tag. */
+    private static final String FLIP_NAME = "Dinnerbone";
+    private static final int NAME_REACH = 8;
+    private static final double TAG_HEIGHT = 0.9;
 
     /** A test allay flying back and forth between two points. */
     private static final class Flyer {
@@ -77,6 +85,10 @@ public final class Allays implements Listener {
         /** What it's fetching, and what it's holding. Holding is kept in memory, because the item has left the world. */
         UUID job; ItemStack carried;
         int rest; String label;
+        /** What the player called it, or null. */
+        String name;
+        /** Shows the name of a flipped allay, whose real name has to be the one the game flips. */
+        TextDisplay tag;
         Worker(int index) { this.index = index; }
     }
 
@@ -113,6 +125,7 @@ public final class Allays implements Listener {
     private final Map<String, Base> bases = new HashMap<>();
     private long now;
     private int sandboxLimit = Integer.MAX_VALUE;
+    private final boolean sausageFlip;
 
     /** {@code zone}: where staff may test flight. {@code sandbox}: the Arena's Foundry, where everything is free and nothing is saved. */
     Allays(BlackForgeCore plugin, BaseStation station, Predicate<Location> zone, boolean sandbox) {
@@ -124,6 +137,7 @@ public final class Allays implements Listener {
         this.deathDrop = new NamespacedKey(BlackForgeCore.NS, "death_drop");
         var c = plugin.getConfig();
         this.table = table(c);
+        this.sausageFlip = c.getBoolean("allays.sausage-flip", true);
         this.carry = Math.max(1, c.getInt("allays.carry", 16));
         this.minDropAge = c.getInt("allays.min-drop-age-ticks", 60);
         this.scanTicks = Math.max(20, c.getInt("allays.scan-seconds", 5) * 20);
@@ -159,7 +173,8 @@ public final class Allays implements Listener {
                     int n = stop();
                     s.sendMessage(Ui.mm(n == 0 ? "<gray>No test allays were running." : "<green>Removed " + n + " test allay" + (n == 1 ? "" : "s") + "."));
                 } else if (what.equals("start") && s instanceof Player p) start(p);
-                else s.sendMessage(Ui.mm("<gray>Stand in the Foundry and run <white>/allay start<gray>, then <white>/allay stop<gray>."));
+                else if (what.equals("name") && a.length > 1 && s instanceof Player p) nameNearest(p, String.join(" ", java.util.Arrays.copyOfRange(a, 1, a.length)));
+                else s.sendMessage(Ui.mm("<gray>Stand in the Foundry and run <white>/allay start<gray>, then <white>/allay stop<gray>. <white>/allay name <text><gray> names the nearest summoned allay."));
                 return true;
             }
         });
@@ -177,6 +192,29 @@ public final class Allays implements Listener {
         Location away = home.clone().add(look.clone().multiply(reach));
         flyers.add(new Flyer(spawn(home), xyz(home), xyz(away), AllayFlight.ticks(reach, speed)));
         p.sendMessage(Ui.mm("<green>Test allay started, flying " + reach + " blocks and back. <gray>Try right-clicking it, holding items near it and playing a jukebox. It should ignore all of that. <white>/allay stop<gray> removes it."));
+    }
+
+    /** Staff test for naming, so nobody needs an anvil: the nearest summoned allay in reach. */
+    private void nameNearest(Player p, String name) {
+        Worker best = null;
+        double bestDist = NAME_REACH * NAME_REACH;
+        for (Base b : bases.values()) for (Worker w : b.workers) {
+            if (w.entity == null || !w.entity.isValid() || w.entity.getWorld() != p.getWorld()) continue;
+            double d = w.entity.getLocation().distanceSquared(p.getLocation());
+            if (d <= bestDist) { bestDist = d; best = w; }
+        }
+        if (best == null) { p.sendMessage(Ui.mm("<gray>No summoned allay within " + NAME_REACH + " blocks. Summon one from slot 34 of the Forge.")); return; }
+        rename(p, best, name);
+    }
+
+    /** Refuses a bad name out loud and returns false, so a name tag isn't used up on it. */
+    private boolean rename(Player p, Worker w, String name) {
+        if (!AllayRules.validName(name)) { p.sendActionBar(Ui.mm("<red>Allay names are up to 16 letters, numbers and spaces.")); return false; }
+        w.name = name;
+        w.label = null;
+        p.playSound(w.entity.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1f);
+        p.sendActionBar(Ui.mm("<#4fd1b5>Named your allay <white>" + name + "<#4fd1b5>."));
+        return true;
     }
 
     /** Removes every test allay. Returns how many, and is safe when there are none. */
@@ -232,7 +270,27 @@ public final class Allays implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onTouch(PlayerInteractEntityEvent e) { if (isOurs(e.getRightClicked())) e.setCancelled(true); }
+    public void onTouch(PlayerInteractEntityEvent e) {
+        if (!isOurs(e.getRightClicked())) return;
+        e.setCancelled(true);
+        if (e.getHand() != EquipmentSlot.HAND) return;
+        Player p = e.getPlayer();
+        ItemStack held = p.getInventory().getItemInMainHand();
+        if (held.getType() == Material.NAME_TAG) useNameTag(p, held, e.getRightClicked());
+    }
+
+    private void useNameTag(Player p, ItemStack tag, Entity allay) {
+        for (Base b : bases.values()) for (Worker w : b.workers) {
+            if (!allay.equals(w.entity)) continue;
+            Location at = station.stationIn(b.region);
+            if (at == null || !station.usable(p, at)) { p.sendActionBar(Ui.mm("<red>That's someone else's allay.")); return; }
+            if (!tag.hasItemMeta() || !tag.getItemMeta().hasCustomName()) { p.sendActionBar(Ui.mm("<gray>Rename this Name Tag in an anvil first.")); return; }
+            String name = PlainTextComponentSerializer.plainText().serialize(tag.getItemMeta().customName()).trim();
+            if (rename(p, w, name)) tag.setAmount(tag.getAmount() - 1);
+            return;
+        }
+        p.sendActionBar(Ui.mm("<gray>This one's only a test. Name a summoned allay."));
+    }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onLeash(PlayerLeashEntityEvent e) { if (isOurs(e.getEntity())) e.setCancelled(true); }
@@ -258,7 +316,8 @@ public final class Allays implements Listener {
         Base b = bases.get(region);
         int tier = b == null ? 0 : b.tier;
         ItemStack it = Ui.item(Material.ALLAY_SPAWN_EGG, NAME, "<gray>A crew that stays at your Station", "<gray>and moves items for you.", "",
-                tier == 0 ? "<gray>Not summoned yet" : "<gray>Tier: <white>" + Spawners.roman(tier) + " <gray>" + TIER_NAME[tier - 1], "", "<yellow>Click to open");
+                tier == 0 ? "<gray>Not summoned yet" : "<gray>Tier: <white>" + Spawners.roman(tier) + " <gray>" + TIER_NAME[tier - 1],
+                "<dark_gray>Use a Name Tag on one to name it", "", "<yellow>Click to open");
         it.setAmount(Math.max(1, tier));
         return it;
     }
@@ -368,6 +427,8 @@ public final class Allays implements Listener {
         for (Worker w : b.workers) {
             if (w.entity == null || !w.entity.isValid()) wake(w, at, flock);
             work(b, w, at, flock, taken);
+            label(w, b.tier, w.state == State.WAIT ? "<red>Station full" : null);
+            moveTag(w);
         }
     }
 
@@ -384,7 +445,6 @@ public final class Allays implements Listener {
     private void work(Base b, Worker w, Location at, int flock, Set<UUID> taken) {
         switch (w.state) {
             case IDLE -> {
-                label(w, b.tier, null);
                 Inventory store = station.storageIn(b.region);
                 var job = store == null || store.firstEmpty() < 0 ? Optional.<AllayJobs.Job>empty()
                         : AllayJobs.nearest(xyz(w.entity.getLocation()), b.jobs, taken);
@@ -411,7 +471,6 @@ public final class Allays implements Listener {
             }
             case WAIT -> {
                 idle(w, at, flock);
-                label(w, b.tier, "<red>Station full");
                 if (--w.rest <= 0) unload(b, w, at);
             }
         }
@@ -486,10 +545,34 @@ public final class Allays implements Listener {
     }
 
     private void label(Worker w, int tier, String status) {
-        String text = NAME + " <gray>" + TIER_NAME[tier - 1] + (status == null ? "" : " " + status);
+        String title = w.name == null ? NAME : "<#4fd1b5><bold>" + w.name + "</bold>";   // validName keeps tags out
+        String text = title + " <gray>" + TIER_NAME[tier - 1] + (status == null ? "" : " " + status);
         if (text.equals(w.label)) return;
         w.label = text;
-        w.entity.customName(Ui.mm(text));
+        if (sausageFlip && AllayRules.flipsUpsideDown(w.name)) {
+            // the game flips it by its real name, so that's hidden and a floating tag shows the name the player gave it
+            w.entity.customName(Component.text(FLIP_NAME));
+            w.entity.setCustomNameVisible(false);
+            if (w.tag == null || !w.tag.isValid()) {
+                w.tag = Ui.hologram(w.entity.getLocation().add(0, TAG_HEIGHT, 0), text, 1f);
+                w.tag.setTeleportDuration(1);
+            } else w.tag.text(Ui.mm(text));
+        } else {
+            removeTag(w);
+            w.entity.customName(Ui.mm(text));
+            w.entity.setCustomNameVisible(true);
+        }
+    }
+
+    private void moveTag(Worker w) {
+        if (w.tag == null) return;
+        if (!w.tag.isValid()) { w.tag = null; w.label = null; return; }   // it went with its chunk: the next label makes a new one
+        w.tag.teleport(w.entity.getLocation().add(0, TAG_HEIGHT, 0));
+    }
+
+    private static void removeTag(Worker w) {
+        if (w.tag != null) w.tag.remove();
+        w.tag = null;
     }
 
     // ------------------------------------------------------------------ finding work
@@ -550,6 +633,7 @@ public final class Allays implements Listener {
                 if (w.carried != null) { w.entity.getWorld().dropItem(w.entity.getLocation(), w.carried); w.carried = null; }
                 w.entity.remove();
             }
+            removeTag(w);
             // an entity that's already gone went with its chunk, so a load stays held until it's back
             w.entity = null;
             w.job = null;

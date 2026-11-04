@@ -152,6 +152,7 @@ allays:
   scan-seconds: 5                 # how often a base looks for work
   max-scans-per-tick: 4           # bases scanned per tick across the server
   sell-fee: 0.10                  # Steward's cut of a sale
+  sausage-flip: true              # an allay named Smoked Sausage flies upside down
 
 # Agents, called robots in the code and saves (Survival + Skyblock copper golems). NOT read by the plugin yet - a later task wires these up.
 # fish-seconds (per robot tier I..V) and fisher-burn match the built-in values in RobotRules; the rest are for the

@@ -55,6 +55,27 @@ class AllayRulesTest {
         assertEquals(Optional.of(DropSkip.DEATH_DROP), AllayRules.skipDrop(0, 60, true, true));
     }
 
+    @Test void names() {
+        assertTrue(AllayRules.validName("Bob"));
+        assertTrue(AllayRules.validName("Smoked Sausage"));
+        assertFalse(AllayRules.validName(""));
+        assertFalse(AllayRules.validName(null));
+        assertFalse(AllayRules.validName("<red>Bob"));
+        assertFalse(AllayRules.validName(" Bob"));
+        assertFalse(AllayRules.validName("Seventeen letters"));
+    }
+
+    @Test void smokedSausageFlips() {
+        assertTrue(AllayRules.flipsUpsideDown("smoked sausage"));
+        assertTrue(AllayRules.flipsUpsideDown("Smoked Sausage"));
+        assertTrue(AllayRules.flipsUpsideDown("SMOKED SAUSAGE"));
+        assertTrue(AllayRules.flipsUpsideDown("smokedsausage"));
+        assertTrue(AllayRules.flipsUpsideDown("SmokedSausage"));
+        assertFalse(AllayRules.flipsUpsideDown("smoked sausages"));
+        assertFalse(AllayRules.flipsUpsideDown("sausage"));
+        assertFalse(AllayRules.flipsUpsideDown(null));
+    }
+
     @Test void saleFee() {
         assertEquals(90.0, AllayRules.netSale(100, 0.10), EPS);
         assertEquals(100.0, AllayRules.netSale(100, 0), EPS);
