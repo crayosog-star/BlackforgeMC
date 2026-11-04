@@ -83,12 +83,12 @@ for name, s in SERVERS.items():
         "koth:", "  interval-minutes: 300", "  first-after-minutes: 30",
         "  capture-seconds: 180", "  max-minutes: 20", "  reward-money: 5000",
         "pvp:", "  drop-interval-minutes: 180", "  first-drop-after-minutes: 60", "  crates-per-drop: 15",
-        "rtp:", "  border-size: 100000", "  range: 100000   # wild teleports land anywhere inside the border",
+        "rtp:", "  border-size: 1000000   # world border (the nether is this / 8)", "  range: 100000   # wild teleports land within this square, whatever the border",
         "votes:", "  party-every: 50", "  money: 250", "  sites: []",
         "store-url: 'Store coming soon!'",
         "gale-bellows:", "  enabled: true", "  custom-model: true   # the resource pack below is live, so the bellows can use its texture",
     ] if s["mode"] == "survival" else [
-        "rtp:", "  border-size: 12000",
+        "rtp:", "  border-size: 100000", "  range: 12000   # wild teleports land within this square, whatever the border",
         "season:", "  months: 3   # the factions map resets every this many months",
     ] if s["mode"] == "factions" else [
         "oneblock:",
