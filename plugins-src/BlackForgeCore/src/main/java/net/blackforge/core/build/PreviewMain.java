@@ -155,7 +155,7 @@ public final class PreviewMain {
     }
 
     /** Simple voxel raytracer from a player's eye (yaw/pitch in Minecraft convention). */
-    static void pov(Canvas c, File file, double ex, double ey, double ez, float yaw, float pitch, int w, int h) throws Exception {
+    public static void pov(Canvas c, File file, double ex, double ey, double ez, float yaw, float pitch, int w, int h) throws Exception {
         Map<Long, String> all = new HashMap<>(c.blocks());
         all.putAll(c.lateBlocks());
         all.values().removeIf(v -> v.startsWith("minecraft:light"));   // invisible light blocks
@@ -212,7 +212,7 @@ public final class PreviewMain {
         return (clamp((int) ar) << 16) | (clamp((int) ag) << 8) | clamp((int) ab);
     }
 
-    static boolean night;
+    public static boolean night;
 
     static int sky(double dy) {
         if (night) {

@@ -31,6 +31,7 @@ public final class SurvivalModule implements Listener {
     private final BlackForgeCore plugin;
     private final World world;
     private final Claims claims;
+    private final KingdomStaging staging;
     private final Crates crates;
     private final Koth koth;
     private final PvpZone pvp;
@@ -87,6 +88,7 @@ public final class SurvivalModule implements Listener {
         this.plugin = plugin;
         this.world = Bukkit.getWorlds().getFirst();
         claims = new Claims(plugin);
+        staging = new KingdomStaging(plugin);
         crates = new Crates(plugin, world, DistrictLife.CRATE_SPOTS, Y + 2);   // in the Grand Hall
         koth = new Koth(plugin, world, crates);
         pvp = new PvpZone(plugin, world, crates);
@@ -389,6 +391,7 @@ public final class SurvivalModule implements Listener {
     public boolean admin(CommandSender s, String[] a) {
         if (vaults.admin(s, a)) return true;   // /blackforge vault give <player> [amount]: crates and the store
         if (rite.admin(s, a)) return true;   // /blackforge rite give <player> (for crates)
+        if (staging.command(s, a)) return true;   // /blackforge kingdom stage|tp: the Infernal Kingdom in its own staging world
         if (upgrade.command(s, a)) return true;   // /blackforge spawnupgrade apply|undo|status 1: the volcanic kingdom (additive only)
         if (a.length >= 1 && a[0].equalsIgnoreCase("voidout")) {   // clear the land around spawn
             if (new File(plugin.getDataFolder(), "spawn-upgrade-phase1").exists()) { s.sendMessage(Component.text("The spawn upgrade is in place - voidout would remove it. Undo it first.")); return true; }
