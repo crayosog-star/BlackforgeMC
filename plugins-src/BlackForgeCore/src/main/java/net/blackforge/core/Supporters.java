@@ -230,7 +230,8 @@ public final class Supporters implements Listener {
 
     private void registerCommands() {
         reg("trails", List.of("trail", "particles"), (s, a) -> { if (s instanceof Player p) open(p); else s.sendMessage("Players only."); });
-        reg("store", List.of("buy", "shop", "donate"), (s, a) -> storeLink(s));
+        // on Survival /shop is the warp to the Gilded Grove; /store still opens the store there
+        reg("store", mode.equals("survival") ? List.of("buy", "donate") : List.of("buy", "shop", "donate"), (s, a) -> storeLink(s));
         reg("supporter", List.of("supporters", "support"), (s, a) -> info(s));
     }
 

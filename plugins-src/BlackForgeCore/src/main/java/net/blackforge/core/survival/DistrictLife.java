@@ -46,6 +46,10 @@ final class DistrictLife implements Listener {
     static final int BELL_X = 0, BELL_Z = D - 3;
     static Location marketWarp(World world) { return new Location(world, 0.5, Y + 1, BELL_Z - 2.5, 0f, 0f); }
 
+    /** /warp shop's landing point. */
+    static Location groveWarp(World world) { return new Location(world, KingdomLayout.GROVE_WARP_X, KingdomLayout.GROVE_WARP_Y, KingdomLayout.GROVE_WARP_Z + 0.5, 0f, 0f); }
+    static boolean groveBuilt(BlackForgeCore plugin) { return new java.io.File(plugin.getDataFolder(), "spawn-upgrade-phase4").exists(); }
+
     private final BlackForgeCore plugin;
     private final World world;
     private final NamespacedKey tag;
@@ -61,6 +65,8 @@ final class DistrictLife implements Listener {
         Bukkit.getScheduler().runTaskLater(plugin, this::relocate, 160L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::relocate2, 240L, 600L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::gateGlow, 100L, 8L);
+        world.addPluginChunkTicket(KingdomLayout.GROVE_X >> 4, KingdomLayout.GROVE_Z >> 4, plugin);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::groveAir, 120L, 10L);
     }
 
     /** Once: the crates move into the Grand Hall and the auction bell into the Merchant District; the old vaults and bell on the island are taken down. */
@@ -126,15 +132,32 @@ final class DistrictLife implements Listener {
         world.spawnParticle(org.bukkit.Particle.REVERSE_PORTAL, -D - 4.5, Y + 3, 0.5, 6, 0.3, 2.0, 2.5, 0.05);
     }
 
+    /** Drifting spores and golden motes in the Grove while anyone is there. */
+    private void groveAir() {
+        for (org.bukkit.entity.Player p : world.getPlayers()) {
+            if (!KingdomLayout.inGrove(p.getX(), p.getY(), p.getZ())) continue;
+            world.spawnParticle(org.bukkit.Particle.SPORE_BLOSSOM_AIR, p.getX(), p.getY() + 4, p.getZ(), 6, 8, 3, 8, 0);
+            world.spawnParticle(org.bukkit.Particle.WAX_ON, p.getX(), p.getY() + 2, p.getZ(), 2, 7, 2, 7, 0);
+        }
+    }
+
     private void ensure() {
         if (!new java.io.File(plugin.getDataFolder(), "spawn-upgrade-phase2").exists()) return;   // only once the districts are built
         if (holos.isEmpty() || holos.stream().anyMatch(t -> !t.isValid())) holograms();
         villager("blacksmith", "<#ff7a1a>Blacksmith", Villager.Profession.WEAPONSMITH, D + 1.5, 0.5, 90f);
         villager("merchant", "<gold>Merchant", Villager.Profession.LIBRARIAN, 0.5, D + 1.5, 180f);
+        if (groveBuilt(plugin)) {
+            villager("grove_daily", "<gradient:#ffd27a:#5fd38a>Daily Shop</gradient>", Villager.Profession.CARTOGRAPHER, KingdomLayout.GROVE_X - 5.5, KingdomLayout.GROVE_Y + 1, KingdomLayout.GROVE_Z + 0.5, -90f);
+            villager("grove_auction", "<gradient:#ffd27a:#5fd38a>Auction House</gradient>", Villager.Profession.LIBRARIAN, KingdomLayout.GROVE_X + 6.5, KingdomLayout.GROVE_Y + 1, KingdomLayout.GROVE_Z + 0.5, 90f);
+        }
     }
 
     private void villager(String id, String name, Villager.Profession prof, double x, double z, float yaw) {
-        Location at = new Location(world, x, Y + 1, z, yaw, 0);
+        villager(id, name, prof, x, Y + 1, z, yaw);
+    }
+
+    private void villager(String id, String name, Villager.Profession prof, double x, double y, double z, float yaw) {
+        Location at = new Location(world, x, y, z, yaw, 0);
         Villager found = null;
         for (Entity e : world.getNearbyEntities(at, 4, 4, 4)) {
             if (!(e instanceof Villager v) || !id.equals(v.getPersistentDataContainer().get(tag, PersistentDataType.STRING))) continue;
@@ -161,6 +184,8 @@ final class DistrictLife implements Listener {
         holos.clear();
         holos.add(Ui.hologram(new Location(world, 0.5, Y + 6, -(D - 7) + 0.5),
                 "<#ff6a00><bold>BLACKFORGEMC</bold><newline><gray>Welcome to the Grand Hall<newline><white>/warp <gray>• <white>/daily <gray>• <white>/vote <gray>• <white>/pv<newline><gray>Crates and the Hall of Fame are at spawn", 1.3f));
+        if (groveBuilt(plugin)) holos.add(Ui.hologram(new Location(world, KingdomLayout.GROVE_WARP_X, KingdomLayout.GROVE_Y + 5, KingdomLayout.GROVE_WARP_Z + 2.5),
+                "<gradient:#ffd27a:#5fd38a><bold>THE GILDED GROVE</bold></gradient><newline><gray>A BlackForgeMC trading haven<newline><white>Daily Shop <gray>and <white>Auction House <gray>ahead", 1.0f));
         holos.add(Ui.hologram(new Location(world, D + 1.5, Y + 3.2, 0.5), "<#ff7a1a><bold>BLACKSMITH</bold><newline><gray>Right-click to use the anvil", 1.0f));
         holos.add(Ui.hologram(new Location(world, 0.5, Y + 3.2, D + 1.5), "<gold><bold>MERCHANT</bold><newline><gray>Right-click to open the Auction House", 1.0f));
         holos.add(Ui.hologram(new Location(world, -(D - 6) + 0.5, Y + 4, 0.5), "<#e5484d><bold>THE WILDS</bold><newline><gray>Use <white>/warp wild <gray>to leave on an expedition", 1.2f));
@@ -174,7 +199,8 @@ final class DistrictLife implements Listener {
         e.setCancelled(true);
         Player p = e.getPlayer();
         if (id.equals("blacksmith")) p.openAnvil(null, true);
-        else if (id.equals("merchant")) p.performCommand("ah");
+        else if (id.equals("merchant") || id.equals("grove_auction")) p.performCommand("ah");
+        else if (id.equals("grove_daily")) p.performCommand("dailyshop");
     }
 
     void shutdown() { holos.forEach(TextDisplay::remove); }

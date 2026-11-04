@@ -55,3 +55,8 @@ Outside spawn: the KOTH arena (z=-420) and the Scrapyard (z=520) float on their 
   get forge-themed dressing around them (the treasure-vault look) without touching their blocks.
 
 **Phase 3:** decoration around existing builds (Trading Hall, crates, Hall of Fame) once phases 1-2 are approved.
+
+**Phase 4: the Gilded Grove** (`/warp shop`)
+* A forest island centred at x=-70, z=150, radius 34, surface at y=170, just above the caldera's south-west ridge.
+* A bridge rises from the Merchant District's west edge. Daily Shop and Auction House NPCs stand in the pavilion.
+* `/warp shop` and `/shop` refuse to teleport until `/blackforge spawnupgrade apply 4` has finished. Back up first; `undo 4` removes it.

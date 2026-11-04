@@ -20,6 +20,8 @@ public final class WalkCheck {
                 net.blackforge.core.survival.RiteChamberBuilder.Y + 1, net.blackforge.core.survival.RiteChamberBuilder.SPAWN_Z);
         bad += check("arcade hub", net.blackforge.core.arcade.ArcadeHubBuilder.build(), net.blackforge.core.arcade.ArcadeHubBuilder.SPAWN_X, net.blackforge.core.arcade.ArcadeHubBuilder.Y + 1, net.blackforge.core.arcade.ArcadeHubBuilder.SPAWN_Z);
         bad += check("skyblock hub", net.blackforge.core.survival.SkyHubBuilder.build(), 0.5, net.blackforge.core.survival.SkyHub.Y + 1, 27.5);
+        bad += check("gilded grove", net.blackforge.core.survival.GildedGrove.build(), net.blackforge.core.survival.KingdomLayout.GROVE_WARP_X,
+                net.blackforge.core.survival.KingdomLayout.GROVE_WARP_Y, net.blackforge.core.survival.KingdomLayout.GROVE_WARP_Z + 0.5);
         bad += check("koth arena", net.blackforge.core.survival.SpawnBuilder.arena(), net.blackforge.core.survival.SurvivalLayout.KOTH_X + 20.5,
                 net.blackforge.core.survival.SurvivalLayout.KOTH_Y + 10, net.blackforge.core.survival.SurvivalLayout.KOTH_Z + 0.5);
         // the Scrapyard's lava pits are part of the PvP (knock people in), so it's reported but not counted

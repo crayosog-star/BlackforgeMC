@@ -102,6 +102,7 @@ public final class SurvivalLayout {
         return dx * dx + dz * dz <= (KOTH_R + 1) * (KOTH_R + 1) && y > KOTH_Y - 20 && y < KOTH_Y + 30;
     }
     public static boolean inSpawn(double x, double y, double z) {
+        if (KingdomLayout.inGrove(x, y, z)) return true;
         return x * x + z * z <= SPAWN_RADIUS * SPAWN_RADIUS && y > Y - 40 && y < Y + 60;
     }
 }
