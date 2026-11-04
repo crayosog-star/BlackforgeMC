@@ -83,6 +83,13 @@ class AllayRulesTest {
         assertEquals(0.0, AllayRules.netSale(100, 1.5), EPS);      // nor can a big one cost more than the sale
     }
 
+    @Test void feeComesOffASaleCrossingTheDailyCap() {
+        // 8 at full price and 8 at the over-cap rate make 10, and the fee takes 10% of that
+        double gross = SellCatalog.payout(1.0, 1_720, 16, 1_728, 0.25);
+        assertEquals(10.0, gross, EPS);
+        assertEquals(9.0, AllayRules.netSale(gross, 0.10), EPS);
+    }
+
     @Test void defaultSpeedOnATwelveBlockRun() {
         double trip = AllayRules.tripSeconds(12, 6.0, 1.0);
         assertEquals(5.0, trip, EPS);

@@ -47,7 +47,9 @@ final class FoundryLab {
     private final List<org.bukkit.entity.Item> benchDrops = new ArrayList<>();
     private int benchTimer;
     /** The Courier Bench's chests, each with what its frame holds: the Allay Bench's own drops, so the whole chain can be watched. */
-    private static final Material[] COURIER_ITEMS = {Material.COBBLESTONE, Material.WHEAT, Material.RAW_IRON};
+    private static final Material[] COURIER_ITEMS = {Material.COBBLESTONE, Material.WHEAT, Material.RAW_IRON, Material.EMERALD};
+    /** The last one's the sell chest: goods the Trader buys, and cobblestone, which it doesn't, to show that stays. */
+    private static final int SELL_INDEX = 3;
     private static final int COURIER_Z_OFFSET = -5, COURIER_SPACING = 2;
     private final org.bukkit.entity.ItemFrame[] courierFrames = new org.bukkit.entity.ItemFrame[COURIER_ITEMS.length];
 
@@ -97,6 +99,11 @@ final class FoundryLab {
             if (chest.getType().isAir() && chest.getRelative(org.bukkit.block.BlockFace.DOWN).getType().isSolid()) chest.setType(Material.CHEST);
             if (chest.getType() != Material.CHEST || !(chest.getState(false) instanceof Container c)) continue;
             if (!occupied) c.getInventory().clear();
+            else if (i == SELL_INDEX && c.getInventory().isEmpty()) {
+                c.getInventory().addItem(new ItemStack(Material.WHEAT, 32), new ItemStack(Material.BONE, 32), new ItemStack(Material.COBBLESTONE, 8));
+            } else if (i == SELL_INDEX && !c.getInventory().contains(Material.WHEAT) && !c.getInventory().contains(Material.BONE)) {
+                c.getInventory().clear();   // sold out: restock next second
+            }
             if (courierFrames[i] != null && courierFrames[i].isValid()) continue;
             ItemStack shown = new ItemStack(COURIER_ITEMS[i]);
             try {
@@ -133,7 +140,7 @@ final class FoundryLab {
     private void spawnLabels() {
         label(layout.title(), "<gradient:#ffb347:#ff5a1a><bold>THE FOUNDRY</bold></gradient><newline><gray>Build and test anything<newline><dark_gray>It all goes when you leave", 1.3f);
         label(layout.forge().clone().add(0.5, 2.3, 0.5), "<gold><bold>The Forge</bold><newline><gray>Upgrades are free here", 1f);
-        label(layout.allayBench().clone().add(COURIER_SPACING, 1.6, COURIER_Z_OFFSET), "<#4fd1b5><bold>Courier Bench</bold><newline><gray>A Tier II allay sorts the Forge's<newline><gray>storage into these framed chests", 1f);
+        label(layout.allayBench().clone().add(COURIER_SPACING, 1.6, COURIER_Z_OFFSET), "<#4fd1b5><bold>Courier Bench</bold><newline><gray>Tier II sorts into these framed chests<newline><gray>Tier III sells from the emerald one", 1f);
         label(layout.allayBench().clone().add(0, 1.8, 0), "<#4fd1b5><bold>Allay Bench</bold><newline><gray>Summon a Forge Allay from slot 34<newline><gray>of the Forge to clear these drops", 1f);
         for (int i = 0; i < layout.supply().length; i++)
             label(layout.supply()[i].clone().add(0.5, 1.5, 0.5), "<#ffb347><bold>" + FoundrySupply.NAMES[i] + "</bold><newline><gray>Never runs out", 0.9f);

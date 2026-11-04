@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -62,10 +63,10 @@ import java.util.function.Predicate;
 public final class Allays implements Listener {
     private static final String NAME = "<gradient:#c8743a:#4fd1b5><bold>Forge Allay</bold></gradient>";
     private static final String[] TIER_NAME = {"Gatherer", "Courier", "Steward"};
-    private static final String[] TIER_JOB = {"Carries loose drops to the Station", "Also sorts the Station into chests with that item in a frame, and refuels Agents from Fuel Cells in the Station", "Sells from an emerald-framed chest, less a fee"};
+    private static final String[] TIER_JOB = {"Carries loose drops to the Station", "Also sorts the Station into chests with that item in a frame, and refuels Agents from Fuel Cells in the Station", "Also sells from a chest with an emerald in a frame, less a fee, while the owner's online"};
     private static final int TRIP_BLOCKS = 12, MAX_TEST = 6, TEST_LIFE_TICKS = 5 * 60 * 20;
     /** The highest tier with its job built so far. Higher cards say so rather than sell nothing. */
-    private static final int BUILT_TIER = 2;
+    private static final int BUILT_TIER = 3;
     private static final int[] CARD_SLOTS = {11, 13, 15};
     private static final int BACK_SLOT = 22, MENU_SIZE = 27;
     private static final int RETRY_TICKS = 40, NEVER_PICKED_UP = 1000, WORK_CHECK_TICKS = 10;
@@ -97,6 +98,8 @@ public final class Allays implements Listener {
         int rest; String label;
         /** Where a load is going, other than the Station: a chest or an Agent. */
         Block dest; Robots.Bot agent;
+        /** Set when a load is from the sell chest, so the Station end of the trip is a sale. */
+        Block sellFrom;
         /** What the player called it, or null. */
         String name;
         /** Shows the name of a flipped allay, whose real name has to be the one the game flips. */
@@ -104,7 +107,7 @@ public final class Allays implements Listener {
         Worker(int index) { this.index = index; }
     }
 
-    private enum State { IDLE, FETCH, DELIVER, RETURN, PAUSE, WAIT }
+    private enum State { IDLE, FETCH, COLLECT, DELIVER, RETURN, PAUSE, WAIT }
 
     /** A chest that takes this material, from an item frame on it. */
     private record Link(Material material, Block chest) {}
@@ -115,6 +118,7 @@ public final class Allays implements Listener {
         final List<Worker> workers = new ArrayList<>();
         final List<AllayJobs.Job> jobs = new ArrayList<>();
         final List<Link> links = new ArrayList<>();
+        final List<Block> sellChests = new ArrayList<>();
         final List<Robots.Bot> thirsty = new ArrayList<>();
         long lastScan = Long.MIN_VALUE / 2, lastLinkScan = Long.MIN_VALUE / 2;
         Base(String region, UUID buyer) { this.region = region; this.buyer = buyer; }
@@ -144,6 +148,9 @@ public final class Allays implements Listener {
     private int sandboxLimit = Integer.MAX_VALUE;
     private final boolean sausageFlip;
     private Robots robots;
+    private GroveTrader trader;
+    private Function<String, UUID> ownerOf;
+    private final double sellFee;
 
     /** {@code zone}: where staff may test flight. {@code sandbox}: the Arena's Foundry, where everything is free and nothing is saved. */
     Allays(BlackForgeCore plugin, BaseStation station, Predicate<Location> zone, boolean sandbox) {
@@ -160,6 +167,7 @@ public final class Allays implements Listener {
         this.minDropAge = c.getInt("allays.min-drop-age-ticks", 60);
         this.scanTicks = Math.max(20, c.getInt("allays.scan-seconds", 5) * 20);
         this.maxScans = Math.max(1, c.getInt("allays.max-scans-per-tick", 4));
+        this.sellFee = c.getDouble("allays.sell-fee", 0.10);
         this.linkScanTicks = Math.max(20, c.getInt("allays.link-scan-seconds", 30) * 20);
         this.speed = Math.max(0.5, c.getDouble("allays.speed", 6.0));
         this.pauseTicks = (int) Math.max(0, Math.round(c.getDouble("allays.pause-seconds", 1.0) * 20));
@@ -170,6 +178,9 @@ public final class Allays implements Listener {
 
     void setSandboxLimit(int total) { this.sandboxLimit = total; }
     void setRobots(Robots r) { this.robots = r; }
+    void setTrader(GroveTrader t) { this.trader = t; }
+    /** Who a region's sales pay. Without this, the Foundry's case, it's whoever bought the upgrade. */
+    void setOwnerOf(Function<String, UUID> rule) { this.ownerOf = rule; }
 
     private static AllayRules.Table table(org.bukkit.configuration.file.FileConfiguration c) {
         AllayRules.Table d = AllayRules.Table.DEFAULT;
@@ -473,7 +484,7 @@ public final class Allays implements Listener {
         w.job = null;
         w.dest = null;
         w.agent = null;
-        if (w.carried != null) goHome(w, at, flock);
+        if (w.carried != null) goHome(w, at, flock);   // a load from the sell chest stays one, so it's still sold
         else w.state = State.IDLE;
     }
 
@@ -486,6 +497,7 @@ public final class Allays implements Listener {
                 if (store == null) return;
                 if (AllayRules.canRefuel(b.tier) && startRefuel(b, w, store)) return;
                 if (AllayRules.canSort(b.tier) && startSort(b, w, store)) return;
+                if (AllayRules.canSell(b.tier) && startSell(b, w)) return;
                 var job = store.firstEmpty() < 0 ? Optional.<AllayJobs.Job>empty()
                         : AllayJobs.nearest(xyz(w.entity.getLocation()), b.jobs, taken);
                 if (job.isPresent()) {
@@ -494,6 +506,11 @@ public final class Allays implements Listener {
                     w.state = State.FETCH;
                     fly(w, new double[]{job.get().x(), job.get().y() + 0.4, job.get().z()});
                 }
+            }
+            case COLLECT -> {
+                if (!advance(w, at, flock)) return;
+                collect(b, w);
+                goHome(w, at, flock);
             }
             case DELIVER -> {
                 if (!advance(w, at, flock)) return;
@@ -508,8 +525,9 @@ public final class Allays implements Listener {
             }
             case RETURN -> {
                 if (!advance(w, at, flock)) return;
-                if (w.carried == null) { rest(w); return; }
-                unload(b, w, at);
+                if (w.carried == null) { w.sellFrom = null; rest(w); return; }
+                if (w.sellFrom != null) sell(b, w, at);
+                else unload(b, w, at);
             }
             case PAUSE -> {
                 idle(w, at, flock);
@@ -623,6 +641,93 @@ public final class Allays implements Listener {
         chest.getWorld().playSound(chest.getLocation(), Sound.BLOCK_AMETHYST_CLUSTER_PLACE, 0.4f, 1.3f);
     }
 
+    // ------------------------------------------------------------------ selling
+
+    private UUID owner(Base b) { return ownerOf == null ? b.buyer : ownerOf.apply(b.region); }
+
+    private static boolean plain(ItemStack it) { return it != null && !it.getType().isAir() && it.isSimilar(new ItemStack(it.getType())); }
+
+    /** Does the Trader buy this? The Foundry has no Trader, so it goes by the catalogue. */
+    private boolean sellable(ItemStack it) {
+        return plain(it) && (trader != null ? trader.buys(it.getType()) : catalogPrice(it.getType()) > 0);
+    }
+
+    private static double catalogPrice(Material m) {
+        for (SellCatalog.Item i : SellCatalog.ITEMS) if (i.id().equals(m.getKey().getKey())) return i.price();
+        return 0;
+    }
+
+    /** Heads for a sell chest with something the Trader buys. It only sells with the owner online, so nothing moves otherwise. */
+    private boolean startSell(Base b, Worker w) {
+        UUID owner = owner(b);
+        if (owner == null || Bukkit.getPlayer(owner) == null) return false;
+        for (Block chest : b.sellChests) {
+            if (!chest.getWorld().isChunkLoaded(chest.getX() >> 4, chest.getZ() >> 4) || !(chest.getState(false) instanceof Container c)) continue;
+            boolean taken = false;
+            for (Worker o : b.workers) if (chest.equals(o.dest)) taken = true;
+            if (taken) continue;
+            for (ItemStack it : c.getInventory().getContents()) {
+                if (!sellable(it)) continue;
+                w.dest = chest;
+                w.state = State.COLLECT;
+                Location l = chest.getLocation();
+                fly(w, new double[]{l.getX() + 0.5, l.getY() + 1.4, l.getZ() + 0.5});
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Takes one load of one sellable item from the chest. It may have gone by now, and then the allay just comes back empty. */
+    private void collect(Base b, Worker w) {
+        Block chest = w.dest;
+        w.dest = null;
+        if (chest == null || !(chest.getState(false) instanceof Container c)) return;
+        Inventory inv = c.getInventory();
+        ItemStack[] all = inv.getContents();
+        for (int i = 0; i < all.length; i++) {
+            if (!sellable(all[i])) continue;
+            int n = Math.min(all[i].getAmount(), carry);
+            ItemStack load = all[i].clone();
+            load.setAmount(n);
+            if (n >= all[i].getAmount()) inv.setItem(i, null);
+            else { all[i].setAmount(all[i].getAmount() - n); inv.setItem(i, all[i]); }
+            w.carried = load;
+            w.sellFrom = chest;
+            return;
+        }
+    }
+
+    /** Pays the owner at the Station, once. If that can't happen, the load goes back where it came from. */
+    private void sell(Base b, Worker w, Location at) {
+        Block from = w.sellFrom;
+        w.sellFrom = null;
+        UUID ownerId = owner(b);
+        Player owner = ownerId == null ? null : Bukkit.getPlayer(ownerId);
+        ItemStack load = w.carried;
+        double gross = owner == null ? 0 : trader != null ? trader.saleValue(ownerId, load.getType(), load.getAmount())
+                : SellCatalog.payout(catalogPrice(load.getType()), 0, load.getAmount(), SellCatalog.DEFAULT_SOFT_CAP, SellCatalog.DEFAULT_OVER_CAP_RATE);
+        double net = AllayRules.netSale(gross, sellFee);
+        // the Foundry shows what it would have paid and pays nothing
+        boolean paid = owner != null && net > 0 && (sandbox || plugin.economy().deposit(owner, net));
+        if (!paid) {
+            if (from != null && from.getState(false) instanceof Container) {
+                w.dest = from;
+                w.state = State.DELIVER;
+                Location l = from.getLocation();
+                fly(w, new double[]{l.getX() + 0.5, l.getY() + 1.4, l.getZ() + 0.5});
+            } else unload(b, w, at);
+            return;
+        }
+        if (trader != null) trader.recordSale(ownerId, load.getType(), load.getAmount());
+        plugin.getLogger().info("allay sale: " + owner.getName() + " sold " + load.getAmount() + " " + load.getType().getKey().getKey() + " for " + net);
+        w.carried = null;
+        at.getWorld().playSound(at, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.6f, 1.2f);
+        at.getWorld().spawnParticle(Particle.WAX_ON, at.clone().add(0.5, 1.4, 0.5), 12, 0.4, 0.3, 0.4, 0.02);
+        owner.sendActionBar(Ui.mm("<#ffd27a>Your allay sold " + load.getAmount() + " for <gold>" + NetEconomy.money(net) + (sandbox ? " <gray>(not really: Foundry)" : "")));
+        rest(w);
+    }
+
     /** Back to its place in the circle, aiming for where that will be when it arrives so it doesn't snap. */
     private void goHome(Worker w, Location at, int flock) {
         w.job = null;
@@ -640,7 +745,7 @@ public final class Allays implements Listener {
         double[] p = AllayFlight.at(w.from, w.to, w.tick, w.ticks);
         World world = w.entity.getWorld();
         if (!world.isChunkLoaded((int) Math.floor(p[0]) >> 4, (int) Math.floor(p[2]) >> 4)) {
-            if (w.state == State.FETCH || w.state == State.DELIVER) goHome(w, at, flock);
+            if (w.state == State.FETCH || w.state == State.DELIVER || w.state == State.COLLECT) goHome(w, at, flock);
             else { w.tick = w.ticks; return true; }   // home is the Station's own area: being unloaded here means we're about to sleep anyway
             return false;
         }
@@ -737,14 +842,17 @@ public final class Allays implements Listener {
         scansThisTick++;
         b.lastLinkScan = now;
         b.links.clear();
+        b.sellChests.clear();
         int leash = table.leash(b.tier);
         for (Entity e : at.getWorld().getNearbyEntities(at, leash, leash, leash, x -> x instanceof ItemFrame)) {
             ItemFrame frame = (ItemFrame) e;
             Material m = frame.getItem().getType();
-            if (m.isAir() || m == SELL_MARK) continue;
+            if (m.isAir()) continue;
             Block chest = frame.getLocation().getBlock().getRelative(frame.getAttachedFace());
             if (chest.equals(at.getBlock()) || !inBase(chest.getLocation(), b.region)) continue;
-            if (chest.getState(false) instanceof Chest || chest.getState(false) instanceof Barrel) b.links.add(new Link(m, chest));
+            if (!(chest.getState(false) instanceof Chest) && !(chest.getState(false) instanceof Barrel)) continue;
+            if (m == SELL_MARK) b.sellChests.add(chest);
+            else b.links.add(new Link(m, chest));
         }
         b.thirsty.clear();
         if (robots != null && AllayRules.canRefuel(b.tier))
@@ -791,7 +899,7 @@ public final class Allays implements Listener {
         b.thirsty.clear();
         for (Worker w : b.workers) {
             if (w.entity != null && w.entity.isValid()) {
-                if (w.carried != null) { w.entity.getWorld().dropItem(w.entity.getLocation(), w.carried); w.carried = null; }
+                if (w.carried != null) { w.entity.getWorld().dropItem(w.entity.getLocation(), w.carried); w.carried = null; w.sellFrom = null; }
                 w.entity.remove();
             }
             removeTag(w);
