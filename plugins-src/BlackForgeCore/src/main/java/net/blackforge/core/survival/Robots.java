@@ -89,6 +89,10 @@ public final class Robots implements Listener {
         Location loc; Inventory storage; UUID entity; int timer; String status = "";
         /** The name the player gave it, or null. */
         String name;
+        /** The last Grinder log line, so an unchanged cycle isn't logged again. Not saved. */
+        String lastGrindLog;
+        /** What's already been warned about, so one fault can't flood the log every second. Not saved. */
+        final Set<String> warned = new HashSet<>();
         Bot(String id) { this.id = id; }
         /** "Agent Bob", or "Miner Agent" until it's named. */
         String title() { return name != null ? "Agent " + name : job.label + " Agent"; }
@@ -115,12 +119,15 @@ public final class Robots implements Listener {
     /** The Arena's Foundry: upgrades are free, nothing is saved, there's no /agents shop, and only the owner can open an agent. */
     private final boolean sandbox;
     private int sandboxPerPlayer, sandboxTotal;
+    /** Logs what each Grinder does when that changes. On by default in the Foundry only. */
+    private final boolean grinderLog;
 
     Robots(BlackForgeCore plugin) { this(plugin, false); }
 
     Robots(BlackForgeCore plugin, boolean sandbox) {
         this.plugin = plugin;
         this.sandbox = sandbox;
+        this.grinderLog = plugin.getConfig().getBoolean("robots.grinder-debug-log", sandbox);
         this.file = new File(plugin.getDataFolder(), "robots.yml");
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 40L, 20L);
@@ -275,11 +282,30 @@ public final class Robots implements Listener {
     private void style(Bot b, CopperGolem g) {
         WeatheringCopperState[] look = {WeatheringCopperState.OXIDIZED, WeatheringCopperState.WEATHERED, WeatheringCopperState.EXPOSED,
                 WeatheringCopperState.UNAFFECTED, WeatheringCopperState.UNAFFECTED};
-        g.setWeatheringState(look[b.tier - 1]);
-        g.setGlowing(b.tier >= 5);
-        g.getEquipment().setItemInMainHand(new ItemStack(b.job.icon));
         String st = b.fuel <= 0 ? "<red>No fuel" : b.status.isEmpty() ? "<white>" + time(b.fuel) : b.status;
-        g.customName(Ui.mm(b.job.color + "⚙ " + (b.name != null ? "Agent " + b.name + " <dark_gray>• " + b.job.color + b.job.label : b.title()) + " " + Spawners.roman(b.tier) + " <dark_gray>• " + st));
+        // each part on its own: a failure in one must not cost the agent its name tag or stop the others
+        stylePart(b, "name", () -> g.customName(Ui.mm(b.job.color + "⚙ " + (b.name != null ? "Agent " + b.name + " <dark_gray>• " + b.job.color + b.job.label : b.title()) + " " + Spawners.roman(b.tier) + " <dark_gray>• " + st)));
+        stylePart(b, "hand", () -> g.getEquipment().setItemInMainHand(new ItemStack(b.job.icon)));
+        stylePart(b, "copper", () -> g.setWeatheringState(look[b.tier - 1]));
+        stylePart(b, "glow", () -> g.setGlowing(b.tier >= 5));
+    }
+
+    private void stylePart(Bot b, String part, Runnable apply) {
+        try { apply.run(); } catch (Exception ex) { warnOnce(b, "style " + part, ex); }
+    }
+
+    private void warnOnce(Bot b, String where, Exception ex) {
+        if (b.warned.add(where + ":" + ex)) plugin.getLogger().warning("agent " + b.id + " " + b.job + " " + where + ": " + ex);
+    }
+
+    /** One line when a Grinder's result changes; the fuel left doesn't count as a change. */
+    private void logGrinder(Bot b, CopperGolem g, String what) {
+        if (!grinderLog || b.job != Job.GRINDER) return;
+        String line = "T" + b.tier + " r=" + RADIUS[b.tier - 1] + " at " + b.loc.getBlockX() + "," + b.loc.getBlockY() + "," + b.loc.getBlockZ() + " in " + b.loc.getWorld().getName()
+                + ": " + what + " | tagShown=" + g.isCustomNameVisible() + " hand=" + g.getEquipment().getItemInMainHand().getType();
+        if (line.equals(b.lastGrindLog)) return;
+        b.lastGrindLog = line;
+        plugin.getLogger().info("Grinder " + b.id.substring(0, 8) + " fuel=" + time(b.fuel) + " " + line);
     }
 
     private CopperGolem entity(Bot b) {
@@ -332,36 +358,41 @@ public final class Robots implements Listener {
 
     private void tick() {
         for (Bot b : new ArrayList<>(bots.values())) {
-            World w = b.loc.getWorld();
-            if (w == null || !w.isChunkLoaded(b.loc.getBlockX() >> 4, b.loc.getBlockZ() >> 4)) continue;
-            Chunk ch = b.loc.getChunk();
-            if (!ch.isEntitiesLoaded()) continue;
-            CopperGolem g = entity(b);
-            if (g == null) {
-                for (Entity x : w.getNearbyEntities(b.loc, 1.5, 1.5, 1.5))
-                    if (b.id.equals(x.getPersistentDataContainer().get(ROBOT, PersistentDataType.STRING)) && x instanceof CopperGolem cg) { g = cg; b.entity = cg.getUniqueId(); break; }
-                if (g == null) { plugin.getLogger().info("Robot " + b.id + " had no entity (was " + b.entity + ", lookup=" + Bukkit.getEntity(b.entity == null ? new UUID(0, 0) : b.entity) + ") - respawning it"); g = spawn(b); }
-            }
-            if (b.fuel <= 0) { if (++b.timer % 5 == 0) style(b, g); continue; }
-            boolean full = b.storage.firstEmpty() < 0 && (stations == null || !stations.hasRoom(b.loc));
-            boolean dry = !full && b.job == Job.FISHERMAN && !nearWater(b);
-            b.status = full ? "<red>Storage full" : dry ? "<red>Needs water" : "";
-            if (!full && !dry) {
-                // Fishermen burn fuel and build Charge at a quarter of the normal rate
-                long burn = Math.min(b.fuel, b.job == Job.FISHERMAN ? (long) (1000 * RobotRules.FISHER_BURN) : 1000);
-                b.fuel -= burn;
-                b.chargeCarry += burn * b.chargeRate;
-                long whole = (long) b.chargeCarry;
-                b.charge += whole;
-                b.chargeCarry -= whole;
-                if (++b.timer >= b.interval()) {
-                    b.timer = 0;
-                    try { work(b, g); } catch (Exception ex) { plugin.getLogger().warning("robot " + b.id + " " + b.job + ": " + ex); }
-                }
-            }
-            else if (dry && ++b.timer >= 5) b.timer = 0;   // no burn, no fishing progress; keep refreshing the name tag
-            if (b.timer % 5 == 0) style(b, g);
+            try { tickBot(b); } catch (Exception ex) { warnOnce(b, "tick", ex); }   // one bad agent must not stop the rest
         }
+    }
+
+    private void tickBot(Bot b) {
+        World w = b.loc.getWorld();
+        if (w == null || !w.isChunkLoaded(b.loc.getBlockX() >> 4, b.loc.getBlockZ() >> 4)) return;
+        Chunk ch = b.loc.getChunk();
+        if (!ch.isEntitiesLoaded()) return;
+        CopperGolem g = entity(b);
+        if (g == null) {
+            for (Entity x : w.getNearbyEntities(b.loc, 1.5, 1.5, 1.5))
+                if (b.id.equals(x.getPersistentDataContainer().get(ROBOT, PersistentDataType.STRING)) && x instanceof CopperGolem cg) { g = cg; b.entity = cg.getUniqueId(); break; }
+            if (g == null) { plugin.getLogger().info("Robot " + b.id + " had no entity (was " + b.entity + ", lookup=" + Bukkit.getEntity(b.entity == null ? new UUID(0, 0) : b.entity) + ") - respawning it"); g = spawn(b); }
+        }
+        if (b.fuel <= 0) { logGrinder(b, g, "idle: no fuel"); if (++b.timer % 5 == 0) style(b, g); return; }
+        boolean full = b.storage.firstEmpty() < 0 && (stations == null || !stations.hasRoom(b.loc));
+        boolean dry = !full && b.job == Job.FISHERMAN && !nearWater(b);
+        b.status = full ? "<red>Storage full" : dry ? "<red>Needs water" : "";
+        if (full) logGrinder(b, g, "idle: storage full");
+        if (!full && !dry) {
+            // Fishermen burn fuel and build Charge at a quarter of the normal rate
+            long burn = Math.min(b.fuel, b.job == Job.FISHERMAN ? (long) (1000 * RobotRules.FISHER_BURN) : 1000);
+            b.fuel -= burn;
+            b.chargeCarry += burn * b.chargeRate;
+            long whole = (long) b.chargeCarry;
+            b.charge += whole;
+            b.chargeCarry -= whole;
+            if (++b.timer >= b.interval()) {
+                b.timer = 0;
+                try { work(b, g); } catch (Exception ex) { plugin.getLogger().warning("robot " + b.id + " " + b.job + ": " + ex); }
+            }
+        }
+        else if (dry && ++b.timer >= 5) b.timer = 0;   // no burn, no fishing progress; keep refreshing the name tag
+        if (b.timer % 5 == 0) style(b, g);
     }
 
     private void work(Bot b, CopperGolem g) {
@@ -458,23 +489,32 @@ public final class Robots implements Listener {
     }
 
     private void grind(Bot b, CopperGolem g) {
-        int r = RADIUS[b.tier - 1], hits = 0;
+        int r = RADIUS[b.tier - 1], maxHits = RobotRules.grindHitsPerSwing(b.tier), mobs = 0, hits = 0, noEffect = 0, kills = 0;
+        Map<RobotRules.GrindSkip, Integer> skipped = new EnumMap<>(RobotRules.GrindSkip.class);
         Map<EntityType, Integer> count = new HashMap<>();
         Collection<Entity> near = b.loc.getWorld().getNearbyEntities(b.loc, r, 3, r);
         for (Entity e : near) count.merge(e.getType(), 1, Integer::sum);
         for (Entity e : near) {
-            if (hits > b.tier) break;   // tier + 1 mobs per swing
             if (!(e instanceof Mob m) || e instanceof CopperGolem || e.getPersistentDataContainer().has(ROBOT)) continue;
-            if (m instanceof Tameable t && t.isTamed()) continue;
-            if (!(m instanceof Enemy) && !workArea.test(b.owner, m.getLocation())) continue;   // hostiles anywhere, animals only on the owner's land
-            if (m instanceof AbstractVillager || m.customName() != null && !m.getPersistentDataContainer().has(Spawners.FROM_SPAWNER)) continue;
-            // leave a breeding pair of farm animals alone
-            if (m instanceof Animals an && !m.getPersistentDataContainer().has(Spawners.FROM_SPAWNER) && (count.get(e.getType()) <= 2 || !an.isAdult())) continue;
+            mobs++;
+            if (hits >= maxHits) continue;
+            boolean hostile = m instanceof Enemy;
+            Optional<RobotRules.GrindSkip> skip = RobotRules.grindSkip(new RobotRules.GrindTarget(
+                    m instanceof Tameable t && t.isTamed(), hostile, hostile || workArea.test(b.owner, m.getLocation()),
+                    m instanceof AbstractVillager, m.customName() != null, m.getPersistentDataContainer().has(Spawners.FROM_SPAWNER),
+                    m instanceof Animals, m instanceof Animals an && an.isAdult(), count.get(e.getType())));
+            if (skip.isPresent()) { skipped.merge(skip.get(), 1, Integer::sum); continue; }
+            double before = m.getHealth();
             killedBy.put(m.getUniqueId(), b.id);
             m.damage(DAMAGE[b.tier - 1]);
-            if (!m.isDead()) killedBy.remove(m.getUniqueId());
+            if (m.isDead()) kills++;
+            else {
+                killedBy.remove(m.getUniqueId());
+                if (m.getHealth() >= before) noEffect++;   // something cancelled or absorbed the hit
+            }
             hits++;
         }
+        logGrinder(b, g, RobotRules.grindSummary(mobs, skipped, hits, noEffect, kills));
         if (hits > 0) { g.swingMainHand(); b.loc.getWorld().playSound(b.loc, Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.4f, 1.2f); }
     }
 
@@ -648,6 +688,7 @@ public final class Robots implements Listener {
                 for (int i = 0; i < 4; i++) if (JOB_SLOTS[i] == slot && b.job != Job.values()[i]) {
                     b.job = Job.values()[i];
                     b.timer = 0;
+                    b.lastGrindLog = null;
                     CopperGolem g = entity(b);
                     if (g != null) style(b, g);
                     p.sendMessage(Ui.mm("<green>Your agent is now a " + b.job.color + b.job.label + "<green>."));

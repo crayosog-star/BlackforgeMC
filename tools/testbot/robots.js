@@ -8,9 +8,11 @@ const rcon = c => { try { return execSync(`python ../netctl.py cmd skyblock "${c
 const ob = c => rcon('execute in minecraft:oneblock_world run ' + c);
 const A = mineflayer.createBot({ host: '127.0.0.1', port: 25577, username: 'AlloyTesterA', version: '1.20.4', auth: 'offline' });
 const txt = w => JSON.stringify(w.title).match(/"value":"([^"]{2,})"/g)?.map(s => s.slice(9, -1)).filter(s => !/^(string|byte|compound|list)$/.test(s)).join('') || '?';
-A.on('message', m => { const t = m.toString(); if (/upgraded|Robot|robot|Fuel|Added|need|now a|picked|Essence|spawns|blocks/.test(t) && !/Welcome/.test(t)) console.log('  chat>', t.slice(0, 150)); });
+A.on('message', m => { const t = m.toString(); if (/upgraded|Agent|agent|Fuel|Added|need|now a|picked|Essence|spawns|blocks/.test(t) && !/Welcome/.test(t)) console.log('  chat>', t.slice(0, 150)); });
 async function openWin(fn) { const w = once(A, 'windowOpen'); await fn(); const win = await Promise.race([w, sleep(4000).then(() => null)]); await sleep(500); return win; }
 const near = (p, r = 1.6) => Object.values(A.entities).find(e => e !== A.entity && e.type !== 'player' && e.name !== 'item' && e.position.distanceTo(p) < r);
+// the agent menu's slots, from Robots.java
+const MENU = { grinder: 5, collect: 9, fuel: 11, upgrade: 15, pickup: 17 };
 const items = win => win.slots.slice(18, 54).filter(Boolean).map(s => s.name + 'x' + s.count).join(', ') || '(empty)';
 (async () => {
   await once(A, 'spawn'); await sleep(4000);
@@ -47,20 +49,20 @@ const items = win => win.slots.slice(18, 54).filter(Boolean).map(s => s.name + '
   const rp = new Vec3(1.5, 80, 0.5);
   win = await openWin(() => A.activateEntityAt(near(rp), new Vec3(0, 0.5, 0)));
   console.log('robot menu:', win ? txt(win) : 'none');
-  if (win) { await A.clickWindow(2, 0, 1); await sleep(1000); A.closeWindow(win); }
+  if (win) { await A.clickWindow(MENU.fuel, 0, 1); await sleep(1000); A.closeWindow(win); }
   await sleep(20000);
   A.chat('/istop'); await sleep(1500);
   win = await openWin(() => A.activateEntityAt(near(rp), new Vec3(0, 0.5, 0)));
-  if (win) { console.log('miner storage:', items(win)); await A.clickWindow(14, 0, 0); await sleep(1000); A.closeWindow(A.currentWindow || win); }
+  if (win) { console.log('miner storage:', items(win)); await A.clickWindow(MENU.grinder, 0, 0); await sleep(1000); A.closeWindow(A.currentWindow || win); }
   ob('summon zombie 2.5 80 2.5'); ob('summon zombie 0.5 80 2.5'); ob('summon cow 2.5 80 -1.5');
   await sleep(30000);
   console.log('golems before pickup:', ob('execute if entity @e[type=copper_golem]'));
   console.log('zombies left:', ob('execute if entity @e[type=zombie,x=1,y=80,z=0,distance=..6]') || '0', '| cow left (single animals are spared):', ob('execute if entity @e[type=cow]'));
   console.log(rcon('robots charge AlloyTesterA 3'));
   win = await openWin(() => A.activateEntityAt(near(rp), new Vec3(0, 0.5, 0)));
-  if (win) { console.log('grinder storage:', items(win)); await A.clickWindow(6, 0, 0); await sleep(1500); }
+  if (win) { console.log('grinder storage:', items(win)); await A.clickWindow(MENU.upgrade, 0, 0); await sleep(1500); }
   console.log('after upgrade:', A.currentWindow ? txt(A.currentWindow) : 'none');
-  if (A.currentWindow) { await A.clickWindow(0, 0, 0); await sleep(800); await A.clickWindow(8, 0, 0); await sleep(1500); }
+  if (A.currentWindow) { await A.clickWindow(MENU.collect, 0, 0); await sleep(800); await A.clickWindow(MENU.pickup, 0, 0); await sleep(1500); }
   console.log('robots left on island:', ob('execute if entity @e[type=copper_golem]') || '0', '| robot item back:', A.inventory.items().filter(i => /spawn_egg/.test(i.name)).length);
   console.log('== WORKSHOP');
   win = await openWin(() => A.chat('/robots'));

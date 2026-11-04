@@ -3,6 +3,7 @@ package net.blackforge.core.survival;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -100,6 +101,39 @@ final class RobotRules {
     /** The lowest-tier cell (first one on ties), so cheap fuel is used first. */
     static Optional<FuelCell> lowestTierCell(List<FuelCell> cells) {
         return cells.stream().min(Comparator.comparingInt(FuelCell::tier));
+    }
+
+    // ---------------------------------------------------------------- grinder
+
+    /** Why a Grinder leaves a mob alone. */
+    enum GrindSkip { TAMED, OUTSIDE_WORK_AREA, VILLAGER, NAMED, BREEDING_STOCK }
+
+    /** What a Grinder needs to know about one mob, as plain values. sameTypeNearby counts this mob too. */
+    record GrindTarget(boolean tamed, boolean hostile, boolean inWorkArea, boolean villager, boolean named,
+                       boolean fromSpawner, boolean animal, boolean adult, int sameTypeNearby) {}
+
+    /** Why this mob is spared, or empty if the Grinder may hit it. Hostile mobs count anywhere; animals only on the owner's land. */
+    static Optional<GrindSkip> grindSkip(GrindTarget t) {
+        if (t.tamed()) return Optional.of(GrindSkip.TAMED);
+        if (!t.hostile() && !t.inWorkArea()) return Optional.of(GrindSkip.OUTSIDE_WORK_AREA);
+        if (t.villager()) return Optional.of(GrindSkip.VILLAGER);
+        if (t.named() && !t.fromSpawner()) return Optional.of(GrindSkip.NAMED);
+        // leave a breeding pair and the young of farm animals alone
+        if (t.animal() && !t.fromSpawner() && (t.sameTypeNearby() <= 2 || !t.adult())) return Optional.of(GrindSkip.BREEDING_STOCK);
+        return Optional.empty();
+    }
+
+    /** How many mobs one swing can hit: tier + 1. */
+    static int grindHitsPerSwing(int tier) { return checkTier(tier) + 1; }
+
+    /** One Grinder cycle for the log. Skip reasons are in a fixed order, so the same result always reads the same. */
+    static String grindSummary(int mobs, Map<GrindSkip, Integer> skipped, int hits, int noEffect, int kills) {
+        StringBuilder sb = new StringBuilder("mobs=" + mobs + " hits=" + hits + " noEffect=" + noEffect + " kills=" + kills);
+        for (GrindSkip reason : GrindSkip.values()) {
+            Integer n = skipped.get(reason);
+            if (n != null && n > 0) sb.append(' ').append(reason).append('=').append(n);
+        }
+        return sb.toString();
     }
 
     /** An agent's name: 1-16 letters or digits, so it's safe inside MiniMessage text and saved item data. */

@@ -1,10 +1,14 @@
 package net.blackforge.core.survival;
 
 import net.blackforge.core.survival.RobotRules.FuelCell;
+import net.blackforge.core.survival.RobotRules.GrindSkip;
+import net.blackforge.core.survival.RobotRules.GrindTarget;
 import net.blackforge.core.survival.RobotRules.SegmentColor;
 import org.junit.jupiter.api.Test;
 
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -95,5 +99,46 @@ class RobotRulesTest {
         Optional<FuelCell> pick = RobotRules.lowestTierCell(List.of(a, b, c));
         assertTrue(pick.isPresent());
         assertSame(b, pick.get());   // first on ties
+    }
+
+    private static final GrindTarget HUSK = new GrindTarget(false, true, false, false, false, false, false, false, 4);
+    private static GrindTarget animal(boolean inArea, boolean named, boolean spawner, boolean adult, int same) {
+        return new GrindTarget(false, false, inArea, false, named, spawner, true, adult, same);
+    }
+
+    @Test void grinderHitsHostilesAnywhere() {
+        assertEquals(Optional.empty(), RobotRules.grindSkip(HUSK));
+    }
+
+    @Test void grinderSparesProtectedMobs() {
+        assertEquals(Optional.of(GrindSkip.TAMED), RobotRules.grindSkip(new GrindTarget(true, false, true, false, false, false, true, true, 9)));
+        assertEquals(Optional.of(GrindSkip.VILLAGER), RobotRules.grindSkip(new GrindTarget(false, false, true, true, false, false, false, true, 1)));
+        assertEquals(Optional.of(GrindSkip.NAMED), RobotRules.grindSkip(new GrindTarget(false, true, true, false, true, false, false, true, 1)));
+        assertEquals(Optional.of(GrindSkip.OUTSIDE_WORK_AREA), RobotRules.grindSkip(animal(false, false, false, true, 9)));
+    }
+
+    @Test void grinderKeepsBreedingStock() {
+        assertEquals(Optional.of(GrindSkip.BREEDING_STOCK), RobotRules.grindSkip(animal(true, false, false, true, 2)));
+        assertEquals(Optional.of(GrindSkip.BREEDING_STOCK), RobotRules.grindSkip(animal(true, false, false, false, 9)));
+        assertEquals(Optional.empty(), RobotRules.grindSkip(animal(true, false, false, true, 3)));
+    }
+
+    @Test void spawnerMobsAreFairGame() {
+        assertEquals(Optional.empty(), RobotRules.grindSkip(animal(true, false, true, false, 1)));
+        assertEquals(Optional.empty(), RobotRules.grindSkip(animal(true, true, true, true, 1)));
+    }
+
+    @Test void grinderHitsPerSwing() {
+        assertEquals(2, RobotRules.grindHitsPerSwing(1));
+        assertEquals(6, RobotRules.grindHitsPerSwing(5));
+        assertThrows(IllegalArgumentException.class, () -> RobotRules.grindHitsPerSwing(0));
+    }
+
+    @Test void grindSummaryReadsTheSameEveryTime() {
+        assertEquals("mobs=0 hits=0 noEffect=0 kills=0", RobotRules.grindSummary(0, Map.of(), 0, 0, 0));
+        Map<GrindSkip, Integer> skipped = new EnumMap<>(GrindSkip.class);
+        skipped.put(GrindSkip.NAMED, 1);
+        skipped.put(GrindSkip.TAMED, 2);
+        assertEquals("mobs=5 hits=2 noEffect=1 kills=1 TAMED=2 NAMED=1", RobotRules.grindSummary(5, skipped, 2, 1, 1));
     }
 }
