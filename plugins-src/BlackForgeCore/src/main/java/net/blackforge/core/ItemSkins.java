@@ -33,7 +33,7 @@ public final class ItemSkins implements Listener {
     private static final Map<String, String> SKINS = new LinkedHashMap<>();
     static {
         for (String id : new String[]{"ashen_bonfire", "ashen_chain", "darkness_potion", "gaia_potion", "gods_eye",
-                "last_rite", "rimelock", "soul_candy", "gale_bellows", "frost_shard", "base_station", "hopper_upgrade"}) SKINS.put(id, id);
+                "last_rite", "rimelock", "soul_candy", "gale_bellows", "frost_shard", "base_station", "hopper_upgrade", "nightrend"}) SKINS.put(id, id);
         SKINS.put("surge_item", "surge");
     }
 

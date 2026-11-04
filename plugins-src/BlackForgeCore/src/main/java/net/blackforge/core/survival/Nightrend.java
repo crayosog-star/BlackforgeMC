@@ -40,7 +40,8 @@ import java.util.function.Predicate;
  *   <li>One dagger in your main hand hits for {@code damage} (5) at {@code attack-speed} (2.0 a second) with
  *   {@code reach-change} (-0.5) blocks of reach. It isn't a sword, so there's no sweep: one target per hit.</li>
  *   <li>With a Nightrend in <b>each</b> hand you attack at {@code pair-attack-speed} (2.6), and every second hit
- *   the off-hand blade swings and slashes too (cosmetic; same damage). Drop either and the bonus is gone.</li>
+ *   the blades take turns: a red slash off the main-hand blade, then the off arm swings and its blade slashes back the
+ *   other way (cosmetic; same damage). Drop either and the bonus is gone.</li>
  *   <li>Hits from the arc behind the target ({@code behind-arc-degrees}, 120) only do {@code behind-damage} (60%),
  *   with a duller sound. Players and mobs alike. "Behind" is where the target is facing, not where it's walking.</li>
  *   <li>A slight aura: a few dark-red embers drift off each blade while you hold it. Off while invisible or vanished.</li>
@@ -233,7 +234,9 @@ public final class Nightrend implements Listener, Hackable {
         ItemDisplay[] d = new ItemDisplay[2];
         double[] sides = {side, -side};
         for (int i = 0; i < 2; i++) {
-            ItemStack shown = i == 0 ? item() : offItem();
+            // show the daggers actually in hand, so the flip wears the same pack texture as the held items
+            ItemStack held = i == 0 ? p.getInventory().getItemInMainHand() : p.getInventory().getItemInOffHand();
+            ItemStack shown = isNightrend(held) ? held.asOne() : (i == 0 ? item() : offItem());
             d[i] = p.getWorld().spawn(hand(p, sides[i], 0), ItemDisplay.class, e -> {
                 e.setItemStack(shown);
                 e.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.FIXED);
@@ -306,27 +309,34 @@ public final class Nightrend implements Listener, Hackable {
         if (!pairOn.contains(p.getUniqueId())) return;
         int n = hits.merge(p.getUniqueId(), 1, Integer::sum);
         if (n >= 1000) hits.put(p.getUniqueId(), 0);
-        if (NightrendMath.offHandHit(n)) Bukkit.getScheduler().runTaskLater(plugin, () -> offHandSlash(p), 2L);   // the second blade follows a beat later
+        // the blades take turns: main-hand slash on odd hits, the off hand swings and slashes on even ones
+        if (NightrendMath.offHandHit(n)) Bukkit.getScheduler().runTaskLater(plugin, () -> slash(p, true), 1L);
+        else slash(p, false);
     }
 
-    /** The off-hand blade's turn: the left arm swings and a thin red arc sweeps left to right in front of you. */
-    private void offHandSlash(Player p) {
+    /**
+     * One blade's slash: a thin red arc sweeps across in front of you, starting on that blade's side. The off-hand
+     * blade also swings the off arm (the main arm already swings with every attack). Left-handed players are mirrored.
+     */
+    private void slash(Player p, boolean offHand) {
         if (!p.isOnline() || p.isDead() || !pairOn.contains(p.getUniqueId())) return;
-        p.swingOffHand();
+        if (offHand) p.swingOffHand();
         World w = p.getWorld();
         Location eye = p.getEyeLocation();
         double yaw = eye.getYaw();                                  // fixed at the start: the arc doesn't follow the camera
         Vector origin = eye.toVector().add(new Vector(0, -0.45, 0));
-        w.playSound(eye, Sound.PARTICLE_SOUL_ESCAPE, 0.6f, 1.5f);   // the quiet whisper of the second blade
-        w.playSound(eye, Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.25f, 1.9f);
+        double mainSide = p.getMainHand() == org.bukkit.inventory.MainHand.LEFT ? -1 : 1;
+        double side = offHand ? -mainSide : mainSide;               // +1 = the right hand
+        if (offHand) w.playSound(eye, Sound.PARTICLE_SOUL_ESCAPE, 0.6f, 1.5f);   // the quiet whisper of the second blade
+        w.playSound(eye, Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.25f, offHand ? 1.9f : 1.7f);
         double[] last = {NightrendMath.slashAngle(0)};
         int[] t = {0};
         Bukkit.getScheduler().runTaskTimer(plugin, run -> {
             if (++t[0] > NightrendMath.SLASH_TICKS || !p.isOnline() || p.getWorld() != w) { run.cancel(); return; }
             double to = NightrendMath.slashAngle(t[0]);
-            for (double ang = last[0]; ang <= to; ang += 9) {
-                double rad = Math.toRadians(yaw + ang);
-                double drop = (ang + NightrendMath.SLASH_ARC_DEGREES / 2) / NightrendMath.SLASH_ARC_DEGREES * 0.35;   // left-high to right-low
+            for (double a = last[0]; a <= to; a += 9) {
+                double rad = Math.toRadians(yaw - side * a);        // starts on the blade's own side and crosses over
+                double drop = (a + NightrendMath.SLASH_ARC_DEGREES / 2) / NightrendMath.SLASH_ARC_DEGREES * 0.35;   // high to low
                 Vector pt = origin.clone().add(new Vector(-Math.sin(rad) * 1.5, 0.15 - drop, Math.cos(rad) * 1.5));
                 w.spawnParticle(Particle.DUST_COLOR_TRANSITION, pt.getX(), pt.getY(), pt.getZ(), 1, 0, 0, 0, 0, EDGE);
             }
