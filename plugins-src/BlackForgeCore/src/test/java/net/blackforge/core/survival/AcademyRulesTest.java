@@ -220,6 +220,33 @@ class AcademyRulesTest {
         assertFalse(all.contains("Farmer"));
     }
 
+    // ---------------------------------------------------------------- perk picks
+
+    @Test
+    void perkPicksAreLimitedByLevel() {
+        AgentRecord.JobTrack t = new AgentRecord.JobTrack();
+        assertFalse(AcademyRules.canPickPerk(t, "quick", "miner", 4));
+        assertTrue(AcademyRules.canPickPerk(t, "quick", "miner", 5));
+        t.perks.add("quick");
+        assertFalse(AcademyRules.canPickPerk(t, "keen", "miner", 14));
+        assertTrue(AcademyRules.canPickPerk(t, "keen", "miner", 15));
+    }
+
+    @Test
+    void theSamePerkCantBePickedTwice() {
+        AgentRecord.JobTrack t = new AgentRecord.JobTrack();
+        t.perks.add("quick");
+        assertFalse(AcademyRules.canPickPerk(t, "quick", "miner", 30));
+    }
+
+    @Test
+    void perksMustExistAndFitTheJob() {
+        AgentRecord.JobTrack t = new AgentRecord.JobTrack();
+        assertFalse(AcademyRules.canPickPerk(t, "reach", "miner", 30));
+        assertTrue(AcademyRules.canPickPerk(t, "reach", "farmer", 30));
+        assertFalse(AcademyRules.canPickPerk(t, "made-up", "miner", 30));
+    }
+
     // ---------------------------------------------------------------- levels
 
     @Test

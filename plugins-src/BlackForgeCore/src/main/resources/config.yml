@@ -170,7 +170,13 @@ academy:
   over-cap-rate: 0.25
   coach-radius: 16
   coach-mult: 1.25
-  perks: {}
+  # What each perk does. Picked at job levels 5, 15 and 25.
+  perks:
+    efficient-fuel-mult: 0.85
+    quick-speed-mult: 1.10
+    reach-radius: 1
+    keen-double-chance: 0.05
+    steady-charge-mult: 1.15
   specs: {}
   traits: {}
 

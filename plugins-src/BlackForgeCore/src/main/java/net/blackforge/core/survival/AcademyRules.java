@@ -8,6 +8,9 @@ final class AcademyRules {
     /** Matches the defaults in config.yml. */
     static final AcademyRules DEFAULTS = new AcademyRules(20, 2.0, 30);
 
+    static final String EFFICIENT = "efficient", QUICK = "quick", REACH = "reach", KEEN = "keen", STEADY = "steady";
+    static final java.util.List<String> PERKS = java.util.List.of(EFFICIENT, QUICK, REACH, KEEN, STEADY);
+
     private static final int SPEC_LEVEL = 10;
     private static final int CAPSTONE_LEVEL = 30;
     private static final int[] PERK_LEVELS = {5, 15, 25};
@@ -73,6 +76,16 @@ final class AcademyRules {
         if (!r.traits.isEmpty()) lines.add("<gray>Traits: <white>" + String.join(", ", r.traits));
         lines.add("<gray>Work done: <white>" + r.workDone);
         return lines;
+    }
+
+    /** Long Reach only helps jobs that work a radius. */
+    static boolean perkFits(String perk, String job) {
+        return !REACH.equals(perk) || "farmer".equals(job) || "grinder".equals(job);
+    }
+
+    /** Whether this job can take this perk now. Checked again when the player confirms, so a double-click can't add two. */
+    static boolean canPickPerk(AgentRecord.JobTrack track, String perk, String job, int level) {
+        return PERKS.contains(perk) && perkFits(perk, job) && !track.perks.contains(perk) && track.perks.size() < perkPicksAt(level);
     }
 
     /** How many perks a job at this level may have picked. */

@@ -22,7 +22,9 @@ import java.util.function.BooleanSupplier;
 public final class Academy implements Listener {
     static final String BRASS = "<#C9A227>";
     private static final String VERDIGRIS = "<#4FA08B>";
-    private static final int SIZE = 54, RANK = 4, PROGRESS = 20, LIFETIME = 22, TODAY = 24, ADD_LEVELS = 40, BACK = 49;
+    private static final int SIZE = 54, RANK = 4, PROGRESS = 20, LIFETIME = 22, TODAY = 24, PERKS = 38, ADD_LEVELS = 40, BACK = 49;
+    private static final int CONFIRM_YES = 29, CONFIRM_NO = 33;
+    private static final int[] PERK_SLOTS = {20, 21, 22, 23, 24};
     private static final int[] JOB_SLOTS = {28, 30, 32, 34};
     private static final int LIST_START = 9, LIST_END = 44;
     private static final int BAR_SEGMENTS = 20;
@@ -42,6 +44,7 @@ public final class Academy implements Listener {
         final Runnable back;
         final BooleanSupplier stillAllowed;
         final Map<Integer, String> agents = new HashMap<>();
+        final Map<Integer, Runnable> actions = new HashMap<>();
         Inventory inv;
         View(String agentId, Runnable back, BooleanSupplier stillAllowed) {
             this.agentId = agentId;
@@ -61,7 +64,7 @@ public final class Academy implements Listener {
     }
 
     /** One Agent's view. back reopens wherever it was opened from. */
-    void openAgent(Player p, Robots.Bot b, Runnable back, BooleanSupplier stillAllowed) {
+    void openAgent(Player p, Robots.Bot b, boolean readOnly, Runnable back, BooleanSupplier stillAllowed) {
         View v = open(b.id, "The Academy", back, stillAllowed);
         AcademyRules rules = robots.academyRules();
         long softCap = robots.academySoftCap();
@@ -98,7 +101,72 @@ public final class Academy implements Listener {
             if (j == b.job) icon.editMeta(m -> m.setEnchantmentGlintOverride(true));
             v.inv.setItem(JOB_SLOTS[i], icon);
         }
+        if (!readOnly) {
+            int waiting = AcademyRules.perkPicksAt(level) - (track == null ? 0 : track.perks.size());
+            v.inv.setItem(PERKS, Ui.item(Material.ENCHANTED_BOOK, VERDIGRIS + "<bold>Perks", "<gray>Earned at job levels <white>5<gray>, <white>15 <gray>and <white>25<gray>.",
+                    "<gray>Chosen: <white>" + (track == null ? 0 : track.perks.size()) + "/3", waiting > 0 ? "<green>" + waiting + " to choose" : "<dark_gray>Nothing to choose yet", "", "<yellow>Click to view"));
+            v.actions.put(PERKS, () -> openPerks(p, b, back, stillAllowed));
+        }
         if (robots.isSandbox() && !maxed) v.inv.setItem(ADD_LEVELS, Ui.item(Material.ANVIL, BRASS + "<bold>Add 10 Levels", "<gray>Foundry only: raises this job's level for free.", "", "<yellow>Click to add"));
+        p.openInventory(v.inv);
+    }
+
+    private static String perkName(String perk) {
+        return switch (perk) {
+            case AcademyRules.EFFICIENT -> "Efficient";
+            case AcademyRules.QUICK -> "Quick Hands";
+            case AcademyRules.REACH -> "Long Reach";
+            case AcademyRules.KEEN -> "Keen Eye";
+            default -> "Steady Charge";
+        };
+    }
+
+    private String perkEffect(String perk) {
+        AgentStats.Tuning t = robots.tuning();
+        return switch (perk) {
+            case AcademyRules.EFFICIENT -> "Burns " + percentOff(t.efficientFuel()) + "% less fuel";
+            case AcademyRules.QUICK -> "Works " + percentOn(t.quickSpeed()) + "% faster";
+            case AcademyRules.REACH -> "+" + t.reachRadius() + " work radius";
+            case AcademyRules.KEEN -> Math.round(t.keenDouble() * 100) + "% chance to double a drop";
+            default -> "Builds Charge " + percentOn(t.steadyCharge()) + "% faster";
+        };
+    }
+
+    private static long percentOff(double mult) { return Math.round((1 - mult) * 100); }
+
+    private static long percentOn(double mult) { return Math.round((mult - 1) * 100); }
+
+    private void openPerks(Player p, Robots.Bot b, Runnable agentBack, BooleanSupplier stillAllowed) {
+        Runnable toAgent = () -> openAgent(p, b, false, agentBack, stillAllowed);
+        View v = open(b.id, "Perks", toAgent, stillAllowed);
+        String job = Robots.jobKey(b);
+        AgentRecord.JobTrack track = b.record.jobs.computeIfAbsent(job, k -> new AgentRecord.JobTrack());
+        int level = robots.academyRules().levelFor(track.points);
+        int slot = 0;
+        for (String perk : AcademyRules.PERKS) {
+            if (!AcademyRules.perkFits(perk, job)) continue;   // Long Reach is hidden for jobs it can't help
+            boolean chosen = track.perks.contains(perk), can = AcademyRules.canPickPerk(track, perk, job, level);
+            ItemStack icon = Ui.item(chosen ? Material.ENCHANTED_BOOK : Material.BOOK, (chosen ? "<green>" : can ? VERDIGRIS : "<gray>") + "<bold>" + perkName(perk), "<gray>" + perkEffect(perk), "",
+                    chosen ? "<green>Chosen" : can ? "<yellow>Click to choose" : "<dark_gray>No pick available");
+            v.inv.setItem(PERK_SLOTS[slot], icon);
+            if (can) v.actions.put(PERK_SLOTS[slot], () -> confirm(p, b, "Choose " + perkName(perk) + "?", perkEffect(perk), () -> {
+                AgentRecord.JobTrack now = b.record.jobs.computeIfAbsent(Robots.jobKey(b), k -> new AgentRecord.JobTrack());
+                if (AcademyRules.canPickPerk(now, perk, Robots.jobKey(b), robots.academyRules().levelFor(now.points))) { now.perks.add(perk); robots.save(); }
+                openPerks(p, b, agentBack, stillAllowed);
+            }, () -> openPerks(p, b, agentBack, stillAllowed), stillAllowed));
+            slot++;
+        }
+        p.openInventory(v.inv);
+    }
+
+    /** A yes or no screen. Choices only ever happen from here, so one stray click can't make one. */
+    private void confirm(Player p, Robots.Bot b, String question, String detail, Runnable yes, Runnable no, BooleanSupplier stillAllowed) {
+        View v = open(b.id, question, no, stillAllowed);
+        v.inv.setItem(13, Ui.item(Material.PAPER, BRASS + "<bold>" + question, "<gray>" + detail));
+        v.inv.setItem(CONFIRM_YES, Ui.item(Material.LIME_CONCRETE, "<green><bold>Yes"));
+        v.inv.setItem(CONFIRM_NO, Ui.item(Material.RED_CONCRETE, "<red><bold>No"));
+        v.actions.put(CONFIRM_YES, yes);
+        v.actions.put(CONFIRM_NO, no);
         p.openInventory(v.inv);
     }
 
@@ -136,15 +204,17 @@ public final class Academy implements Listener {
         if (!v.stillAllowed.getAsBoolean() || (v.agentId != null && robots.agent(v.agentId) == null)) { closeLater(p, v); return; }
         int slot = e.getRawSlot();
         if (slot == BACK) { v.back.run(); return; }
+        Runnable action = v.actions.get(slot);
+        if (action != null) { action.run(); return; }
         if (slot == ADD_LEVELS && v.agentId != null && robots.isSandbox()) {
             Robots.Bot b = robots.agent(v.agentId);
             robots.addLevels(b, 10);
-            openAgent(p, b, v.back, v.stillAllowed);
+            openAgent(p, b, false, v.back, v.stillAllowed);
             return;
         }
         String picked = v.agents.get(slot);
         Robots.Bot chosen = picked == null ? null : robots.agent(picked);
-        if (chosen != null) openAgent(p, chosen, () -> openList(p, v.back, v.stillAllowed), v.stillAllowed);
+        if (chosen != null) openAgent(p, chosen, false, () -> openList(p, v.back, v.stillAllowed), v.stillAllowed);
     }
 
     /** For the Foundry's first-use tip. */

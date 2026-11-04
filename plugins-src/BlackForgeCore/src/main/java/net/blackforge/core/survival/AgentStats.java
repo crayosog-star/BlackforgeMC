@@ -1,17 +1,32 @@
 package net.blackforge.core.survival;
 
+import java.util.function.ToDoubleBiFunction;
+
 /**
  * Everything the job code reads about how an Agent works. No Bukkit types here so it can be unit-tested without a server.
- * With an empty Academy record every value is the Agent's plain Tier value; perks, specializations and traits add to this
- * in later phases.
+ * With an empty Academy record every value is the Agent's plain Tier value; perks, specializations and traits add to that.
  */
 record AgentStats(int intervalSeconds, double speedMult, int radius, double damage, int hits, int harvests, int fortune,
-                  double fuelMult, double chargeMult, double doubleDropChance, double treasureMult) {
+                  double fuelMult, double chargeMult, double doubleDropChance, double treasureMult,
+                  int mineHeight, int growCrops, double cycleDoubleChance, double harvestDoubleChance, double copyDropChance) {
     static final int[] INTERVAL = {8, 6, 4, 3, 2};          // seconds between jobs, per tier
     static final int[] RADIUS = {2, 3, 4, 5, 6};
     static final double[] DAMAGE = {8, 12, 16, 22, 30};
     /** Below this tier, Miners have no Fortune. */
     private static final int FORTUNE_FROM_TIER = 4;
+    private static final AgentRecord EMPTY = new AgentRecord();
+
+    /** The academy.perks values from config. */
+    record Tuning(double efficientFuel, double quickSpeed, int reachRadius, double keenDouble, double steadyCharge) {
+        static final Tuning DEFAULTS = read((key, fallback) -> fallback);
+
+        /** get receives a key under academy, and the default to use if it's missing. */
+        static Tuning read(ToDoubleBiFunction<String, Double> get) {
+            return new Tuning(get.applyAsDouble("perks.efficient-fuel-mult", 0.85), get.applyAsDouble("perks.quick-speed-mult", 1.10),
+                    (int) get.applyAsDouble("perks.reach-radius", 1.0), get.applyAsDouble("perks.keen-double-chance", 0.05),
+                    get.applyAsDouble("perks.steady-charge-mult", 1.15));
+        }
+    }
 
     /** A speed of zero would stop an Agent for good while it still burned fuel, and an interval under 1 would run every tick. */
     AgentStats {
@@ -19,12 +34,33 @@ record AgentStats(int intervalSeconds, double speedMult, int radius, double dama
         if (!(speedMult > 0)) speedMult = 1;
     }
 
+    /** Plain Tier stats, with no Academy bonuses. */
+    static AgentStats of(String job, int tier) { return of(job, tier, EMPTY, AcademyRules.DEFAULTS, Tuning.DEFAULTS); }
+
     /** The stats for a job name as saved in the record ("miner"), at tier 1-5. */
-    static AgentStats of(String job, int tier, AgentRecord record) {
+    static AgentStats of(String job, int tier, AgentRecord record, AcademyRules rules, Tuning tune) {
         int i = tier - 1;
         int interval = "fisherman".equals(job) ? (int) (RobotRules.fishIntervalMs(tier) / 1000) : INTERVAL[i];
-        return new AgentStats(interval, 1, RADIUS[i], DAMAGE[i], RobotRules.grindHitsPerSwing(tier), tier,
-                tier >= FORTUNE_FROM_TIER ? tier - 2 : 0, 1, 1, 0, 1);
+        double speed = 1, damage = DAMAGE[i], fuel = 1, charge = 1, doubleDrop = 0, treasure = 1;
+        int radius = RADIUS[i], hits = RobotRules.grindHitsPerSwing(tier), harvests = tier, fortune = tier >= FORTUNE_FROM_TIER ? tier - 2 : 0;
+        int mineHeight = 0, grow = 0;
+        double cycleDouble = 0, harvestDouble = 0, copyDrop = 0;
+
+        AgentRecord.JobTrack track = record.jobs.get(job);
+        if (track != null) {
+            for (String perk : track.perks) {
+                switch (perk) {
+                    case AcademyRules.EFFICIENT -> fuel *= tune.efficientFuel();
+                    case AcademyRules.QUICK -> speed *= tune.quickSpeed();
+                    case AcademyRules.REACH -> { if (AcademyRules.perkFits(perk, job)) radius += tune.reachRadius(); }
+                    case AcademyRules.KEEN -> doubleDrop += tune.keenDouble();
+                    case AcademyRules.STEADY -> charge *= tune.steadyCharge();
+                    default -> { }   // a removed perk stays saved but does nothing
+                }
+            }
+        }
+        return new AgentStats(interval, speed, radius, damage, hits, harvests, fortune, fuel, charge, doubleDrop, treasure,
+                mineHeight, grow, cycleDouble, harvestDouble, copyDrop);
     }
 
     /** Fuel taken for this much burn. Rounds up, so the last few milliseconds of fuel always run out. */

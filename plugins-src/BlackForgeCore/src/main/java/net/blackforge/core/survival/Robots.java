@@ -108,7 +108,11 @@ public final class Robots implements Listener {
         AgentRecord record = withUid(new AgentRecord());
         String title() { return name != null ? "Agent " + name : job.label + " Agent"; }
         int interval() { return stats().intervalSeconds(); }
-        AgentStats stats() { return AgentStats.of(job.name().toLowerCase(Locale.ROOT), tier, record); }
+        /** Whenever the Academy is off, this is plain Tier stats whatever the record holds. */
+        AgentStats stats() {
+            String key = job.name().toLowerCase(Locale.ROOT);
+            return academyOn ? AgentStats.of(key, tier, record, academy, tuning) : AgentStats.of(key, tier);
+        }
         /** Old saves and robot items have no rate: fall back to the burning cell tier's rate. */
         void fixRate() { if (!(chargeRate > 0)) chargeRate = RobotRules.rateForTier(Math.max(1, Math.min(5, fuelTier))); }
     }
@@ -136,6 +140,7 @@ public final class Robots implements Listener {
     /** Whether Agents earn Mastery here. See academyOn(). */
     private final boolean academyOn;
     private final AcademyRules academy;
+    private final AgentStats.Tuning tuning;
     private Academy academyMenu;
 
     Robots(BlackForgeCore plugin) { this(plugin, false); }
@@ -147,6 +152,7 @@ public final class Robots implements Listener {
         this.academyOn = sandbox || plugin.getConfig().getStringList("academy.live-modes").contains(plugin.getConfig().getString("mode", "backend"));
         this.academy = new AcademyRules(plugin.getConfig().getDouble("academy.level-base", 20), plugin.getConfig().getDouble("academy.level-exponent", 2.0),
                 plugin.getConfig().getInt("academy.max-level", 30));
+        this.tuning = AgentStats.Tuning.read((key, fallback) -> plugin.getConfig().getDouble("academy." + key, fallback));
         if (academyOn) this.academyMenu = new Academy(plugin, this);
         this.file = new File(plugin.getDataFolder(), "robots.yml");
         Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -546,6 +552,8 @@ public final class Robots implements Listener {
 
     Bot agent(String id) { return bots.get(id); }
 
+    AgentStats.Tuning tuning() { return tuning; }
+
     boolean isSandbox() { return sandbox; }
 
     /** The Foundry's fast-level button. It refuses outside the sandbox, whatever calls it. */
@@ -584,12 +592,22 @@ public final class Robots implements Listener {
     }
 
     private void store(Bot b, Collection<ItemStack> items) {
+        double doubling = b.stats().doubleDropChance();
         for (ItemStack it : items) if (it != null && !it.getType().isAir())
         {
-            ItemStack left = stations == null ? it : stations.deliver(b.loc, it);   // the Base Station first, if there's one in range
-            if (left != null) b.storage.addItem(left).values().forEach(l -> b.loc.getWorld().dropItemNaturally(b.loc, l));
+            ItemStack copy = isPlainDrop(it) && doubling > 0 && rnd.nextDouble() < doubling ? it.clone() : null;
+            deliver(b, it);
+            if (copy != null) deliver(b, copy);
         }
     }
+
+    private void deliver(Bot b, ItemStack it) {
+        ItemStack left = stations == null ? it : stations.deliver(b.loc, it);   // the Base Station first, if there's one in range
+        if (left != null) b.storage.addItem(left).values().forEach(l -> b.loc.getWorld().dropItemNaturally(b.loc, l));
+    }
+
+    /** Bonuses only copy these, so Mob Essence and named or custom items are never copied. */
+    private static boolean isPlainDrop(ItemStack it) { return !it.hasItemMeta(); }
 
     private static final Set<Material> NO_MINE = EnumSet.of(Material.BEDROCK, Material.SPAWNER, Material.END_PORTAL_FRAME, Material.END_PORTAL,
             Material.NETHER_PORTAL, Material.BARRIER, Material.COMMAND_BLOCK, Material.REINFORCED_DEEPSLATE);
@@ -840,7 +858,7 @@ public final class Robots implements Listener {
         if (academyOn() && m.kind.equals("robot") && e.getRawSlot() == SLOT_ACADEMY) {
             Bot viewed = bots.get(m.id);
             if (viewed != null && (m.readOnly || mayUse(p, viewed)))
-                academyMenu.openAgent(p, viewed, () -> open(p, viewed, m.readOnly), () -> m.readOnly || mayUse(p, viewed));
+                academyMenu.openAgent(p, viewed, m.readOnly, () -> open(p, viewed, m.readOnly), () -> m.readOnly || mayUse(p, viewed));
             return;
         }
         if (m.readOnly) { p.sendActionBar(Ui.mm("<red>Read-only: you can look, but not change anything.")); return; }

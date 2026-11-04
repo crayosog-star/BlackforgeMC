@@ -279,7 +279,10 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Edge cases:** double-clicking a pick, a job switch (perks follow the job), the speed floor, storage staying within the 36-slot menu limit.
 - **Done when:** unit tests cover pick limits and every perk's effect on `AgentStats`. In the Foundry, the Farmer bench shows Long Reach's added radius, and a stopwatch test shows Quick Hands working faster.
 - **Leaves ready:** the pick-and-apply pattern for specializations.
-- **Evidence:**
+- **Evidence:** not ticked; prepared on a branch with no PR, because earlier phase gates aren't confirmed.
+  - Verified: pick limits and every perk's effect passed unit tests with `javac` 21 and a local stand-in for JUnit.
+  - Untested: the Paper compile, the perk menu, and the Long Reach and Quick Hands checks in the Foundry.
+  - Note: `AgentStats` gains its later spec and capstone fields here, unused and at 0, so later tasks don't change its shape again.
 
 ### [ ] P3.T2: Add Miner and Farmer specializations
 - **Needs:** P3.T1; `S/Robots.java:423`, `464`.
