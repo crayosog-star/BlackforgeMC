@@ -404,7 +404,10 @@ public final class SurvivalModule implements Listener {
             @Override public List<String> tabComplete(CommandSender s, String alias, String[] args) {
                 if (name.equals("warp") && args.length == 1) return List.of("spawn", "crates", "sundering", "koth", "worldboss", "pvp", "wild", "market", "smithy", "merchant", "wilds", "hall", "sell");
                 if (name.equals("ah") && args.length == 1) return List.of("sell", "listings", "collect", "help");
-                if (name.equals("claim") && args.length == 1) return List.of("map", "show", "info", "list", "trust", "untrust", "unclaimall", "help");
+                if (name.equals("claim") && args.length == 1)
+                    return claims.qolEnabled()
+                            ? List.of("here", "confirm", "cancel", "map", "show", "info", "list", "trust", "untrust", "unclaimall", "help")
+                            : List.of("map", "show", "info", "list", "trust", "untrust", "unclaimall", "help");
                 return super.tabComplete(s, alias, args);
             }
         };
@@ -707,9 +710,14 @@ public final class SurvivalModule implements Listener {
             if (bad) { tryRtp(p, attempt + 1); return; }
             Location dest = top.getLocation().add(0.5, 1, 0.5);
             dest.setYaw(p.getLocation().getYaw());
-            p.teleportAsync(dest).thenRun(() -> {
-                p.sendMessage(Ui.mm("<green>☘ Welcome to the wild! <gray>You're at <white>" + fx + ", " + fz + "<gray>. Use <white>/claim <gray>to protect your base."));
-                p.playSound(p.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 0.6f, 0.9f);
+            p.teleportAsync(dest).thenAccept(success -> {
+                if (!success || !p.isOnline()) return;
+                Location landed = p.getLocation();
+                String hint = claims.qolEnabled() ? "" : "<gray> Use <white>/claim <gray>to protect your base.";
+                p.sendMessage(Ui.mm("<green>☘ Welcome to the wild! <gray>You're at <white>" + landed.getBlockX()
+                        + ", " + landed.getBlockZ() + "<gray>." + hint));
+                p.playSound(landed, Sound.ENTITY_ENDERMAN_TELEPORT, 0.6f, 0.9f);
+                if (landed.getWorld() == world) claims.onRtpLanding(p, landed);
             });
         });
     }
@@ -720,6 +728,7 @@ public final class SurvivalModule implements Listener {
     public void onJoin(PlayerJoinEvent e) {
         Player p = e.getPlayer();
         if (!p.hasPlayedBefore()) {
+            claims.noteNewPlayer(p);
             p.teleport(spawn());
             Bukkit.broadcast(Ui.mm("<gold>✦ <gray>Welcome <white>" + p.getName() + " <gray>to BlackForgeMC Survival!"));
             Bukkit.getScheduler().runTaskLater(plugin, () -> crates.give(p, "iron", 1), 40L);

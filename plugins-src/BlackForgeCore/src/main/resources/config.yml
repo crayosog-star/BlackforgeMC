@@ -156,6 +156,10 @@ thief-ambush:
   rare-key-crate: gold
 
 # Base Station (Survival + Skyblock): one per claim or island. Sells Hopper Upgrades, upgrades Agents, collects their output.
+# Survival claim previews, confirmation, help, and the first-claim RTP tip. Off until rollout.
+survival-claims-base-qol:
+  enabled: false
+
 base-station:
   enabled: true
   price: 25000
