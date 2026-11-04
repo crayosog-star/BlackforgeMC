@@ -112,14 +112,36 @@ public final class Robots implements Listener {
     private record Naming(String botId, long until) {}
     private final Random rnd = new Random();
 
-    Robots(BlackForgeCore plugin) {
+    /** The Arena's Foundry: upgrades are free, nothing is saved, there's no /agents shop, and only the owner can open an agent. */
+    private final boolean sandbox;
+    private int sandboxPerPlayer, sandboxTotal;
+
+    Robots(BlackForgeCore plugin) { this(plugin, false); }
+
+    Robots(BlackForgeCore plugin, boolean sandbox) {
         this.plugin = plugin;
+        this.sandbox = sandbox;
         this.file = new File(plugin.getDataFolder(), "robots.yml");
-        load();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 40L, 20L);
+        if (sandbox) return;
+        load();
         Bukkit.getScheduler().runTaskTimer(plugin, this::save, 1200L, 1200L);
         registerCommand();
+    }
+
+    void setSandboxLimits(int perPlayer, int total) { this.sandboxPerPlayer = perPlayer; this.sandboxTotal = total; }
+
+    /** Removes this player's agents and whatever they held. */
+    void removeOwnedBy(UUID owner) {
+        for (Iterator<Bot> it = bots.values().iterator(); it.hasNext(); ) {
+            Bot b = it.next();
+            if (!b.owner.equals(owner)) continue;
+            CopperGolem g = entity(b);
+            if (g != null) g.remove();
+            it.remove();
+        }
+        naming.remove(owner);
     }
 
     void setAccess(BiPredicate<Player, Location> rule) { this.canUse = rule; }
@@ -130,6 +152,7 @@ public final class Robots implements Listener {
     void setStations(BaseStation s) { this.stations = s; }
 
     int limit(Player p) {
+        if (sandbox) return sandboxPerPlayer;
         Ranks.Rank r = ranks == null ? null : ranks.of(p);
         if (r == null) return 2;
         return Math.min(RobotRules.MAX_AGENTS, switch (r.id()) { case "copper" -> 3; case "iron" -> 4; default -> 5; });
@@ -203,6 +226,7 @@ public final class Robots implements Listener {
         Block at = e.getClickedBlock().getRelative(e.getBlockFace());
         if (!at.isPassable() || !at.getRelative(BlockFace.UP).isPassable()) { p.sendMessage(Ui.mm("<red>Not enough room there.")); return; }
         if (!canUse.test(p, at.getLocation())) { p.sendMessage(Ui.mm("<red>Agents can only go on your own island or claimed land.")); return; }
+        if (sandbox && bots.size() >= sandboxTotal) { p.sendMessage(Ui.mm("<red>The Foundry is at its limit of " + sandboxTotal + " agents right now.")); return; }
         if (owned(p.getUniqueId()) >= limit(p)) { p.sendMessage(Ui.mm("<red>You have " + owned(p.getUniqueId()) + "/" + limit(p) + " agents placed. Ranks raise the limit.")); return; }
         String[] d = e.getItem().getItemMeta().getPersistentDataContainer().get(ITEM, PersistentDataType.STRING).split(";");
         Bot b = new Bot(UUID.randomUUID().toString());
@@ -235,7 +259,7 @@ public final class Robots implements Listener {
             x.setAI(false);
             x.setInvulnerable(true);
             x.setSilent(true);
-            x.setPersistent(true);
+            x.setPersistent(!sandbox);
             x.setRemoveWhenFarAway(false);
             x.setCollidable(false);
             x.setOxidizing(CopperGolem.Oxidizing.waxed());
@@ -282,7 +306,7 @@ public final class Robots implements Listener {
             open(p, b, true);   // the OWNER title looks but doesn't touch, even with admin permission
             return;
         }
-        if (!b.owner.equals(p.getUniqueId()) && !canUse.test(p, g.getLocation()) && !p.hasPermission("blackforge.admin")) {
+        if (!b.owner.equals(p.getUniqueId()) && (sandbox || !canUse.test(p, g.getLocation())) && !p.hasPermission("blackforge.admin")) {
             p.sendMessage(Ui.mm("<red>That's " + Bukkit.getOfflinePlayer(b.owner).getName() + "'s agent.")); return;
         }
         open(p, b);
@@ -666,12 +690,14 @@ public final class Robots implements Listener {
     private void upgrade(Player p, Bot b) {
         if (b.tier >= MAX_TIER) return;
         int t = b.tier - 1;
+        if (!sandbox) {
         if (b.charge < UP_CHARGE_HOURS[t] * 3600_000L) { p.sendMessage(Ui.mm("<red>Not enough Charge yet - keep it fuelled (" + time(b.charge) + " / " + UP_CHARGE_HOURS[t] + "h). Better fuel charges faster.")); return; }
         if (Spawners.countEssence(p) < UP_ESSENCE[t]) { p.sendMessage(Ui.mm("<red>You need " + UP_ESSENCE[t] + " Mob Essence.")); return; }
         if (eco == null || eco.getBalance(p) < UP_MONEY[t]) { p.sendMessage(Ui.mm("<red>You need " + NetEconomy.money(UP_MONEY[t]) + ".")); return; }
         eco.withdrawPlayer(p, UP_MONEY[t]);
         Spawners.takeEssence(p, UP_ESSENCE[t]);
         b.charge -= UP_CHARGE_HOURS[t] * 3600_000L;
+        }
         b.tier++;
         Inventory bigger = Bukkit.createInventory(null, STORAGE[b.tier - 1]);
         bigger.setContents(Arrays.copyOf(b.storage.getContents(), bigger.getSize()));
@@ -891,6 +917,7 @@ public final class Robots implements Listener {
     }
 
     void save() {
+        if (sandbox) return;
         YamlConfiguration y = new YamlConfiguration();
         for (Map.Entry<String, ConfigurationSection> en : pending.entrySet()) y.set("robots." + en.getKey(), en.getValue());
         for (Bot b : bots.values()) {

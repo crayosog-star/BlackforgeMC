@@ -63,6 +63,7 @@ public final class BaseStation implements Listener {
     }
 
     private final BlackForgeCore plugin;
+    private final boolean sandbox;
     private final Robots robots;
     private final HopperUpgrades hoppers;
     private final File file;
@@ -73,7 +74,11 @@ public final class BaseStation implements Listener {
     private Function<Location, String> regionOf = l -> null;
     private Economy eco;
 
-    BaseStation(BlackForgeCore plugin, Robots robots, HopperUpgrades hoppers) {
+    BaseStation(BlackForgeCore plugin, Robots robots, HopperUpgrades hoppers) { this(plugin, robots, hoppers, false); }
+
+    /** {@code sandbox}: the Arena's Foundry, where everything is free and nothing is saved. */
+    BaseStation(BlackForgeCore plugin, Robots robots, HopperUpgrades hoppers, boolean sandbox) {
+        this.sandbox = sandbox;
         this.plugin = plugin;
         this.robots = robots;
         this.hoppers = hoppers;
@@ -84,7 +89,7 @@ public final class BaseStation implements Listener {
         radius = c.getInt("base-station.agent-radius", 16);
         enabled = c.getBoolean("base-station.enabled", true);
         StationUi.setArt(c.getBoolean("base-station.custom-ui", true));
-        load();
+        if (!sandbox) load();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         robots.setStations(this);
     }
@@ -132,6 +137,7 @@ public final class BaseStation implements Listener {
     }
 
     private boolean pay(Player p, int money, int ess) {
+        if (sandbox) return true;
         if (Spawners.countEssence(p) < ess) { p.sendMessage(Ui.mm("<red>You need " + ess + " Mob Essence (you have " + Spawners.countEssence(p) + ").")); return false; }
         if (eco == null || eco.getBalance(p) < money) { p.sendMessage(Ui.mm("<red>You need " + NetEconomy.money(money) + ".")); return false; }
         if (!eco.withdrawPlayer(p, money).transactionSuccess()) { p.sendMessage(Ui.mm("<red>That payment didn't go through.")); return false; }
@@ -368,6 +374,7 @@ public final class BaseStation implements Listener {
     }
 
     private void save() {
+        if (sandbox) return;
         YamlConfiguration y = new YamlConfiguration();
         int i = 0;
         for (Map.Entry<String, Spot> en : stations.entrySet()) {

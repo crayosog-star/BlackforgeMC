@@ -66,7 +66,8 @@ public final class HopperUpgrades implements Listener {
 
     private final Map<ChunkId, Loaded> loaded = new HashMap<>();
     private final int[] delays, needed;
-    private final int maxPerChunk;
+    private int maxPerChunk;
+    private boolean sandbox;
     final int price, essence;
     private final boolean enabled;
     private BiPredicate<Player, Location> access = (p, l) -> false;
@@ -94,6 +95,9 @@ public final class HopperUpgrades implements Listener {
     }
 
     void setAccess(BiPredicate<Player, Location> rule) { this.access = rule; }
+
+    /** The Arena's Foundry: one upgrade raises a tier and isn't used up, so Tier III can be tested with the kit's single upgrade. */
+    void setSandbox(int maxPerChunk) { this.sandbox = true; this.maxPerChunk = maxPerChunk; }
     boolean enabled() { return enabled; }
     int delay(int tier) { return delays[HopperTiers.clampTier(tier) - 1]; }
     int needed(int tier) { return HopperTiers.upgradesToLeave(tier, needed); }
@@ -215,11 +219,11 @@ public final class HopperUpgrades implements Listener {
         if (!access.test(p, b.getLocation())) { p.sendActionBar(Ui.mm("<red>You can only upgrade hoppers on your own land.")); return; }
         int tier = tierAt(b);
         if (tier >= HopperTiers.MAX_TIER) { p.sendActionBar(Ui.mm("<gold>This hopper is already Tier " + ROMAN[tier] + ".")); return; }
-        int need = needed(tier);
+        int need = sandbox ? 1 : needed(tier);
         int have = count(p);
         if (have < need) { p.sendActionBar(Ui.mm("<red>Tier " + ROMAN[tier + 1] + " takes " + need + " Hopper Upgrades. You have " + have + ".")); return; }
         if (tier == 1 && countInChunk(b) >= maxPerChunk) { p.sendActionBar(Ui.mm("<red>This chunk already has " + maxPerChunk + " upgraded hoppers.")); return; }
-        take(p, need);
+        if (!sandbox) take(p, need);
         setTier(b, tier + 1);
         b.getWorld().spawnParticle(Particle.WAX_OFF, b.getLocation().add(0.5, 0.8, 0.5), 25, 0.35, 0.35, 0.35);
         p.playSound(b.getLocation(), Sound.BLOCK_SMITHING_TABLE_USE, 0.8f, 1.2f);

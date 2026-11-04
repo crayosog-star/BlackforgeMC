@@ -166,3 +166,10 @@ boss:
   min-share: 0.01
   retreat-share: 0.25      # if it retreats, this much of the money and Scrap is still paid (no keys)
   key-rolls: [netherite, gold, gold, iron, iron, iron]   # each key goes to one player; your damage share is your chance
+
+# The Foundry: the Arena's build-and-test island (hub server). Agents, hopper tiers and the Forge are free there, and
+# everything a player places goes when they leave. These limits only apply inside it.
+foundry:
+  max-agents-per-player: 20
+  max-agents-total: 60
+  max-upgraded-hoppers-per-chunk: 64
