@@ -19,7 +19,7 @@ import java.util.*;
  * Fire, roars, fireballs, nostril smoke and ember trails are particles and sounds, all triggered at random by {@link DragonFlight}.
  * The displays are never saved with the world; any left over from a crash are removed by tag on start.
  */
-final class DragonAnimator {
+public final class DragonAnimator {
     private static final String TAG = "blackforge_hub_dragon", OLD_TAG = "alloy_hub_dragon";   // OLD_TAG: dragons spawned before the rename
     private static final int SEND_EVERY = 3;
 
@@ -59,14 +59,18 @@ final class DragonAnimator {
     private final Random rnd = new Random();
     private int tick;
 
-    DragonAnimator(Plugin plugin, World world) {
+    DragonAnimator(Plugin plugin, World world) { this(plugin, world, DragonFlight.Region.HUB, 4); }
+
+    /** Dragons flying over {@code region} (the Infernal Kingdom uses its own); {@code count} of them, black, crimson, violet, serpent in turn. */
+    public DragonAnimator(Plugin plugin, World world, DragonFlight.Region region, int count) {
         this.world = world;
-        this.anchor = new Location(world, 0.5, HubLayout.Y + 30, 0.5);
+        this.anchor = new Location(world, region.cx(), region.baseY() + 30, region.cz());
         for (Entity e : world.getEntitiesByClass(BlockDisplay.class)) if (e.getScoreboardTags().contains(TAG) || e.getScoreboardTags().contains(OLD_TAG)) e.remove();
         long seed = System.nanoTime();
-        DragonFlight.Kind[] kinds = {DragonFlight.Kind.BLACK, DragonFlight.Kind.CRIMSON, DragonFlight.Kind.VIOLET, DragonFlight.Kind.SERPENT};
+        DragonFlight.Kind[] all = {DragonFlight.Kind.BLACK, DragonFlight.Kind.CRIMSON, DragonFlight.Kind.VIOLET, DragonFlight.Kind.SERPENT};
+        DragonFlight.Kind[] kinds = java.util.Arrays.copyOf(all, Math.max(1, Math.min(count, all.length)));
         for (int i = 0; i < kinds.length; i++) {
-            DragonFlight d = new DragonFlight(kinds[i], seed + i * 7919L, i * Math.PI + rnd.nextDouble());
+            DragonFlight d = new DragonFlight(kinds[i], seed + i * 7919L, i * Math.PI + rnd.nextDouble(), region);
             flights.add(d);
             List<BlockDisplay> list = new ArrayList<>();
             for (DragonFlight.Piece p : d.pose()) list.add(spawn(p));
@@ -76,7 +80,7 @@ final class DragonAnimator {
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 1L);
     }
 
-    void remove() {
+    public void remove() {
         displays.forEach(l -> l.forEach(Entity::remove));
         displays.clear();
     }

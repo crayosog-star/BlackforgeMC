@@ -26,6 +26,7 @@ public final class InfernalKingdom {
         citadel(k);
         KingdomHalls.build(k);
         KingdomDistricts.build(k);
+        KingdomExtras.build(k);
         dragonGate(k);
         KingdomTerrain.trees(k);
         return c;

@@ -39,7 +39,23 @@ public final class DragonFlight {
     private double[] mouth = new double[3], breathDir = {1, 0, 0}, nose = new double[3], forward = {1, 0, 0};
     private double[][] trails = new double[0][];
 
-    public DragonFlight(Kind kind, long seed, double startAngle) {
+    /**
+     * Where a dragon flies. {@link #HUB} is the hub's sky; other places (the Infernal Kingdom) give their own centre, base
+     * height, flight radius, how far north targets may be, and an optional keep-out circle (a tower cluster to fly round).
+     */
+    public record Region(double cx, double cz, double baseY, double outer, double targetNorth, double turnNorth, double homeZ, double keepX, double keepZ, double keepR) {
+        public static final Region HUB = new Region(0.5, 0.5, Y, 108, -10, -40, 30.5, 0, 0, 0);
+    }
+
+    private final Region reg;
+    private final double low, outer;
+
+    public DragonFlight(Kind kind, long seed, double startAngle) { this(kind, seed, startAngle, Region.HUB); }
+
+    public DragonFlight(Kind kind, long seed, double startAngle, Region region) {
+        this.reg = region;
+        this.low = region.baseY() + 30;
+        this.outer = region.outer();
         this.kind = kind;
         this.rnd = new Random(seed);
         boolean serpent = kind == Kind.SERPENT;
@@ -50,14 +66,15 @@ public final class DragonFlight {
         speed = cruise;
         // start somewhere in the south half, so the straight starting trail never runs through the BLACKFORGE sign
         startAngle = 0.6 + Math.floorMod((long) (startAngle * 1000), 1942L) / 1000.0;
-        x = 0.5 + Math.cos(startAngle) * 70;
-        z = 0.5 + Math.sin(startAngle) * 70;
-        y = Y + 26 + rnd.nextDouble() * 14;
+        double ring = 70 * region.outer() / 108;
+        x = region.cx() + Math.cos(startAngle) * ring;
+        z = region.cz() + Math.sin(startAngle) * ring;
+        y = region.baseY() + 26 + rnd.nextDouble() * 14;
         yaw = startAngle + Math.PI / 2;
         // a trail behind it along the same circle, so the body has somewhere to be on the first tick
         for (int i = 0; i < 400; i++) {
-            double a = startAngle - i * speed / 70;
-            path.addLast(new double[]{0.5 + Math.cos(a) * 70, y, 0.5 + Math.sin(a) * 70, 0});
+            double a = startAngle - i * speed / ring;
+            path.addLast(new double[]{region.cx() + Math.cos(a) * ring, y, region.cz() + Math.sin(a) * ring, 0});
         }
         breathCooldown = 60 + rnd.nextInt(300);
         roarCooldown = 300 + rnd.nextInt(600);
@@ -94,27 +111,28 @@ public final class DragonFlight {
      * Below LOW a dragon is "low": it has to stay out in the ring between the floating islands and the castle walls
      * (CastleBuilder.INNER), sweeping along the sides of the hub. Wing tips reach about 22 blocks either side.
      */
-    private static final double LOW = Y + 30, OUTER = 108;
 
     private void pickTarget() {
-        boolean low = y < LOW;
+        boolean isLow = y < low;
+        double sc = outer / 108, by = reg.baseY();
         for (int tries = 0; tries < 80; tries++) {
             double a = rnd.nextDouble() * Math.PI * 2, r, py;
             // now and then dive down past the edge and sweep along the cliffs, just outside the island
-            if ((low ? rnd.nextDouble() < 0.55 : rnd.nextDouble() < 0.3)) { r = OUTER + rnd.nextDouble() * 4; py = Y + 31 + rnd.nextDouble() * 14; }
-            else { r = 24 + rnd.nextDouble() * 66; py = (r < 60 ? Y + 34 : Y + 32) + rnd.nextDouble() * 20; }
-            double px = 0.5 + Math.cos(a) * r, pz = 0.5 + Math.sin(a) * r;
-            if (pz < -10) continue;                                  // keep clear of the BLACKFORGE sign in the north
+            if ((isLow ? rnd.nextDouble() < 0.55 : rnd.nextDouble() < 0.3)) { r = outer + rnd.nextDouble() * 4; py = by + 31 + rnd.nextDouble() * 14; }
+            else { r = (24 + rnd.nextDouble() * 66) * sc; py = (r < 60 * sc ? by + 34 : by + 32) + rnd.nextDouble() * 20; }
+            double px = reg.cx() + Math.cos(a) * r, pz = reg.cz() + Math.sin(a) * r;
+            if (pz < reg.targetNorth()) continue;                    // keep clear of the BLACKFORGE sign in the north
+            if (reg.keepR() > 0 && Math.hypot(px - reg.keepX(), pz - reg.keepZ()) < reg.keepR() + 20) continue;
             if (Math.hypot(px - x, pz - z) < 35) continue;           // somewhere worth flying to
             boolean crowded = false;                                 // and well away from where the others are and are going
             for (DragonFlight o : others) crowded |= Math.hypot(px - o.x, pz - o.z) < 60 || Math.hypot(px - o.tx, pz - o.tz) < 60;
             if (crowded && tries < 60) continue;
             // low passes stay low around the outside: from low, only climb back in once out past the islands
-            if (low && py < LOW && Math.hypot(x, z) < OUTER - 4) continue;
+            if (isLow && py < low && Math.hypot(x - reg.cx(), z - reg.cz()) < outer - 4) continue;
             tx = px; ty = py; tz = pz;
             return;
         }
-        tx = 0.5; ty = Y + 44; tz = 40.5;
+        tx = reg.cx(); ty = by + 44; tz = reg.cz() + 40;
     }
 
     public void step() {
@@ -122,27 +140,32 @@ public final class DragonFlight {
         roared = flapped = fireball = false;
         double dx = tx - x, dy = ty - y, dz = tz - z, flat = Math.hypot(dx, dz);
         if (flat < 12) pickTarget();
-        double rad = Math.hypot(x - 0.5, z - 0.5);
+        double rad = Math.hypot(x - reg.cx(), z - reg.cz());
         // too far out (or heading for the sign): turn back towards the middle
-        if (rad > OUTER + 6) { tx = 0.5; tz = 30.5; ty = Math.max(ty, Y + 34); }
+        if (rad > outer + 6) { tx = reg.cx(); tz = reg.homeZ(); ty = Math.max(ty, reg.baseY() + 34); }
         for (DragonFlight o : others)                            // another dragon too close: go somewhere else
             if (Math.hypot(x - o.x, z - o.z) < 40 && age % 40 == 0) pickTarget();
         dx = tx - x; dy = ty - y; dz = tz - z; flat = Math.hypot(dx, dz);
         double wantYaw = Math.atan2(dz, dx);
         // low and not yet out past the floating islands: bank outwards and climb, never through them
-        boolean tooLowInside = y < LOW && rad < OUTER - 4;
-        if (tooLowInside) { wantYaw = Math.atan2(Math.max(z - 0.5, 0), x - 0.5); dy = Math.max(dy, 6); }
+        boolean tooLowInside = y < low && rad < outer - 4;
+        if (tooLowInside) { wantYaw = Math.atan2(Math.max(z - reg.cz(), 0), x - reg.cx()); dy = Math.max(dy, 6); }
         // about to leave the flight ring (the castle walls are out there): curve along it and back in, in good time
         double[] ahead = dir(yaw, 0);
-        if (Math.hypot(x + ahead[0] * 25 - 0.5, z + ahead[2] * 25 - 0.5) > OUTER + 6) {
-            double ang = Math.atan2(z - 0.5, x - 0.5), left = ang + Math.PI / 2, right = ang - Math.PI / 2;
+        if (Math.hypot(x + ahead[0] * 25 - reg.cx(), z + ahead[2] * 25 - reg.cz()) > outer + 6) {
+            double ang = Math.atan2(z - reg.cz(), x - reg.cx()), left = ang + Math.PI / 2, right = ang - Math.PI / 2;
             wantYaw = Math.abs(wrap(left - yaw)) < Math.abs(wrap(right - yaw)) ? left + 0.35 : right - 0.35;
-            if (rad > OUTER + 12) wantYaw = ang + Math.PI;   // already past it: straight back in
+            if (rad > outer + 12) wantYaw = ang + Math.PI;   // already past it: straight back in
+        }
+        // a tower cluster to fly round (the kingdom's citadel): curve along its edge instead of through it
+        if (reg.keepR() > 0 && Math.hypot(x + ahead[0] * 40 - reg.keepX(), z + ahead[2] * 40 - reg.keepZ()) < reg.keepR()) {
+            double ang = Math.atan2(z - reg.keepZ(), x - reg.keepX()), left = ang + Math.PI / 2, right = ang - Math.PI / 2;
+            wantYaw = Math.abs(wrap(left - yaw)) < Math.abs(wrap(right - yaw)) ? left + 0.3 : right - 0.3;
         }
         // the BLACKFORGE sign hangs over the north edge: if the next 25 blocks of flight would reach it, turn south now
-        if (z + ahead[2] * 25 < -40 || z < -40) { wantYaw = Math.atan2(1, -0.3 * Math.signum(x)); tx = x * 0.5; tz = 30.5; }
+        if (z + ahead[2] * 25 < reg.turnNorth() || z < reg.turnNorth()) { wantYaw = Math.atan2(1, -0.3 * Math.signum(x - reg.cx())); tx = reg.cx() + (x - reg.cx()) * 0.5; tz = reg.homeZ(); }
         if (kind == Kind.SERPENT) wantYaw += 0.45 * Math.sin(age * slither);     // slithering through the air
-        double agil = rad > OUTER + 6 ? agility * 2.5 : agility;   // pull hard back into the ring before the castle walls
+        double agil = rad > outer + 6 ? agility * 2.5 : agility;   // pull hard back into the ring before the castle walls
         double turn = clamp(wrap(wantYaw - yaw), -agil, agil);
         yaw += turn;
         double wantPitch = clamp(Math.atan2(dy, Math.max(flat, 1)), -0.42, 0.38);
@@ -152,12 +175,12 @@ public final class DragonFlight {
         speed += (cruise - pitch * 0.45 - speed) * 0.03;                         // faster in a dive, slower climbing
         double[] f = dir(yaw, pitch);
         x += f[0] * speed; y += f[1] * speed; z += f[2] * speed;
-        if (y < Y - 16) y = Y - 16;
+        if (y < reg.baseY() - 16) y = reg.baseY() - 16;
         // hard wall: never further out than the edge of the flight ring, whatever the steering was doing
-        double out = Math.hypot(x - 0.5, z - 0.5);
-        if (out > OUTER + 14) { x = 0.5 + (x - 0.5) * (OUTER + 14) / out; z = 0.5 + (z - 0.5) * (OUTER + 14) / out; }
+        double out = Math.hypot(x - reg.cx(), z - reg.cz());
+        if (out > outer + 14) { x = reg.cx() + (x - reg.cx()) * (outer + 14) / out; z = reg.cz() + (z - reg.cz()) * (outer + 14) / out; }
         // hard floor over the island and its floating islands, in case a dive comes in too steep
-        if (Math.hypot(x - 0.5, z - 0.5) < OUTER - 10 && y < LOW + 2) y = LOW + 2;
+        if (Math.hypot(x - reg.cx(), z - reg.cz()) < outer - 10 && y < low + 2) y = low + 2;
         path.addFirst(new double[]{x, y, z, bank});
         if (path.size() > 400) path.removeLast();
         behave();

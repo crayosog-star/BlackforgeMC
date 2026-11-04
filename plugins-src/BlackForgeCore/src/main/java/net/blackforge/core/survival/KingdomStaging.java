@@ -24,6 +24,7 @@ final class KingdomStaging {
     static final String WORLD = "kingdom_staging";
     private final BlackForgeCore plugin;
     private boolean building;
+    private KingdomLife life;
 
     KingdomStaging(BlackForgeCore plugin) { this.plugin = plugin; }
 
@@ -35,9 +36,10 @@ final class KingdomStaging {
             case "stage" -> stage(s);
             case "tp" -> {
                 World w = Bukkit.getWorld(WORLD);
+                if (w == null && new File(plugin.getDataFolder(), "kingdom-staged").exists()) w = load();   // after a restart
                 if (!(s instanceof Player p)) s.sendMessage(Ui.mm("<red>Players only."));
                 else if (w == null) s.sendMessage(Ui.mm("<red>Not built yet: /blackforge kingdom stage"));
-                else p.teleport(new Location(w, 0.5, InfernalLayout.Y + 1, 76.5, 180f, 0f));
+                else { ensureLife(w); p.teleport(new Location(w, 0.5, InfernalLayout.Y + 1, 76.5, 180f, 0f)); }
             }
             default -> s.sendMessage(Ui.mm("<gold>Infernal Kingdom staging: <white>" + (Bukkit.getWorld(WORLD) != null ? "world loaded" : "not built")
                     + (new File(plugin.getDataFolder(), "kingdom-staged").exists() ? ", staged" : "") + "<gray>  /blackforge kingdom stage | tp"));
@@ -45,11 +47,21 @@ final class KingdomStaging {
         return true;
     }
 
+    private World load() {
+        return new WorldCreator(WORLD).generator(new Worlds.Void()).environment(World.Environment.NORMAL).type(WorldType.FLAT).generateStructures(false).createWorld();
+    }
+
+    private void ensureLife(World w) {
+        if (life == null) { life = new KingdomLife(plugin, w, 0, 0); life.start(); }
+    }
+
+    void shutdown() { if (life != null) life.stop(); life = null; }
+
     private void stage(CommandSender s) {
         if (building) { s.sendMessage(Ui.mm("<yellow>Already building.")); return; }
         building = true;
         World w = Bukkit.getWorld(WORLD);
-        if (w == null) w = new WorldCreator(WORLD).generator(new Worlds.Void()).environment(World.Environment.NORMAL).type(WorldType.FLAT).generateStructures(false).createWorld();
+        if (w == null) w = load();
         final World world = w;
         world.setTime(18000);
         world.setGameRule(org.bukkit.GameRule.DO_MOB_SPAWNING, false);
@@ -59,6 +71,7 @@ final class KingdomStaging {
         Paster.paste(plugin, world, c, 6000, () -> {
             building = false;
             try { new File(plugin.getDataFolder(), "kingdom-staged").createNewFile(); } catch (Exception ignored) { }
+            ensureLife(world);
             s.sendMessage(Ui.mm("<green>Kingdom staged in " + (System.currentTimeMillis() - t) / 1000 + "s. <gray>/blackforge kingdom tp"));
         });
     }

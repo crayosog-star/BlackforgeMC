@@ -64,8 +64,15 @@ warps, protection radius) at them is the integration step and happens only after
       (five leaderboard pedestals), Merchant District (one building per service), Blacksmith Quarter
 - [x] Staging: `/blackforge kingdom stage` pastes it into its own void world `kingdom_staging`, `/blackforge kingdom tp` visits
       (staff only; the live spawn and Survival world are not touched). Offline renders: `gradle kingdom`.
-- [ ] Not done yet: hidden passages and secret rooms, interior of the keep, dragons and ambient effects (particles, smoke,
-      sounds), crate/rank/leaderboard/NPC re-pointing (Phase 5), protection area, in-game testing (Phases 7-8), live deploy.
+- [x] Throne hall inside the keep, spiral stairs up the two front corner towers to railed rooftop viewpoints, the Founders'
+      Cache (a hidden room off the Treasury's back-left corner), a dragon skull and bone piles on the back of the terrace.
+- [x] `KingdomLife` (runs in the staging world while someone is there): four dragons on a flight path round the citadel (the
+      hub dragon system, now taking a flight region), ambient fire / embers / sparks at the plaza, crate shrines, rank
+      displays and trophies, forge and lava sounds, floating labels over every crate, rank, leaderboard and building. Small
+      particle counts, only within 56 blocks of an emitter, only while a player is in that world.
+- [ ] Not done yet: crate/rank/leaderboard/NPC re-pointing (Phase 5: the existing crate engine, `/ranks`, Hall of Fame boards,
+      villagers and `/warp` still point at the old spawn), the protection area for the new world, the wild-gate trigger,
+      in-game testing (Phases 7-8), live deploy.
 
 Nothing in the live spawn was changed. Re-pointing the features and the live paste need in-game testing of the staged
 kingdom first.

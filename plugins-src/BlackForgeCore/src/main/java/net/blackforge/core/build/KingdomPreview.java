@@ -21,6 +21,10 @@ public final class KingdomPreview {
         PreviewMain.pov(k, new File(out, "kingdom_castle.png"), 0.5, Y + 60, 20.5, 180, 14, 1600, 900);
         PreviewMain.pov(k, new File(out, "kingdom_terrace.png"), 0.5, Y + 28, -45.5, 180, 14, 1600, 900);
         PreviewMain.pov(k, new File(out, "kingdom_west.png"), -190.5, Y + 70, 40.5, 90, 14, 1600, 900);
+        PreviewMain.pov(k, new File(out, "kingdom_throne.png"), 0.5, Y + 24, -92.5, 180, 4, 1600, 900);
+        PreviewMain.pov(k, new File(out, "kingdom_skull.png"), 0.5, Y + 34, -150.5, 180, 6, 1600, 900);
+        PreviewMain.pov(k, new File(out, "kingdom_cache.png"), -48.5, Y + 3.6, -92.5, 90, 4, 1600, 900);
+        PreviewMain.pov(k, new File(out, "kingdom_viewpoint.png"), 0.5, Y + 100, -60.5, 180, 6, 1600, 900);
         PreviewMain.topDown(k, new File(out, "kingdom_top.png"), 3);
         PreviewMain.pov(k, new File(out, "kingdom_treasury.png"), 0.5, Y + 6, -45.5, 180, -4, 1600, 900);
         PreviewMain.pov(k, new File(out, "kingdom_treasury_back.png"), 0.5, Y + 8, -66.5, 180, -6, 1600, 900);

@@ -225,6 +225,7 @@ public final class SurvivalModule implements Listener {
     }
 
     public void shutdown() {
+        staging.shutdown();
         boss.stop(null);
         districts.shutdown();
         gladiators.shutdown();
