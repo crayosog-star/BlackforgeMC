@@ -145,7 +145,7 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Leaves ready:** `AgentRecord`, `AcademyRules` and config keys for P1.T2.
 - **Evidence:** not ticked, because two checks can only run after this PR merges (see Blockers log).
   - Verified: `AcademyRulesTest` (14 tests) passed against the two new classes, compiled with `javac` 21 and a small local stand-in for JUnit, since Gradle isn't run locally. This wasn't the real JUnit or the project's Java 25.
-  - Untested: the automerge build with tests, which is also the first compile of the `BlackForgeCore.java` log line.
+  - Verified: PR #88 merged through automerge, which only merges after a build with tests. The build log itself wasn't read.
   - Untested: the Survival startup log. Expected: `Academy live-modes=[] source=jar-default`. `source` was added because an empty list reads the same as a missing key, so `live-modes=[]` alone wouldn't prove the default arrives. `source=missing` means it doesn't.
   - Note: the log line needed one file beyond this task's list, `BlackForgeCore.java`, because nothing else runs at startup yet.
   - For P2.T1: `dailyGain`'s `todaySoFar` is the day's raw gains, not awarded points, so `todayPoints` must store raw gains.
@@ -166,7 +166,8 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Evidence:** not ticked, because every **Done when** check needs a staff member on a running server.
   - Crates (step 6): reward commands go through `robots give`, which builds an item with no record, so a crate Agent gets its record and UID when placed. The live `crates.yml` wasn't read.
   - Verified: `Robots.java` parses under `javac` 21. It wasn't compiled against Paper, since Gradle isn't run locally.
-  - Untested: the automerge build, and everything in game: restart, pickup and place, duplicate refusal and old items.
+  - Verified: PR #91 merged through automerge, which only merges after a build with tests. The build log itself wasn't read.
+  - Untested: everything in game: restart, pickup and place, duplicate refusal and old items.
   - Note: `uidInUse` also checks Agents waiting for their world to load, so a copy can't be placed while the original is unloaded.
 
 ### [ ] P1.T3: Add the work signal and stat layer with no behaviour change
@@ -443,7 +444,7 @@ Rolled the first time any job reaches level 10 (slot 1) and then 30 (slot 2). Sl
 - **Evidence:**
 
 ## Blockers log
-- 2026-11-04, P1.T1 (open): rule 7 ticks a task in the same PR as its work, but two **Done when** checks need that PR merged first: the automerge build and the Survival startup log. The task stays unticked. Colin to supply the startup log line; ticking then needs a small follow-up PR.
+- 2026-11-04, P1.T1 (open): rule 7 ticks a task in the same PR as its work, but one **Done when** check still needs that PR live: the Survival startup log. The task stays unticked. Colin to supply the startup log line; ticking then needs a small follow-up PR.
 - 2026-11-04, P1.T2 (open): needs a staff member's in-game checks; steps are in PR #91. Colin chose to keep building Phase 1 meanwhile.
 - 2026-11-04, P1.T3 (open): needs a tester at the four Foundry benches.
 - 2026-11-04, Phase 2 (open): can't start until Colin or a tester confirms the Phase 1 gate.
