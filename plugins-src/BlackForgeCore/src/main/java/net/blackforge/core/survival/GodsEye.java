@@ -49,6 +49,7 @@ public final class GodsEye implements Listener, Hackable {
     private final BlackForgeCore plugin;
     private final boolean enabled;
     private final Predicate<Location> allowedAt;
+    private final java.util.function.BiPredicate<Player, Player> mayMark;
     private final NamespacedKey tagKey;
     private final Map<UUID, Mark> marks = new HashMap<>();   // by caster
     private final EyeBurst burst;
@@ -58,7 +59,12 @@ public final class GodsEye implements Listener, Hackable {
     private final BlockData beamCore = Material.WHITE_CONCRETE.createBlockData();
 
     public GodsEye(BlackForgeCore plugin, Predicate<Location> allowedAt) {
+        this(plugin, allowedAt, (caster, target) -> true);
+    }
+
+    public GodsEye(BlackForgeCore plugin, Predicate<Location> allowedAt, java.util.function.BiPredicate<Player, Player> mayMark) {
         this.plugin = plugin;
+        this.mayMark = mayMark;
         this.allowedAt = allowedAt;
         this.enabled = plugin.getConfig().getBoolean("gods-eye.enabled", true);
         this.tagKey = new NamespacedKey(BlackForgeCore.NS, "gods_eye");
@@ -121,15 +127,21 @@ public final class GodsEye implements Listener, Hackable {
     }
 
     /** The nearest other player in the same world: no spectators, nobody the caster can't see. Mobs never count. */
-    private static Player closest(Player p) {
+    private Player closest(Player p) {
         Player best = null;
         double bestD = Double.MAX_VALUE;
         for (Player q : p.getWorld().getPlayers()) {
-            if (q == p || q.isDead() || q.getGameMode() == GameMode.SPECTATOR || !p.canSee(q)) continue;
+            if (!eligible(p, q)) continue;
             double d = q.getLocation().distanceSquared(p.getLocation());
             if (d < bestD) { bestD = d; best = q; }
         }
         return best;
+    }
+
+    private boolean eligible(Player caster, Player target) {
+        return target != caster && target.isOnline() && !target.isDead() && target.getWorld() == caster.getWorld()
+                && target.getGameMode() != GameMode.SPECTATOR && caster.canSee(target)
+                && allowedAt.test(target.getLocation()) && mayMark.test(caster, target);
     }
 
     /** EMP: a mark goes out if the wave reaches the marked player or the player who cast it (not the EMP caster's own). */
@@ -332,7 +344,7 @@ public final class GodsEye implements Listener, Hackable {
         void tick() {
             t++;
             Player p = Bukkit.getPlayer(caster);
-            if (!target.isOnline() || target.isDead() || target.getWorld() != world) {
+            if (p == null || p.isDead() || p.getWorld() != world || !allowedAt.test(p.getLocation()) || !eligible(p, target)) {
                 if (p != null) p.sendActionBar(Ui.mm("<#FFD34D>👁 <gray>Lost sight of <white>" + target.getName()));
                 end(false);
                 return;

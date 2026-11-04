@@ -656,7 +656,12 @@ public final class Robots implements Listener {
         if (m.readOnly) { p.sendActionBar(Ui.mm("<red>Read-only: you can look, but not change anything.")); return; }
         if (m.kind.equals("shop")) { shopClick(p, e.getRawSlot()); return; }
         Bot b = bots.get(m.id);
-        if (b == null) { p.closeInventory(); return; }
+        if (b == null || !mayUse(p, b)) {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (p.getOpenInventory().getTopInventory().equals(m.inv)) p.closeInventory();
+            });
+            return;
+        }
         int slot = e.getRawSlot();
         if (slot >= STORAGE_START) {
             int i = slot - STORAGE_START;
@@ -746,7 +751,7 @@ public final class Robots implements Listener {
         if (b.charge < UP_CHARGE_HOURS[t] * 3600_000L) { p.sendMessage(Ui.mm("<red>Not enough Charge yet - keep it fuelled (" + time(b.charge) + " / " + UP_CHARGE_HOURS[t] + "h). Better fuel charges faster.")); return; }
         if (Spawners.countEssence(p) < UP_ESSENCE[t]) { p.sendMessage(Ui.mm("<red>You need " + UP_ESSENCE[t] + " Mob Essence.")); return; }
         if (eco == null || eco.getBalance(p) < UP_MONEY[t]) { p.sendMessage(Ui.mm("<red>You need " + NetEconomy.money(UP_MONEY[t]) + ".")); return; }
-        eco.withdrawPlayer(p, UP_MONEY[t]);
+        if (!eco.withdrawPlayer(p, UP_MONEY[t]).transactionSuccess()) { p.sendMessage(Ui.mm("<red>The payment failed.")); return; }
         Spawners.takeEssence(p, UP_ESSENCE[t]);
         b.charge -= UP_CHARGE_HOURS[t] * 3600_000L;
         }
@@ -789,7 +794,7 @@ public final class Robots implements Listener {
 
     private void applyName(Player p, String botId, String typed) {
         Bot b = bots.get(botId);
-        if (b == null || typed.equalsIgnoreCase("cancel")) { p.sendMessage(Ui.mm("<gray>Rename cancelled.")); return; }
+        if (b == null || !mayUse(p, b) || typed.equalsIgnoreCase("cancel")) { p.sendMessage(Ui.mm("<gray>Rename cancelled.")); return; }
         if (typed.equalsIgnoreCase("clear")) b.name = null;
         else if (!RobotRules.validName(typed)) { p.sendMessage(Ui.mm("<red>Names are 1-16 letters or numbers, with no spaces.")); return; }
         else if (net.blackforge.core.moderation.AutoMod.blocks(typed)) { p.sendMessage(Ui.mm("<red>That name isn't allowed.")); return; }
@@ -811,7 +816,7 @@ public final class Robots implements Listener {
     }
 
     private boolean mayUse(Player p, Bot b) {
-        return b.owner.equals(p.getUniqueId()) || canUse.test(p, b.loc) || p.hasPermission("blackforge.admin");
+        return p.hasPermission("blackforge.admin") || (sandbox ? b.owner.equals(p.getUniqueId()) : canUse.test(p, b.loc));
     }
 
     /** An agent's card in the Forge: its tier and the price of the next one, and nothing from its storage. */
@@ -886,7 +891,7 @@ public final class Robots implements Listener {
             int t = (slot - 19) / 2 + 1;
             if (Spawners.countEssence(p) < FUEL_ESSENCE[t - 1]) { p.sendMessage(Ui.mm("<red>You need " + FUEL_ESSENCE[t - 1] + " Mob Essence.")); return; }
             if (eco == null || eco.getBalance(p) < FUEL_MONEY[t - 1]) { p.sendMessage(Ui.mm("<red>You need " + NetEconomy.money(FUEL_MONEY[t - 1]) + ".")); return; }
-            eco.withdrawPlayer(p, FUEL_MONEY[t - 1]);
+            if (!eco.withdrawPlayer(p, FUEL_MONEY[t - 1]).transactionSuccess()) { p.sendMessage(Ui.mm("<red>The payment failed.")); return; }
             Spawners.takeEssence(p, FUEL_ESSENCE[t - 1]);
             give(p, fuelCell(t, 1));
             p.sendMessage(Ui.mm("<green>Bought a Fuel Cell " + Spawners.roman(t) + "."));

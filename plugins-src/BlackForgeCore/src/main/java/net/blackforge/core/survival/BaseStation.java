@@ -357,6 +357,7 @@ public final class BaseStation implements Listener {
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {
+        if (e.getWhoClicked() instanceof Player p && denyStorage(p, e.getInventory())) { e.setCancelled(true); return; }
         if (!(e.getInventory().getHolder() instanceof Menu m)) return;
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
@@ -382,7 +383,20 @@ public final class BaseStation implements Listener {
     }
 
     @EventHandler
-    public void onDrag(InventoryDragEvent e) { if (e.getInventory().getHolder() instanceof Menu) e.setCancelled(true); }
+    public void onDrag(InventoryDragEvent e) {
+        if (e.getInventory().getHolder() instanceof Menu
+                || e.getWhoClicked() instanceof Player p && denyStorage(p, e.getInventory())) e.setCancelled(true);
+    }
+
+    private boolean denyStorage(Player p, Inventory inventory) {
+        if (!(inventory.getHolder() instanceof Barrel b) || !b.getPersistentDataContainer().has(ITEM)) return false;
+        Location at = b.getLocation();
+        if (p.getWorld() == at.getWorld() && isStation(at.getBlock()) && access.test(p, at)) return false;
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (p.getOpenInventory().getTopInventory().equals(inventory)) p.closeInventory();
+        });
+        return true;
+    }
 
     // ------------------------------------------------------------------ saving
 

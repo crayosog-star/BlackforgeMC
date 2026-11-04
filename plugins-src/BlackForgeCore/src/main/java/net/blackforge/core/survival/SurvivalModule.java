@@ -134,7 +134,7 @@ public final class SurvivalModule implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, () -> net.blackforge.core.Events.publishLive(koth.nextStart(), koth.active(), boss.active()), 100L, 600L);
         bounties = new Bounties(plugin);
         jobs = new Jobs(plugin);
-        new ChestShops(plugin);
+        new ChestShops(plugin, claims);
         new AfkZone(plugin, world, new Location(world, 1500.5, 200, 1500.5), 6, crates, "afkzone-built");
         new ResourceWorld(plugin);
         votes.setScrap(scrap);
