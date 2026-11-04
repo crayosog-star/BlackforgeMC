@@ -48,7 +48,7 @@ import java.util.*;
  */
 public final class TestArena implements Listener {
     public static final String WORLD = "arena";
-    private static final String MARKER = "arena-built-v2";   // v2: armour lever post
+    private static final String MARKER = "arena-built-v3";   // v2: armour lever post; v3: the Foundry
     private static final int SLOTS = TestArenaBuilder.GRID * TestArenaBuilder.GRID;
     private static final double DUMMY_HEALTH = 1000;
 
@@ -208,9 +208,9 @@ public final class TestArena implements Listener {
         org.bukkit.block.Biome forest = io.papermc.paper.registry.RegistryAccess.registryAccess()
                 .getRegistry(io.papermc.paper.registry.RegistryKey.BIOME).get(NamespacedKey.minecraft("forest"));
         if (forest == null) return;
-        for (int x = -40; x < 40; x += 4) for (int z = -40; z < 40; z += 4)
+        for (int x = -40; x < 40; x += 4) for (int z = FoundryZone.MIN_Z; z < 40; z += 4)
             for (int y = TestArenaBuilder.Y - 48; y < TestArenaBuilder.Y + 40; y += 4) world.setBiome(x, y, z, forest);
-        for (int cx = -3; cx <= 2; cx++) for (int cz = -3; cz <= 2; cz++) world.refreshChunk(cx, cz);
+        for (int cx = -3; cx <= 2; cx++) for (int cz = FoundryZone.MIN_CHUNK_Z; cz <= 2; cz++) world.refreshChunk(cx, cz);
     }
 
     // ------------------------------------------------------------------ entities
@@ -234,7 +234,7 @@ public final class TestArena implements Listener {
         wallHolo = Ui.hologram(new Location(world, TestArenaBuilder.WALL_X + 1.6, TestArenaBuilder.Y + 10.2, 0.5), "", 1.4f);
         spawnHolo = Ui.hologram(new Location(world, TestArenaBuilder.SPAWN_X, TestArenaBuilder.Y + 3.4, TestArenaBuilder.SPAWN_Z - 3),
                 "<gradient:#7bd88f:#2e9e5b><bold>THE ARENA</bold></gradient><newline><gray>Test your gear on the <white>dummy"
-                        + "<newline><gray>Pull and knock around the <red>practice zombie <gray>(east)<newline><gray>Grab new items from the <light_purple>showcase wall <gray>(west)<newline><gray>Flip the <white>lever <gray>to armour the dummy<newline><gray>/arena kit <dark_gray>· <gray>/hub to leave", 1.1f);
+                        + "<newline><gray>Pull and knock around the <red>practice zombie <gray>(east)<newline><gray>Grab new items from the <light_purple>showcase wall <gray>(west)<newline><gray>Flip the <white>lever <gray>to armour the dummy<newline><gray>Run north past the targets for <#ffb347>the Foundry<newline><gray>/arena kit <dark_gray>· <gray>/hub to leave", 1.1f);
         armorHolo = Ui.hologram(new Location(world, TestArenaBuilder.LEVER_X + 0.5, TestArenaBuilder.LEVER_Y + 0.9, TestArenaBuilder.LEVER_Z + 0.5), "", 0.8f);
         archeryHolo = Ui.hologram(new Location(world, 0.5, TestArenaBuilder.Y + 4.4, TestArenaBuilder.TARGET_Z + 0.5), "", 1.1f);
         for (TextDisplay td : List.of(dummyHolo, wallHolo, spawnHolo, armorHolo, archeryHolo)) mark(td);
