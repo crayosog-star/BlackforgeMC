@@ -59,6 +59,7 @@ public final class AbyssWorld {
         for (Entity e : world.getEntities()) if (e.getScoreboardTags().contains("leviathan_part")) e.remove();
         Bukkit.getScheduler().runTaskLater(plugin, this::dockLife, 60L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::encounterTick, 200L, 20L);
+        new AbyssMobs(plugin, world);
         return world;
     }
 

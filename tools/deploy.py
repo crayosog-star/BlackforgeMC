@@ -96,7 +96,7 @@ for name, s in SERVERS.items():
         f"  fragment-chance-chest: {os.environ.get('BF_FRAGMENT_CHANCE', '0.0833')}   # per OneBlock chest opened (~1 in 12)",
     ] if s["mode"] == "skyblock" else []
     (cfg / "config.yml").write_text("\n".join([
-        "# hub | arcade | survival | skyblock | factions | backend", f"mode: {s['mode']}", f"display-name: {s['display']}",
+        "# hub | arcade | survival | skyblock | factions | raft | backend", f"mode: {s['mode']}", f"display-name: {s['display']}",
         f"join-command: '{s['join']}'", f"address: '{ADDRESS}'", "resource-pack-live: true", *koth, ""]), encoding="utf-8")
     set_props(d / "server.properties", {
         "enable-rcon": "true", "rcon.port": str(s["port"] + 1000), "rcon.password": RCON_PASS,
