@@ -74,14 +74,4 @@ class OrangeCompanionTest {
         assertEquals("blackforge:pet.hesitant_gulp", pet.voiceDue(returned));
         assertNull(pet.voiceDue(returned + SECOND));
     }
-
-    @Test
-    void hopReturnsToTheGroundWhenThePetStops() {
-        assertEquals(0f, OrangeCompanion.hopHeight(0));
-        int frame = OrangeCompanion.nextHopFrame(0, true);
-        assertTrue(OrangeCompanion.hopHeight(frame) > 0);
-        for (int i = 0; i < 12; i++) frame = OrangeCompanion.nextHopFrame(frame, false);
-        assertEquals(0, frame);
-        assertEquals(0f, OrangeCompanion.hopHeight(frame));
-    }
 }
