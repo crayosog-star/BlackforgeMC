@@ -325,7 +325,7 @@ public final class TestArenaBuilder {
                 boolean atGate = Math.abs(x) <= FoundryZone.BRIDGE_HALF + 1 && z > cz;
                 if (r > R - 1 && !atGate) c.set(x, Y + 1, z, "minecraft:deepslate_brick_wall");   // nobody falls off by accident
             }
-        for (int z = FoundryZone.GATE_Z - 1; z >= cz - R + 22; z--) for (int x = -1; x <= 1; x++) c.set(x, Y, z, "minecraft:gilded_blackstone");   // gold path in
+        foundryWings();
         foundrySupply();
         foundryForge();
         foundryLanes();
@@ -343,15 +343,77 @@ public final class TestArenaBuilder {
         }
     }
 
+    /** The monument in the middle: pillars out past the flock's circle, beams crossing high above it, and a light hanging in the centre. */
     private void foundryForge() {
-        int x = FoundryZone.FORGE_X, z = FoundryZone.FORGE_Z;
-        c.fill(x - 2, Y, z - 2, x + 2, Y, z + 1, "minecraft:polished_blackstone");
+        int x = FoundryZone.FORGE_X, z = FoundryZone.FORGE_Z, p = FoundryZone.PILLAR_OFFSET;
+        for (int dx = -FoundryZone.PLAZA_R; dx <= FoundryZone.PLAZA_R; dx++)
+            for (int dz = -FoundryZone.PLAZA_R; dz <= FoundryZone.PLAZA_R; dz++) {
+                double r = Math.hypot(dx, dz);
+                if (r > FoundryZone.PLAZA_R + 0.4) continue;
+                boolean ring = r > FoundryZone.PLAZA_R - 0.6 || (r > 2.6 && r < 3.5);
+                c.set(x + dx, Y, z + dz, ring ? "minecraft:gilded_blackstone" : "minecraft:polished_blackstone");
+            }
+        c.set(x, Y, z, "minecraft:gold_block");
         c.set(x, Y + 1, z, "minecraft:barrel[facing=up]");
-        for (int s : new int[]{-2, 2}) {
-            for (int y = Y + 1; y <= Y + 4; y++) c.set(x + s, y, z - 2, y % 2 == 0 ? "minecraft:gilded_blackstone" : "minecraft:polished_blackstone_bricks");
-            c.setLate(x + s, Y + 5, z - 2, "minecraft:soul_lantern");
+        for (int sx : new int[]{-p, p}) for (int sz : new int[]{-p, p}) {
+            for (int y = Y + 1; y <= Y + 6; y++) c.set(x + sx, y, z + sz, y % 2 == 0 ? "minecraft:gilded_blackstone" : "minecraft:polished_blackstone_bricks");
+            c.setLate(x + sx, Y + 7, z + sz, "minecraft:soul_lantern");
         }
-        c.fill(x - 1, Y + 4, z - 2, x + 1, Y + 4, z - 2, "minecraft:polished_blackstone_bricks");
+        for (int i = -p; i <= p; i++) {
+            c.set(x + i, Y + 6, z + i, "minecraft:polished_blackstone_bricks");
+            c.set(x + i, Y + 6, z - i, "minecraft:polished_blackstone_bricks");
+        }
+        c.setLate(x, Y + 5, z, "minecraft:lantern[hanging=true]");
+    }
+
+    /** Each wing has its own colour, on the path that leads there, so you can see where to go from the Forge. The way in is gold. */
+    private void foundryWings() {
+        int fx = FoundryZone.FORGE_X, fz = FoundryZone.FORGE_Z;
+        path(0, FoundryZone.GATE_Z - 1, fx, fz, "minecraft:gilded_blackstone");
+        path(fx, fz, (FoundryZone.FARM_X1 + FoundryZone.FARM_X2) / 2, (FoundryZone.FARM_Z1 + FoundryZone.FARM_Z2) / 2, "minecraft:green_terracotta");
+        path(fx, fz, (FoundryZone.POND_X1 + FoundryZone.POND_X2) / 2, (FoundryZone.POND_Z1 + FoundryZone.POND_Z2) / 2, "minecraft:cyan_terracotta");
+        path(fx, fz, 0, FoundryZone.PEN_Z2 + 1, "minecraft:red_nether_bricks");
+        path(fx, fz, (FoundryZone.MINE_X1 + FoundryZone.MINE_X2) / 2, FoundryZone.MINE_Z + 1, "minecraft:waxed_cut_copper");
+        path(fx, fz, FoundryZone.LANE_X - 2, FoundryZone.LANE_Z[1], "minecraft:orange_terracotta");
+        path(fx, fz, (FoundryZone.PLOT_X1 + FoundryZone.PLOT_X2) / 2, FoundryZone.PLOT_Z1, "minecraft:calcite");
+        emberGarden();
+        rimBraziers();
+    }
+
+    /** A 3-wide straight line of floor, drawn before the benches so they sit on top of it. */
+    private void path(int x1, int z1, int x2, int z2, String block) {
+        int steps = Math.max(Math.abs(x2 - x1), Math.abs(z2 - z1));
+        for (int i = 0; i <= steps; i++) {
+            int x = x1 + (int) Math.round((x2 - x1) * (double) i / steps), z = z1 + (int) Math.round((z2 - z1) * (double) i / steps);
+            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) c.set(x + dx, Y, z + dz, block);
+        }
+    }
+
+    /** The quiet corner by the way in: nothing to test, just the forge's own furniture among the embers. */
+    private void emberGarden() {
+        int x = -13, z = -58;
+        for (int dx = -4; dx <= 4; dx++) for (int dz = -4; dz <= 4; dz++) {
+            double r = Math.hypot(dx, dz);
+            if (r > 4.4) continue;
+            c.set(x + dx, Y, z + dz, rnd.nextInt(5) == 0 ? "minecraft:crying_obsidian" : rnd.nextBoolean() ? "minecraft:blackstone" : "minecraft:polished_basalt");
+        }
+        c.set(x, Y, z, "minecraft:shroomlight");
+        c.set(x, Y + 1, z, "minecraft:anvil");
+        c.set(x + 2, Y + 1, z + 1, "minecraft:campfire");
+        c.set(x - 2, Y + 1, z - 1, "minecraft:campfire");
+        c.set(x + 1, Y + 1, z - 2, "minecraft:grindstone[face=floor]");
+        c.set(x - 2, Y + 1, z + 2, "minecraft:smithing_table");
+    }
+
+    /** Fire along the wall, so the island reads from across the sky. */
+    private void rimBraziers() {
+        int cx = FoundryZone.ISLAND_X, cz = FoundryZone.ISLAND_Z, R = FoundryZone.ISLAND_R;
+        for (int deg = 15; deg < 360; deg += 30) {
+            int x = cx + (int) Math.round(Math.sin(Math.toRadians(deg)) * (R - 0.5)), z = cz + (int) Math.round(Math.cos(Math.toRadians(deg)) * (R - 0.5));
+            if (Math.abs(x) <= FoundryZone.BRIDGE_HALF + 1 && z > cz) continue;
+            c.set(x, Y + 1, z, "minecraft:polished_blackstone_bricks");
+            c.set(x, Y + 2, z, "minecraft:campfire");
+        }
     }
 
     private void foundryLanes() {

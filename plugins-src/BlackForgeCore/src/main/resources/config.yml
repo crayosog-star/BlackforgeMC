@@ -264,6 +264,7 @@ foundry:
   max-agents-total: 60
   max-upgraded-hoppers-per-chunk: 64
   max-allays-total: 12
+  check-seconds: 60               # how long /foundry check runs before it reports
   agent-radius: 40                # blocks an agent can deliver to the Forge from, enough for every bench on the island
   leave-grace-seconds: 15         # time to step back in before your Foundry test is cleared
   fisherman-seconds: 10           # a Fisherman's catch time here, so it can be seen working

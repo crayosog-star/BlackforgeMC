@@ -56,7 +56,9 @@ public final class Foundry implements Listener {
                 new Location(w, (FoundryZone.PEN_X1 + FoundryZone.PEN_X2) / 2 + 0.5, y + 1, (FoundryZone.PEN_Z1 + FoundryZone.PEN_Z2) / 2 + 0.5), FoundryZone.PEN_SPOTS,
                 new Location(w, 0.5, y + 7.5, FoundryZone.GATE_Z + 0.5), supply,
                 new Location(w, FoundryZone.ALLAY_BENCH_X + 0.5, y + 1, FoundryZone.ALLAY_BENCH_Z + 0.5), demoSpots(w),
-                new int[]{FoundryZone.FARM_X1, FoundryZone.FARM_X2, FoundryZone.FARM_Z1, FoundryZone.FARM_Z2}, signs(w)),
+                new int[]{FoundryZone.FARM_X1, FoundryZone.FARM_X2, FoundryZone.FARM_Z1, FoundryZone.FARM_Z2}, signs(w),
+                FoundryZone.MINE_X1, FoundryZone.MINE_X2, FoundryZone.MINE_Z, FoundryZone.MINE_HEIGHT,
+                new int[]{FoundryZone.POND_X1, FoundryZone.POND_X2, FoundryZone.POND_Z1, FoundryZone.POND_Z2}),
                 l -> l.getWorld() == w ? FoundryZone.supplyAt(l.getBlockX(), l.getBlockY(), l.getBlockZ()) : -1, this::inZone,
                 l -> FoundryZone.regionAt(l.getBlockX(), l.getBlockZ()), FoundryZone.SHARED_REGION,
                 (p, l) -> inZone(l) && (placed.owner(pos(l.getBlock())) == null || p.getUniqueId().equals(placed.owner(pos(l.getBlock())))));
@@ -76,12 +78,12 @@ public final class Foundry implements Listener {
     private static FoundrySystems.Sign[] signs(org.bukkit.World w) {
         double y = TestArenaBuilder.Y + 1;
         return new FoundrySystems.Sign[]{
-                sign(w, (FoundryZone.FARM_X1 + FoundryZone.FARM_X2) / 2.0 + 0.5, y + 2.2, (FoundryZone.FARM_Z1 + FoundryZone.FARM_Z2) / 2.0 + 0.5, "#7ed957", "Farm Bench", "Put a Farmer beside the wheat. It regrows here", "/foundry tp farm"),
-                sign(w, (FoundryZone.POND_X1 + FoundryZone.POND_X2) / 2.0 + 0.5, y + 1.6, (FoundryZone.POND_Z1 + FoundryZone.POND_Z2) / 2.0 + 0.5, "#5ec8ff", "Pond Bench", "Put a Fisherman within 2 blocks of the water", "/foundry tp pond"),
-                sign(w, (FoundryZone.MINE_X1 + FoundryZone.MINE_X2) / 2.0 + 0.5, y + FoundryZone.MINE_HEIGHT + 0.6, FoundryZone.MINE_Z + 0.5, "#c6a15b", "Mine Bench", "Face a Miner at this wall. The ore grows back", "/foundry tp mine"),
-                sign(w, 0.5, y + 2.2, FoundryZone.PEN_Z2 + 1.5, "#ff5e5e", "Grinder Pen", "Put a Grinder right against any fence", "/foundry tp pen"),
-                sign(w, FoundryZone.LANE_X - 2.5, y + 2.0, FoundryZone.LANE_Z[1] + 2.5, "#ffb347", "Hopper Lanes", "Live speed against rated speed, Tier I to III", "/foundry status"),
-                sign(w, (FoundryZone.PLOT_X1 + FoundryZone.PLOT_X2) / 2.0 + 0.5, y + 1.6, (FoundryZone.PLOT_Z1 + FoundryZone.PLOT_Z2) / 2.0 + 0.5, "#ffb347", "Build Plot", "Your own Base Station goes here, one per square", "/foundry tp plot"),
+                sign(w, (FoundryZone.FARM_X1 + FoundryZone.FARM_X2) / 2.0 + 0.5, y + 2.2, (FoundryZone.FARM_Z1 + FoundryZone.FARM_Z2) / 2.0 + 0.5, "#7ed957", "Farm", "Place a Farmer beside the wheat", "/foundry tp farm"),
+                sign(w, (FoundryZone.POND_X1 + FoundryZone.POND_X2) / 2.0 + 0.5, y + 1.6, (FoundryZone.POND_Z1 + FoundryZone.POND_Z2) / 2.0 + 0.5, "#5ec8ff", "Pond", "Place a Fisherman at the water", "/foundry tp pond"),
+                sign(w, (FoundryZone.MINE_X1 + FoundryZone.MINE_X2) / 2.0 + 0.5, y + FoundryZone.MINE_HEIGHT + 0.6, FoundryZone.MINE_Z + 0.5, "#c6a15b", "Mine", "Place a Miner facing this wall", "/foundry tp mine"),
+                sign(w, 0.5, y + 2.2, FoundryZone.PEN_Z2 + 1.5, "#ff5e5e", "Grinder Pen", "Place a Grinder against any fence", "/foundry tp pen"),
+                sign(w, FoundryZone.LANE_X - 2.5, y + 2.0, FoundryZone.LANE_Z[1] + 2.5, "#ffb347", "Hopper Lanes", "Live speed against rated speed", "/foundry status"),
+                sign(w, (FoundryZone.PLOT_X1 + FoundryZone.PLOT_X2) / 2.0 + 0.5, y + 1.6, (FoundryZone.PLOT_Z1 + FoundryZone.PLOT_Z2) / 2.0 + 0.5, "#e8e4d8", "Build Plot", "Build your own base here", "/foundry tp plot"),
         };
     }
 

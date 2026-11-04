@@ -45,6 +45,7 @@ final class FoundryLab {
     private final java.util.Random rnd = new java.util.Random();
     private final Runnable onEmpty;
     private static final int WHEAT_SECONDS = 30;
+    private static final float LABEL_VIEW_RANGE = 0.3f;
     private int wheatTimer;
     private boolean wasOccupied;
     private static final Material[] BENCH_ITEMS = {Material.COBBLESTONE, Material.WHEAT, Material.BONE, Material.ROTTEN_FLESH, Material.OAK_LOG, Material.RAW_IRON};
@@ -131,6 +132,33 @@ final class FoundryLab {
         return out;
     }
 
+    /** Is each lane moving what it's rated for? For /foundry check. A lane's first seconds count low, so it gets some room. */
+    List<String> laneChecks() {
+        List<String> out = new ArrayList<>();
+        for (Lane l : lanes) {
+            double rated = Double.parseDouble(hoppers.rate(l.tier)), real = rate(l);
+            out.add(FoundrySystems.result(real >= rated * 0.7 && real <= rated * 1.3, "Hopper Tier " + Spawners.roman(l.tier), String.format(java.util.Locale.ROOT, "%.1f a second, rated %.1f", real, rated)));
+        }
+        return out;
+    }
+
+    /** Are the benches actually there? For /foundry check. */
+    List<String> benchChecks(int[] mine, int[] pond) {
+        int wheat = 0, f[] = layout.farm();
+        for (int x = f[0]; x <= f[1]; x++) for (int z = f[2]; z <= f[3]; z++) if (world.getBlockAt(x, layout.y(), z).getType() == Material.WHEAT) wheat++;
+        int water = 0;
+        for (int x = pond[0]; x <= pond[1]; x++) for (int z = pond[2]; z <= pond[3]; z++) if (world.getBlockAt(x, layout.y() - 1, z).getType() == Material.WATER) water++;
+        int ore = 0;
+        for (int x = mine[0]; x <= mine[1]; x++) for (int y = 0; y < mine[3]; y++) if (world.getBlockAt(x, layout.y() + y, mine[2]).getType().name().endsWith("_ORE")) ore++;
+        int husks = 0;
+        for (Husk m : mobs) if (m != null && m.isValid()) husks++;
+        int chests = 0;
+        for (Location s : layout.supply()) if (s.getBlock().getState(false) instanceof Container) chests++;
+        return List.of(FoundrySystems.result(chests == layout.supply().length, "Supply chests", chests + " of " + layout.supply().length),
+                FoundrySystems.result(wheat > 0, "Farm", wheat + " wheat"), FoundrySystems.result(water > 0, "Pond", water + " water"),
+                FoundrySystems.result(ore > 0, "Mine", ore + " ore"), FoundrySystems.result(husks > 0, "Grinder Pen", husks + " mobs"));
+    }
+
     private static double rate(Lane l) { return l.counts.stream().mapToInt(Integer::intValue).average().orElse(0); }
 
     /** Keeps a few loose items landing while someone's here, and clears them when nobody is. They're never saved. */
@@ -194,8 +222,8 @@ final class FoundryLab {
     }
 
     private void spawnLabels() {
-        label(layout.title(), "<gradient:#ffb347:#ff5a1a><bold>THE FOUNDRY</bold></gradient><newline><gray>Build and test anything<newline><dark_gray>It all goes when you leave", 1.3f);
-        label(layout.forge().clone().add(0.5, 2.3, 0.5), "<gold><bold>The Forge</bold><newline><gray>Right-click: free upgrades, allays in slot 34<newline><gray>Sneak with an empty hand: its storage", 1f);
+        label(layout.title(), "<gradient:#ffb347:#ff5a1a><bold>THE FOUNDRY</bold></gradient><newline><white>1 <gray>Open the gold chests for gear<newline><white>2 <gray>Follow the gold path to the Forge<newline><white>3 <gray>Each coloured path leads to a test<newline><white>/foundry check <gray>tests it all for you", 1.1f);
+        label(layout.forge().clone().add(0.5, 3.4, 0.5), "<gold><bold>The Forge</bold><newline><gray>Right-click: free upgrades, allays in slot 34<newline><gray>Sneak with an empty hand: its storage", 1f);
         label(layout.allayBench().clone().add(COURIER_SPACING, 1.6, COURIER_Z_OFFSET), "<#4fd1b5><bold>Courier Bench</bold><newline><white>/foundry allays 2<gray> sorts into these framed chests<newline><white>/foundry allays 3<gray> sells from the emerald one", 1f);
         label(layout.allayBench().clone().add(0, 1.8, 0), "<#4fd1b5><bold>Allay Bench</bold><newline><gray>Allays carry these drops to the Forge<newline><white>/foundry status<gray> shows what they're doing", 1f);
         for (FoundrySystems.Sign s : layout.signs()) label(s.at(), s.text(), 1f);
@@ -206,6 +234,7 @@ final class FoundryLab {
     private void label(Location at, String text, float scale) {
         TextDisplay td = Ui.hologram(at, text, scale);
         td.setPersistent(false);
+        td.setViewRange(LABEL_VIEW_RANGE);   // only the bench you're near, so signs don't pile up in front of each other
         labels.add(td);
     }
 

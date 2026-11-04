@@ -26,6 +26,7 @@ final class FoundryCommand {
             {"/foundry tp [place]", "/foundry tp ", "Takes you to a bench: forge, supply, allays, courier, lanes, farm, pond, mine, pen or plot"},
             {"/foundry fuel low", "/foundry fuel low", "Runs your agents low and stocks the Forge with Fuel Cells, so a Courier comes to refuel them"},
             {"/foundry reset", "/foundry reset", "Resets the benches, the Forge's storage and the courier chests. Staff, or when you're alone here"},
+            {"/foundry check", "/foundry check", "Tests every agent, hopper and allay job for you, then lists what passed and what failed"},
             {"/foundry status", "/foundry status", "Shows the allays, your agents and where they deliver, framed chests and hopper speeds"},
             {"/arena kit", "/arena kit", "Refills your test kit"},
             {"/hub", "/hub", "Leaves the Arena and clears your Foundry test right away"},
@@ -43,7 +44,7 @@ final class FoundryCommand {
     FoundryCommand(Foundry foundry, TestArena arena) {
         this.foundry = foundry;
         this.arena = arena;
-        Bukkit.getCommandMap().register("blackforge", new Command("foundry", "Test agents, hoppers and allays in the Arena", "/foundry [start|stop|allays|demo|tp|fuel|reset|status]", List.of()) {
+        Bukkit.getCommandMap().register("blackforge", new Command("foundry", "Test agents, hoppers and allays in the Arena", "/foundry [start|stop|allays|demo|tp|fuel|reset|check|status]", List.of()) {
             @Override public boolean execute(CommandSender s, String label, String[] a) {
                 if (!(s instanceof Player p)) return true;
                 run(p, a);
@@ -77,6 +78,7 @@ final class FoundryCommand {
                 else p.sendMessage(Ui.mm("<gray>Use <white>/foundry fuel low"));
             }
             case "reset" -> reset(p);
+            case "check" -> foundry.systems().check(p, line -> p.sendMessage(Ui.mm(line)));
             case "status" -> foundry.systems().status(p).forEach(line -> p.sendMessage(Ui.mm(line)));
             default -> help(p);
         }

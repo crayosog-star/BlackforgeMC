@@ -28,9 +28,13 @@ public final class FoundrySystems {
     private final Function<Location, String> region;
     private final String sharedRegion;
     private final Location[] demoSpots;
+    private final org.bukkit.plugin.Plugin plugin;
+    private final int checkSeconds;
+    private final int[] mineWall, pond;
+    private boolean checking;
 
     /** Where the fixed benches are, from the hub's layout. */
-    public record Layout(int[] laneZ, int laneX, int y, Location forge, Location penMobs, int[][] mobs, Location title, Location[] supply, Location allayBench, Location[] demo, int[] farm, Sign[] signs) {}
+    public record Layout(int[] laneZ, int laneX, int y, Location forge, Location penMobs, int[][] mobs, Location title, Location[] supply, Location allayBench, Location[] demo, int[] farm, Sign[] signs, int mineX1, int mineX2, int mineZ, int mineHeight, int[] pond) {}
     /** A bench's fixed label. */
     public record Sign(Location at, String text) {}
 
@@ -38,6 +42,10 @@ public final class FoundrySystems {
     public FoundrySystems(BlackForgeCore plugin, World world, Layout at, java.util.function.ToIntFunction<Location> supplyAt, Predicate<Location> zone,
                           Function<Location, String> region, String sharedRegion, BiPredicate<Player, Location> access) {
         var c = plugin.getConfig();
+        this.plugin = plugin;
+        this.checkSeconds = Math.max(10, c.getInt("foundry.check-seconds", 60));
+        this.mineWall = new int[]{at.mineX1(), at.mineX2(), at.mineZ(), at.mineHeight()};
+        this.pond = new int[]{at.pond()[0], at.pond()[1], at.pond()[2], at.pond()[3]};
         this.region = region;
         this.sharedRegion = sharedRegion;
         this.demoSpots = at.demo();
@@ -107,6 +115,50 @@ public final class FoundrySystems {
         }
         return "<green>" + agents.size() + " agent" + (agents.size() == 1 ? "" : "s") + " down to a minute of fuel, and the Forge has Fuel Cells. "
                 + (allays.sharedTier() >= 2 ? "<gray>A Courier should fly over within a few seconds." : "<gray>Couriers do the refuelling: run <white>/foundry allays 2<gray>.");
+    }
+
+    static String result(boolean ok, String what, String detail) {
+        return (ok ? "<green>PASS " : "<red>FAIL ") + "<white>" + what + " <gray>" + detail;
+    }
+
+    /**
+     * Tests everything by really running it: puts one agent at each bench, turns on Tier III, runs the agents low on fuel,
+     * then after {@code foundry.check-seconds} says which jobs were really done. It reads counters, so a PASS means it
+     * happened. It proves the job ran, not how it looks.
+     */
+    public void check(Player p, java.util.function.Consumer<String> say) {
+        if (checking) { say.accept("<gray>A check is already running. It'll report soon."); return; }
+        checking = true;
+        int before = allays.sharedTier(), seconds = checkSeconds;
+        say.accept("<gold>Testing everything for " + seconds + " seconds. <gray>You can watch, or keep testing. Your agents stay placed.");
+        allays.resetCounts();
+        robots.resetWorkCounts();
+        allays.setSharedTier(p.getUniqueId(), 3);
+        List<Robots.Job> have = new ArrayList<>();
+        for (Robots.Bot b : robots.agentsOf(p.getUniqueId())) have.add(b.job);
+        Robots.Job[] jobs = {Robots.Job.MINER, Robots.Job.FARMER, Robots.Job.FISHERMAN, Robots.Job.GRINDER};
+        for (int i = 0; i < jobs.length; i++) if (!have.contains(jobs[i])) robots.place(p, Robots.robotItem(jobs[i], 1, 0, 0, 1), demoSpots[i].getBlock(), 180f);
+        fuelLow(p);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            checking = false;
+            say.accept("<gradient:#ffb347:#ff5a1a><bold>Foundry check</bold></gradient>");
+            say.accept(result(station.storageIn(sharedRegion) != null, "The Forge", "storage"));
+            lab.benchChecks(new int[]{mineWall[0], mineWall[1], mineWall[2], mineWall[3]}, pond).forEach(say);
+            for (Robots.Job job : jobs) {
+                int done = 0, placed = 0;
+                if (p.isOnline()) for (Robots.Bot b : robots.agentsOf(p.getUniqueId())) if (b.job == job) { done += b.workCount; placed++; }
+                say.accept(result(done > 0, job.label + " Agent", placed == 0 ? "couldn't be placed" : done + " jobs done"));
+            }
+            lab.laneChecks().forEach(say);
+            int[] c = allays.counts();
+            say.accept(result(allays.sharedFlying() == 3, "Allays flying", allays.sharedFlying() + " of 3"));
+            say.accept(result(c[0] > 0, "Gatherer", c[0] + " drops carried to the Forge"));
+            say.accept(result(c[1] > 0, "Courier sorting", c[1] + " loads put in framed chests"));
+            say.accept(result(c[2] > 0, "Courier refuelling", c[2] + " Agents refuelled"));
+            say.accept(result(c[3] > 0, "Steward", c[3] + " sales"));
+            allays.setSharedTier(p.getUniqueId(), Math.max(before, 0));
+            say.accept("<gray>Allays are back to how you had them. A FAIL can also mean it just ran out of time, so run it again before calling it a bug.");
+        }, seconds * 20L);
     }
 
     /** Everything worth checking when something looks wrong, as chat lines. */
