@@ -13,12 +13,15 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Allay;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.entity.ItemSpawnEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.PlayerLeashEntityEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
@@ -32,8 +35,11 @@ import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 
@@ -52,6 +58,8 @@ public final class Allays implements Listener {
     private static final int BUILT_TIER = 1;
     private static final int[] CARD_SLOTS = {11, 13, 15};
     private static final int BACK_SLOT = 22, MENU_SIZE = 27;
+    private static final int RETRY_TICKS = 40, NEVER_PICKED_UP = 1000;
+    private static final double REACH_SQ = 9;
 
     /** A test allay flying back and forth between two points. */
     private static final class Flyer {
@@ -63,13 +71,23 @@ public final class Allays implements Listener {
     /** One allay of a flock. The record outlives its entity, which is gone whenever the chunk unloads. */
     private static final class Worker {
         final int index; Allay entity;
+        State state = State.IDLE;
+        /** The trip under way. */
+        double[] from, to; int tick, ticks;
+        /** What it's fetching, and what it's holding. Holding is kept in memory, because the item has left the world. */
+        UUID job; ItemStack carried;
+        int rest; String label;
         Worker(int index) { this.index = index; }
     }
+
+    private enum State { IDLE, FETCH, RETURN, PAUSE, WAIT }
 
     /** One claim or island's upgrade. */
     private static final class Base {
         final String region; final UUID buyer; int tier;
         final List<Worker> workers = new ArrayList<>();
+        final List<AllayJobs.Job> jobs = new ArrayList<>();
+        long lastScan = Long.MIN_VALUE / 2;
         Base(String region, UUID buyer) { this.region = region; this.buyer = buyer; }
     }
 
@@ -86,7 +104,11 @@ public final class Allays implements Listener {
     private final boolean sandbox;
     private final AllayRules.Table table;
     private final double speed;
-    private final int pauseTicks;
+    private final int pauseTicks, carry, minDropAge, scanTicks, maxScans;
+    private final NamespacedKey deathDrop;
+    private org.bukkit.World deathWorld;
+    private double deathX, deathY, deathZ;
+    private int deathTick = -1, scansThisTick;
     private final List<Flyer> flyers = new ArrayList<>();
     private final Map<String, Base> bases = new HashMap<>();
     private long now;
@@ -98,8 +120,13 @@ public final class Allays implements Listener {
         this.zone = zone;
         this.sandbox = sandbox;
         this.marker = new NamespacedKey(BlackForgeCore.NS, "forge_allay");
+        this.deathDrop = new NamespacedKey(BlackForgeCore.NS, "death_drop");
         var c = plugin.getConfig();
         this.table = table(c);
+        this.carry = Math.max(1, c.getInt("allays.carry", 16));
+        this.minDropAge = c.getInt("allays.min-drop-age-ticks", 60);
+        this.scanTicks = Math.max(20, c.getInt("allays.scan-seconds", 5) * 20);
+        this.maxScans = Math.max(1, c.getInt("allays.max-scans-per-tick", 4));
         this.speed = Math.max(0.5, c.getDouble("allays.speed", 6.0));
         this.pauseTicks = (int) Math.max(0, Math.round(c.getDouble("allays.pause-seconds", 1.0) * 20));
         Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -294,6 +321,7 @@ public final class Allays implements Listener {
 
     private void tick() {
         now++;
+        scansThisTick = 0;
         flyers.removeIf(f -> {
             if (!f.entity.isValid()) return true;
             if (++f.life > TEST_LIFE_TICKS) { f.entity.remove(); return true; }   // nobody has to remember to clean up
@@ -326,11 +354,179 @@ public final class Allays implements Listener {
         if (at == null) { sleep(b); return; }
         int flock = table.flock(b.tier);
         while (b.workers.size() < flock) b.workers.add(new Worker(b.workers.size()));
+        scan(b, at);
+        Set<UUID> taken = new HashSet<>();
+        for (Worker w : b.workers) if (w.job != null) taken.add(w.job);
         for (Worker w : b.workers) {
-            double[] spot = hover(at, w.index, flock, now);
-            if (w.entity == null || !w.entity.isValid()) w.entity = spawn(new Location(at.getWorld(), spot[0], spot[1], spot[2]));
-            else moveTo(w.entity, spot, 0, 0);
+            if (w.entity == null || !w.entity.isValid()) wake(w, at, flock);
+            work(b, w, at, flock, taken);
         }
+    }
+
+    /** A new entity for this allay. If it was carrying something when its last one went, it takes that home first. */
+    private void wake(Worker w, Location at, int flock) {
+        double[] spot = hover(at, w.index, flock, now);
+        w.entity = spawn(new Location(at.getWorld(), spot[0], spot[1], spot[2]));
+        w.label = null;
+        w.job = null;
+        if (w.carried != null) goHome(w, at, flock);
+        else w.state = State.IDLE;
+    }
+
+    private void work(Base b, Worker w, Location at, int flock, Set<UUID> taken) {
+        switch (w.state) {
+            case IDLE -> {
+                label(w, b.tier, null);
+                Inventory store = station.storageIn(b.region);
+                var job = store == null || store.firstEmpty() < 0 ? Optional.<AllayJobs.Job>empty()
+                        : AllayJobs.nearest(xyz(w.entity.getLocation()), b.jobs, taken);
+                if (job.isPresent()) {
+                    w.job = job.get().id();
+                    taken.add(w.job);
+                    w.state = State.FETCH;
+                    fly(w, new double[]{job.get().x(), job.get().y() + 0.4, job.get().z()});
+                } else idle(w, at, flock);
+            }
+            case FETCH -> {
+                if (!advance(w, at, flock)) return;
+                grab(b, w);
+                goHome(w, at, flock);
+            }
+            case RETURN -> {
+                if (!advance(w, at, flock)) return;
+                if (w.carried == null) { rest(w); return; }
+                unload(b, w, at);
+            }
+            case PAUSE -> {
+                idle(w, at, flock);
+                if (--w.rest <= 0) w.state = State.IDLE;
+            }
+            case WAIT -> {
+                idle(w, at, flock);
+                label(w, b.tier, "<red>Station full");
+                if (--w.rest <= 0) unload(b, w, at);
+            }
+        }
+    }
+
+    private void idle(Worker w, Location at, int flock) { moveTo(w.entity, hover(at, w.index, flock, now), 0, 0); }
+
+    private void fly(Worker w, double[] to) {
+        w.from = xyz(w.entity.getLocation());
+        w.to = to;
+        w.tick = 0;
+        double dx = to[0] - w.from[0], dy = to[1] - w.from[1], dz = to[2] - w.from[2];
+        w.ticks = AllayFlight.ticks(Math.sqrt(dx * dx + dy * dy + dz * dz), speed);
+    }
+
+    /** Back to its place in the circle, aiming for where that will be when it arrives so it doesn't snap. */
+    private void goHome(Worker w, Location at, int flock) {
+        w.job = null;
+        w.state = State.RETURN;
+        double[] here = xyz(w.entity.getLocation()), spot = hover(at, w.index, flock, now);
+        int eta = AllayFlight.ticks(Math.sqrt(Math.pow(spot[0] - here[0], 2) + Math.pow(spot[1] - here[1], 2) + Math.pow(spot[2] - here[2], 2)), speed);
+        fly(w, hover(at, w.index, flock, now + eta));
+    }
+
+    /** One tick of the trip. True on arrival. If the way ahead isn't loaded, it gives up and turns for home, so it never loads a chunk. */
+    private boolean advance(Worker w, Location at, int flock) {
+        w.tick++;
+        double[] p = AllayFlight.at(w.from, w.to, w.tick, w.ticks);
+        World world = w.entity.getWorld();
+        if (!world.isChunkLoaded((int) Math.floor(p[0]) >> 4, (int) Math.floor(p[2]) >> 4)) {
+            if (w.state == State.FETCH) goHome(w, at, flock);
+            else { w.tick = w.ticks; return true; }   // home is the Station's own area: being unloaded here means we're about to sleep anyway
+            return false;
+        }
+        moveTo(w.entity, p, w.to[0] - w.from[0], w.to[2] - w.from[2]);
+        return w.tick >= w.ticks;
+    }
+
+    /** Takes up to a load from the drop, if it's still about where it was. The items leave the world here, so a crash can lose them but can't double them. */
+    private void grab(Base b, Worker w) {
+        UUID id = w.job;
+        b.jobs.removeIf(j -> j.id().equals(id));
+        if (id == null || !(Bukkit.getEntity(id) instanceof Item drop) || !drop.isValid() || drop.getWorld() != w.entity.getWorld()
+                || drop.getLocation().distanceSquared(w.entity.getLocation()) > REACH_SQ) return;
+        ItemStack stack = drop.getItemStack();
+        int n = Math.min(stack.getAmount(), carry);
+        ItemStack load = stack.clone();
+        load.setAmount(n);
+        if (n >= stack.getAmount()) drop.remove();
+        else { stack.setAmount(stack.getAmount() - n); drop.setItemStack(stack); }
+        w.carried = load;
+        w.entity.getWorld().playSound(w.entity.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.5f, 1.4f);
+    }
+
+    private void unload(Base b, Worker w, Location at) {
+        Inventory store = station.storageIn(b.region);
+        Map<Integer, ItemStack> left = store == null ? Map.of(0, w.carried) : store.addItem(w.carried);
+        if (left.isEmpty()) {
+            w.carried = null;
+            at.getWorld().playSound(at, Sound.BLOCK_AMETHYST_CLUSTER_PLACE, 0.4f, 1.6f);
+            rest(w);
+        } else {
+            w.carried = left.values().iterator().next();
+            w.state = State.WAIT;
+            w.rest = RETRY_TICKS;
+        }
+    }
+
+    private void rest(Worker w) {
+        w.state = State.PAUSE;
+        w.rest = pauseTicks;
+    }
+
+    private void label(Worker w, int tier, String status) {
+        String text = NAME + " <gray>" + TIER_NAME[tier - 1] + (status == null ? "" : " " + status);
+        if (text.equals(w.label)) return;
+        w.label = text;
+        w.entity.customName(Ui.mm(text));
+    }
+
+    // ------------------------------------------------------------------ finding work
+
+    /** Looks for loose drops, a few bases a tick across the server, so many bases can't all search at once. */
+    private void scan(Base b, Location at) {
+        if (scansThisTick >= maxScans || !AllayJobs.due(b.lastScan, now, scanTicks)) return;
+        scansThisTick++;
+        b.lastScan = now;
+        b.jobs.clear();
+        int leash = table.leash(b.tier);
+        for (Entity e : at.getWorld().getNearbyEntities(at, leash, leash, leash, x -> x instanceof Item)) {
+            Item drop = (Item) e;
+            if (!inBase(drop.getLocation(), b.region) || !collectable(drop, at)) continue;
+            Location l = drop.getLocation();
+            b.jobs.add(new AllayJobs.Job(drop.getUniqueId(), l.getX(), l.getY(), l.getZ()));
+        }
+    }
+
+    private boolean inBase(Location l, String region) {
+        return sandbox ? zone.test(l) : region.equals(station.regionAt(l));   // the Foundry's regions are a chunk each, too small to work in
+    }
+
+    private boolean collectable(Item drop, Location at) {
+        if (!drop.canMobPickup() || !drop.canPlayerPickup() || drop.getPickupDelay() >= NEVER_PICKED_UP) return false;   // displays, not loot
+        UUID thrower = drop.getThrower();
+        Player who = thrower == null ? null : Bukkit.getPlayer(thrower);
+        boolean visitor = thrower != null && (who == null || !station.usable(who, at));
+        return AllayRules.skipDrop(drop.getTicksLived(), minDropAge, drop.getPersistentDataContainer().has(deathDrop), visitor).isEmpty();
+    }
+
+    /** Remembers where a player just died, so {@link #onItemSpawn} can mark what falls. It marks the drop, not the stack, so the items stay normal. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onDeath(PlayerDeathEvent e) {
+        Location l = e.getEntity().getLocation();
+        deathWorld = l.getWorld(); deathX = l.getX(); deathY = l.getY(); deathZ = l.getZ();
+        deathTick = Bukkit.getCurrentTick();
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onItemSpawn(ItemSpawnEvent e) {
+        if (Bukkit.getCurrentTick() != deathTick) return;
+        Location l = e.getLocation();
+        if (l.getWorld() == deathWorld && Math.abs(l.getX() - deathX) < 4 && Math.abs(l.getY() - deathY) < 4 && Math.abs(l.getZ() - deathZ) < 4)
+            e.getEntity().getPersistentDataContainer().set(deathDrop, PersistentDataType.BYTE, (byte) 1);
     }
 
     private static double[] hover(Location station, int index, int flock, long tick) {
@@ -338,11 +534,18 @@ public final class Allays implements Listener {
         return new double[]{station.getX() + 0.5 + h[0], station.getY() + 2.2 + h[1], station.getZ() + 0.5 + h[2]};
     }
 
-    /** No Station, or it's unloaded: the flock goes away until it's back. The tier stays. */
+    /** No Station, or it's unloaded: the flock goes away until it's back, dropping what it holds. The tier stays. */
     private void sleep(Base b) {
+        b.jobs.clear();
         for (Worker w : b.workers) {
-            if (w.entity != null) w.entity.remove();
+            if (w.entity != null && w.entity.isValid()) {
+                if (w.carried != null) { w.entity.getWorld().dropItem(w.entity.getLocation(), w.carried); w.carried = null; }
+                w.entity.remove();
+            }
+            // an entity that's already gone went with its chunk, so a load stays held until it's back
             w.entity = null;
+            w.job = null;
+            w.state = State.IDLE;
         }
     }
 }

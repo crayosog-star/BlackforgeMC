@@ -1,6 +1,6 @@
 # Forge Allays
 **Status:** In progress. Approved by Colin on 2026-11-04 with the recommended defaults
-**Next task:** P2.T2
+**Next task:** P2.T3
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -179,7 +179,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** an item despawned or picked up by a player mid-flight (the job ends); two allays claiming one item; a chunk unloading mid-trip (the allay freezes with its load, and it's kept in memory while the server runs); a shutdown; a crash (up to one carry lost); a claim shrunk under a job.
 - **Done when:** `AllayJobsTest` passes. In the Foundry, the Phase 2 gate's collection, full Station and skip checks pass. With 3 test bases running, staff see no TPS drop in `/tps`.
 - **Leaves ready:** the work loop that later jobs join.
-- **Evidence:**
+- **Evidence:** Verified: `AllayJobsTest` passes when run alone, and the build runs before merge. Untested in game: all the collection and skip checks, including whether death drops really get marked.
 
 ### [ ] P2.T3: Add the Foundry bench and tips
 - **Needs:** P2.T2; `S/FoundryLab.java`; `hub/FoundryTips.java:31`; `S/FoundrySystems.java`.
@@ -316,6 +316,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | P2.T2 marks death drops on the item entity, not the stack, so a player's recovered items don't keep a hidden tag and still stack | Same check, safer method; flagged to Colin in the PR |
 | 2026-11-04 | Phase 2 started before the Phase 1 in-game gate was played | Colin, in chat |
 | 2026-11-04 | P1.T3 registers `/allay` from `Allays`, as `Robots` does, instead of changing `HubModule` | Small wiring change, no check weakened; flagged to Colin in the PR |
 
