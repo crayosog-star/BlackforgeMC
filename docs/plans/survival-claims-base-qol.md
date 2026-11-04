@@ -165,11 +165,31 @@ Two ordinary players complete first claim, expansion, trust and safe removal. Ov
 
 - **Needs** — P1.T2 and approval of the command behavior.
 - **Files** — `Claims.java#command,show,map`, `SurvivalModule.java#registerCommands,reg,tryRtp,spawnHolograms`, config flag.
-- **Steps** — `/claim` and `/claim here` show exact inclusive block bounds (16×16, full world height), world, eligibility, used/total, and remaining after the claim. Show a single-chunk preview and one clickable `/claim confirm <code>` with the same command printed for typing and `/claim cancel`. Generate a fresh one-use code for each preview so an old clickable line cannot confirm a newer request. Expire in 20 seconds. Bind to actor, action and exact world/chunk, replace on new request, invalidate on exit from the chunk for single-chunk actions, and rerun all checks before committing. Use the same flow from adjacent wilderness, retain the map, add world names and coordinates to the list, and use `/claim info` for the trust roster and command hints. Keep `/trust <name>` and `/untrust <name>` and state their owner-wide scope. Preview single and bulk unclaim with a warning that other players may gain access to the area and containers, and that dependent automation may stop. Keep the exact ownership and staff rules at commit. Bind bulk confirmation to the exact set of caller-owned keys and reject a changed set.
+- **Steps** — `/claim` and `/claim here` show exact inclusive block bounds (16×16, full world height), world, eligibility, used/total, and remaining after the claim. Show a single-chunk preview and one clickable `/claim confirm <code>` with the same command printed for typing and `/claim cancel`. Generate a fresh one-use code for each preview so an old clickable line cannot confirm a newer request. Expire in 20 seconds. Bind to actor, action and exact world/chunk, replace on new request, invalidate on exit from the chunk for single-chunk actions, and rerun all checks before committing. Use the same flow from adjacent wilderness, retain the map, add world names and coordinates to the list, and use `/claim info` for the trust roster and command hints. Keep `/trust <name>` and `/untrust <name>` and state their owner-wide scope. Preview single and bulk unclaim with a warning that other players may gain access to the area and containers, and that dependent automation may stop. Keep the exact ownership and staff rules at commit. Bind bulk confirmation to the exact set of caller-owned keys and reject a changed set. Put the full guide below in `/claim help`. For a new Survival player, show the short tip once on the first successful `/rtp` arrival that passes the same server-side claim eligibility check as `/claim`. Recheck the actual landing chunk on the server thread after teleport completes. Record pending onboarding by player UUID on their first Survival join. Persist the state so an unshown tip can carry across sessions and a shown tip stays dismissed across reconnects and restarts. Failed teleports and ineligible landings leave the tip pending. Skip onboarding for a player who has already made their first claim. Honor the Survival QoL flag.
 - **Edge cases** — `/claims`, namespaced aliases, stale link, quit/death/world change, another player wins the chunk, rank change, wrong chunk, exact negative chunk bounds, staff removing someone else's chunk, unclaiming a chunk with machines.
-- **Done when** — At staging spawn `/claim` explains the protected area and points to `/rtp`. After RTP, invoke `/claim` on free land and verify allowance and all four edges, with zero changes until confirm. Confirm once, then replay and verify exactly one saved claim. Open a different preview and replay the first link again. The new preview must remain pending. Cross into neighboring wilderness and confirm another chunk, checking allowance decrements once. Have B claim a previewed chunk first, then confirm as A and expect zero ownership changes. Test timed-out and cross-world confirmation, trust/untrust in two A-owned chunks, and both single and bulk unclaim aliases. Confirm bulk only after a fresh list if any claim changed. With the flag off, verify legacy command behavior.
+- **Done when** — At staging spawn `/claim` explains the protected area and points to `/rtp`. After RTP, invoke `/claim` on free land and verify allowance and all four edges, with zero changes until confirm. Confirm once, then replay and verify exactly one saved claim. Open a different preview and replay the first link again. The new preview must remain pending. Cross into neighboring wilderness and confirm another chunk, checking allowance decrements once. Have B claim a previewed chunk first, then confirm as A and expect zero ownership changes. Test timed-out and cross-world confirmation, trust/untrust in two A-owned chunks, and both single and bulk unclaim aliases. Confirm bulk only after a fresh list if any claim changed. As a fresh player, open `/claim help` and follow the full guide. Cancel an RTP and simulate a target becoming claimed before arrival. Expect zero tips and onboarding still pending. Complete an eligible RTP and expect the short tip once. Repeat after reconnect and restart and expect no duplicate. Verify an established player and a newcomer who already made a claim receive no first-claim tip. Confirm the guide lists `/claim show` and `/claim map` before P2.T2, and adds `/claim borders` only when that toggle is available. With the flag off, verify legacy command behavior and no new tip.
 - **Leaves ready** — A complete command-only first-claim loop that requires neither a station nor a pack.
-- **Evidence** — Two-player command transcript, before/after counts, exact edge screenshots and save/reload evidence.
+- **Evidence** — Two-player command transcript, before/after counts, exact edge screenshots, save/reload evidence, and chat captures for the full guide and the first qualifying RTP.
+
+##### Approved `/claim help` guide
+
+**Claiming land in BlackForgeMC Survival**
+
+1. **Find a spot.** Use `/rtp` to head into the wild. You can claim eligible wilderness away from protected areas.
+2. **Preview your land.** Stand where you want to build and type `/claim`. Each claim covers one **16 × 16 chunk** from the bottom of the world to the top. Check the outline before you confirm.
+3. **Confirm the claim.** Click **Confirm Claim** or type the confirmation command shown in chat. You’ll see how many claims you have left. Only you and players you trust can build in your claim.
+
+**Need more room?** Walk into the next chunk and type `/claim` again. If you’ve used all your claims, `/claim info` shows your allowance. You earn more as you play.
+
+**See your borders.** Use `/claim show` to outline the current chunk or claim, `/claim map` for a chat map, or `/claim list` to find your own chunks. When the P2.T2 toggle is available, add “`/claim borders` toggles nearby outlines. Green is yours, aqua is land you’re trusted on, red belongs to someone else, and gray is wilderness.”
+
+**Build with a friend.** Use `/trust <player>` to give them access to **all** your claims. Use `/untrust <player>` to remove that access.
+
+**Give up land.** Stand in the chunk and type `/unclaim`. Review the location before confirming. Releasing a chunk can give other players access to the blocks and containers there.
+
+##### Approved first RTP message
+
+> **Ready to build your first base?** Find a spot you like and type `/claim`. You’ll see the exact chunk you’re about to protect. Check the outline, then click **Confirm Claim**. If your build needs more room, step into the next chunk and repeat. Type `/claim help` anytime for borders, trust, and more.
 
 #### [ ] P2.T2 — Toggle nearby borders and explain denials
 
@@ -298,6 +318,7 @@ Colin approves the candidate, activation method and window after seeing the evid
 
 - 2026-11-04 — Created the five-phase, nine-task plan from pinned main and verified #90 ancestry.
 - 2026-11-04 — Colin approved the defaults. P1.T1 passed code review and local Survival, Skyblock and Foundry staging. The task stays open through the PR gate.
+- 2026-11-04 — Colin approved the full claim guide and one-time first-claim tip. Added the copy, trigger and staging checks to P2.T1.
 
 ## Later ideas
 
