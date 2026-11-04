@@ -71,6 +71,7 @@ public final class SurvivalModule implements Listener {
     private final Robots robots;
     private final HopperUpgrades hoppers;
     private final BaseStation station;
+    private final Allays allays;
     private final Set<UUID> dropping = new HashSet<>(), landed = new HashSet<>();
     private final Set<UUID> warmupApproved = new HashSet<>();
     private final Map<UUID, Integer> warmups = new HashMap<>();
@@ -162,6 +163,10 @@ public final class SurvivalModule implements Listener {
         station = new BaseStation(plugin, robots, hoppers);
         station.setAccess((p, l) -> p.hasPermission("blackforge.admin") || claims.ownerAt(l) != null && claims.canUse(p, l));
         station.setRegion(l -> { UUID stationOwner = claims.ownerAt(l); return stationOwner == null ? null : "claim:" + stationOwner; });
+        allays = new Allays(plugin, station, l -> false, false);
+        allays.setRobots(robots);
+        allays.setOwnerOf(region -> UUID.fromString(region.substring("claim:".length())));
+        station.setAllays(allays);
         koth.setScrap(scrap);
         pvp.setScrap(scrap);
         borderSize = plugin.getConfig().getInt("rtp.border-size", 10000);
@@ -199,7 +204,9 @@ public final class SurvivalModule implements Listener {
         plugin.discord().setGladiator(gladiators::discordRole);
         collection = new CollectionBook(plugin);
         new DailyShop(plugin);
-        districts.setTrader(new GroveTrader(plugin));
+        GroveTrader trader = new GroveTrader(plugin);
+        districts.setTrader(trader);
+        allays.setTrader(trader);
         new ShowcaseWarp(plugin);
         new LagGuard(plugin, world, this::protectedArea);
         blockLog = new BlockLog(plugin);
@@ -246,6 +253,7 @@ public final class SurvivalModule implements Listener {
         if (koth.active()) koth.stop(null);
         pvp.shutdown();
         scrap.save();
+        allays.shutdown();
         robots.save();
         hall.shutdown();
     }

@@ -1,6 +1,6 @@
 # Forge Allays
 **Status:** In progress. Approved by Colin on 2026-11-04 with the recommended defaults
-**Next task:** P4.T2
+**Next task:** P5.T1, once the Phase 4 gate is confirmed (rule 9)
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -252,7 +252,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 - **Edge cases:** restart with a load in flight (saved load returns to the Station); Station moved within a claim (allays rebind); claim deleted (data stays dormant, entities removed); a stale entity after a rollback; two entities with one id (`x.remove()`); world not loaded yet.
 - **Done when:** with preview on, staff buy all tiers with real money on Survival, a restart keeps tier and flock, a mob farm feeds the Station, a sale pays the owner and counts toward the Trader's daily total, and a non-staff player sees no slot 34.
 - **Leaves ready:** live-ready data and staff-tested behaviour.
-- **Evidence:**
+- **Evidence:** Untested in game: buying with real money, restart behaviour and sales on Survival. The build runs before merge.
 
 ## Phase 5: Launch on Survival
 - **Goal:** every Survival player can buy allays from the Forge and learn them in game.
@@ -316,6 +316,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | `allays.preview-staff` defaults to true, not false, so staff can run the Phase 4 checks without a live config edit; players still see nothing. Carried items are only saved on a clean stop, so a crash can't double a load. P5.T4 must set this flag as Colin wants after launch | Flagged to Colin in the PR |
 | 2026-11-04 | Phase 4 started after Colin said "looks great, keep going". He didn't list which checks he played, so the Phase 1-3 gates aren't recorded as individually confirmed | Colin, in chat |
 | 2026-11-04 | Added a sell chest to the Courier Bench so P4.T1 can be tested with no setup | Testing rule; flagged to Colin in the PR |
 | 2026-11-04 | Phase 3 started with the Phase 1 and 2 in-game gates still unplayed; those checks carry forward | Colin, in chat |

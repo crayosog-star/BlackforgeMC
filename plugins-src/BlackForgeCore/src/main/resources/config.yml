@@ -138,9 +138,10 @@ hopper-upgrades:
   max-per-chunk: 16
 
 # Forge Allays: a base upgrade that stays at the Base Station and moves items (plan: docs/plans/forge-allays.md).
-# Nothing reads these yet. Lists are per tier I, II, III. enabled stays false until the launch task.
+# Survival and the Foundry only. Lists are per tier I, II, III. With enabled and preview-staff both false, no allays fly and tiers are kept.
 allays:
   enabled: false
+  preview-staff: true             # staff get the Forge's allay menu on Survival with real money, before enabled is on
   flock: [1, 2, 3]                # allays per base
   leash: [12, 20, 28]             # blocks from the Station, and never outside the claim
   price: [75000, 250000, 750000]  # to reach each tier
