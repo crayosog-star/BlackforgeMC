@@ -299,9 +299,22 @@ public final class Robots implements Listener {
         if (e.getHand() != EquipmentSlot.HAND) return;
         Player p = e.getPlayer();
         Block at = e.getClickedBlock().getRelative(e.getBlockFace());
-        if (!at.isPassable() || !at.getRelative(BlockFace.UP).isPassable()) { p.sendMessage(Ui.mm("<red>Not enough room there.")); return; }
+        if (!hasRoom(at)) { p.sendMessage(Ui.mm("<red>Not enough room there.")); return; }
         if (!canUse.test(p, at.getLocation())) { p.sendMessage(Ui.mm("<red>Agents can only go on your own island or claimed land.")); return; }
         place(p, e.getItem(), at, p.getYaw());
+    }
+
+    /** Two passable blocks, so the agent fits. */
+    static boolean hasRoom(Block at) { return at.isPassable() && at.getRelative(BlockFace.UP).isPassable(); }
+
+    /** The ownership rule a player's click checks, for agents placed by a command instead. */
+    boolean mayBuild(Player p, Block at) { return canUse.test(p, at.getLocation()); }
+
+    /** Is an agent, anyone's, already standing on this block? */
+    boolean agentOn(Block at) {
+        for (Bot b : bots.values())
+            if (b.loc.getWorld() == at.getWorld() && b.loc.getBlockX() == at.getX() && b.loc.getBlockY() == at.getY() && b.loc.getBlockZ() == at.getZ()) return true;
+        return false;
     }
 
     /** Places an agent from this item, facing {@code look}. False, with a message, if it was refused. */
