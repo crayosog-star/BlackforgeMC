@@ -380,6 +380,8 @@ public final class Robots implements Listener {
             stylePart(b, "skin", () -> { g.setInvisible(true); g.setGlowing(false); g.getEquipment().setItemInMainHand(null); });
             return;
         }
+        // looks were on before (or the pack is off now): the golem was saved invisible, so bring its body back
+        stylePart(b, "skin", () -> { if (g.isInvisible()) g.setInvisible(false); });
         stylePart(b, "hand", () -> g.getEquipment().setItemInMainHand(new ItemStack(b.job.icon)));
         stylePart(b, "copper", () -> g.setWeatheringState(look[b.tier - 1]));
         stylePart(b, "glow", () -> g.setGlowing(b.tier >= 5));
@@ -594,11 +596,13 @@ public final class Robots implements Listener {
                         if (b.lastTarget == null) b.lastTarget = bl.getLocation().add(0.5, 0.2, 0.5);
                         done++;
                     } else if (t == Material.MELON || t == Material.PUMPKIN) {
+                        if (b.lastTarget == null) b.lastTarget = bl.getLocation().add(0.5, 0.5, 0.5);   // so the Farmer's work animation plays
                         store(b, bl.getDrops());
                         bl.setType(Material.AIR);
                         done++;
                     } else if ((t == Material.SUGAR_CANE || t == Material.CACTUS || t == Material.BAMBOO) && bl.getRelative(BlockFace.DOWN).getType() == t
                             && bl.getRelative(BlockFace.UP).getType() != t) {
+                        if (b.lastTarget == null) b.lastTarget = bl.getLocation().add(0.5, 0.5, 0.5);
                         store(b, bl.getDrops());
                         bl.setType(Material.AIR);
                         done++;
