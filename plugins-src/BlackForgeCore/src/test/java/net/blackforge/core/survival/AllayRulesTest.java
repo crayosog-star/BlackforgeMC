@@ -99,4 +99,11 @@ class AllayRulesTest {
     @Test void speedMustBePositive() {
         assertThrows(IllegalArgumentException.class, () -> AllayRules.tripSeconds(12, 0, 1));
     }
+
+    @Test void brokenFileNeverLandsOnAnOlderCopy() {
+        assertEquals("allays.yml.broken", AllayRules.brokenName("allays.yml", 42, n -> false));
+        assertEquals("allays.yml.broken-42", AllayRules.brokenName("allays.yml", 42, "allays.yml.broken"::equals));
+        java.util.Set<String> taken = java.util.Set.of("allays.yml.broken", "allays.yml.broken-42", "allays.yml.broken-42-2");
+        assertEquals("allays.yml.broken-42-3", AllayRules.brokenName("allays.yml", 42, taken::contains));
+    }
 }
