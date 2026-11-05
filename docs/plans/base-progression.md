@@ -1,6 +1,6 @@
 # Base Progression
 **Status:** In progress
-**Next task:** P4.T3
+**Next task:** P5.T4
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -251,7 +251,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** cached packs; `base-station.custom-ui: false` gives the plain menu; a player without the pack sees readable text.
 - **Done when:** Colin approves a preview, and the Phase 4 gate passes.
 - **Leaves ready:** the final screen.
-- **Evidence:**
+- **Evidence:** Verified: the art is generated from the same layout as the menu, and the pack's SHA-1 matches its zip. A panel preview was sent to Colin. Untested in game: alignment at GUI scales 2, 3 and 4, so this stays unticked until it's approved.
 
 ## Phase 5: Launch on Survival
 - **Goal:** Survival players use base levels, and nobody loses anything they already had.

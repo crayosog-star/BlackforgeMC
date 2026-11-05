@@ -56,9 +56,15 @@ final class ForgeHome implements Listener {
         BaseLevelRules.Table t = levels.table();
         long delivered = levels.delivered(region);
         Menu m = new Menu(at);
-        m.inv = Bukkit.createInventory(m, SIZE, Ui.mm("<dark_gray>The Forge - Base Level " + level));
-        ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
-        for (int i = 0; i < SIZE; i++) m.inv.setItem(i, pane);
+        StationUi.Canvas title = new StationUi.Canvas().art(StationUi.Screen.HOME);
+        title.text("title", 40, "THE FORGE", 0xFFD9A0);
+        title.text("title", 96, "LEVEL " + level, 0xFFB347);
+        title.pips(142, level, BaseLevelRules.MAX_LEVEL, StationUi.COUNT_ON, StationUi.COUNT_OFF, 8);
+        m.inv = Bukkit.createInventory(m, SIZE, StationUi.art() ? title.done() : Ui.mm("<dark_gray>The Forge - Base Level " + level));
+        if (!StationUi.art()) {
+            ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
+            for (int i = 0; i < SIZE; i++) m.inv.setItem(i, pane);
+        }
         m.inv.setItem(SUMMARY, summary(t, level, delivered));
         m.inv.setItem(10, label("Base Levels"));
         for (int l = 1; l <= BaseLevelRules.MAX_LEVEL; l++) m.inv.setItem(LEVEL_SLOTS[l - 1], levelIcon(t, level, l));
