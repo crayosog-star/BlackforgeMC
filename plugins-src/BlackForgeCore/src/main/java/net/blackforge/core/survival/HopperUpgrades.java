@@ -115,12 +115,7 @@ public final class HopperUpgrades implements Listener {
     /** A claim's tier changed: looks at every loaded chunk again. Rare enough that a full pass is fine. */
     void refreshClaims() {
         if (claimTier == null || !enabled) return;
-        for (World w : Bukkit.getWorlds()) for (Chunk ch : w.getLoadedChunks()) {
-            Loaded l = loaded.get(ChunkId.of(w, ch.getX(), ch.getZ()));
-            if (l == null) l = new Loaded(w, ch.getX(), ch.getZ());
-            scanClaim(ch, l);
-            if (!l.tiers.isEmpty() || !l.claim.isEmpty()) loaded.put(ChunkId.of(w, ch.getX(), ch.getZ()), l);
-        }
+        for (World w : Bukkit.getWorlds()) for (Chunk ch : w.getLoadedChunks()) refreshClaim(ch);
     }
 
     /** One chunk was just claimed: hoppers already in it join the claim's tier now, not on the next chunk load. */
