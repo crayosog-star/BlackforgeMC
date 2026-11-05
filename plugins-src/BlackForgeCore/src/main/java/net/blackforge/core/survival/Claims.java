@@ -42,8 +42,12 @@ public final class Claims implements Listener {
     private final Map<UUID, String> lastArea = new HashMap<>();
     private final Set<UUID> bypass = new HashSet<>();
     private Ranks ranks;
+    private java.util.function.Consumer<Chunk> onClaimed = ch -> {};
 
     void setRanks(Ranks r) { this.ranks = r; }
+
+    /** Runs after a chunk is claimed and saved, so blocks already there can pick up the new owner's perks. */
+    void setOnClaimed(java.util.function.Consumer<Chunk> hook) { this.onClaimed = hook; }
 
     static final int BASE_CLAIMS = 6, PER_HOURS = 2, MAX_CLAIMS = 120;   // +PER_HOURS claims per hour played
 
@@ -320,6 +324,7 @@ public final class Claims implements Listener {
                 Map<String, UUID> next = new HashMap<>(owners);
                 next.put(k, p.getUniqueId());
                 if (!commit(p, next, trusted, withoutRtpTip(p.getUniqueId()))) return true;
+                onClaimed.accept(ch);
                 msg(p, "<green>✔ Chunk claimed! <gray>(" + (claim.used() + 1) + "/" + claim.allowance() + ") Only you and trusted players can build here.");
                 if (qol) msg(p, "<gray>Claims remaining: <white>" + Math.max(0, claim.allowance() - claim.used() - 1));
                 p.playSound(p.getLocation(), Sound.BLOCK_ANVIL_USE, 0.6f, 1.4f);
