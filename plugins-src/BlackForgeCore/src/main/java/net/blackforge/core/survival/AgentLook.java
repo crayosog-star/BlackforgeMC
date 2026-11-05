@@ -39,12 +39,14 @@ final class AgentLook {
     }
 
     private final Robots robots;
+    private final java.util.logging.Logger log;
     private final boolean active;
     private final Map<Robots.Bot, Parts> parts = new HashMap<>();
     private long now;
 
     AgentLook(BlackForgeCore plugin, Robots robots) {
         this.robots = robots;
+        this.log = plugin.getLogger();
         this.active = plugin.getConfig().getBoolean("resource-pack-live", false) && plugin.getConfig().getBoolean("agent-looks", true);
         if (active) Bukkit.getScheduler().runTaskTimer(plugin, this::tick, STEP_TICKS, STEP_TICKS);
     }
@@ -77,15 +79,21 @@ final class AgentLook {
             if (!robots.isPlaced(e.getKey())) { remove(e.getValue()); it.remove(); }
         }
         for (Robots.Bot b : robots.allBots()) {
-            if (b.loc.getWorld() == null || !b.loc.getWorld().isChunkLoaded(b.loc.getBlockX() >> 4, b.loc.getBlockZ() >> 4)) { drop(b); continue; }
-            if (!anyoneNear(b.loc)) { drop(b); continue; }
-            CopperGolem g = robots.golem(b);
-            if (g == null) { drop(b); continue; }
-            Parts p = parts.computeIfAbsent(b, k -> new Parts());
-            dress(b, g, p);
-            ambient(b, p);
-            pose(b, p);
-            sparkle(b, p);
+            // each Agent on its own, like Robots.tick: one bad Agent must not stop the looks of every Agent after it
+            try {
+                if (b.loc.getWorld() == null || !b.loc.getWorld().isChunkLoaded(b.loc.getBlockX() >> 4, b.loc.getBlockZ() >> 4)) { drop(b); continue; }
+                if (!anyoneNear(b.loc)) { drop(b); continue; }
+                CopperGolem g = robots.golem(b);
+                if (g == null) { drop(b); continue; }
+                Parts p = parts.computeIfAbsent(b, k -> new Parts());
+                dress(b, g, p);
+                ambient(b, p);
+                pose(b, p);
+                sparkle(b, p);
+            } catch (Exception ex) {
+                try { drop(b); } catch (Exception ignored) { parts.remove(b); }
+                if (b.warned.add("look:" + ex)) log.warning("agent " + b.id + " " + b.job + " look: " + ex);
+            }
         }
     }
 
