@@ -71,7 +71,7 @@ public final class HopperUpgrades implements Listener {
     private final int[] delays, needed;
     private int maxPerChunk;
     /** Skins per chunk, so a claim-wide tier over a huge hopper wall can't fill a chunk with displays. The rest still run at their tier. */
-    private final int looksPerChunk;
+    private int looksPerChunk;
     private boolean sandbox;
     final int price, essence;
     private final boolean enabled;
@@ -150,7 +150,11 @@ public final class HopperUpgrades implements Listener {
     }
 
     /** The Arena's Foundry: one upgrade raises a tier and isn't used up, so Tier III can be tested with the kit's single upgrade. */
-    void setSandbox(int maxPerChunk) { this.sandbox = true; this.maxPerChunk = maxPerChunk; }
+    void setSandbox(int maxPerChunk) {
+        this.sandbox = true;
+        this.maxPerChunk = maxPerChunk;
+        looksPerChunk = HopperTiers.looksCap(looksPerChunk, maxPerChunk);   // every hopper the Foundry allows can show its tier
+    }
     boolean enabled() { return enabled; }
     int delay(int tier) { return delays[HopperTiers.clampTier(tier) - 1]; }
     int needed(int tier) { return sandbox && tier < HopperTiers.MAX_TIER ? 1 : HopperTiers.upgradesToLeave(tier, needed); }

@@ -38,4 +38,9 @@ class HopperTiersTest {
             assertEquals(p[1], HopperTiers.y(packed));
         }
     }
+
+    @Test void foundrySkinsCoverEveryAllowedHopper() {
+        assertEquals(64, HopperTiers.looksCap(32, 64));   // the Foundry allows 64 per chunk: all 64 show their tier
+        assertEquals(32, HopperTiers.looksCap(32, 16));   // never lowers the configured cap
+    }
 }
