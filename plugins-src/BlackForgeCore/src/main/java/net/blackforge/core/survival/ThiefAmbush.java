@@ -328,6 +328,7 @@ final class ThiefAmbush implements Listener {
             v.setImmovable(true);
             v.setCollidable(false);
             v.setSilent(true);
+            v.addScoreboardTag(net.blackforge.core.moderation.Guardian.RELAY_TAG);   // its hits are passed on to the mob; count those once
             v.setProfile(skinOf != null
                     ? ResolvableProfile.resolvableProfile(skinOf.getPlayerProfile())
                     : ResolvableProfile.resolvableProfile().skinPatch(sp -> sp.body(Key.key("blackforge", "entity/thief_mage")).model(PlayerTextures.SkinModel.CLASSIC)).build());

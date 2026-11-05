@@ -34,6 +34,9 @@ public final class Guardian implements Listener {
 
     static final long XRAY_WINDOW = 20 * 60_000L;
     static final int CPS_LIMIT = 20, CPS_SECONDS = 3;
+    /** Scoreboard tag for a stand-in body that passes its hits on to another entity (a Night Thief's Mannequin):
+     *  the passed-on hit is the one counted, so the stand-in's own hit isn't counted again. */
+    public static final String RELAY_TAG = "bf_hit_relay";
 
     public Guardian(BlackForgeCore plugin, ModStore store) {
         this.plugin = plugin;
@@ -108,7 +111,13 @@ public final class Guardian implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onHit(org.bukkit.event.entity.EntityDamageByEntityEvent e) {
-        if (e.getDamager() instanceof Player p && e.getCause() == org.bukkit.event.entity.EntityDamageEvent.DamageCause.ENTITY_ATTACK) click(p);
+        if (e.getDamager() instanceof Player p && e.getCause() == org.bukkit.event.entity.EntityDamageEvent.DamageCause.ENTITY_ATTACK
+                && countsAsClick(e.getEntity().getScoreboardTags())) click(p);
+    }
+
+    /** A melee hit counts towards clicks unless it landed on a stand-in that relays it (that relayed hit counts instead). */
+    static boolean countsAsClick(Set<String> victimTags) {
+        return !victimTags.contains(RELAY_TAG);
     }
 
     private void cpsTick() {
