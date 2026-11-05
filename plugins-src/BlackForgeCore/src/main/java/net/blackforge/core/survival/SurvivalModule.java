@@ -71,6 +71,7 @@ public final class SurvivalModule implements Listener {
     private final Robots robots;
     private final HopperUpgrades hoppers;
     private final BaseStation station;
+    private final BaseLevels levels;
     private final Allays allays;
     private final ThiefAmbush thieves;
     private final Set<UUID> dropping = new HashSet<>(), landed = new HashSet<>();
@@ -170,6 +171,8 @@ public final class SurvivalModule implements Listener {
         station.setAccess((p, l) -> p.hasPermission("blackforge.admin") || claims.ownerAt(l) != null && claims.canUse(p, l));
         station.setRegion(l -> { UUID stationOwner = claims.ownerAt(l); return stationOwner == null ? null : "claim:" + stationOwner; });
         station.requireLiveDeliveryRegion();
+        levels = new BaseLevels(plugin, false);
+        station.setLevels(levels);
         allays = new Allays(plugin, station, l -> false, false);
         allays.setRobots(robots);
         allays.setOwnerOf(region -> UUID.fromString(region.substring("claim:".length())));
@@ -242,6 +245,7 @@ public final class SurvivalModule implements Listener {
     }
 
     public void shutdown() {
+        levels.shutdown();
         staging.shutdown();
         pirate.shutdown();
         abyss.shutdown();

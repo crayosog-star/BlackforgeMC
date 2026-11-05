@@ -25,6 +25,7 @@ public final class FoundrySystems {
     private final FoundryLab lab;
     private final Allays allays;
     private final BaseStation station;
+    private final BaseLevels levels;
     private final Function<Location, String> region;
     private final String sharedRegion;
     private final Location[] demoSpots;
@@ -62,6 +63,8 @@ public final class FoundrySystems {
         // the island is one base around the shared Forge, so every bench's agents can deliver to it; the Build Plot is for your own
         station.setRegion(l -> zone.test(l) ? region.apply(l) : null);
         station.setRadius(c.getInt("foundry.agent-radius", 40));
+        levels = new BaseLevels(plugin, true);
+        station.setLevels(levels);
         allays = new Allays(plugin, station, zone, true);
         station.setAllays(allays);
         allays.setRobots(robots);

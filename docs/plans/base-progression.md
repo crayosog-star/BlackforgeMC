@@ -1,6 +1,6 @@
 # Base Progression
 **Status:** In progress
-**Next task:** P1.T2
+**Next task:** P1.T3
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -120,7 +120,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Leaves ready:** rules and config.
 - **Evidence:** Verified: all 8 `BaseLevelRulesTest` tests pass when run alone with a small stand-in for JUnit, and the config parses as YAML. Automerge runs them on the `BlackForgeCore` build and won't merge if they fail. Nothing reads the config yet, so there's nothing to play.
 
-### [ ] P1.T2: Save levels and count Agent deliveries
+### [x] P1.T2: Save levels and count Agent deliveries
 - **Needs:** P1.T1; `S/BaseStation.java:181`; `S/Allays.java:349-385` as the save pattern.
 - **Files:** create `S/BaseLevels.java`; change `S/BaseStation.java`, `S/SurvivalModule.java`, `S/FoundrySystems.java`.
 - **Steps:**
@@ -129,10 +129,10 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
   3. Save to `base-levels.yml` every minute when changed and on shutdown, with no file in the sandbox. Unknown keys are ignored.
   4. `BaseStation.setLevels(BaseLevels)`. In `deliver`, count the amount that went in, using the input amount minus the leftover.
   5. Construct it on Survival and in the Foundry, not on Skyblock. In the sandbox every region shares one test level, default 5.
-- **Edge cases:** a full Station counts nothing; a partial stack counts only what fit; a bad save file logs and starts clean without overwriting it until the next real change; the count is capped at `Long.MAX_VALUE`; a shutdown saves; a flag-off server counts nothing and writes nothing.
+- **Edge cases:** a full Station counts nothing; a partial stack counts only what fit; an unreadable save file logs an error and moves to `base-levels.yml.broken`, and if it can't be moved, saving stops so it isn't overwritten; the count is capped at `Long.MAX_VALUE`; a shutdown saves; a flag-off server counts nothing and writes nothing.
 - **Done when:** a code review confirms `deliver` is the only count call. Automerge's build passes. The in-game delivery check runs in the Phase 1 gate.
 - **Leaves ready:** a saved level for each base.
-- **Evidence:**
+- **Evidence:** Verified by code review: `BaseStation.deliver` is the only call to `countDelivery`, and it counts the stack's amount from before `addItem`, less what's left. Automerge runs the real build. Untested in game: the delivery check runs in the Phase 1 gate once P1.T3 can show it.
 
 ### [ ] P1.T3: Add Foundry level commands
 - **Needs:** P1.T2; `hub/FoundryCommand.java:20-45`, `run`; `S/FoundrySystems.java:93-95`; `S/FoundrySystems.java:181`.
@@ -325,6 +325,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | P1.T2 keeps an unreadable save file instead of overwriting it at the next delivery. The check is stronger, from a review of PR #124 | Flagged to Colin |
 | 2026-11-04 | Plan created from Colin's decisions, and approved to build with "start building" | Colin, in chat |
 
 ## Later ideas
