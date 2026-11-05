@@ -27,4 +27,19 @@ class FoundryTestRulesTest {
         assertFalse(FoundryTestRules.restoreAfterCheck(true, 1), "a new tester got Tier I");
         assertFalse(FoundryTestRules.restoreAfterCheck(true, 2), "another tester set a tier");
     }
+
+    @Test void checkComparesFlyingAllaysWithTheConfiguredFlock() {
+        assertTrue(FoundryTestRules.flockFlying(true, 5, 5), "a flock of 5 configured, 5 up");
+        assertFalse(FoundryTestRules.flockFlying(true, 3, 5), "3 is not the whole flock when 5 are configured");
+        assertFalse(FoundryTestRules.flockFlying(false, 3, 3), "the tier change was refused, so the old flock doesn't count");
+        assertEquals("4 of 6", FoundryTestRules.flyingDetail(true, 4, 6));
+        assertTrue(FoundryTestRules.flyingDetail(false, 1, 3).contains("refused by the allay limit"));
+    }
+
+    @Test void checkOnlyCountsAsADemoWhenItPlacedAnAgent() {
+        assertTrue(FoundryTestRules.placedAny(1));
+        assertTrue(FoundryTestRules.placedAny(4));
+        assertFalse(FoundryTestRules.placedAny(0), "every spot taken or at the agent limit");
+        assertFalse(FoundryTestRules.placedAny(-1), "a check was already running");
+    }
 }

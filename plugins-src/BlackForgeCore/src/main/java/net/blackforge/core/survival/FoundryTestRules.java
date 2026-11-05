@@ -18,4 +18,15 @@ final class FoundryTestRules {
      * an empty island must stay empty, and another tester's choice wins.
      */
     static boolean restoreAfterCheck(boolean anyoneTesting, int tierNow) { return anyoneTesting && tierNow == CHECK_TIER; }
+
+    /** /foundry check passes the flock only if Tier III went on and its whole configured flock is up. */
+    static boolean flockFlying(boolean tierSet, int flying, int flock) { return tierSet && flying == flock; }
+
+    /** The "Allays flying" line's detail, saying so when the allay limit refused the tier change. */
+    static String flyingDetail(boolean tierSet, int flying, int flock) {
+        return flying + " of " + flock + (tierSet ? "" : " (the tier change was refused by the allay limit)");
+    }
+
+    /** /foundry check returns how many demo agents it placed (-1 if one was already running); only a placed one marks a demo. */
+    static boolean placedAny(int placed) { return placed > 0; }
 }
