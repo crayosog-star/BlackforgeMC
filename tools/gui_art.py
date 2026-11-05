@@ -19,7 +19,7 @@ WELL, WELL_DARK, WELL_LIGHT = (14, 11, 13), (5, 4, 5), (72, 58, 54)
 LAVA = [(92, 20, 10), (170, 44, 12), (255, 110, 20), (255, 196, 70)]
 
 # The Forge's text sits at these heights: font name -> y from the panel's top.
-LINES = {"gui_l1": 39, "gui_l2": 49, "gui_l3": 59, "gui_l4": 77}
+LINES = {"gui_l0": 22, "gui_l1": 39, "gui_l2": 49, "gui_l3": 59, "gui_l4": 77, "gui_l5": 95, "gui_l6": 113}
 PIP_Y, COUNT_Y = 67, 5
 CARD_COLS = [0, 2, 4, 6, 8]
 
@@ -132,6 +132,63 @@ def plain(rows, wells, rings):
     return img
 
 
+# The Forge's home screen: flat near-black, thin lines, and one accent moving from molten orange to teal.
+SLEEK_BG, SLEEK_EDGE, SLEEK_RULE, SLEEK_LOCK = (13, 12, 15), (30, 28, 33), (26, 24, 29), (32, 30, 35)
+SLEEK_IDLE, SLEEK_DIM = (17, 16, 20), (38, 35, 41)
+SLEEK_ORANGE, SLEEK_TEAL, SLEEK_TEAL_DIM = (255, 138, 61), (79, 209, 181), (52, 120, 106)
+HOME_TRACK = [0, 2, 4, 6, 8]
+HOME_WELLS = [21, 22, 23, 30, 31, 32, 33, 39, 40, 45, 51, 52, 53]
+
+
+def sleek_well(d, x, y, edge, fill):
+    d.rounded_rectangle([x + 1, y + 1, x + 16, y + 16], 2, fill=fill, outline=edge)
+
+
+def home(level):
+    """One panel per base level, because the track's colours show how far this base has come."""
+    w, h = 176, 125
+    img = Image.new("RGBA", (w, h), SLEEK_BG + (255,))
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 0, w - 1, h - 1], outline=SLEEK_EDGE)
+    for x in range(1, w - 1):
+        t = (x - 1) / (w - 3)
+        d.point((x, 15), fill=tuple(int(SLEEK_ORANGE[i] + (SLEEK_TEAL[i] - SLEEK_ORANGE[i]) * t) for i in range(3)))
+    for i, slot in enumerate(HOME_TRACK[:-1]):
+        x0, y = slot_xy(slot)
+        x1, _ = slot_xy(HOME_TRACK[i + 1])
+        shown = i + 1
+        colour = SLEEK_TEAL_DIM if shown < level else SLEEK_ORANGE if shown == level else SLEEK_DIM
+        d.line([x0 + 17, y + 8, x1, y + 8], fill=colour)
+    for i, slot in enumerate(HOME_TRACK):
+        x, y = slot_xy(slot)
+        shown = i + 1
+        if shown <= level:
+            sleek_well(d, x, y, SLEEK_TEAL_DIM, (22, 34, 34))
+        elif shown == level + 1:
+            sleek_well(d, x, y, SLEEK_ORANGE, (40, 26, 20))
+        else:
+            sleek_well(d, x, y, SLEEK_LOCK, SLEEK_IDLE)
+    for row in (2, 3, 4, 5):
+        _, y = slot_xy(row * 9)
+        d.line([8, y - 1, 167, y - 1], fill=SLEEK_RULE)
+    for slot in HOME_WELLS:
+        x, y = slot_xy(slot)
+        sleek_well(d, x, y, SLEEK_LOCK, SLEEK_IDLE)
+    return img
+
+
+def home_ring(edge, fill):
+    """Drawn over a home screen well to show it's unlocked or ready. The middle stays clear for its item."""
+    img = Image.new("RGBA", (18, 18), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle([1, 1, 16, 16], 2, fill=fill + (255,), outline=edge)
+    return img
+
+
+def home_bar(on):
+    return Image.new("RGBA", (7, 2), (SLEEK_ORANGE if on else SLEEK_DIM) + (255,))
+
+
 def pip(size, on):
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -171,7 +228,13 @@ def main():
     add("storage", plain(3, list(range(27)), []), "", 13)
     add("agent", plain(6, [1, 3, 5, 7, 9, 10, 11, 13, 15, 16, 17] + list(range(18, 54)), [1, 3, 5, 7, 15]), "", 13)
     add("workshop", plain(4, [4, 13, 19, 21, 23, 25, 27, 31], [13, 31]), "", 13)
-    add("home", plain(6, [4, 10, 11, 12, 13, 14, 15, 19, 20, 21, 22, 28, 29, 30, 31, 32, 33, 37, 38, 39, 46, 49, 52], []), "\ue00a", 13)
+    for level in range(1, 6):
+        add(f"home_{level}", home(level), chr(0xE01F + level), 13)
+    for i, row in enumerate((2, 3, 4)):
+        add(f"home_on_{row}", home_ring(SLEEK_TEAL_DIM, (22, 34, 34)), chr(0xE025 + i), 13 - slot_xy(row * 9)[1])
+    add("home_ready", home_ring(SLEEK_ORANGE, (40, 26, 20)), "\ue028", 13 - slot_xy(45)[1])
+    add("home_bar_on", home_bar(True), "\ue029", 13 - 48)
+    add("home_bar_off", home_bar(False), "\ue02a", 13 - 48)
     add("pip_on", pip(3, True), "", 13 - PIP_Y)
     add("pip_off", pip(3, False), "", 13 - PIP_Y)
     add("count_on", pip(7, True), "", 13 - COUNT_Y)

@@ -26,8 +26,12 @@ import java.util.List;
  * Today's Agent cards sit one click behind it.
  */
 final class ForgeHome implements Listener {
-    private static final int SIZE = 54, SUMMARY = 4, AGENTS = 33, LEVEL_UP = 46, STORAGE = 49, HELP = 52;
-    private static final int[] LEVEL_SLOTS = {11, 12, 13, 14, 15}, ALLAY_SLOTS = {20, 21, 22}, JOB_SLOTS = {29, 30, 31, 32}, HOPPER_SLOTS = {38, 39};
+    private static final int SIZE = 54, LEVEL_UP = 45, AGENTS = 51, STORAGE = 52, HELP = 53;
+    private static final int[] LEVEL_SLOTS = {0, 2, 4, 6, 8}, SUMMARY_SLOTS = {9, 10, 11, 12, 13, 14, 15, 16, 17};
+    private static final int[] ALLAY_SLOTS = {21, 22, 23}, JOB_SLOTS = {30, 31, 32, 33}, HOPPER_SLOTS = {39, 40};
+    private static final int TEAL = 0x4FD1B5, ORANGE = 0xFF8A3D, QUIET = 0x8A848F, INK = 0xECE8E2, DIM = 0x4A464E;
+    /** Draws nothing: the panel shows these slots, and the item is only there for its tooltip. */
+    private static final org.bukkit.NamespacedKey BLANK = new org.bukkit.NamespacedKey("blackforge", "blank");
     private static final Robots.Job[] JOB_ORDER = {Robots.Job.FARMER, Robots.Job.MINER, Robots.Job.FISHERMAN, Robots.Job.GRINDER};
     private static final String MONEY = "<green>", ESSENCE = "<#9d7bff>";
 
@@ -56,29 +60,30 @@ final class ForgeHome implements Listener {
         BaseLevelRules.Table t = levels.table();
         long delivered = levels.delivered(region);
         Menu m = new Menu(at);
-        StationUi.Canvas title = new StationUi.Canvas().art(StationUi.Screen.HOME);
-        title.text("title", 40, "THE FORGE", 0xFFD9A0);
-        title.text("title", 96, "LEVEL " + level, 0xFFB347);
-        title.pips(142, level, BaseLevelRules.MAX_LEVEL, StationUi.COUNT_ON, StationUi.COUNT_OFF, 8);
-        m.inv = Bukkit.createInventory(m, SIZE, StationUi.art() ? title.done() : Ui.mm("<dark_gray>The Forge - Base Level " + level));
-        if (!StationUi.art()) {
+        boolean art = StationUi.art();
+        Allays allays = station.allays();
+        boolean showAllays = allays != null && allays.available(p), claimTiers = station.sellsClaimTiers(region);
+        m.inv = Bukkit.createInventory(m, SIZE, art ? title(t, level, delivered, region, showAllays, claimTiers) : Ui.mm("<dark_gray>The Forge - Base Level " + level));
+        if (!art) {
             ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
             for (int i = 0; i < SIZE; i++) m.inv.setItem(i, pane);
+            m.inv.setItem(18, label("Forge Allays"));
+            m.inv.setItem(27, label("Agents"));
+            m.inv.setItem(36, label("Hoppers"));
         }
-        m.inv.setItem(SUMMARY, summary(t, level, delivered));
-        m.inv.setItem(10, label("Base Levels"));
-        for (int l = 1; l <= BaseLevelRules.MAX_LEVEL; l++) m.inv.setItem(LEVEL_SLOTS[l - 1], levelIcon(t, level, l));
-        Allays allays = station.allays();
-        if (allays != null && allays.available(p)) {
-            m.inv.setItem(19, label("Forge Allays"));
-            for (int tier = 1; tier <= AllayRules.MAX_TIER; tier++) m.inv.setItem(ALLAY_SLOTS[tier - 1], allays.homeCard(tier, region));
+        ItemStack summary = summary(t, level, delivered);
+        if (art) { hide(summary); for (int slot : SUMMARY_SLOTS) m.inv.setItem(slot, summary); }
+        else m.inv.setItem(SUMMARY_SLOTS[4], summary);
+        for (int l = 1; l <= BaseLevelRules.MAX_LEVEL; l++) {
+            ItemStack icon = levelIcon(t, level, l);
+            if (art) { icon.setAmount(1); hide(icon); }
+            m.inv.setItem(LEVEL_SLOTS[l - 1], icon);
         }
-        m.inv.setItem(28, label("Agents"));
+        if (showAllays) for (int tier = 1; tier <= AllayRules.MAX_TIER; tier++) m.inv.setItem(ALLAY_SLOTS[tier - 1], allays.homeCard(tier, region));
         for (int i = 0; i < JOB_ORDER.length; i++) m.inv.setItem(JOB_SLOTS[i], jobIcon(t, level, JOB_ORDER[i]));
         m.inv.setItem(AGENTS, Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, "<gold><bold>Your Agents",
                 "<gray>Placed: <white>" + robots.owned(p.getUniqueId()) + "/" + robots.limit(p), "", "<yellow>Click to see and upgrade them"));
-        m.inv.setItem(37, label("Hoppers"));
-        if (station.sellsClaimTiers(region)) for (int i = 0; i < HOPPER_SLOTS.length; i++) m.inv.setItem(HOPPER_SLOTS[i], station.claimTierIcon(region, i + 2));
+        if (claimTiers) for (int i = 0; i < HOPPER_SLOTS.length; i++) m.inv.setItem(HOPPER_SLOTS[i], station.claimTierIcon(region, i + 2));
         else m.inv.setItem(HOPPER_SLOTS[0], Ui.item(Material.HOPPER, "<gold><bold>Hopper Tiers", "<gray>This Forge sells Hopper Upgrades instead.", "<gray>Find them under <white>Your Agents<gray>."));
         m.inv.setItem(LEVEL_UP, levelUpIcon(t, level, delivered));
         m.inv.setItem(STORAGE, Ui.item(Material.BARREL, "<gold><bold>Storage", "<gray>What your Agents have delivered.", "", "<yellow>Click to open"));
@@ -93,6 +98,39 @@ final class ForgeHome implements Listener {
         if (pdc.has(seenIntro, org.bukkit.persistence.PersistentDataType.BYTE)) return;
         pdc.set(seenIntro, org.bukkit.persistence.PersistentDataType.BYTE, (byte) 1);
         p.sendMessage(Ui.mm("<#4fd1b5>Your base has a level now. <gray>What your Agents deliver here counts toward the next one, and each level unlocks more of your base."));
+    }
+
+    private static void hide(ItemStack it) { it.editMeta(m -> m.setItemModel(BLANK)); }
+
+    private static int leftAt(int x, String text) { return x + StationText.width(text) / 2; }
+
+    private static int slotX(int slot) { return 7 + 18 * (slot % 9); }
+
+    /** The live part of the home screen: its text, progress bar and which wells are lit. */
+    private net.kyori.adventure.text.Component title(BaseLevelRules.Table t, int level, long delivered, String region, boolean showAllays, boolean claimTiers) {
+        StationUi.Canvas c = new StationUi.Canvas().art(StationUi.Screen.values()[StationUi.Screen.HOME_1.ordinal() + level - 1]);
+        c.text("title", leftAt(8, "FORGE"), "FORGE", INK);
+        String now = "LEVEL " + level;
+        c.text("title", 168 - StationText.width(now) / 2, now, ORANGE);
+        for (int l = 1; l <= BaseLevelRules.MAX_LEVEL; l++)
+            c.text("gui_l0", slotX(LEVEL_SLOTS[l - 1]) + 9, String.valueOf(l), l <= level ? TEAL : l == level + 1 ? ORANGE : DIM);
+        boolean top = level == BaseLevelRules.MAX_LEVEL;
+        c.text("gui_l1", leftAt(8, top ? "TOP LEVEL" : "NEXT LEVEL"), top ? "TOP LEVEL" : "NEXT LEVEL", QUIET);
+        String count = top ? String.valueOf(delivered) : Math.min(delivered, t.cost(level + 1).deliveries()) + " / " + t.cost(level + 1).deliveries();
+        c.text("gui_l1", 168 - StationText.width(count) / 2, count, INK);
+        c.pips(88, (int) Math.round(t.progress(level, delivered) * 20), 20, StationUi.HOME_BAR_ON, StationUi.HOME_BAR_OFF, 8);
+        c.text("gui_l3", leftAt(8, "ALLAYS"), "ALLAYS", QUIET);
+        c.text("gui_l4", leftAt(8, "AGENTS"), "AGENTS", QUIET);
+        c.text("gui_l5", leftAt(8, "HOPPERS"), "HOPPERS", QUIET);
+        c.text("gui_l6", leftAt(29, "LEVEL UP"), "LEVEL UP", t.canLevelUp(level, delivered) ? ORANGE : QUIET);
+        if (showAllays) for (int tier = 1; tier <= AllayRules.MAX_TIER; tier++)
+            if (t.allayUnlocked(level, tier)) c.glyph(slotX(ALLAY_SLOTS[tier - 1]), StationUi.HOME_ON_2, 18);
+        for (int i = 0; i < JOB_ORDER.length; i++)
+            if (t.jobUnlocked(level, JOB_ORDER[i].name().toLowerCase(java.util.Locale.ROOT))) c.glyph(slotX(JOB_SLOTS[i]), StationUi.HOME_ON_3, 18);
+        if (claimTiers) for (int i = 0; i < HOPPER_SLOTS.length; i++)
+            if (t.hopperUnlocked(level, i + 2)) c.glyph(slotX(HOPPER_SLOTS[i]), StationUi.HOME_ON_4, 18);
+        if (t.canLevelUp(level, delivered)) c.glyph(slotX(LEVEL_UP), StationUi.HOME_READY, 18);
+        return c.done();
     }
 
     private static ItemStack label(String text) { return Ui.item(Material.PAPER, "<white><bold>" + text); }

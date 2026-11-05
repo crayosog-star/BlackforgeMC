@@ -251,7 +251,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** cached packs; `base-station.custom-ui: false` gives the plain menu; a player without the pack sees readable text.
 - **Done when:** Colin approves a preview, and the Phase 4 gate passes.
 - **Leaves ready:** the final screen.
-- **Evidence:** Verified: the art is generated from the same layout as the menu, and the pack's SHA-1 matches its zip. A panel preview was sent to Colin. Untested in game: alignment at GUI scales 2, 3 and 4, so this stays unticked until it's approved.
+- **Evidence:** Verified: the pack's SHA-1 matches its zip, and it contains the new panels, fonts and blank model. Colin approved the sleek mockup. Untested in game: alignment at GUI scales 2, 3 and 4, so this stays unticked until someone checks it.
 
 ## Phase 5: Launch on Survival
 - **Goal:** Survival players use base levels, and nobody loses anything they already had.
@@ -326,6 +326,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | Replaced the stone home art, which had merged with #132 just as it was closed, with the sleek layout Colin approved | Colin, in chat |
 | 2026-11-04 | P4.T3's art moves after P5.T3, because the plain menu works and the art needs a preview and a pack update. It still happens before launch | Flagged to Colin |
 | 2026-11-04 | Colin said to keep building and not wait on PRs. Phase gates aren't recorded as played and their checks carry forward. Stacked tasks ship one PR per phase to save restarts, and everything stays behind `base-levels.enabled` | Colin, in chat |
 | 2026-11-04 | Starter Farmer and the 256-per-chunk hopper limit moved from assumptions to decisions | Colin, in chat |
