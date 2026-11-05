@@ -41,6 +41,9 @@ public final class Foundry implements Listener {
     private final Map<UUID, Long> outUntil = new HashMap<>();
     private final long graceMs;
     private final Set<UUID> demoed = new HashSet<>();
+    /** How each /foundry start player was set before the test, so /foundry stop gives staff their Creative and flight back. Memory only. */
+    private final Map<UUID, Before> before = new HashMap<>();
+    private record Before(GameMode mode, boolean allowFlight) {}
     private final ItemStack[] bar;
 
     public Foundry(BlackForgeCore plugin, TestArena arena) {
@@ -172,6 +175,7 @@ public final class Foundry implements Listener {
     void begin(Player p) {
         p.teleport(new Location(arena.world(), FoundryZone.ENTRY_X, FoundryZone.ENTRY_Y, FoundryZone.ENTRY_Z, 180f, 0f));
         p.setFallDistance(0);
+        if (!inside.contains(p.getUniqueId())) before.put(p.getUniqueId(), new Before(p.getGameMode(), p.getAllowFlight()));   // not the Survival the zone gave you
         p.setGameMode(GameMode.SURVIVAL);
         p.setFlying(false);
         p.setAllowFlight(false);
@@ -184,9 +188,12 @@ public final class Foundry implements Listener {
     /** False if there was nothing to stop. */
     boolean end(Player p) {
         if (!inside.contains(p.getUniqueId())) return false;
+        Before was = before.get(p.getUniqueId());
         left(p);
         p.teleport(arena.spawn());
-        p.setGameMode(GameMode.ADVENTURE);
+        boolean creative = was != null && was.mode() == GameMode.CREATIVE;
+        p.setGameMode(creative ? GameMode.CREATIVE : GameMode.ADVENTURE);   // never back to the hub in Survival
+        if (was != null && !creative) p.setAllowFlight(was.allowFlight());
         arena.kit(p);
         return true;
     }
@@ -209,6 +216,7 @@ public final class Foundry implements Listener {
 
     private void left(Player p) {
         inside.remove(p.getUniqueId());
+        before.remove(p.getUniqueId());
         outUntil.remove(p.getUniqueId());
         wipe(p.getUniqueId());
     }

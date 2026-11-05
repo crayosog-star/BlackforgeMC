@@ -21,11 +21,12 @@ class FoundryTestRulesTest {
     }
 
     @Test void checkRestoresTheTierOnlyIfStillTestingAndUnchanged() {
-        assertTrue(FoundryTestRules.restoreAfterCheck(true, FoundryTestRules.CHECK_TIER));
-        assertFalse(FoundryTestRules.restoreAfterCheck(false, FoundryTestRules.CHECK_TIER), "the island emptied");
-        assertFalse(FoundryTestRules.restoreAfterCheck(true, 0), "reset when it emptied, then nobody came back");
-        assertFalse(FoundryTestRules.restoreAfterCheck(true, 1), "a new tester got Tier I");
-        assertFalse(FoundryTestRules.restoreAfterCheck(true, 2), "another tester set a tier");
+        assertTrue(FoundryTestRules.restoreAfterCheck(true, true, FoundryTestRules.CHECK_TIER));
+        assertFalse(FoundryTestRules.restoreAfterCheck(true, false, FoundryTestRules.CHECK_TIER), "the island emptied");
+        assertFalse(FoundryTestRules.restoreAfterCheck(true, true, 0), "reset when it emptied, then nobody came back");
+        assertFalse(FoundryTestRules.restoreAfterCheck(true, true, 1), "a new tester got Tier I");
+        assertFalse(FoundryTestRules.restoreAfterCheck(true, true, 2), "another tester set a tier");
+        assertFalse(FoundryTestRules.restoreAfterCheck(false, true, FoundryTestRules.CHECK_TIER), "Tier III was refused, so there's nothing to undo");
     }
 
     @Test void checkComparesFlyingAllaysWithTheConfiguredFlock() {

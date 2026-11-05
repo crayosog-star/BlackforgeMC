@@ -216,8 +216,8 @@ public final class FoundrySystems {
             say.accept(result(c[1] > 0, "Courier sorting", c[1] + " loads put in framed chests"));
             say.accept(result(c[2] > 0, "Courier refuelling", c[2] + " Agents refuelled"));
             say.accept(result(c[3] > 0, "Steward", c[3] + " sales"));
-            // an island that emptied keeps no flock, and a tier someone set during the check stays
-            boolean restore = FoundryTestRules.restoreAfterCheck(testing.getAsBoolean(), allays.sharedTier());
+            // an island that emptied keeps no flock, a tier someone set during the check stays, and a refused Tier III has nothing to undo
+            boolean restore = FoundryTestRules.restoreAfterCheck(tierSet, testing.getAsBoolean(), allays.sharedTier());
             if (restore) allays.setSharedTier(p.getUniqueId(), Math.max(before, 0));
             say.accept("<gray>" + (restore ? "Allays are back to how you had them." : !tierSet ? "Allays left as they are: the allay limit refused Tier III."
                     : "Allays left as they are: someone changed the tier, or the island emptied, during the check.")
