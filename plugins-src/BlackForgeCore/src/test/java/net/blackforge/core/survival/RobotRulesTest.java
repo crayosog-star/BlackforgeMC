@@ -4,6 +4,7 @@ import net.blackforge.core.survival.RobotRules.FuelCell;
 import net.blackforge.core.survival.RobotRules.GrindSkip;
 import net.blackforge.core.survival.RobotRules.GrindTarget;
 import net.blackforge.core.survival.RobotRules.SegmentColor;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 
 import java.util.EnumMap;
@@ -28,6 +29,16 @@ class RobotRulesTest {
         assertEquals(90, RobotRules.fishPerHour(5));
         assertThrows(IllegalArgumentException.class, () -> RobotRules.fishIntervalMs(0));
         assertThrows(IllegalArgumentException.class, () -> RobotRules.fishIntervalMs(6));
+    }
+
+    @Test void bundledConfigFishSecondsMatchRules() throws java.io.IOException {
+        try (java.io.InputStream in = RobotRules.class.getResourceAsStream("/config.yml")) {
+            assertNotNull(in, "config.yml missing from the classpath");
+            YamlConfiguration y = YamlConfiguration.loadConfiguration(new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8));
+            List<Integer> secs = y.getIntegerList("robots.fish-seconds");
+            assertEquals(RobotRules.FISH_INTERVAL_MS.length, secs.size());
+            for (int i = 0; i < secs.size(); i++) assertEquals(RobotRules.FISH_INTERVAL_MS[i], secs.get(i) * 1000L, "tier " + (i + 1));
+        }
     }
 
     @Test void litSegmentsAtThresholds() {
