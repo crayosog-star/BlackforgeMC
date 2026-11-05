@@ -117,7 +117,9 @@ public final class Foundry implements Listener {
             if (p.isDead()) continue;
             boolean now = inZone(p.getLocation()), was = inside.contains(id);
             Long until = outUntil.get(id);
-            if (now && !was) {
+            long time = System.currentTimeMillis();
+            FoundryGrace.Step step = FoundryGrace.step(now, was, until, time);
+            if (step == FoundryGrace.Step.ENTER) {
                 inside.add(id);
                 if (inside.size() == 1 && systems.allayTier() == 0) systems.setAllayTier(id, 1);
                 if (builder(p)) p.sendMessage(net.blackforge.core.Ui.mm("<gray>You're building in Creative, so blocks you place here stay. <white>/foundry start<gray> tests as a player."));
@@ -126,23 +128,21 @@ public final class Foundry implements Listener {
                     arena.kit(p);
                 }
                 p.sendMessage(net.blackforge.core.Ui.mm("<#ffb347><bold>The Foundry</bold> <dark_gray>· <gray>chests never run out and the Forge is free. Everything you place or carry from here goes when you leave. <click:run_command:'/foundry'><white><u>/foundry</u></white></click><gray> lists every test command."));
-            } else if (now && until != null) {
+            } else if (step == FoundryGrace.Step.BACK) {
                 outUntil.remove(id);
                 if (!builder(p)) p.setGameMode(GameMode.SURVIVAL);
                 p.sendActionBar(net.blackforge.core.Ui.mm("<green>Back in the Foundry. Your test is still running."));
-            } else if (!now && was) {
-                long time = System.currentTimeMillis();
-                if (until == null) {
-                    outUntil.put(id, time + graceMs);
-                    if (!builder(p)) p.setGameMode(GameMode.ADVENTURE);   // no building out here, and the wipe waits
-                    p.sendMessage(net.blackforge.core.Ui.mm("<yellow>You stepped out of the Foundry. <gray>Come back within <white>" + graceMs / 1000 + " seconds<gray> or your builds, agents and Foundry items are cleared."));
-                } else if (time >= until) {
-                    left(p);
-                    if (!builder(p)) p.setGameMode(GameMode.ADVENTURE);
-                    arena.kit(p);
-                    p.sendMessage(net.blackforge.core.Ui.mm("<gray>Your Foundry test was cleared."));
-                } else p.sendActionBar(net.blackforge.core.Ui.mm("<yellow>Back to the Foundry in <white>" + ((until - time) / 1000 + 1) + "s<yellow> to keep your test"));
-            }
+            } else if (step == FoundryGrace.Step.STEP_OUT) {
+                outUntil.put(id, FoundryGrace.deadline(time, graceMs));
+                if (!builder(p)) p.setGameMode(GameMode.ADVENTURE);   // no building out here, and the wipe waits
+                p.sendMessage(net.blackforge.core.Ui.mm("<yellow>You stepped out of the Foundry. <gray>Come back within <white>" + graceMs / 1000 + " seconds<gray> or your builds, agents and Foundry items are cleared."));
+            } else if (step == FoundryGrace.Step.CLEAR) {
+                left(p);
+                if (!builder(p)) p.setGameMode(GameMode.ADVENTURE);
+                arena.kit(p);
+                p.sendMessage(net.blackforge.core.Ui.mm("<gray>Your Foundry test was cleared."));
+            } else if (step == FoundryGrace.Step.COUNTDOWN)
+                p.sendActionBar(net.blackforge.core.Ui.mm("<yellow>Back to the Foundry in <white>" + FoundryGrace.secondsLeft(until, time) + "s<yellow> to keep your test"));
             // only while standing in the zone: someone in the leave grace keeps their test, not a free refill outside
             if (now && inside.contains(id) && !builder(p) && p.getItemOnCursor().getType().isAir()) restock(p);
         }
