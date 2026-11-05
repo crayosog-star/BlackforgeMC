@@ -82,6 +82,8 @@ public final class Robots implements Listener {
 
     /** One robot's state; the entity is found by robot id each tick (entities can reload with new UUIDs). */
     final class Bot {
+        /** Jobs done since /foundry check started. Not saved. */
+        int workCount;
         final String id; UUID owner; Job job; int tier; long fuel, charge; int fuelTier = 1; int xp;
         /** Fuel-weighted charge multiplier of what's in the tank; fuelTier is now only the icon/colour of the best cell added. */
         double chargeRate;
@@ -460,7 +462,10 @@ public final class Robots implements Listener {
     }
 
     /** Called after every cycle with how much real work was done. The Academy earns Mastery here from Phase 2. */
-    private void onWorked(Bot b, int done) {}
+    private void onWorked(Bot b, int done) { b.workCount += done; }
+
+    /** Starts /foundry check's count over. */
+    void resetWorkCounts() { for (Bot b : bots.values()) b.workCount = 0; }
 
     private void store(Bot b, Collection<ItemStack> items) {
         for (ItemStack it : items) if (it != null && !it.getType().isAir())

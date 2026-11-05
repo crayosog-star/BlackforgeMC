@@ -179,6 +179,7 @@ public final class Allays implements Listener {
     private final List<Flyer> flyers = new ArrayList<>();
     private final Map<String, Base> bases = new HashMap<>();
     private long now;
+    private final int[] counts = new int[4];
     private int sandboxLimit = Integer.MAX_VALUE;
     private final boolean sausageFlip;
     private Robots robots;
@@ -418,6 +419,17 @@ public final class Allays implements Listener {
         b.tier = tier;
         b.lastScan = b.lastLinkScan = Long.MIN_VALUE / 2;
         return true;
+    }
+
+    /** Jobs done since {@link #resetCounts}, for /foundry check: drops carried, loads sorted, Agents refuelled, sales. */
+    int[] counts() { return counts.clone(); }
+    void resetCounts() { java.util.Arrays.fill(counts, 0); }
+
+    int sharedFlying() {
+        Base b = sharedRegion == null ? null : bases.get(sharedRegion);
+        int flying = 0;
+        if (b != null) for (Worker w : b.workers) if (w.entity != null && w.entity.isValid()) flying++;
+        return flying;
     }
 
     /** "Tier II Courier", and what it does. */
@@ -843,6 +855,7 @@ public final class Allays implements Listener {
         w.agent = null;
         if (w.carried == null || !robots.isPlaced(agent) || !robots.fuelFromItem(agent, w.carried)) return;
         w.carried = null;
+        counts[2]++;
         w.entity.getWorld().playSound(agent.loc, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.5f, 0.9f);
         w.entity.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, agent.loc.clone().add(0, 1, 0), 8, 0.3, 0.3, 0.3, 0.02);
     }
@@ -895,6 +908,7 @@ public final class Allays implements Listener {
         if (w.carried == null || chest == null || !(chest.getState(false) instanceof Container c)) return;
         Map<Integer, ItemStack> left = c.getInventory().addItem(w.carried);
         w.carried = left.isEmpty() ? null : left.values().iterator().next();
+        counts[1]++;
         chest.getWorld().playSound(chest.getLocation(), Sound.BLOCK_AMETHYST_CLUSTER_PLACE, 0.4f, 1.3f);
     }
 
@@ -982,6 +996,7 @@ public final class Allays implements Listener {
         if (trader != null) trader.recordSale(ownerId, load.getType(), load.getAmount());
         plugin.getLogger().info("allay sale: " + owner.getName() + " sold " + load.getAmount() + " " + load.getType().getKey().getKey() + " for " + net);
         w.carried = null;
+        counts[3]++;
         at.getWorld().playSound(at, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.6f, 1.2f);
         at.getWorld().spawnParticle(Particle.WAX_ON, at.clone().add(0.5, 1.4, 0.5), 12, 0.4, 0.3, 0.4, 0.02);
         if (w.tier >= 3) prismBurst(at.clone().add(0.5, 1.4, 0.5));
@@ -1002,6 +1017,7 @@ public final class Allays implements Listener {
         if (n >= stack.getAmount()) drop.remove();
         else { stack.setAmount(stack.getAmount() - n); drop.setItemStack(stack); }
         w.carried = load;
+        counts[0]++;
         w.entity.getWorld().playSound(w.entity.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.5f, 1.4f);
     }
 

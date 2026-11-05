@@ -317,6 +317,7 @@ Every phase ends with a gate. New config keys all live under `allays:` in `plugi
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | Foundry redesigned round a central Forge with coloured paths, and `/foundry check` added to test every agent, hopper and allay job | Colin, in chat |
 | 2026-11-04 | Added a glowing Tier II trail, Tier III ribbons, halo and burst, and separate flock paths. Fixed bugs from a code review | Colin, in chat |
 | 2026-11-04 | Colin saw allays showing double. Wings are now smaller and see-through with three flap steps, and a tight hover spreads the flock out | Colin, in chat |
 | 2026-11-04 | Added tier looks: Tier II glimmering orange and Tier III a flowing rainbow, from pack models on a display that follows an invisible allay | Colin, in chat |

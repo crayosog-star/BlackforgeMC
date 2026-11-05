@@ -20,33 +20,35 @@ public final class FoundryZone {
     /** The infinite chests, one for each of FoundrySupply's menus. */
     public static final int[] SUPPLY_X = {-8, -4, 0, 4, 8};
     public static final int SUPPLY_Z = -53;
-    /** The Forge: a Base Station anyone can use. */
-    public static final int FORGE_X = 0, FORGE_Z = -60;
+    /** The Forge: a Base Station anyone can use, in the middle of the island so every wing leads back to it. */
+    public static final int FORGE_X = 0, FORGE_Z = -71;
+    /** The plaza round the Forge, and how far out its pillars stand: past the flock's circle, so allays have room to fly it. */
+    public static final int PLAZA_R = 8, PILLAR_OFFSET = 4;
     /** Allay Bench: a spot on the open floor by the Forge where loose items keep landing, in reach of a Gatherer. */
-    public static final int ALLAY_BENCH_X = 7, ALLAY_BENCH_Z = -60;
+    public static final int ALLAY_BENCH_X = 6, ALLAY_BENCH_Z = -64;
     /** Hopper lanes, tier I to III: source chest on top, the hopper, then the sink one block east. */
-    public static final int LANE_X = 14;
-    public static final int[] LANE_Z = {-66, -61, -56};
+    public static final int LANE_X = 17;
+    public static final int[] LANE_Z = {-76, -71, -66};
     /** Farmer bench: farmland with a water block in the middle. */
-    public static final int FARM_X1 = -18, FARM_X2 = -10, FARM_Z1 = -66, FARM_Z2 = -58;
+    public static final int FARM_X1 = -19, FARM_X2 = -11, FARM_Z1 = -71, FARM_Z2 = -63;
     /** Fisherman bench: a one-deep pond. */
-    public static final int POND_X1 = -19, POND_X2 = -13, POND_Z1 = -78, POND_Z2 = -72;
+    public static final int POND_X1 = -17, POND_X2 = -11, POND_Z1 = -84, POND_Z2 = -78;
     /** Miner bench: an ore wall on z = MINE_Z that grows back. */
-    public static final int MINE_X1 = 8, MINE_X2 = 18, MINE_Z = -82, MINE_HEIGHT = 3;
+    public static final int MINE_X1 = 7, MINE_X2 = 17, MINE_Z = -84, MINE_HEIGHT = 3;
     /** Grinder bench: a fenced pen of mobs. */
     public static final int PEN_X1 = -5, PEN_X2 = 5, PEN_Z1 = -90, PEN_Z2 = -80;
 
     /** The Build Plot: open floor for your own Base Station, in squares of 8 so each square is its own little base. */
-    public static final int PLOT_X1 = 3, PLOT_X2 = 15, PLOT_Z1 = -79, PLOT_Z2 = -68;
+    public static final int PLOT_X1 = 8, PLOT_X2 = 15, PLOT_Z1 = -62, PLOT_Z2 = -54;
     /** Everywhere else on the island is one base: the shared Forge's. */
     public static final String SHARED_REGION = "foundry";
 
     /** Where /foundry tp takes you: x, z, on open floor beside each bench. */
     public static final java.util.Map<String, int[]> SPOTS = java.util.Map.of(
-            "forge", new int[]{0, -57}, "supply", new int[]{0, -50}, "allays", new int[]{7, -57}, "courier", new int[]{10, -62}, "lanes", new int[]{11, -59},
-            "farm", new int[]{-8, -62}, "pond", new int[]{-11, -75}, "mine", new int[]{13, -80}, "pen", new int[]{0, -78}, "plot", new int[]{9, -74});
+            "forge", new int[]{0, -65}, "supply", new int[]{0, -50}, "allays", new int[]{3, -62}, "courier", new int[]{9, -66}, "lanes", new int[]{14, -71},
+            "farm", new int[]{-9, -67}, "pond", new int[]{-9, -81}, "mine", new int[]{12, -80}, "pen", new int[]{0, -78}, "plot", new int[]{11, -58});
     /** Where /foundry demo puts its agents, in the order FoundrySystems.demo places them: Miner, Farmer, Fisherman, Grinder. */
-    public static final int[][] DEMO = {{13, -81}, {-9, -62}, {-12, -75}, {0, -79}};
+    public static final int[][] DEMO = {{12, -83}, {-10, -67}, {-10, -81}, {0, -79}};
 
     /**
      * Where the Grinder pen's mobs stand, offset from its middle: the inside edge, every 4 blocks. An agent right outside any

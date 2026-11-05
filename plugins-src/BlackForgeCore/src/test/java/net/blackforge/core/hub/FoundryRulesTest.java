@@ -79,6 +79,17 @@ class FoundryRulesTest {
             }
     }
 
+    @Test void theForgeIsInTheMiddleWithRoomForTheFlockToCircle() {
+        assertEquals(FoundryZone.ISLAND_X, FoundryZone.FORGE_X);
+        assertEquals(FoundryZone.ISLAND_Z, FoundryZone.FORGE_Z);
+        assertTrue(FoundryZone.PILLAR_OFFSET > 2, "the circle check needs 2 blocks clear each way");
+        assertTrue(FoundryZone.PLAZA_R > FoundryZone.PILLAR_OFFSET);
+    }
+
+    @Test void theAllayBenchIsWithinATierOneAllaysReach() {
+        assertTrue(Math.hypot(FoundryZone.ALLAY_BENCH_X - FoundryZone.FORGE_X, FoundryZone.ALLAY_BENCH_Z - FoundryZone.FORGE_Z) + 2 < 12);
+    }
+
     @Test void theBuildPlotHasRoomForSeveralBases() {
         assertNotEquals(FoundryZone.regionAt(FoundryZone.PLOT_X1, FoundryZone.PLOT_Z1), FoundryZone.regionAt(FoundryZone.PLOT_X2, FoundryZone.PLOT_Z2));
         assertEquals(FoundryZone.regionAt(FoundryZone.PLOT_X1, FoundryZone.PLOT_Z1), FoundryZone.regionAt(FoundryZone.PLOT_X1 + 1, FoundryZone.PLOT_Z1 + 1));
