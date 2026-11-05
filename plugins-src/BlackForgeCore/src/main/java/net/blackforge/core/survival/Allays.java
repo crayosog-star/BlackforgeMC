@@ -437,6 +437,9 @@ public final class Allays implements Listener {
     int[] counts() { return counts.clone(); }
     void resetCounts() { java.util.Arrays.fill(counts, 0); }
 
+    /** How many allays a flock of this tier has, from the config. */
+    int flock(int tier) { return table.flock(tier); }
+
     int sharedFlying() {
         Base b = sharedRegion == null ? null : bases.get(sharedRegion);
         int flying = 0;

@@ -1,6 +1,7 @@
 package net.blackforge.core.hub;
 
 import net.blackforge.core.Ui;
+import net.blackforge.core.survival.FoundrySystems;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Sound;
@@ -8,6 +9,7 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.TreeSet;
@@ -23,7 +25,7 @@ final class FoundryCommand {
             {"/foundry stop", "/foundry stop", "Removes your agents and blocks, and gives your combat kit back"},
             {"/foundry allays [1|2|3|off]", "/foundry allays ", "Sets the allay tier: 1 Gatherer carries drops, 2 Courier sorts and refuels, 3 Steward sells"},
             {"/foundry level", "/foundry level", "Shows the island's base level, its Agent deliveries and what's next"},
-            {"/foundry level [1-5]", "/foundry level ", "Sets the base level for the whole island"},
+            {"/foundry level [1-" + FoundrySystems.maxLevel() + "]", "/foundry level ", "Sets the base level for the whole island"},
             {"/foundry level add [items]", "/foundry level add ", "Adds Agent deliveries, so you can test progress without waiting"},
             {"/foundry demo", "/foundry demo", "Places one fuelled agent at each bench, so the whole chain runs by itself"},
             {"/foundry tp [place]", "/foundry tp ", "Takes you to a bench: forge, supply, allays, courier, lanes, farm, pond, mine, pen or plot"},
@@ -57,7 +59,12 @@ final class FoundryCommand {
             @Override public List<String> tabComplete(CommandSender s, String alias, String[] a) {
                 if (a.length == 1) return List.of("start", "stop", "allays", "level", "demo", "tp", "fuel", "reset", "status");
                 if (a.length == 2 && a[0].equalsIgnoreCase("allays")) return List.of("1", "2", "3", "off");
-                if (a.length == 2 && a[0].equalsIgnoreCase("level")) return List.of("1", "2", "3", "4", "5", "add");
+                if (a.length == 2 && a[0].equalsIgnoreCase("level")) {
+                    List<String> out = new ArrayList<>();
+                    for (int l = 1; l <= FoundrySystems.maxLevel(); l++) out.add(String.valueOf(l));
+                    out.add("add");
+                    return out;
+                }
                 if (a.length == 2 && a[0].equalsIgnoreCase("tp")) return List.copyOf(new TreeSet<>(FoundryZone.SPOTS.keySet()));
                 if (a.length == 2 && a[0].equalsIgnoreCase("fuel")) return List.of("low");
                 return List.of();
@@ -129,7 +136,7 @@ final class FoundryCommand {
                 foundry.tell("<#4fd1b5>" + p.getName() + " added " + items + " Agent deliveries to the island's test base.");
             } else {
                 long level = number(want);
-                if (level < 1 || level > 5) { p.sendMessage(Ui.mm("<gray>Use <white>/foundry level 1 <gray>to <white>5<gray>, or <white>/foundry level add <gray>and a number")); return; }
+                if (level < 1 || level > FoundrySystems.maxLevel()) { p.sendMessage(Ui.mm("<gray>Use <white>/foundry level 1 <gray>to <white>" + FoundrySystems.maxLevel() + "<gray>, or <white>/foundry level add <gray>and a number")); return; }
                 foundry.systems().setTestLevel((int) level);
                 foundry.tell("<#4fd1b5>" + p.getName() + " set the island to Base Level " + level + ".");
             }

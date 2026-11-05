@@ -130,6 +130,12 @@ public final class FoundrySystems {
         return out;
     }
 
+    /** The highest base level, for /foundry level. */
+    public static int maxLevel() { return BaseLevelRules.MAX_LEVEL; }
+
+    /** Did a {@link #check} put down at least one demo agent? */
+    public static boolean placedAny(int checkResult) { return FoundryTestRules.placedAny(checkResult); }
+
     /** Sets the whole island's test level. */
     public void setTestLevel(int level) { levels.setLevel(sharedRegion, level); }
 
@@ -176,19 +182,21 @@ public final class FoundrySystems {
     /**
      * Tests everything by really running it: puts one agent at each bench, turns on Tier III, runs the agents low on fuel,
      * then after {@code foundry.check-seconds} says which jobs were really done. It reads counters, so a PASS means it
-     * happened. It proves the job ran, not how it looks. False if a check was already running, so nothing was placed.
+     * happened. It proves the job ran, not how it looks. Returns how many demo agents it placed, or -1 if a check was
+     * already running, so nothing was placed.
      */
-    public boolean check(Player p, java.util.function.Consumer<String> say) {
-        if (checking) { say.accept("<gray>A check is already running. It'll report soon."); return false; }
+    public int check(Player p, java.util.function.Consumer<String> say) {
+        if (checking) { say.accept("<gray>A check is already running. It'll report soon."); return -1; }
         checking = true;
         int before = allays.sharedTier(), seconds = checkSeconds;
         say.accept("<gold>Testing everything for " + seconds + " seconds. <gray>You can watch, or keep testing. Your agents stay placed.");
         allays.resetCounts();
         robots.resetWorkCounts();
-        allays.setSharedTier(p.getUniqueId(), FoundryTestRules.CHECK_TIER);
+        boolean tierSet = allays.setSharedTier(p.getUniqueId(), FoundryTestRules.CHECK_TIER);
+        int flock = allays.flock(FoundryTestRules.CHECK_TIER);
         List<Robots.Job> have = new ArrayList<>();
         for (Robots.Bot b : robots.agentsOf(p.getUniqueId())) have.add(b.job);
-        placeDemoSet(p, have);
+        int placedNow = placeDemoSet(p, have);
         fuelLow(p);
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             checking = false;
@@ -202,7 +210,8 @@ public final class FoundrySystems {
             }
             lab.laneChecks().forEach(say);
             int[] c = allays.counts();
-            say.accept(result(allays.sharedFlying() == 3, "Allays flying", allays.sharedFlying() + " of 3"));
+            int flying = allays.sharedFlying();
+            say.accept(result(FoundryTestRules.flockFlying(tierSet, flying, flock), "Allays flying", FoundryTestRules.flyingDetail(tierSet, flying, flock)));
             say.accept(result(c[0] > 0, "Gatherer", c[0] + " drops carried to the Forge"));
             say.accept(result(c[1] > 0, "Courier sorting", c[1] + " loads put in framed chests"));
             say.accept(result(c[2] > 0, "Courier refuelling", c[2] + " Agents refuelled"));
@@ -210,10 +219,11 @@ public final class FoundrySystems {
             // an island that emptied keeps no flock, and a tier someone set during the check stays
             boolean restore = FoundryTestRules.restoreAfterCheck(testing.getAsBoolean(), allays.sharedTier());
             if (restore) allays.setSharedTier(p.getUniqueId(), Math.max(before, 0));
-            say.accept("<gray>" + (restore ? "Allays are back to how you had them." : "Allays left as they are: someone changed the tier, or the island emptied, during the check.")
+            say.accept("<gray>" + (restore ? "Allays are back to how you had them." : !tierSet ? "Allays left as they are: the allay limit refused Tier III."
+                    : "Allays left as they are: someone changed the tier, or the island emptied, during the check.")
                     + " A FAIL can also mean it just ran out of time, so run it again before calling it a bug.");
         }, seconds * 20L);
-        return true;
+        return placedNow;
     }
 
     /** Everything worth checking when something looks wrong, as chat lines. */

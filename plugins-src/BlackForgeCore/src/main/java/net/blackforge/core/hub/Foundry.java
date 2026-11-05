@@ -140,7 +140,8 @@ public final class Foundry implements Listener {
                     p.sendMessage(net.blackforge.core.Ui.mm("<gray>Your Foundry test was cleared."));
                 } else p.sendActionBar(net.blackforge.core.Ui.mm("<yellow>Back to the Foundry in <white>" + ((until - time) / 1000 + 1) + "s<yellow> to keep your test"));
             }
-            if (inside.contains(id) && !builder(p) && p.getItemOnCursor().getType().isAir()) restock(p);
+            // only while standing in the zone: someone in the leave grace keeps their test, not a free refill outside
+            if (now && inside.contains(id) && !builder(p) && p.getItemOnCursor().getType().isAir()) restock(p);
         }
     }
 
@@ -196,14 +197,14 @@ public final class Foundry implements Listener {
         int n = systems.demo(p);
         if (n == 0) {
             demoed.remove(p.getUniqueId());
-            return "<gray>No demo agents went down: another tester's agents may already be on the bench spots. <white>/foundry status<gray> shows yours.";
+            return "<gray>No demo agents went down: bench spots are taken or blocked, or you're at your agent limit. <white>/foundry status<gray> shows yours.";
         }
         return "<green>" + n + " demo agents placed at the benches. <gray>What they make goes to the Forge. <white>/foundry status<gray> shows where each one delivers.";
     }
 
-    /** /foundry check places the demo set too, so a /foundry demo after it doesn't stack a second one. */
+    /** /foundry check places the demo set too, so a /foundry demo after it doesn't stack a second one. Nothing placed, nothing marked. */
     void check(Player p, java.util.function.Consumer<String> say) {
-        if (systems.check(p, say)) demoed.add(p.getUniqueId());
+        if (FoundrySystems.placedAny(systems.check(p, say))) demoed.add(p.getUniqueId());
     }
 
     private void left(Player p) {
