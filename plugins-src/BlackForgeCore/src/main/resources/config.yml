@@ -167,6 +167,25 @@ base-station:
   agent-radius: 16
   custom-ui: true          # false = plain menus
 
+# Base levels (plan: docs/plans/base-progression.md). Survival and the Foundry only; the Foundry always runs them for testing.
+# Nothing reads these yet. deliveries = lifetime items Agents put in the Forge, per level from 2 to 5, and must rise.
+base-levels:
+  enabled: false
+  deliveries: [2000, 12000, 52000, 202000]
+  money: [25000, 100000, 400000, 2000000]
+  essence: [128, 512, 2048, 8192]
+  job-levels:                       # the farmer must stay at 1
+    farmer: 1
+    miner: 2
+    fisherman: 3
+    grinder: 4
+  allay-levels: [3, 4, 5]           # Gatherer, Courier, Steward; their prices stay under allays:
+  hopper-levels: [2, 4]             # claim-wide Tier II, Tier III
+  hopper-money: [150000, 1500000]
+  hopper-essence: [512, 8192]
+  claim-hopper-max-per-chunk: 256   # safety limit until the lag test
+  starter-agent: true               # one free Tier I Farmer, once per player, on placing a Forge
+
 # Hopper tiers I, II, III. delays = ticks between moves (vanilla is 8). upgrades-needed = I to II, then II to III.
 hopper-upgrades:
   enabled: true            # false = hoppers run at vanilla speed; tiers are kept
