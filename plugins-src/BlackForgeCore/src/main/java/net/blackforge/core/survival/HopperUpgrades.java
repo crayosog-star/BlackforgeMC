@@ -25,6 +25,7 @@ import org.bukkit.event.block.BlockDispenseEvent;
 import org.bukkit.event.block.BlockDropItemEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.inventory.InventoryType;
@@ -69,6 +70,8 @@ public final class HopperUpgrades implements Listener {
     private final Map<ChunkId, Loaded> loaded = new HashMap<>();
     private final int[] delays, needed;
     private int maxPerChunk;
+    /** Skins per chunk, so a claim-wide tier over a huge hopper wall can't fill a chunk with displays. The rest still run at their tier. */
+    private final int looksPerChunk;
     private boolean sandbox;
     final int price, essence;
     private final boolean enabled;
@@ -86,6 +89,7 @@ public final class HopperUpgrades implements Listener {
         delays = ints(c.getIntegerList("hopper-upgrades.delays"), HopperTiers.DELAYS);
         needed = ints(c.getIntegerList("hopper-upgrades.upgrades-needed"), HopperTiers.UPGRADES_NEEDED);
         maxPerChunk = c.getInt("hopper-upgrades.max-per-chunk", 16);
+        looksPerChunk = Math.max(0, c.getInt("hopper-looks-max-per-chunk", 32));
         price = c.getInt("hopper-upgrades.price", 20_000);
         essence = c.getInt("hopper-upgrades.essence", 128);
         enabled = c.getBoolean("hopper-upgrades.enabled", true);
@@ -265,13 +269,26 @@ public final class HopperUpgrades implements Listener {
         return l.world.getBlockAt(l.cx << 4 | HopperTiers.localX(pos), HopperTiers.y(pos), l.cz << 4 | HopperTiers.localZ(pos));
     }
 
-    /** Puts each upgraded hopper's skin on, and takes it off any that have gone. */
+    /** Puts each upgraded hopper's skin on, at the tier it really runs at, and takes it off any that have gone. */
     private void refreshLooks() {
         if (look == null || !look.active()) return;
         java.util.Set<Block> now = new java.util.HashSet<>();
-        for (Loaded l : loaded.values()) for (Map.Entry<Integer, Integer> e : l.tiers.entrySet()) {
-            Block b = blockAt(l, e.getKey());
-            if (b.getType() == Material.HOPPER && e.getValue() >= 2) { now.add(b); look.dress(b, e.getValue()); }
+        for (Loaded l : loaded.values()) {
+            Map<Integer, Integer> all = new HashMap<>(l.claim);
+            all.putAll(l.tiers);
+            int shown = 0;
+            // bought one at a time first: those are the ones a player paid to see
+            List<Map.Entry<Integer, Integer>> order = new java.util.ArrayList<>(all.entrySet());
+            order.sort(java.util.Comparator.comparing(e -> !l.tiers.containsKey(e.getKey())));
+            for (Map.Entry<Integer, Integer> e : order) {
+                if (shown >= looksPerChunk) break;
+                int tier = HopperTiers.effective(l.tiers.getOrDefault(e.getKey(), 1), l.claim.getOrDefault(e.getKey(), 1));
+                Block b = blockAt(l, e.getKey());
+                if (tier < 2 || b.getType() != Material.HOPPER) continue;
+                now.add(b);
+                look.dress(b, tier);
+                shown++;
+            }
         }
         look.keepOnly(now);
     }
@@ -303,13 +320,19 @@ public final class HopperUpgrades implements Listener {
         if (!isUpgrade(e.getItem())) return;
         if (e.getAction() != Action.RIGHT_CLICK_BLOCK || !e.getPlayer().isSneaking() || e.getClickedBlock().getType() != Material.HOPPER) return;
         e.setCancelled(true);
-        if (e.getHand() != EquipmentSlot.HAND) return;
         Player p = e.getPlayer();
+        if (e.getHand() != EquipmentSlot.HAND) {
+            if (!isUpgrade(p.getInventory().getItemInMainHand())) p.sendActionBar(Ui.mm("<gray>Hold the Hopper Upgrade in your main hand."));
+            return;
+        }
         Block b = e.getClickedBlock();
         if (!enabled) { p.sendActionBar(Ui.mm("<gray>Hopper upgrades are switched off right now.")); return; }
         if (!access.test(p, b.getLocation())) { p.sendActionBar(Ui.mm("<red>You can only upgrade hoppers on your own land.")); return; }
         int tier = tierAt(b);
         if (tier >= HopperTiers.MAX_TIER) { p.sendActionBar(Ui.mm("<gold>This hopper is already Tier " + ROMAN[tier] + ".")); return; }
+        // it wouldn't get any faster, so don't let a player spend upgrades on it
+        int claim = claimTierAt(b);
+        if (claim > tier) { p.sendActionBar(Ui.mm("<gold>Your base already runs this hopper at Tier " + ROMAN[claim] + ". <gray>Keep your upgrades.")); return; }
         int need = needed(tier);
         int have = count(p);
         if (have < need) { p.sendActionBar(Ui.mm("<red>Tier " + ROMAN[tier + 1] + " takes " + need + " Hopper Upgrades. You have " + have + ".")); return; }
@@ -375,6 +398,7 @@ public final class HopperUpgrades implements Listener {
         if (b.getType() != Material.HOPPER) return;
         Loaded inChunk = loaded.get(ChunkId.of(b.getWorld(), b.getX() >> 4, b.getZ() >> 4));
         if (inChunk != null) inChunk.claim.remove(HopperTiers.pack(b.getX(), b.getY(), b.getZ()));
+        if (look != null) look.remove(b);
         int tier = tierAt(b);
         if (tier <= 1) return;
         forget(b);
@@ -403,6 +427,12 @@ public final class HopperUpgrades implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onBlockExplode(BlockExplodeEvent e) { e.blockList().removeIf(b -> b.getType() == Material.HOPPER && tierAt(b) > 1); }
+
+    /** A Wither chews through blocks without an explosion or a break event, and the tier would be lost with no drop. */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onEntityChange(EntityChangeBlockEvent e) {
+        if (e.getBlock().getType() == Material.HOPPER && tierAt(e.getBlock()) > 1) e.setCancelled(true);
+    }
 
     @EventHandler(ignoreCancelled = true)
     public void onDispense(BlockDispenseEvent e) { if (isUpgrade(e.getItem()) || itemTier(e.getItem()) > 1) e.setCancelled(true); }

@@ -9,6 +9,13 @@ class AllayFlightTest {
     private static final double EPS = 1e-9;
     private static final double[] A = {0, 64, 0}, B = {12, 64, 0};
 
+    @Test void liftOnlyWhenItFitsUnderTheCeiling() {
+        AllayPath.Route r = new AllayPath.Route(java.util.List.of(new double[]{0.5, 64.5, 0.5}, new double[]{12.5, 64.5, 0.5}));
+        assertTrue(AllayFlight.liftFits(r, (x, y, z) -> true));
+        assertTrue(AllayPath.clear(r.at(0), r.at(r.length), (x, y, z) -> y < 65), "the level line itself is clear");
+        assertFalse(AllayFlight.liftFits(r, (x, y, z) -> y < 65), "the arc would go through a ceiling at y 65");
+    }
+
     @Test void ticksFollowSpeed() {
         assertEquals(40, AllayFlight.ticks(12, 6));
         assertEquals(10, AllayFlight.ticks(1, 6));      // a short hop still eases
