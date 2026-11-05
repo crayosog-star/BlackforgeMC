@@ -116,4 +116,65 @@ class AllayFlightTest {
         assertEquals(AllayFlight.Hover.CENTRE, h);
         allFit(h, 3, cubby);
     }
+
+    @Test void tightSpotIsJustAboveTheStation() {
+        assertArrayEquals(TIGHT, AllayFlight.tightSpot(0, 64, 0), EPS);
+    }
+
+    @Test void packedFlockSitsSideBySide() {
+        assertArrayEquals(new double[]{-0.2, 65.3, 0.5}, AllayFlight.idleSpot(0, 64, 0, AllayFlight.Hover.ROW_X, 0, 3, 99), EPS);
+        assertArrayEquals(new double[]{0.5, 65.3, 0.5}, AllayFlight.idleSpot(0, 64, 0, AllayFlight.Hover.ROW_X, 1, 3, 99), EPS);
+        assertArrayEquals(new double[]{0.5, 65.3, 1.2}, AllayFlight.idleSpot(0, 64, 0, AllayFlight.Hover.ROW_Z, 2, 3, 99), EPS);
+        assertArrayEquals(new double[]{0.5, 66.7, 0.5}, AllayFlight.idleSpot(0, 64, 0, AllayFlight.Hover.STACK, 2, 3, 99), EPS);
+        assertArrayEquals(TIGHT, AllayFlight.idleSpot(0, 64, 0, AllayFlight.Hover.CENTRE, 2, 3, 99), EPS);
+        // neighbours are exactly one spacing apart, whatever the flock size
+        for (int flock = 2; flock <= 5; flock++) for (int i = 1; i < flock; i++) {
+            double[] a = AllayFlight.idleSpot(0, 64, 0, AllayFlight.Hover.ROW_X, i - 1, flock, 0), b = AllayFlight.idleSpot(0, 64, 0, AllayFlight.Hover.ROW_X, i, flock, 0);
+            assertEquals(AllayFlight.TIGHT_SPACING, b[0] - a[0], EPS);
+        }
+    }
+
+    @Test void packedFlockDoesNotMoveOverTime() {
+        assertArrayEquals(AllayFlight.idleSpot(10, 70, -5, AllayFlight.Hover.ROW_Z, 1, 2, 0),
+                AllayFlight.idleSpot(10, 70, -5, AllayFlight.Hover.ROW_Z, 1, 2, 12_345), EPS);
+    }
+
+    @Test void circlingFlockFollowsTheHover() {
+        double[] h = AllayFlight.hover(1, 3, 40), spot = AllayFlight.idleSpot(10, 70, -5, AllayFlight.Hover.CIRCLE, 1, 3, 40);
+        assertArrayEquals(new double[]{10.5 + h[0], 72.2 + h[1], -4.5 + h[2]}, spot, EPS);
+    }
+
+    @Test void wingsStepThroughEveryPoseInOrder() {
+        int flap = 0;
+        int[] seen = new int[8];
+        for (int i = 0; i < seen.length; i++) { flap = AllayFlight.nextFlap(flap); seen[i] = AllayFlight.flapFrame(flap); }
+        assertArrayEquals(new int[]{1, 2, 1, 0, 1, 2, 1, 0}, seen);   // never closed straight to swept
+        assertEquals(0, AllayFlight.flapFrame(0));
+    }
+
+    @Test void flockFlapsOutOfStep() {
+        assertTrue(AllayFlight.flapsNow(10, 0));
+        assertFalse(AllayFlight.flapsNow(11, 0));
+        assertNotEquals(AllayFlight.flapsNow(10, 0), AllayFlight.flapsNow(10, 1));
+        int flaps = 0;
+        for (long t = 0; t < 20; t++) if (AllayFlight.flapsNow(t, 3)) flaps++;
+        assertEquals(20 / AllayFlight.FLAP_TICKS, flaps);
+    }
+
+    @Test void skinSizeAndFlip() {
+        assertEquals(1f, AllayFlight.skinScale(2));
+        assertEquals(AllayFlight.STEWARD_SCALE, AllayFlight.skinScale(3));
+        assertEquals(1.15f, AllayFlight.STEWARD_SCALE);
+        assertEquals(0f, AllayFlight.skinRoll(false));
+        assertEquals((float) Math.PI, AllayFlight.skinRoll(true));
+    }
+
+    @Test void ribbonsSitEitherSideOfTravel() {
+        assertArrayEquals(new double[]{0, 1}, AllayFlight.side(3, 0), EPS);
+        assertArrayEquals(new double[]{-1, 0}, AllayFlight.side(0, 2), EPS);
+        assertArrayEquals(new double[]{1, 0}, AllayFlight.side(0, 0), EPS);   // straight up or down
+        double[] s = AllayFlight.side(1, 1);
+        assertEquals(1, Math.hypot(s[0], s[1]), EPS);
+        assertEquals(0, s[0] * 1 + s[1] * 1, EPS);   // square to the way it's going
+    }
 }
