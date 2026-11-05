@@ -231,7 +231,7 @@ robots:
   store-threshold: 20
   fuel-fetch-minutes: 2
   walk-speed: 4.0
-  fish-seconds: [180, 150, 120, 90, 60]
+  fish-seconds: [120, 100, 80, 60, 40]
   fisher-burn: 0.25
   # Logs each Grinder's result when it changes (fuel, mobs found, skipped and why, hits, kills).
   # If this key is missing, it's on for the Arena's Foundry and off everywhere else.
