@@ -19,7 +19,7 @@ final class RobotRules {
     /** Charge multiplier per Fuel Cell tier I..V (moved from Robots.FUEL_CHARGE, values unchanged). */
     static final double[] FUEL_CHARGE = {1.0, 1.25, 1.5, 2.0, 3.0};
     /** Milliseconds per fish, per robot tier I..V. */
-    static final long[] FISH_INTERVAL_MS = {180_000, 150_000, 120_000, 90_000, 60_000};
+    static final long[] FISH_INTERVAL_MS = {120_000, 100_000, 80_000, 60_000, 40_000};
     /** A Fisherman burns fuel (and builds Charge) at this fraction of the normal rate. */
     static final double FISHER_BURN = 0.25;
     /** Fuel meter thresholds: 5m, 15m, 30m, 1h, 3h, 12h, 24h. */

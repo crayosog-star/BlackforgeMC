@@ -7,11 +7,13 @@ package net.blackforge.core.survival;
  */
 record AgentStats(int intervalSeconds, double speedMult, int radius, double damage, int hits, int harvests, int fortune,
                   double fuelMult, double chargeMult, double doubleDropChance, double treasureMult) {
-    static final int[] INTERVAL = {8, 6, 4, 3, 2};          // seconds between jobs, per tier
-    static final int[] RADIUS = {2, 3, 4, 5, 6};
-    static final double[] DAMAGE = {8, 12, 16, 22, 30};
+    static final int[] INTERVAL = {6, 4, 3, 2, 1};          // seconds between jobs, per tier
+    static final int[] RADIUS = {3, 4, 5, 6, 7};
+    static final double[] DAMAGE = {10, 15, 20, 28, 40};
     /** Below this tier, Miners have no Fortune. */
-    private static final int FORTUNE_FROM_TIER = 4;
+    private static final int FORTUNE_FROM_TIER = 3;
+    /** Crops a Farmer takes per job, for each tier. */
+    private static final int HARVESTS_PER_TIER = 2;
 
     /** A speed of zero would stop an Agent for good while it still burned fuel, and an interval under 1 would run every tick. */
     AgentStats {
@@ -23,7 +25,7 @@ record AgentStats(int intervalSeconds, double speedMult, int radius, double dama
     static AgentStats of(String job, int tier, AgentRecord record) {
         int i = tier - 1;
         int interval = "fisherman".equals(job) ? (int) (RobotRules.fishIntervalMs(tier) / 1000) : INTERVAL[i];
-        return new AgentStats(interval, 1, RADIUS[i], DAMAGE[i], RobotRules.grindHitsPerSwing(tier), tier,
+        return new AgentStats(interval, 1, RADIUS[i], DAMAGE[i], RobotRules.grindHitsPerSwing(tier), tier * HARVESTS_PER_TIER,
                 tier >= FORTUNE_FROM_TIER ? tier - 2 : 0, 1, 1, 0, 1);
     }
 
