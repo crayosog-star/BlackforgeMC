@@ -30,4 +30,7 @@ final class HopperTiers {
     static int localX(int packed) { return packed & 15; }
     static int localZ(int packed) { return packed >> 4 & 15; }
     static int y(int packed) { return (packed >>> 8) - 2048; }
+
+    /** Skins per chunk: never fewer than the upgraded hoppers a chunk may hold, so none of them runs without its colour. */
+    static int looksCap(int looksPerChunk, int maxPerChunk) { return Math.max(looksPerChunk, maxPerChunk); }
 }
