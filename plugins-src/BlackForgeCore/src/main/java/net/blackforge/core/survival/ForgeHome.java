@@ -37,11 +37,13 @@ final class ForgeHome implements Listener {
         public Inventory getInventory() { return inv; }
     }
 
+    private final org.bukkit.NamespacedKey seenIntro;
     private final BaseStation station;
     private final BaseLevels levels;
     private final Robots robots;
 
     ForgeHome(BlackForgeCore plugin, BaseStation station, BaseLevels levels, Robots robots) {
+        this.seenIntro = new org.bukkit.NamespacedKey(plugin, "forge_home_intro");
         this.station = station;
         this.levels = levels;
         this.robots = robots;
@@ -81,6 +83,10 @@ final class ForgeHome implements Listener {
                 "<gray>4. Each level unlocks more of the base.",
                 "", "<dark_gray>Hoppers and allays don't add to the count."));
         p.openInventory(m.inv);
+        var pdc = p.getPersistentDataContainer();
+        if (pdc.has(seenIntro, org.bukkit.persistence.PersistentDataType.BYTE)) return;
+        pdc.set(seenIntro, org.bukkit.persistence.PersistentDataType.BYTE, (byte) 1);
+        p.sendMessage(Ui.mm("<#4fd1b5>Your base has a level now. <gray>What your Agents deliver here counts toward the next one, and each level unlocks more of your base."));
     }
 
     private static ItemStack label(String text) { return Ui.item(Material.PAPER, "<white><bold>" + text); }

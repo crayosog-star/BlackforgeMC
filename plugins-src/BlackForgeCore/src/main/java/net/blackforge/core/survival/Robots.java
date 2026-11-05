@@ -179,6 +179,27 @@ public final class Robots implements Listener {
     void setLevels(BaseLevels l) { this.levels = l; }
 
     /** The base level this job needs here, or 0 if it's available. Servers without levels, like Skyblock, never lock a job. */
+    /** Each owner's placed jobs, by the names base levels use. */
+    Map<UUID, Set<String>> placedJobs() {
+        Map<UUID, Set<String>> out = new HashMap<>();
+        for (Bot b : bots.values()) out.computeIfAbsent(b.owner, k -> new HashSet<>()).add(b.job.name().toLowerCase(Locale.ROOT));
+        return out;
+    }
+
+    /** New Agents start with the first job a base unlocks. */
+    private Job defaultJob() { return levels != null && levels.active() ? Job.FARMER : Job.MINER; }
+
+    /** One free Agent, for a player's first Forge. */
+    void giveStarter(Player p) {
+        give(p, robotItem(Job.FARMER, 1, 0, 0, 1));
+        p.sendMessage(Ui.mm("<#4fd1b5>You got a free Farmer Agent! <gray>Place it by your crops, within range of your Forge. It runs on Fuel Cells from <white>/agents<gray>."));
+    }
+
+    /** Where to get an Agent, for an empty card in the Forge. */
+    String emptySlotHint() {
+        return crateOnly == null ? "<gray>Get an agent at <white>/agents<gray> and place it." : "<gray>Win agents from " + crateOnly + " <gray>crates and place them.";
+    }
+
     private int lockedUntil(Job job, Location at) {
         if (levels == null || !levels.active() || stations == null) return 0;
         String name = job.name().toLowerCase(Locale.ROOT);
@@ -1006,7 +1027,7 @@ public final class Robots implements Listener {
                 crateOnly == null ? "<gray>1. Buy an agent and place it on your island" : "<gray>1. Win an agent from a crate, place it in your claim", "<gray>2. Right-click it and add Fuel Cells",
                 "<gray>3. Pick a job: Farmer, Miner, Grinder, Fisherman", "<gray>4. Burning fuel builds Charge - with Charge,",
                 "<gray>   Essence and money it can reach the next tier", "", "<gray>Your agents: <white>" + owned(p.getUniqueId()) + "/" + limit(p) + " <dark_gray>(ranks raise this)"));
-        ItemStack r = robotItem(Job.MINER, 1, 0, 0, 1);
+        ItemStack r = robotItem(defaultJob(), 1, 0, 0, 1);
         r.editMeta(x -> { List<net.kyori.adventure.text.Component> l = new ArrayList<>(Optional.ofNullable(x.lore()).orElse(List.of())); l.add(Ui.mm(""));
             if (crateOnly == null) { l.add(Ui.mm("<green>Price: " + NetEconomy.money(ROBOT_PRICE))); l.add(Ui.mm("<yellow>Click to buy")); }
             else { l.add(Ui.mm("<red>Not for sale here")); l.add(Ui.mm("<gray>Win agents from " + crateOnly + " <gray>crates")); }
@@ -1028,7 +1049,7 @@ public final class Robots implements Listener {
         else if (slot == 13) {
             if (crateOnly != null) { p.sendMessage(Ui.mm("<gray>Agents can only be won from " + crateOnly + " <gray>crates.")); return; }
             if (eco == null || !eco.withdrawPlayer(p, ROBOT_PRICE).transactionSuccess()) { p.sendMessage(Ui.mm("<red>An agent costs " + NetEconomy.money(ROBOT_PRICE) + ".")); return; }
-            give(p, robotItem(Job.MINER, 1, 0, 0, 1));
+            give(p, robotItem(defaultJob(), 1, 0, 0, 1));
             p.sendMessage(Ui.mm("<green>You bought an agent! Place it on your island."));
         } else if (slot >= 19 && slot <= 27 && (slot - 19) % 2 == 0) {
             int t = (slot - 19) / 2 + 1;
@@ -1051,7 +1072,7 @@ public final class Robots implements Listener {
                     if (t == null) { s.sendMessage(Ui.mm("<red>Not online.")); return true; }
                     int n = a.length > 3 ? Integer.parseInt(a[3]) : 1;
                     switch (a[2].toLowerCase()) {
-                        case "agent", "robot" -> give(t, robotItem(a.length > 4 ? Job.valueOf(a[4].toUpperCase()) : Job.MINER, Math.max(1, Math.min(5, n)), 0, 0, 1));
+                        case "agent", "robot" -> give(t, robotItem(a.length > 4 ? Job.valueOf(a[4].toUpperCase()) : defaultJob(), Math.max(1, Math.min(5, n)), 0, 0, 1));
                         case "fuel" -> give(t, fuelCell(n, 1));
                         case "essence" -> Spawners.giveEssence(t, n);
                         case "fragment", "fragments" -> give(t, Spawners.fragment(n));

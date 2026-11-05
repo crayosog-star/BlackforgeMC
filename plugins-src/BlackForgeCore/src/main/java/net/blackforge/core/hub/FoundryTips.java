@@ -31,7 +31,7 @@ final class FoundryTips implements Listener {
     private static final Map<String, String> TIPS = Map.ofEntries(
             Map.entry("allay", "Forge Allays are already flying here, carrying loose drops to the Forge. /foundry allays 2 or 3 changes their tier, and so does slot 34 of the Forge."),
             Map.entry("supply", "Click anything in this chest for a full stack. It never runs out."),
-            Map.entry("forge", "Upgrades here are free. Click an agent's card to raise its tier, and use the arrow if you have more than five."),
+            Map.entry("forge", "This screen shows the base's level and what it unlocks. /foundry level changes it for the island. Upgrades here are free. Under Your Agents, click an agent's card to raise its tier, and use the arrow if you have more than five."),
             Map.entry("lane", "Each lane shows its rated speed and the speed it's really moving. Tier I is a plain hopper."),
             Map.entry("farm", "Place a Farmer agent next to this wheat. It starts with fuel here, harvests and replants on its own, and the wheat regrows for the next test."),
             Map.entry("pond", "Place a Fisherman agent within two blocks of this water. It catches much faster here than in Survival, so you can see it work."),

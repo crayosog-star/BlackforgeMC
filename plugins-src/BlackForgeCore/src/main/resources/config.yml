@@ -168,7 +168,7 @@ base-station:
   custom-ui: true          # false = plain menus
 
 # Base levels (plan: docs/plans/base-progression.md). Survival and the Foundry only; the Foundry always runs them for testing.
-# Nothing reads these yet. deliveries = lifetime items Agents put in the Forge, per level from 2 to 5, and must rise.
+# deliveries = lifetime items Agents put in the Forge, per level from 2 to 5, and must rise.
 base-levels:
   enabled: false
   deliveries: [2000, 12000, 52000, 202000]

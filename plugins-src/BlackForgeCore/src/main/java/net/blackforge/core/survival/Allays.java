@@ -553,6 +553,13 @@ public final class Allays implements Listener {
         p.openInventory(m.inv);
     }
 
+    /** Every base's allay tier. */
+    Map<String, Integer> tiers() {
+        Map<String, Integer> out = new HashMap<>();
+        for (Base b : bases.values()) out.put(b.region, b.tier);
+        return out;
+    }
+
     /** A tier's card for the Forge's home screen. */
     ItemStack homeCard(int t, String region) {
         Base b = bases.get(region);

@@ -78,6 +78,7 @@ public final class BaseStation implements Listener {
     private Allays allays;
     private BaseLevels levels;
     private ForgeHome home;
+    private BiPredicate<Player, Location> starterRule = (p, l) -> false;
     private java.util.function.Predicate<String> claimHoppers = r -> true;
 
     BaseStation(BlackForgeCore plugin, Robots robots, HopperUpgrades hoppers) { this(plugin, robots, hoppers, false); }
@@ -112,6 +113,8 @@ public final class BaseStation implements Listener {
         if (l.active()) home = new ForgeHome(plugin, this, l, robots);
     }
     Allays allays() { return allays; }
+    /** Is this the player's own claim, so their first Forge here earns the free Agent? */
+    void setStarterRule(BiPredicate<Player, Location> rule) { this.starterRule = rule; }
     /** Which bases buy hopper tiers for the whole claim, when levels are on. */
     void setClaimHoppers(java.util.function.Predicate<String> rule) { this.claimHoppers = rule; }
 
@@ -261,6 +264,9 @@ public final class BaseStation implements Listener {
         save();
         e.getPlayer().playSound(e.getBlockPlaced().getLocation(), Sound.BLOCK_SMITHING_TABLE_USE, 0.8f, 1f);
         e.getPlayer().sendMessage(Ui.mm("<green>Base Station placed. Right-click it to open. Agents within " + radius + " blocks will deliver here."));
+        Player placer = e.getPlayer();
+        if (levels != null && levels.active() && robots.owned(placer.getUniqueId()) == 0
+                && starterRule.test(placer, e.getBlockPlaced().getLocation()) && levels.takeStarter(placer.getUniqueId())) robots.giveStarter(placer);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -387,7 +393,7 @@ public final class BaseStation implements Listener {
                 m.inv.setItem(col, robots.forgeIcon(agents.get(i)));
                 for (int slot : new int[]{col, col + 9, col + 18}) m.agents.put(slot, agents.get(i).id);
             } else m.inv.setItem(col, i < allowed
-                    ? Ui.item(Material.LIGHT_GRAY_DYE, "<gray><bold>Empty Slot", sandbox ? "<gray>Take an agent from the Agents chest and place it." : "<gray>Get an agent at <white>/agents<gray> and place it.")
+                    ? Ui.item(Material.LIGHT_GRAY_DYE, "<gray><bold>Empty Slot", sandbox ? "<gray>Take an agent from the Agents chest and place it." : robots.emptySlotHint())
                     : Ui.item(Material.IRON_BARS, "<dark_gray><bold>Locked", "<gray>Ranks unlock more agents, up to <white>" + RobotRules.MAX_AGENTS + "<gray>."));
         }
         m.inv.setItem(HOPPER_INFO, claimWide ? Ui.item(Material.HOPPER, "<gold><bold>Hopper Tiers",

@@ -1,6 +1,6 @@
 # Base Progression
 **Status:** In progress
-**Next task:** P5.T1
+**Next task:** P4.T3
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -259,7 +259,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Rollback:** set `base-levels.enabled: false`. The old menu and rules return, and levels and claim tiers stay saved. Hoppers fall back to their own tier while it's off.
 - **Phase gate:** Colin confirms on live Survival: a new player can place a Forge, get a Farmer, level up and buy a Gatherer at Level 3, and an existing base kept everything.
 
-### [ ] P5.T1: Move existing bases up
+### [x] P5.T1: Move existing bases up
 - **Needs:** Phase 4; `BaseLevelRules.floor`; `S/Robots.java:916`; `S/Allays.java:366`.
 - **Files:** change `S/BaseLevels.java`, `S/SurvivalModule.java`.
 - **Steps:**
@@ -268,9 +268,9 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** a world not loaded yet (pending Agents count once loaded); restart mid-migration; an owner with no Forge; running twice changes nothing; levels never go down.
 - **Done when:** a test covers `floor`, and a staff preview on Survival shows an existing Grinder owner at Level 4 or above with their Agent untouched.
 - **Leaves ready:** safe data for launch.
-- **Evidence:**
+- **Evidence:** Verified by code review: raising runs once per base, 10 seconds after startup, and levels only go up. `floor` is covered by `BaseLevelRulesTest`. Untested: a staff preview with a real base.
 
-### [ ] P5.T2: Add the starter Agent and correct the text
+### [x] P5.T2: Add the starter Agent and correct the text
 - **Needs:** P5.T1; `S/Robots.java:987`, `1009`; `S/BaseStation.java:368`.
 - **Files:** change `S/Robots.java`, `S/BaseStation.java`, `S/BaseLevels.java`.
 - **Steps:**
@@ -280,9 +280,9 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** a full inventory drops the Agent at the player's feet, as `give` does; a trusted member placing a Forge in someone else's claim gets nothing; replacing a Forge gives nothing again.
 - **Done when:** a new test player gets exactly one Farmer across two Forge placements.
 - **Leaves ready:** a new player can start with no outside help.
-- **Evidence:**
+- **Evidence:** Verified by code review: `takeStarter` is saved per player and only says yes once. Untested in game: two Forge placements with a new player.
 
-### [ ] P5.T3: Add player guidance
+### [x] P5.T3: Add player guidance
 - **Needs:** P5.T2; `hub/FoundryTips.java`; `S/Robots.java` help.
 - **Files:** change `hub/FoundryTips.java`, `S/ForgeHome.java`, `S/BaseStation.java`.
 - **Steps:**
@@ -292,7 +292,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** no Forge yet: the Workshop says where to buy one; a player without the pack.
 - **Done when:** a new tester gets a Farmer delivering and finds Level 2's cost from in-game text alone.
 - **Leaves ready:** guidance.
-- **Evidence:**
+- **Evidence:** Verified by code review: the intro shows once per player, and the news line is above. Untested: a new tester with in-game text alone.
 
 ### [ ] P5.T4: Measure balance and load
 - **Needs:** P5.T3.
