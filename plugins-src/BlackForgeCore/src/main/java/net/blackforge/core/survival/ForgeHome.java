@@ -67,7 +67,7 @@ final class ForgeHome implements Listener {
         if (!art) {
             ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
             for (int i = 0; i < SIZE; i++) m.inv.setItem(i, pane);
-            m.inv.setItem(18, label("Forge Allays"));
+            if (showAllays) m.inv.setItem(18, label("Forge Allays"));
             m.inv.setItem(27, label("Agents"));
             m.inv.setItem(36, label("Hoppers"));
         }
@@ -119,7 +119,7 @@ final class ForgeHome implements Listener {
         String count = top ? String.valueOf(delivered) : Math.min(delivered, t.cost(level + 1).deliveries()) + " / " + t.cost(level + 1).deliveries();
         c.text("gui_l1", 168 - StationText.width(count) / 2, count, INK);
         c.pips(88, (int) Math.round(t.progress(level, delivered) * 20), 20, StationUi.HOME_BAR_ON, StationUi.HOME_BAR_OFF, 8);
-        c.text("gui_l3", leftAt(8, "ALLAYS"), "ALLAYS", QUIET);
+        if (showAllays) c.text("gui_l3", leftAt(8, "ALLAYS"), "ALLAYS", QUIET);
         c.text("gui_l4", leftAt(8, "AGENTS"), "AGENTS", QUIET);
         c.text("gui_l5", leftAt(8, "HOPPERS"), "HOPPERS", QUIET);
         c.text("gui_l6", leftAt(29, "LEVEL UP"), "LEVEL UP", t.canLevelUp(level, delivered) ? ORANGE : QUIET);
