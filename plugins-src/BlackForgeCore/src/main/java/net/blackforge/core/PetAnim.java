@@ -16,6 +16,8 @@ final class PetAnim {
     /** The hard limit: past this the pet is put back beside the owner. */
     static final double LEASH = 10;
     static final double STEP = .25, LEAP_STEP = 1;
+    /** While bounding back, this many airborne frames in a row with no step means a door or high ledge is in the way. */
+    static final int STUCK_FRAMES = 10;
 
     private static final float TAU = (float) (2 * Math.PI), PI = (float) Math.PI;
 
@@ -118,6 +120,16 @@ final class PetAnim {
     /** Whether the pet should be bounding back, with a gap so it does not flip modes at one distance. */
     static boolean chasing(boolean wasChasing, double distance) {
         return distance > CHASE_START || (wasChasing && distance > CHASE_DONE);
+    }
+
+    /** Counts airborne frames that found no step. Any step clears it. */
+    static int blocked(int frames, boolean stepped) {
+        return stepped ? 0 : frames + 1;
+    }
+
+    /** A chasing pet that keeps hitting the same wall is put back beside the owner instead of leaping on the spot. */
+    static boolean stuck(boolean chasing, int blockedFrames) {
+        return chasing && blockedFrames >= STUCK_FRAMES;
     }
 
     /** Turn from an angle toward another the short way, at most maxStep radians. */
