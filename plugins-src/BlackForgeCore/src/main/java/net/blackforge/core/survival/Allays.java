@@ -195,6 +195,8 @@ public final class Allays implements Listener {
     private final File file;
     /** allays.yml couldn't be read or moved aside, so saving would wipe it: nothing is written until it's fixed. */
     private boolean saveBlocked;
+    /** The last write of allays.yml failed (disk full, permissions). Cleared by the next write that works. */
+    private boolean saveFailing;
 
     /** {@code zone}: where staff may test flight. {@code sandbox}: the Arena's Foundry, where everything is free and nothing is saved. */
     Allays(BlackForgeCore plugin, BaseStation station, Predicate<Location> zone, boolean sandbox) {
@@ -371,7 +373,8 @@ public final class Allays implements Listener {
                 if (withLoads && w.carried != null) y.set(k + "loads." + w.index, w.carried);
             }
         }
-        try { y.save(file); } catch (Exception e) { plugin.getLogger().warning("allay save failed: " + e.getMessage()); }
+        try { y.save(file); saveFailing = false; }
+        catch (Exception e) { saveFailing = true; plugin.getLogger().warning("allay save failed: " + e.getMessage()); }
     }
 
     private void load() {
@@ -635,8 +638,9 @@ public final class Allays implements Listener {
             for (Base o : bases.values()) all += o.workers.size();
             if (all > sandboxLimit) { p.sendActionBar(Ui.mm("<red>The Foundry has enough allays flying right now. Try again soon.")); return; }
         }
-        // save() does nothing while allays.yml is blocked, so a tier bought now would be gone after a restart with nothing refunded
-        if (saveBlocked) { p.sendActionBar(Ui.mm("<red>Allays can't be saved right now, so no tiers can be bought. Tell staff.")); return; }
+        // save() does nothing while allays.yml is blocked, and the last write failed while saveFailing is set,
+        // so a tier bought now would be gone after a restart with nothing refunded
+        if (saveBlocked || saveFailing) { p.sendActionBar(Ui.mm("<red>Allays can't be saved right now, so no tiers can be bought. Tell staff.")); return; }
         AllayRules.Cost cost = table.cost(t);
         if (!station.pay(p, cost.money(), cost.essence())) return;
         if (b == null) { b = new Base(region, p.getUniqueId()); bases.put(region, b); }
