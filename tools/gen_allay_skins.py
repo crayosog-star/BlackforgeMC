@@ -2,7 +2,7 @@
 """Forge Allay skins for Tier II and III: writes the textures, models and item definitions into resourcepack/.
 
 Tier II (courier): orange and copper, with a slow, faint shimmer and sparkles that twinkle (an animated texture). Tier III (steward): a flowing rainbow gradient, an
-animated texture. Each has three models, wings closed to swept back, which the plugin steps through to flap. Wings are
+animated texture. Each has five models, wings closed to swept back, which the plugin steps through to flap. Wings are
 pale, see-through and smaller than the body, so from behind it still reads as one allay with its head showing. Run it from the repo root,
 then build the pack as blackforge-skin-item describes. Output is stable, so re-running changes nothing.
 """
@@ -114,7 +114,7 @@ def model(name, wing_angle):
 
 
 def write_models(name):
-    for frame, angle in (("a", 0.0), ("b", 22.5), ("c", 45.0)):
+    for frame, angle in (("a", 0.0), ("b", 11.25), ("c", 22.5), ("d", 33.75), ("e", 45.0)):
         (ROOT / "models/item/allay").mkdir(parents=True, exist_ok=True)
         (ROOT / "items/allay").mkdir(parents=True, exist_ok=True)
         (ROOT / f"models/item/allay/{name}_{frame}.json").write_text(json.dumps(model(name, angle), indent=2) + "\n")

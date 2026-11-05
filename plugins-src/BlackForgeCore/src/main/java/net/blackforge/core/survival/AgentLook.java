@@ -36,6 +36,10 @@ final class AgentLook {
         int tier; Robots.Job job;
         long start = -1, lastJob; int length; double reach; boolean impact, impactDone;
         Location target;
+        /** The frame last shown, as bob, lean, arm, walk x, walk z, facing. A new animation melts out of it. */
+        double[] shown, fadeFrom;
+        long fadeStart = -1;
+        boolean hadFuel;
     }
 
     private final Robots robots;
@@ -68,8 +72,16 @@ final class AgentLook {
         p.target = target;
         p.impact = impact;
         p.impactDone = false;
+        fade(p);
         Location from = b.loc;
         p.reach = target.getWorld() == from.getWorld() ? AgentMotion.reach(kind, p.length, Math.hypot(target.getX() - from.getX(), target.getZ() - from.getZ())) : 0;
+    }
+
+    /** The next frames melt out of whatever's showing now. */
+    private void fade(Parts p) {
+        if (p.shown == null) return;
+        p.fadeFrom = p.shown;
+        p.fadeStart = now;
     }
 
     private void tick() {
@@ -163,9 +175,12 @@ final class AgentLook {
     }
 
     private void pose(Robots.Bot b, Parts p) {
+        boolean hasFuel = b.fuel > 0;
+        if (hasFuel != p.hadFuel) { p.hadFuel = hasFuel; fade(p); }   // running out slumps it gradually, and refuelling brings it back up
         AgentMotion.Kind kind = AgentMotion.Kind.valueOf(b.job.name());
         AgentPose pose;
         double aim = Math.toRadians(-b.loc.getYaw()), walkX = 0, walkZ = 0;
+        boolean ended = false;
         if (p.start >= 0) {
             double done = (double) (now - p.start) / p.length;
             pose = AgentMotion.work(kind, done);
@@ -182,15 +197,24 @@ final class AgentLook {
                 p.impactDone = true;
                 if (p.impact) impact(b, p);
             }
-            if (done >= 1) p.start = -1;
+            if (done >= 1) { p.start = -1; ended = true; }
         } else {
             pose = AgentMotion.idle(now, b.id.hashCode(), b.fuel > 0);
             if (b.job == Robots.Job.FISHERMAN && b.fuel > 0) pose = new AgentPose(pose.bob(), pose.lean(), pose.arm() + 0.75, 0);   // holds its rod out
         }
-        Matrix4f base = new Matrix4f().translate((float) walkX, (float) pose.bob(), (float) walkZ).rotateY((float) aim);
-        set(p.body, new Matrix4f(base).translate(0, 0.5f, 0).rotateX((float) pose.lean()));
+        double[] frame = {pose.bob(), pose.lean(), pose.arm(), walkX, walkZ, aim};
+        if (p.fadeStart >= 0) {
+            double t = (double) (now - p.fadeStart) / AgentMotion.BLEND_TICKS;
+            if (t >= 1) p.fadeStart = -1;
+            else frame = AgentMotion.blend(p.fadeFrom, frame, t);
+        }
+        p.shown = frame;
+        if (ended) fade(p);   // from this frame into its idle
+        double bob = frame[0], lean = frame[1], armUp = frame[2];
+        Matrix4f base = new Matrix4f().translate((float) frame[3], (float) bob, (float) frame[4]).rotateY((float) frame[AgentMotion.AIM]);
+        set(p.body, new Matrix4f(base).translate(0, 0.5f, 0).rotateX((float) lean));
         // the arm's on the Agent's right, so -x with +z as forward, and raising it means turning it forward
-        Matrix4f arm = new Matrix4f(base).translate(0, 0.52f, 0).rotateX((float) pose.lean()).translate(-0.27f, 0, 0).rotateX((float) -pose.arm());
+        Matrix4f arm = new Matrix4f(base).translate(0, 0.52f, 0).rotateX((float) lean).translate(-0.27f, 0, 0).rotateX((float) -armUp);
         set(p.arm, arm);
         set(p.tool, new Matrix4f(arm).translate(0, -0.3f, 0.02f).scale(0.8f));
     }

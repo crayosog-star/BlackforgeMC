@@ -26,7 +26,7 @@ final class AgentMotion {
 
     /** The moment in a job, 0-1, when the hit lands: when its sound and particles go off. */
     static double impactAt(Kind kind) {
-        return switch (kind) { case MINER -> 0.55; case FARMER -> 0.5; case GRINDER -> 0.42; case FISHERMAN -> 0.75; };
+        return switch (kind) { case MINER -> 0.6; case FARMER -> 0.5; case GRINDER -> 0.48; case FISHERMAN -> 0.75; };
     }
 
     /** How far it may walk to its target: only the Farmer and Grinder leave their post, and it needs time to get there and back. */
@@ -47,25 +47,43 @@ final class AgentMotion {
         double t = clamp(p);
         return switch (kind) {
             case MINER -> {
-                double arm = t < 0.45 ? 2.4 * ease(t / 0.45) : t < 0.58 ? 2.4 - 2.0 * ease((t - 0.45) / 0.13) : 0.4 * (1 - ease((t - 0.58) / 0.42));
-                double lean = t < 0.45 ? -0.2 * ease(t / 0.45) : t < 0.58 ? -0.2 + 0.55 * ease((t - 0.45) / 0.13) : 0.35 * (1 - ease((t - 0.58) / 0.42));
+                double arm = t < 0.36 ? 2.4 * ease(t / 0.36) : t < 0.66 ? 2.4 - 2.0 * ease((t - 0.36) / 0.3) : 0.4 * (1 - ease((t - 0.66) / 0.34));
+                double lean = t < 0.36 ? -0.2 * ease(t / 0.36) : t < 0.66 ? -0.2 + 0.55 * ease((t - 0.36) / 0.3) : 0.35 * (1 - ease((t - 0.66) / 0.34));
                 yield new AgentPose(0, lean, arm, 0);
             }
             case FARMER -> {
                 double go = t < 0.3 ? ease(t / 0.3) : t < 0.7 ? 1 : 1 - ease((t - 0.7) / 0.3);
                 double chop = t < 0.3 || t > 0.7 ? 0 : Math.sin((t - 0.3) / 0.4 * Math.PI);
-                yield new AgentPose(Math.abs(Math.sin(t * Math.PI * 8)) * 0.05 * (t < 0.3 || t > 0.7 ? 1 : 0), 0.45 * chop, 0.3 + 1.2 * chop, go);
+                // little hops while it walks, dying away at each end of the walk so they never cut off in mid-air
+                double walking = t < 0.3 ? Math.sin(t / 0.3 * Math.PI) : t > 0.7 ? Math.sin((t - 0.7) / 0.3 * Math.PI) : 0;
+                yield new AgentPose(Math.abs(Math.sin(t * Math.PI * 8)) * 0.05 * walking, 0.45 * chop, 0.3 + 1.2 * chop, go);
             }
             case GRINDER -> {
                 double go = t < 0.3 ? ease(t / 0.3) : t < 0.55 ? 1 : 1 - ease((t - 0.55) / 0.45);
-                double arm = t < 0.3 ? 2.6 * ease(t / 0.3) : t < 0.45 ? 2.6 - 2.2 * ease((t - 0.3) / 0.15) : 0.4 * (1 - ease((t - 0.45) / 0.55));
+                double arm = t < 0.33 ? 2.6 * ease(t / 0.33) : t < 0.6 ? 2.6 - 2.2 * ease((t - 0.33) / 0.27) : 0.4 * (1 - ease((t - 0.6) / 0.4));
                 yield new AgentPose(0, 0.3 * go, arm, go);
             }
             case FISHERMAN -> {
                 double arm = t < 0.2 ? 0.9 + 1.5 * ease(t / 0.2) : t < 0.32 ? 2.4 - 1.6 * ease((t - 0.2) / 0.12) : t < 0.72 ? 0.8 : t < 0.86 ? 0.8 + 1.4 * ease((t - 0.72) / 0.14) : 2.2 - 1.3 * ease((t - 0.86) / 0.14);
-                yield new AgentPose(0, t > 0.32 && t < 0.72 ? 0.12 : 0, arm, 0);
+                yield new AgentPose(0, 0.12 * ease((t - 0.32) / 0.08) * (1 - ease((t - 0.64) / 0.08)), arm, 0);
             }
         };
+    }
+
+    /** Ticks to melt from one animation into the next, so starting or stopping one never snaps. */
+    static final int BLEND_TICKS = 6;
+    /** Where the numbers in a frame sit. Only the angle it faces needs special care. */
+    static final int FRAME_SIZE = 6, AIM = 5;
+
+    /** A frame part-way from one to the other, on a smooth curve. The facing angle goes the short way round. */
+    static double[] blend(double[] from, double[] to, double t) {
+        double e = ease(t);
+        double[] out = new double[FRAME_SIZE];
+        for (int i = 0; i < FRAME_SIZE; i++) {
+            double gap = i == AIM ? Math.atan2(Math.sin(to[i] - from[i]), Math.cos(to[i] - from[i])) : to[i] - from[i];
+            out[i] = from[i] + gap * e;
+        }
+        return out;
     }
 
     static double ease(double t) {

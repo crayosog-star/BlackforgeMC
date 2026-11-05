@@ -27,6 +27,36 @@ class AgentMotionTest {
         }
     }
 
+    @Test void noPartOfAJobJumpsBetweenTheStepsAPlayerSees() {
+        for (Kind k : Kind.values()) {
+            int ticks = AgentMotion.ticks(k, 8);
+            for (int i = 2; i <= ticks; i += 2) {
+                AgentPose a = AgentMotion.work(k, (i - 2.0) / ticks), b = AgentMotion.work(k, (double) i / ticks);
+                assertTrue(Math.abs(a.arm() - b.arm()) < 1.25, k + " arm at " + i + ": " + Math.abs(a.arm() - b.arm()));   // past this the tool visibly leaves the hand mid-swing
+                assertTrue(Math.abs(a.lean() - b.lean()) < 0.4, k + " lean at " + i);
+                assertTrue(Math.abs(a.bob() - b.bob()) < 0.06, k + " bob at " + i);
+            }
+        }
+    }
+
+    @Test void aBlendStartsAndEndsExactlyOnItsFrames() {
+        double[] a = {0, 0.3, 2.0, 1, -1, 0.5}, b = {0.1, 0, 0.5, 0, 0, 1.0};
+        assertArrayEquals(a, AgentMotion.blend(a, b, 0), 1e-9);
+        assertArrayEquals(b, AgentMotion.blend(a, b, 1), 1e-9);
+        for (int i = 1; i <= AgentMotion.BLEND_TICKS; i++) {
+            double[] was = AgentMotion.blend(a, b, (i - 1.0) / AgentMotion.BLEND_TICKS), now = AgentMotion.blend(a, b, (double) i / AgentMotion.BLEND_TICKS);
+            assertTrue(Math.abs(was[2] - now[2]) < 1.0, "arm at " + i);
+        }
+    }
+
+    @Test void aBlendTurnsTheShortWayRound() {
+        double[] a = new double[AgentMotion.FRAME_SIZE], b = new double[AgentMotion.FRAME_SIZE];
+        a[AgentMotion.AIM] = Math.PI - 0.1;
+        b[AgentMotion.AIM] = -Math.PI + 0.1;
+        double half = AgentMotion.blend(a, b, 0.5)[AgentMotion.AIM];
+        assertEquals(Math.PI, half, 1e-9, "through the back, not all the way round the front");
+    }
+
     @Test void aJobAlwaysFitsItsAgentsCycle() {
         for (Kind k : Kind.values()) for (int interval = 1; interval <= 10; interval++) {
             int t = AgentMotion.ticks(k, interval);

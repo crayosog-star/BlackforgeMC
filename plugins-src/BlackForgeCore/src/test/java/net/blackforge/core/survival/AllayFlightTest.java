@@ -151,21 +151,60 @@ class AllayFlightTest {
         assertArrayEquals(new double[]{10.5 + h[0], 72.2 + h[1], -4.5 + h[2]}, spot, EPS);
     }
 
-    @Test void wingsStepThroughEveryPoseInOrder() {
-        int flap = 0;
-        int[] seen = new int[8];
-        for (int i = 0; i < seen.length; i++) { flap = AllayFlight.nextFlap(flap); seen[i] = AllayFlight.flapFrame(flap); }
-        assertArrayEquals(new int[]{1, 2, 1, 0, 1, 2, 1, 0}, seen);   // never closed straight to swept
-        assertEquals(0, AllayFlight.flapFrame(0));
+    @Test void wingsMoveOnePoseATick() {
+        for (long t = 0; t < 40; t++) {
+            int a = AllayFlight.flapFrame(t, 0), b = AllayFlight.flapFrame(t + 1, 0);
+            assertEquals(1, Math.abs(a - b), "never skips a pose, at " + t);
+            assertTrue(a >= 0 && a < AllayFlight.FLAP_FRAMES);
+        }
     }
 
     @Test void flockFlapsOutOfStep() {
-        assertTrue(AllayFlight.flapsNow(10, 0));
-        assertFalse(AllayFlight.flapsNow(11, 0));
-        assertNotEquals(AllayFlight.flapsNow(10, 0), AllayFlight.flapsNow(10, 1));
-        int flaps = 0;
-        for (long t = 0; t < 20; t++) if (AllayFlight.flapsNow(t, 3)) flaps++;
-        assertEquals(20 / AllayFlight.FLAP_TICKS, flaps);
+        assertNotEquals(AllayFlight.flapFrame(10, 0), AllayFlight.flapFrame(10, 1));
+        assertNotEquals(AllayFlight.flapFrame(10, 1), AllayFlight.flapFrame(10, 2));
+    }
+
+    @Test void itTurnsGraduallyAndTheShortWayRound() {
+        assertEquals(18f, AllayFlight.turn(0f, 90f, 18f), 1e-3f);
+        assertEquals(-18f, AllayFlight.turn(0f, -90f, 18f), 1e-3f);
+        assertEquals(188f, AllayFlight.turn(170f, -170f, 18f), 1e-3f);   // across the back, not 340 degrees the long way
+        assertEquals(5f, AllayFlight.turn(0f, 5f, 18f), 1e-3f);          // close enough: lands exactly
+        float yaw = 0;
+        for (int i = 0; i < 12; i++) yaw = AllayFlight.turn(yaw, 180f, 18f);
+        assertEquals(180f, Math.abs(yaw), 1e-3f, "gets all the way round in the end");
+    }
+
+    @Test void driftingHomeNeverJumps() {
+        double[] at = {0, 64, 0}, spot = {6, 65, 2};
+        int steps = 0;
+        while (at != spot && steps++ < 100) {
+            double[] next = AllayFlight.stepToward(at, spot, AllayFlight.MAX_HOVER_STEP);
+            assertTrue(AllayPath.dist(at, next) <= AllayFlight.MAX_HOVER_STEP + EPS);
+            at = next;
+        }
+        assertSame(spot, at, "arrives");
+        double[] small = {6.02, 65, 2};
+        assertSame(small, AllayFlight.stepToward(spot, small, AllayFlight.MAX_HOVER_STEP), "ordinary hovering isn't slowed at all");
+    }
+
+    @Test void aWholeTripIsSmoothTickByTick() {
+        double speed = 6;
+        for (int index = 0; index < 3; index++) {
+            AllayPath.Route r = AllayPath.bowed(new double[]{0.5, 66, 0.5}, new double[]{20.5, 66, 8.5}, index, (x, y, z) -> true);
+            int ticks = AllayFlight.ticks(r.length, speed);
+            double[] was = r.at(0);
+            double fastest = 0, lastStep = 0;
+            for (int t = 1; t <= ticks; t++) {
+                double[] p = r.at(AllayFlight.ease((double) t / ticks) * r.length);
+                double step = AllayPath.dist(was, p);
+                fastest = Math.max(fastest, step);
+                assertTrue(Math.abs(step - lastStep) < 0.08, "a lurch in speed at tick " + t + ": " + lastStep + " to " + step);
+                lastStep = step;
+                was = p;
+            }
+            assertTrue(fastest < speed / 20 * 1.6, "too fast: " + fastest);
+            assertTrue(lastStep < 0.08, "it lands gently: " + lastStep);
+        }
     }
 
     @Test void skinSizeAndFlip() {

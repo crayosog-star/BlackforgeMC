@@ -121,21 +121,33 @@ final class AllayFlight {
     /** The middle of a packed flock, just above the Station block at (x, y, z). */
     static double[] tightSpot(double x, double y, double z) { return new double[]{x + 0.5, y + 1.3, z + 0.5}; }
 
-    /** Ticks between wing poses. */
-    static final int FLAP_TICKS = 2;
-    /** Closed, half, swept, half: it steps through each one, because a jump between two far-apart poses looks like two pairs of wings. */
-    private static final int[] FLAP_ORDER = {0, 1, 2, 1};
+    /** Closed to swept and back, one small step a tick, because a jump between two far-apart poses looks like two pairs of wings. */
+    private static final int[] FLAP_ORDER = {0, 1, 2, 3, 4, 3, 2, 1};
+    /** How many wing models a tier has. */
+    static final int FLAP_FRAMES = 5;
+    /** Most degrees it turns in a tick, so it swings round to face a new way and never snaps. */
+    static final float MAX_TURN = 18f;
+    /** Fastest it drifts back to its idle spot, in blocks a tick. Ordinary hovering is far slower, so this only catches a jump. */
+    static final double MAX_HOVER_STEP = 0.3;
     /** The top tier is a little bigger. */
     static final float STEWARD_SCALE = 1.15f;
 
-    /** Does this allay change wing pose this tick? Its index staggers a flock so they don't flap in step. */
-    static boolean flapsNow(long now, int index) { return (now + index) % FLAP_TICKS == 0; }
+    /** Which wing model it shows on this tick. Its index staggers a flock so they don't flap in step. */
+    static int flapFrame(long now, int index) { return FLAP_ORDER[(int) Math.floorMod(now + index * 3L, (long) FLAP_ORDER.length)]; }
 
-    /** The step after this one in the flap cycle. */
-    static int nextFlap(int flap) { return (flap + 1) % FLAP_ORDER.length; }
+    /** A facing, in degrees, turned towards another by at most {@code most}, the short way round. */
+    static float turn(float from, float to, float most) {
+        float gap = (((to - from) % 360f) + 540f) % 360f - 180f;
+        return from + Math.max(-most, Math.min(most, gap));
+    }
 
-    /** Which of a tier's three wing models this step of the cycle shows. */
-    static int flapFrame(int flap) { return FLAP_ORDER[flap]; }
+    /** One step towards a spot, at most {@code most} blocks, ending exactly on it. */
+    static double[] stepToward(double[] from, double[] to, double most) {
+        double d = AllayPath.dist(from, to);
+        if (d <= most) return to;
+        double t = most / d;
+        return new double[]{from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t, from[2] + (to[2] - from[2]) * t};
+    }
 
     /** How big a tier's skin is drawn. */
     static float skinScale(int tier) { return tier >= 3 ? STEWARD_SCALE : 1f; }
