@@ -123,8 +123,9 @@ final class AllayPath {
     }
 
     /**
-     * Trips that found no way lately, by base and target block, so a sealed base or a target past the search limit
-     * doesn't search again on every trip: those fly straight until the entry is forgotten, after {@code ttl} ticks.
+     * Trips that found no way lately, by base, start block and target block, so a sealed base or a target past the search
+     * limit doesn't search again on every trip: those fly straight until the entry is forgotten, after {@code ttl} ticks.
+     * The start counts too, so one allay stuck in a sealed spot doesn't send every other trip to that block through walls.
      */
     static final class Misses {
         private static final int MAX = 1024;
@@ -133,7 +134,9 @@ final class AllayPath {
 
         Misses(long ttl) { this.ttl = ttl; }
 
-        static String key(String base, double[] to) { return base + '|' + cell(to[0]) + ',' + cell(to[1]) + ',' + cell(to[2]); }
+        static String key(String base, double[] from, double[] to) {
+            return base + '|' + cell(from[0]) + ',' + cell(from[1]) + ',' + cell(from[2]) + '|' + cell(to[0]) + ',' + cell(to[1]) + ',' + cell(to[2]);
+        }
 
         /** Did a search for this fail less than {@code ttl} ticks ago? */
         boolean recent(String key, long now) {
