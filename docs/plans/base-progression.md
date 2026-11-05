@@ -1,6 +1,6 @@
 # Base Progression
 **Status:** In progress
-**Next task:** P2.T2
+**Next task:** P3.T1, after the Phase 2 gate
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -165,7 +165,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Leaves ready:** gated jobs.
 - **Evidence:** Verified by code review: an Agent keeps a locked job until it's changed, and servers without levels skip the check. Automerge runs the real build. Untested in game: all job checks, in the Phase 2 gate.
 
-### [ ] P2.T2: Gate Forge Allays
+### [x] P2.T2: Gate Forge Allays
 - **Needs:** P2.T1; `S/Allays.java:546`, `577`.
 - **Files:** change `S/Allays.java`, `S/SurvivalModule.java`, `S/FoundrySystems.java`.
 - **Steps:**
@@ -175,7 +175,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** `/foundry allays` bypasses the gate, since it's a test tool; a base already owning a tier keeps it; two players with the menu open; no money taken on refusal.
 - **Done when:** the allay checks in the Phase 2 gate pass.
 - **Leaves ready:** every level gate except hoppers.
-- **Evidence:**
+- **Evidence:** Verified by code review: `buy` re-checks the level before taking money, and `/foundry allays` doesn't pass through it. Automerge runs the real build. Untested in game: all allay checks, in the Phase 2 gate.
 
 ## Phase 3: Claim-wide hoppers (Foundry only)
 - **Goal:** in the Foundry's Build Plot, buying a tier upgrades every hopper in that plot, including ones placed later.

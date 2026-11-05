@@ -70,6 +70,7 @@ public final class FoundrySystems {
         allays = new Allays(plugin, station, zone, true);
         station.setAllays(allays);
         allays.setRobots(robots);
+        allays.setLevels(levels);
         allays.setSandboxLimit(c.getInt("foundry.max-allays-total", 12));
         allays.setShared(sharedRegion, () -> {
             for (Player p : world.getPlayers()) if (zone.test(p.getLocation())) return p.getUniqueId();
