@@ -171,6 +171,7 @@ def main():
     add("storage", plain(3, list(range(27)), []), "", 13)
     add("agent", plain(6, [1, 3, 5, 7, 9, 10, 11, 13, 15, 16, 17] + list(range(18, 54)), [1, 3, 5, 7, 15]), "", 13)
     add("workshop", plain(4, [4, 13, 19, 21, 23, 25, 27, 31], [13, 31]), "", 13)
+    add("home", plain(6, [4, 10, 11, 12, 13, 14, 15, 19, 20, 21, 22, 28, 29, 30, 31, 32, 33, 37, 38, 39, 46, 49, 52], []), "\ue00a", 13)
     add("pip_on", pip(3, True), "", 13 - PIP_Y)
     add("pip_off", pip(3, False), "", 13 - PIP_Y)
     add("count_on", pip(7, True), "", 13 - COUNT_Y)

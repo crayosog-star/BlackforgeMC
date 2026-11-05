@@ -13,7 +13,7 @@ final class StationUi {
     private StationUi() {}
 
     enum Screen {
-        FORGE('', 176), STORAGE('', 176), AGENT('', 176), WORKSHOP('', 176);
+        FORGE('', 176), STORAGE('', 176), AGENT('', 176), WORKSHOP('', 176), HOME('', 176);
         final char glyph; final int width;
         Screen(char glyph, int width) { this.glyph = glyph; this.width = width; }
     }
