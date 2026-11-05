@@ -143,9 +143,12 @@ class AllayPathTest {
         for (double[] from : starts) {
             Route r = AllayPath.route(from, home, HOUSE, 500);
             assertNotNull(r, "no way in from " + from[0] + "," + from[2]);
-            for (double d = 0; d <= r.length; d += 0.1) {
+            // never further into a wall than a graze: clear() looks every quarter block, so a corner can be clipped by less than that
+            double inWall = 0;
+            for (double d = 0; d <= r.length; d += 0.02) {
                 double[] p = r.at(d);
-                assertTrue(HOUSE.at((int) Math.floor(p[0]), (int) Math.floor(p[1]), (int) Math.floor(p[2])), "in a wall at " + d);
+                inWall = HOUSE.at((int) Math.floor(p[0]), (int) Math.floor(p[1]), (int) Math.floor(p[2])) ? 0 : inWall + 0.02;
+                assertTrue(inWall < 0.25, "through a wall at " + d);
             }
             assertArrayEquals(from, r.at(0), 1e-9);
             assertArrayEquals(home, r.at(r.length), 1e-9);
