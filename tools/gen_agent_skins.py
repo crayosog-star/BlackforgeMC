@@ -2,11 +2,12 @@
 """Agent skins, one per tier: writes the textures, models and item definitions into resourcepack/.
 
 Each tier has a body model and an arm model, so the plugin can swing the arm on its own. Tier I is weathered green copper,
-II is bright copper, III is glimmering orange like a Courier allay, IV is ember gold and V is a flowing rainbow, like a
+II is bright copper, III is glimmering orange like a Courier allay, with the same slow shimmer (an animated texture), IV is ember gold and V is a flowing rainbow, like a
 Steward allay. Run from the repo root, then build the pack as blackforge-skin-item describes. Output is stable.
 """
 import colorsys
 import json
+import math
 from pathlib import Path
 
 from PIL import Image
@@ -14,6 +15,7 @@ from PIL import Image
 ROOT = Path("resourcepack/assets/blackforge")
 SIZE = 32
 FRAMES = 16
+EMBER_FRAMETIME = 5   # ticks per frame, so the shimmer loops every 4 seconds, matching the Courier allay
 # base, dark, light, eye: the eye colour lights the face so the Agent reads at a distance
 PALETTES = {
     "oxidized": ((78, 160, 132), (52, 116, 98), (118, 196, 168), (214, 250, 232)),
@@ -37,6 +39,24 @@ def metal(name, x, y):
     if (x * 7 + y * 13) % 19 == 0:
         return light + (255,)
     return (dark if y % 8 == 7 else base) + (255,)
+
+
+def shade(base, light, amount):
+    return tuple(round(a + (b - a) * amount) for a, b in zip(base, light))
+
+
+def ember(x, y, frame):
+    """The metal() look with its sparkles fading in and out and a faint light drifting across. Whole cycles only, so no seam."""
+    base, dark, light, eye = PALETTES["ember"]
+    if x < 12 and y < 10 and eyes(x, y):
+        return eye + (255,)
+    if x < 12 and y == 7 and 3 <= x <= 8:
+        return dark + (255,)
+    if (x * 7 + y * 13) % 19 == 0:
+        beat = 0.5 + 0.5 * math.cos(2 * math.pi * (frame / FRAMES - (x * 3 + y * 5) % FRAMES / FRAMES))
+        return shade(shade(base, light, 0.45), (255, 214, 140), beat) + (255,)
+    sheen = 0.18 * (0.5 + 0.5 * math.cos(2 * math.pi * (frame / FRAMES - (x + y) / SIZE)))
+    return shade(dark if y % 8 == 7 else base, light, sheen) + (255,)
 
 
 def rainbow(x, y, frame):
@@ -121,10 +141,17 @@ def main():
     tex = ROOT / "textures/item/agent"
     tex.mkdir(parents=True, exist_ok=True)
     for name in PALETTES:
+        if name == "ember":
+            continue
         img = Image.new("RGBA", (SIZE, SIZE))
         img.putdata([metal(name, x, y) for y in range(SIZE) for x in range(SIZE)])
         img.save(tex / f"{name}.png")
         write(name)
+    glow = Image.new("RGBA", (SIZE, SIZE * FRAMES))
+    glow.putdata([ember(x, y, f) for f in range(FRAMES) for y in range(SIZE) for x in range(SIZE)])
+    glow.save(tex / "ember.png")
+    (tex / "ember.png.mcmeta").write_text(json.dumps({"animation": {"frametime": EMBER_FRAMETIME, "interpolate": True}}, indent=2) + "\n")
+    write("ember")
     strip = Image.new("RGBA", (SIZE, SIZE * FRAMES))
     strip.putdata([rainbow(x, y, f) for f in range(FRAMES) for y in range(SIZE) for x in range(SIZE)])
     strip.save(tex / "prism.png")
