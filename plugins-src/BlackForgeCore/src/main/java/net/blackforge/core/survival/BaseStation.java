@@ -76,6 +76,7 @@ public final class BaseStation implements Listener {
     private boolean requireLiveDeliveryRegion;
     private Economy eco;
     private Allays allays;
+    private BaseLevels levels;
 
     BaseStation(BlackForgeCore plugin, Robots robots, HopperUpgrades hoppers) { this(plugin, robots, hoppers, false); }
 
@@ -104,6 +105,7 @@ public final class BaseStation implements Listener {
     void requireLiveDeliveryRegion() { requireLiveDeliveryRegion = true; }
     void setEconomy(Economy e) { this.eco = e; }
     void setAllays(Allays a) { this.allays = a; }
+    void setLevels(BaseLevels l) { this.levels = l; }
 
     // ------------------------------------------------------------------ items
 
@@ -181,8 +183,12 @@ public final class BaseStation implements Listener {
     ItemStack deliver(Location agentAt, ItemStack item) {
         Barrel b = stationFor(agentAt);
         if (b == null) return item;
+        int amount = item.getAmount();   // addItem can change the stack it's given
         var left = b.getInventory().addItem(item);
-        return left.isEmpty() ? null : left.values().iterator().next();
+        ItemStack rest = left.isEmpty() ? null : left.values().iterator().next();
+        // only Agents come through here, so hoppers and allays can't loop items to raise a base's level
+        if (levels != null) levels.countDelivery(regionOf.apply(agentAt), amount - (rest == null ? 0 : rest.getAmount()));
+        return rest;
     }
 
     boolean hasRoom(Location agentAt) {
