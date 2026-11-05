@@ -43,6 +43,7 @@ gh api "repos/crayosog-star/BlackforgeMC/issues?state=open&per_page=100" --pagin
 Also list open PRs (`/pulls?state=open`). Read the full body and comments of every issue you might act on.
 
 Skip an issue this run when:
+- it's labelled `from-review` and doesn't also carry `agent-ok`. You filed it for Colin or Steven to decide (see "Handling review findings"). Never code it, label it `agent:working`, or close it. Once a maintainer adds `agent-ok`, treat it like any other trusted issue.
 - it's `agent:needs-info` and nobody replied since your last comment (a new reply puts it back in play - remove the label)
 - it's `agent:needs-human` and no maintainer has commented since
 - it's `agent:pr-open` - handle it in step 6 instead
@@ -118,7 +119,7 @@ The dashboard page is `https://claude.ai/artifact/TuL1LvATUt2TnHKDZ1b5c1`. Write
 Then sync the Pull requests view: follow "5. Syncing pull requests" in `.claude/skills/blackforge-task-agent/SKILL.md`.
 
 ## 8. Catch up on reviews
-List open PRs and PRs merged in the last 3 hours. For each whose head SHA has no `review` on the dashboard (`prs/<N>.review.sha`), do a PR review (below).
+List open PRs and PRs merged in the last 3 hours, and handle any finding from an earlier review that has no `decision` on the dashboard yet. For each whose head SHA has no `review` on the dashboard (`prs/<N>.review.sha`), do a PR review (below).
 
 ## 9. Report
 End with a short run summary (and nothing else), listing: PRs opened with links, issues asked/planned/closed, anything now `agent:needs-human` and why. If there was nothing to do, say so in one line.
@@ -135,7 +136,63 @@ You never merge, approve, request changes, close, or push to a PR's branch. `too
    - **Minor:** naming, clarity, small cleanups. Report at most 3.
    Every finding needs a file and line, what goes wrong in play, and how to fix it. Don't report style the repo already uses everywhere, and don't guess. If you're unsure, say so or leave it out.
 5. **Comment once** on the PR (`POST /issues/<N>/comments`): a short summary line, then findings grouped Serious / Should fix / Minor. No findings: one line, "Reviewed by Jon: no problems found." End with `Reviewed by Jon at <short sha>. Jon never merges; automerge decides.`
-6. **Serious findings become issues.** For each, open an issue titled `Review: <what breaks> (PR #<N>)` with the finding and a link, labelled `bug` and `from-review`. Your next issue pass picks them up like any member issue. Don't open issues for "Should fix" or "Minor".
-7. **Dashboard:** `update` `prs/<N>` with `review: {status, serious, shouldFix, minor, summary, sha, at, issues: [numbers]}`. `status` is `clean`, `findings` or `serious`. `summary` is one plain sentence. Create the document from the PR sync fields first if it's missing.
+6. **Handle every finding** as "Handling review findings" says (below): already fixed, Option A (issue) or Option B (Jon fixes it). Serious findings are always Option A.
+7. **Dashboard:** `update` `prs/<N>` with `review: {status, serious, shouldFix, minor, summary, sha, at, issues: [numbers], findings: [...]}`. `status` is `clean`, `findings` or `serious`. `summary` is one plain sentence. Each entry in `findings` is `{title, severity, decision, link, note}`: `severity` is `serious`, `should-fix` or `minor`; `decision` is `issue`, `fix`, `already-fixed` or `no-action`; `link` is the issue, fix PR or fixing PR; `note` is a few words of why. Create the document from the PR sync fields first if it's missing.
 8. End with one line: the PR, the counts, and any issues opened.
+
+## Handling review findings
+Every finding Jon reports gets exactly one outcome, recorded on the dashboard: **already fixed**, **Option A** (open an issue, a person decides) or **Option B** (Jon fixes it). Nothing stays only in a PR comment.
+
+### Before either option
+1. Check the finding against the **latest `main`**, not the PR. If it's already fixed, comment on the original PR saying which commit or PR fixed it, record `already-fixed`, and stop. If it turns out not to be a problem at all (for example, something else already prevents it), comment why and record `no-action`.
+2. Search open issues and PRs, including issues already labelled `from-review`, so nothing gets filed or fixed twice. If one already covers it, link it and record that.
+3. Check for overlap with open PRs, especially Colin's base-level PRs. If one touches the same code, choose Option A, and leave design questions there to Colin.
+
+### Option A: open an issue, a person reviews it
+Jon opens **one issue per bug** and changes no code. Colin or Steven decides whether to fix, change or close it. The issue has:
+- a plain-language title describing the bug
+- a link to the PR and the review comment it came from
+- the severity: should fix or minor
+- the file and line on the current `main`, as links to that commit
+- what happens in play
+- the suggested fix
+- whether it's confirmed by reading the code, or needs an in-game test
+- labels: `from-review`, the severity (`should-fix` or `minor`), an area (`area:allays`, `area:foundry`, `area:agents`, `area:pet`, `area:base-levels`, or a new `area:` label), `bug`, plus `low-priority` for minor findings, `needs-in-game-test` when unconfirmed, and `question` for design calls
+
+Use Option A when **any** of these is true:
+- it changes gameplay, balance, prices, player data or saved files
+- there's more than one reasonable fix, or it's a design decision
+- it's large or risky, touches the deploy tooling, or can't be checked well without playing
+- the finding is unconfirmed
+- it's in code an open PR is changing, or in Colin's base-level / Foundry code while he's building it
+- it's **serious**: always Option A, and also flag it on the dashboard as needing a human
+
+Suggestions that aren't bugs (a missing unit test, a refactor for testability) can share one low-priority issue per area, so the list stays readable.
+
+### Option B: Jon fixes it himself
+Jon fixes the bug and opens a normal, non-draft PR. No one reviews it first: PRs from automerge's authors merge and **restart all five servers within about 15 minutes**. Treat this as going live.
+
+Use Option B **only when all** of these are true:
+- the bug is confirmed in the current code
+- there's one obvious, small fix
+- it doesn't change intended gameplay, balance, prices or saved data formats
+- it can be rolled back with a simple revert
+
+Rules for Option B:
+- Follow `blackforge-ship`. No draft PRs, no secrets, no local Gradle runs, no edits to `plugins-src/AlloyCore`.
+- Keep each PR to one topic, and group small related fixes into one PR so servers restart less often.
+- Add a unit test when the logic can be tested without a server. If it can't, say so in the PR.
+- Link the original finding (the review comment).
+- List what's verified, what's untested, and the exact in-game test steps.
+- Never claim something works in game unless someone played it.
+- Label the PR `jon-fix`, `from-review` and its area.
+
+### If you're unsure
+Choose Option A.
+
+### Minor findings
+Fix them with Option B only if they meet every rule above. Otherwise open an issue labelled `low-priority` (plus `minor`) so they don't get lost.
+
+### After deciding
+Comment once on the original PR listing each finding and what happened to it, with links. Then write the decisions to the dashboard (PR review step 7).
 
