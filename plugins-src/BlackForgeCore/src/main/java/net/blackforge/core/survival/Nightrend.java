@@ -213,8 +213,8 @@ public final class Nightrend implements Listener, Hackable {
         boolean drewMain = main && !heldMain.contains(id), drewOff = off && !heldOff.contains(id);
         if (main) heldMain.add(id); else heldMain.remove(id);
         if (off) heldOff.add(id); else heldOff.remove(id);
+        setQuick(p, pairOn.contains(id) && nextOff.getOrDefault(id, false));   // before draw(), so the flip's hidden hands stay hidden
         if (here && !p.isDead() && (drewMain || drewOff)) draw(p, drewMain, drewOff, now);
-        setQuick(p, pairOn.contains(id) && nextOff.getOrDefault(id, false));
         if (auraNow && here && (main || off) && !flipping.containsKey(p.getUniqueId()) && visible(p)) aura(p, main, off);
     }
 
@@ -485,6 +485,9 @@ public final class Nightrend implements Listener, Hackable {
      * {@code quick-right-on-left-turns: false}.
      */
     private void setQuick(Player p, boolean quick) {
+        // A real item change while the draw flip plays would show the true daggers to everyone hiding them
+        // (see hideHands). Wait: the 2-tick refresh applies it once the flip ends.
+        if (flipping.containsKey(p.getUniqueId())) return;
         var inv = p.getInventory();
         ItemStack main = inv.getItemInMainHand(), off = inv.getItemInOffHand();
         boolean want = quick && quickRight;
