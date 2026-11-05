@@ -16,7 +16,7 @@ import java.util.Map;
  * In the Foundry nothing is saved, and the whole island shares one test level, starting at the top so its tests keep working.
  */
 final class BaseLevels {
-    private static final class Base { int level = 1, hopperTier = 1; long delivered; }
+    private static final class Base { int level = 1, hopperTier = 1; long delivered; boolean migrated; }
 
     private final BlackForgeCore plugin;
     private final boolean sandbox, enabled;
@@ -25,6 +25,8 @@ final class BaseLevels {
     private final Map<String, Base> bases = new HashMap<>();
     private final Base test = new Base();
     private final Map<String, Integer> testHoppers = new HashMap<>();
+    private final java.util.Set<String> starters = new java.util.HashSet<>();
+    private final boolean starterAgent;
     private final int claimHopperCap;
     private boolean dirty, saveBlocked;
 
@@ -35,6 +37,7 @@ final class BaseLevels {
         this.enabled = c.getBoolean("base-levels.enabled", false);
         this.table = table(plugin, c);
         this.file = new File(plugin.getDataFolder(), "base-levels.yml");
+        this.starterAgent = c.getBoolean("base-levels.starter-agent", true);
         this.claimHopperCap = Math.max(1, c.getInt("base-levels.claim-hopper-max-per-chunk", 256));
         resetTest();
         if (sandbox || !enabled) return;
@@ -100,6 +103,30 @@ final class BaseLevels {
 
     int claimHopperCap() { return claimHopperCap; }
 
+    /** Should this player get their one free Agent now? Remembers the answer, so it only ever says yes once. */
+    boolean takeStarter(java.util.UUID player) {
+        if (sandbox || !starterAgent || !starters.add(player.toString())) return false;
+        dirty = true;
+        return true;
+    }
+
+    /**
+     * Raises existing bases to what they already own, once each, so nobody loses anything when levels arrive. A base that's
+     * been raised is never looked at again, and levels only go up. Returns how many moved.
+     */
+    int migrate(Map<String, Integer> floors) {
+        int moved = 0;
+        for (Map.Entry<String, Integer> en : floors.entrySet()) {
+            if (en.getValue() <= 1) continue;
+            Base b = base(en.getKey());
+            if (b.migrated) continue;
+            b.migrated = true;
+            dirty = true;
+            if (en.getValue() > b.level) { b.level = en.getValue(); moved++; }
+        }
+        return moved;
+    }
+
     /** Agents put this many items in this base's Forge. */
     void countDelivery(String region, long amount) {
         if (!active() || region == null || amount <= 0) return;
@@ -134,6 +161,7 @@ final class BaseLevels {
             plugin.getLogger().severe("base-levels.yml can't be read: " + ex.getMessage() + (saveBlocked ? ". Base levels won't be saved until it's fixed." : ". It was moved to " + broken.getName() + "."));
             return;
         }
+        starters.addAll(y.getStringList("starters"));
         ConfigurationSection all = y.getConfigurationSection("bases");
         if (all == null) return;
         for (String i : all.getKeys(false)) {
@@ -144,6 +172,7 @@ final class BaseLevels {
             b.level = Math.max(1, Math.min(BaseLevelRules.MAX_LEVEL, s.getInt("level", 1)));
             b.delivered = Math.max(0, s.getLong("delivered"));
             b.hopperTier = HopperTiers.clampTier(s.getInt("hopper-tier", 1));
+            b.migrated = s.getBoolean("migrated");
             bases.put(region, b);
         }
     }
@@ -151,6 +180,7 @@ final class BaseLevels {
     private void save() {
         if (sandbox || !dirty || saveBlocked) return;
         YamlConfiguration y = new YamlConfiguration();
+        y.set("starters", new java.util.ArrayList<>(starters));
         int i = 0;
         for (Map.Entry<String, Base> en : bases.entrySet()) {
             String k = "bases." + i++ + ".";
@@ -158,6 +188,7 @@ final class BaseLevels {
             y.set(k + "level", en.getValue().level);
             y.set(k + "delivered", en.getValue().delivered);
             y.set(k + "hopper-tier", en.getValue().hopperTier);
+            y.set(k + "migrated", en.getValue().migrated);
         }
         try { y.save(file); dirty = false; } catch (Exception e) { plugin.getLogger().warning("base level save failed: " + e.getMessage()); }
     }

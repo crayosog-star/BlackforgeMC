@@ -174,6 +174,8 @@ public final class SurvivalModule implements Listener {
         levels = new BaseLevels(plugin, false);
         station.setLevels(levels);
         robots.setLevels(levels);
+        station.setStarterRule((p, l) -> p.getUniqueId().equals(claims.ownerAt(l)));
+        if (levels.active()) Bukkit.getScheduler().runTaskLater(plugin, this::raiseExistingBases, 200L);
         if (levels.active()) hoppers.setClaimTier(l -> levels.hopperTier(station.regionAt(l)), levels.claimHopperCap());
         allays = new Allays(plugin, station, l -> false, false);
         allays.setRobots(robots);
@@ -245,6 +247,20 @@ public final class SurvivalModule implements Listener {
         }
         try { new File(plugin.getDataFolder(), "spawn-chains-v1").createNewFile(); } catch (Exception ignored) { }
         plugin.getLogger().info("Survival spawn: " + fixed + " lantern chains repaired");
+    }
+
+    /** Runs once the worlds and Agents have loaded. */
+    private void raiseExistingBases() {
+        BaseLevelRules.Table table = levels.table();
+        Map<String, Set<String>> jobs = new HashMap<>();
+        robots.placedJobs().forEach((owner, placed) -> jobs.put("claim:" + owner, placed));
+        Map<String, Integer> allayTiers = allays.tiers();
+        Set<String> regions = new HashSet<>(jobs.keySet());
+        regions.addAll(allayTiers.keySet());
+        Map<String, Integer> floors = new HashMap<>();
+        for (String region : regions) floors.put(region, table.floor(jobs.getOrDefault(region, Set.of()), allayTiers.getOrDefault(region, 0), 0));
+        int moved = levels.migrate(floors);
+        if (moved > 0) plugin.getLogger().info("Base levels: raised " + moved + " existing bases to keep what they already own.");
     }
 
     public void shutdown() {
