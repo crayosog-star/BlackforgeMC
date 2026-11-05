@@ -1,6 +1,7 @@
 package net.blackforge.core.survival;
 
 import net.blackforge.core.BlackForgeCore;
+import net.blackforge.core.NetEconomy;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -74,7 +75,7 @@ public final class FoundrySystems {
             return null;
         });
         Bukkit.getPluginManager().registerEvents(new FoundrySupply(supplyAt, hoppers), plugin);
-        lab = new FoundryLab(plugin, world, hoppers, station, zone, new FoundryLab.Layout(at.laneZ(), at.laneX(), at.y(), at.forge(), at.penMobs(), at.mobs(), at.title(), at.supply(), at.allayBench(), at.farm(), at.signs()), allays::resetShared);
+        lab = new FoundryLab(plugin, world, hoppers, station, zone, new FoundryLab.Layout(at.laneZ(), at.laneX(), at.y(), at.forge(), at.penMobs(), at.mobs(), at.title(), at.supply(), at.allayBench(), at.farm(), at.signs()), () -> { allays.resetShared(); levels.resetTest(); });
     }
 
     // ------------------------------------------------------------------ what /foundry uses
@@ -95,7 +96,33 @@ public final class FoundrySystems {
     public int allayTier() { return allays.sharedTier(); }
     public boolean setAllayTier(UUID by, int tier) { return allays.setSharedTier(by, tier); }
     public String allayTierText(int tier) { return allays.tierText(tier); }
-    public void reset() { lab.reset(); }
+    public void reset() { lab.reset(); levels.resetTest(); }
+
+    /** What /foundry level shows: the island's level, its progress and what's next. */
+    public List<String> levelStatus() {
+        BaseLevelRules.Table t = levels.table();
+        int level = levels.level(sharedRegion);
+        long delivered = levels.delivered(sharedRegion);
+        List<String> out = new ArrayList<>();
+        out.add("<gradient:#c8743a:#4fd1b5><bold>Base Level " + level + " of " + BaseLevelRules.MAX_LEVEL + "</bold></gradient>");
+        List<String> have = new ArrayList<>();
+        for (int l = 1; l <= level; l++) have.addAll(t.unlocks(l));
+        out.add("<gray>Unlocked: <white>" + String.join(", ", have));
+        if (level == BaseLevelRules.MAX_LEVEL) {
+            out.add("<gray>Agent deliveries: <white>" + delivered + "<gray>. This is the top level.");
+            return out;
+        }
+        BaseLevelRules.Cost next = t.cost(level + 1);
+        out.add("<gray>Agent deliveries: <white>" + delivered + " <dark_gray>/ " + next.deliveries() + " <gray>(" + Math.round(t.progress(level, delivered) * 100) + "%)");
+        out.add("<gray>Level " + (level + 1) + " costs <green>" + NetEconomy.money(next.money()) + " <dark_gray>+ <#9d7bff>" + next.essence() + " Mob Essence<gray> and unlocks <white>" + String.join(", ", t.unlocks(level + 1)));
+        return out;
+    }
+
+    /** Sets the whole island's test level. */
+    public void setTestLevel(int level) { levels.setLevel(sharedRegion, level); }
+
+    /** Adds test deliveries, as if Agents had made them. */
+    public void addTestDeliveries(long items) { levels.countDelivery(sharedRegion, items); }
 
     /** One Tier I agent at each bench. Returns how many went down. */
     public int demo(Player p) {

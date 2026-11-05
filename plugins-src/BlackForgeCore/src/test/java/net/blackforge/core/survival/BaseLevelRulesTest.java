@@ -72,6 +72,14 @@ class BaseLevelRulesTest {
         assertThrows(IllegalArgumentException.class, () -> T.hopperCost(1));
     }
 
+    @Test void unlocksNameWhatEachLevelGives() {
+        assertEquals(List.of("Farmer"), T.unlocks(1));
+        assertEquals(List.of("Miner", "Hopper Tier II"), T.unlocks(2));
+        assertEquals(List.of("Fisherman", "Gatherer"), T.unlocks(3));
+        assertEquals(List.of("Grinder", "Courier", "Hopper Tier III"), T.unlocks(4));
+        assertEquals(List.of("Steward"), T.unlocks(5));
+    }
+
     @Test void floorKeepsWhatABaseAlreadyHas() {
         assertEquals(1, T.floor(List.of(), 0, 0));
         assertEquals(1, T.floor(List.of("farmer"), 0, 1));

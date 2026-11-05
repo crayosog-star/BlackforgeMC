@@ -1,6 +1,6 @@
 # Base Progression
 **Status:** In progress
-**Next task:** P1.T3
+**Next task:** P2.T1, after the Phase 1 gate
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -53,14 +53,14 @@ Allay prices stay as they are: $75,000 + 256 Essence, $250,000 + 1,024, and $750
 - Allays are unlocked by level and then bought. Nobody gets a free allay. Gatherer unlocks at Level 3.
 - Hopper tiers are gated by level, and an upgrade covers every hopper in the claim.
 - Farmer is the first job. Prices can be set now and changed later, and Tier III is much more expensive.
+- A player gets one free Tier I Farmer the first time they place a Forge, if they own no Agents, because deliveries need an Agent.
+- A safety limit of 256 claim-upgraded hoppers per chunk replaces the 16-per-chunk limit for claim tiers, pending the lag test.
 
 **Assumptions (asked, not answered; Colin can overrule them)**
-- A player gets one free Tier I Farmer the first time they place a Forge, if they own no Agents, because deliveries need an Agent.
 - Only Agent deliveries count. Hoppers can loop items into the barrel, and allays can carry the same thrown stack repeatedly.
 - Only the player clicking pays for a level, and any player with access to the Forge can do so.
 - Existing bases never lose anything. On launch each base rises to the level its existing Agent jobs, allay tier and hopper need.
 - An Agent item whose job isn't unlocked is placed as a Farmer with a message, rather than refused, so a live crate reward can't become unusable.
-- A safety limit of 256 claim-upgraded hoppers per chunk replaces the 16-per-chunk limit for claim tiers, pending the lag test.
 - The Foundry starts at Level 5, so `/foundry check` and `/foundry demo` keep working until a tester lowers it.
 
 ## Verified facts
@@ -144,7 +144,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** a bad number shows usage; `add` caps at a huge number; a level change announces itself through `foundry.tell`, since the island is shared.
 - **Done when:** the Phase 1 gate passes in game.
 - **Leaves ready:** a quick way to test every later gate.
-- **Evidence:**
+- **Evidence:** Verified: `BaseLevelRulesTest`, including what each level unlocks, passes when run alone. Automerge runs the real build. Untested in game: all commands. This stays unticked until the Phase 1 gate is played.
 
 ## Phase 2: Gates (Foundry only)
 - **Goal:** in the Foundry, jobs and allays obey the level, and every refusal explains itself. Level 5 behaves exactly as today.
@@ -321,10 +321,12 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 ## Blockers log
 | Date | Task | Problem | Decision |
 |---|---|---|---|
+| 2026-11-04 | Phase 1 gate | The Phase 1 in-game checks need a tester before Phase 2 can start (rule 9). P2.T1 and P2.T2 are prepared on stacked branches, unopened | Waiting on Colin |
 
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | Starter Farmer and the 256-per-chunk hopper limit moved from assumptions to decisions | Colin, in chat |
 | 2026-11-04 | P1.T2 keeps an unreadable save file instead of overwriting it at the next delivery. The check is stronger, from a review of PR #124 | Flagged to Colin |
 | 2026-11-04 | Plan created from Colin's decisions, and approved to build with "start building" | Colin, in chat |
 
