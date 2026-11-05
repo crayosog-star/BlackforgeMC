@@ -93,6 +93,8 @@ public final class Allays implements Listener {
     private static final float TAG_VIEW_RANGE = 0.2f;
     private static final Color COPPER = Color.fromRGB(0xC8743A), VERDIGRIS = Color.fromRGB(0x4FD1B5), ORANGE = Color.fromRGB(0xF28C2C), GOLD = Color.fromRGB(0xFFE096);
     private static final double SKIN_HEIGHT = 0.35, RAINBOW_SPEED = 0.01;
+    /** Ticks a skin takes to glide to each new spot. One tick longer than the updates, so a late packet doesn't show as a stutter. */
+    private static final int SKIN_GLIDE_TICKS = 2;
     private static final int SPARKLE_TICKS = 12;
     private static final double ARRIVAL_SPREAD = 0.4;
     private static final double TRAIL_MIN_MOVE = 0.04, TRAIL_MAX_MOVE = 2, RIBBON_WIDTH = 0.4, HALO_RADIUS = 0.6;
@@ -133,7 +135,7 @@ public final class Allays implements Listener {
         int tier = 1;
         /** The Tier II or III look: the real allay goes invisible and this flies with it. */
         ItemDisplay skin;
-        int skinTier, flap; boolean skinFlipped;
+        int skinTier, flapShown; boolean skinFlipped;
         /** Where it was last tick, so its trail can go behind it. */
         double[] lastPos;
         /** Where a load is going, other than the Station: a chest or an Agent. */
@@ -732,6 +734,7 @@ public final class Allays implements Listener {
         if (!now.getWorld().isChunkLoaded(next.getBlockX() >> 4, next.getBlockZ() >> 4)) return;   // never load a chunk just to hover in it
         Vector dir = new Vector(headX, 0, headZ);
         next.setDirection(dir.lengthSquared() < 1e-4 ? now.getDirection() : dir);
+        next.setYaw(AllayFlight.turn(now.getYaw(), next.getYaw(), AllayFlight.MAX_TURN));
         next.setPitch(0);
         a.teleport(next);
     }
@@ -847,7 +850,10 @@ public final class Allays implements Listener {
         }
     }
 
-    private void idle(Worker w, Location at, int flock) { moveTo(w.entity, hover(at, w, flock, now), 0, 0); }
+    /** Holds its place in the flock. If it's away from that place, because a landing fell short or the layout changed, it drifts there and doesn't jump. */
+    private void idle(Worker w, Location at, int flock) {
+        moveTo(w.entity, AllayFlight.stepToward(xyz(w.entity.getLocation()), hover(at, w, flock, now), AllayFlight.MAX_HOVER_STEP), 0, 0);
+    }
 
     /** Sets off for a spot. A trip needing a search may wait a tick or two for its turn: see {@link #plan}. */
     private void fly(Worker w, double[] to) {
@@ -1178,7 +1184,7 @@ public final class Allays implements Listener {
             w.entity.setCustomNameVisible(false);
             if (w.tag == null || !w.tag.isValid()) {
                 w.tag = Ui.hologram(w.entity.getLocation().add(0, TAG_HEIGHT, 0), text, 1f);
-                w.tag.setTeleportDuration(1);
+                w.tag.setTeleportDuration(SKIN_GLIDE_TICKS);
                 w.tag.setViewRange(TAG_VIEW_RANGE);
             } else w.tag.text(Ui.mm(text));
         } else {
@@ -1190,7 +1196,7 @@ public final class Allays implements Listener {
 
     /**
      * Tier II and III wear a skin, since vanilla can't colour one allay and not another. The real allay stays, invisible, for
-     * its hitbox and name, and a display of the pack's model follows it and flaps by stepping through its models. Tier I
+     * its hitbox and name, and a display of the pack's model follows it and flaps by stepping through its models, one a tick. Tier I
      * keeps the plain allay. With no pack on this server, they all do, because the models would show purple.
      */
     private void dress(Worker w) {
@@ -1207,14 +1213,15 @@ public final class Allays implements Listener {
             w.skinTier = w.tier;
             w.skin = at.getWorld().spawn(at, ItemDisplay.class, d -> {
                 d.setPersistent(false);
-                d.setTeleportDuration(1);
+                d.setTeleportDuration(SKIN_GLIDE_TICKS);
                 d.setInterpolationDuration(0);
                 d.setBrightness(new Display.Brightness(15, 15));   // the skin is the light here: it glows even in a dark base
                 d.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
-                d.setItemStack(skinItem(w.tier, 0));
+                d.setItemStack(skinItem(w.tier, AllayFlight.flapFrame(now, w.index)));
                 d.setTransformation(skinTransform(w.tier, false));
             });
             w.skinFlipped = false;
+            w.flapShown = AllayFlight.flapFrame(now, w.index);
         } else w.skin.teleport(at);
         boolean flip = sausageFlip && AllayRules.flipsUpsideDown(w.name);
         if (flip != w.skinFlipped) {
@@ -1222,9 +1229,10 @@ public final class Allays implements Listener {
             // the game's own upside-down rule only touches the real allay, so a skin turns itself over to match
             w.skin.setTransformation(skinTransform(w.tier, flip));
         }
-        if (AllayFlight.flapsNow(now, w.index)) {
-            w.flap = AllayFlight.nextFlap(w.flap);
-            w.skin.setItemStack(skinItem(w.tier, AllayFlight.flapFrame(w.flap)));
+        int flap = AllayFlight.flapFrame(now, w.index);
+        if (w.watched && flap != w.flapShown) {   // nobody near to see it flap: don't send the change
+            w.flapShown = flap;
+            w.skin.setItemStack(skinItem(w.tier, flap));
         }
     }
 
@@ -1288,13 +1296,13 @@ public final class Allays implements Listener {
         return new Transformation(new Vector3f(), new AxisAngle4f(AllayFlight.skinRoll(flip), 0, 0, 1), new Vector3f(scale, scale, scale), new AxisAngle4f());
     }
 
-    /** One of a tier's three wing positions. Both tiers carry the enchantment shine. */
+    /** One of a tier's wing positions. Both tiers carry the enchantment shine. */
     private ItemStack skinItem(int tier, int frame) {
         return skinItems[tier - 2][frame];
     }
 
     private ItemStack[][] buildSkinItems() {
-        String[] names = {"courier", "steward"}, frames = {"a", "b", "c"};
+        String[] names = {"courier", "steward"}, frames = {"a", "b", "c", "d", "e"};
         ItemStack[][] out = new ItemStack[names.length][frames.length];
         for (int t = 0; t < names.length; t++) for (int f = 0; f < frames.length; f++) {
             NamespacedKey model = new NamespacedKey("blackforge", "allay/" + names[t] + "_" + frames[f]);

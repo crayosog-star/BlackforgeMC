@@ -120,6 +120,7 @@ public final class HopperUpgrades implements Listener {
     void refreshClaims() {
         if (claimTier == null || !enabled) return;
         for (World w : Bukkit.getWorlds()) for (Chunk ch : w.getLoadedChunks()) refreshClaim(ch);
+        refreshLooks();   // the new colour arrives with the purchase, not a second later
     }
 
     /** One chunk was just claimed: hoppers already in it join the claim's tier now, not on the next chunk load. */
@@ -300,6 +301,7 @@ public final class HopperUpgrades implements Listener {
         Loaded l = loaded.computeIfAbsent(ChunkId.of(b.getWorld(), b.getX() >> 4, b.getZ() >> 4), k -> new Loaded(b.getWorld(), b.getX() >> 4, b.getZ() >> 4));
         l.tiers.put(HopperTiers.pack(b.getX(), b.getY(), b.getZ()), tier);
         writeIndex(l);
+        if (look != null && look.active() && tier >= 2) look.dress(b, HopperTiers.effective(tier, l.claim.getOrDefault(HopperTiers.pack(b.getX(), b.getY(), b.getZ()), 1)));   // at once, with the upgrade's burst
     }
 
     private void forget(Block b) {
