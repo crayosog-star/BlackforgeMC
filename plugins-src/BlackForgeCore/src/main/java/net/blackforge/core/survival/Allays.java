@@ -383,7 +383,8 @@ public final class Allays implements Listener {
         try { y.load(file); }
         catch (Exception ex) {
             // starting clean would overwrite every base's allays at the next save, so the unreadable file is kept for fixing
-            File broken = new File(file.getParentFile(), file.getName() + ".broken");
+            File dir = file.getParentFile();
+            File broken = new File(dir, AllayRules.brokenName(file.getName(), System.currentTimeMillis(), n -> new File(dir, n).exists()));   // never over an older copy
             try { java.nio.file.Files.move(file.toPath(), broken.toPath()); }
             catch (Exception moveFailed) { saveBlocked = true; }
             plugin.getLogger().severe("allays.yml can't be read: " + ex.getMessage() + (saveBlocked ? ". Allays won't be saved until it's fixed." : ". It was moved to " + broken.getName() + "."));

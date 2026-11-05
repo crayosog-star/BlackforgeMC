@@ -77,4 +77,13 @@ final class AllayRules {
 
     /** Items a second for one allay making that trip over and over. */
     static double itemsPerSecond(int carry, double tripSeconds) { return carry / tripSeconds; }
+
+    /** Where an unreadable allays.yml is moved: ".broken", or a stamped name when an older broken copy is still there, so the move doesn't fail. */
+    static String brokenName(String name, long stamp, java.util.function.Predicate<String> taken) {
+        String plain = name + ".broken";
+        if (!taken.test(plain)) return plain;
+        String stamped = plain + "-" + stamp;
+        for (int n = 2; taken.test(stamped); n++) stamped = plain + "-" + stamp + "-" + n;
+        return stamped;
+    }
 }
