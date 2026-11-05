@@ -103,22 +103,31 @@ class AllayPathTest {
 
     @Test void aMissIsRememberedThenForgotten() {
         AllayPath.Misses m = new AllayPath.Misses(100);
-        String k = AllayPath.Misses.key("claim-1", B);
+        String k = AllayPath.Misses.key("claim-1", A, B);
         assertFalse(m.recent(k, 0));
         m.add(k, 100);
         assertTrue(m.recent(k, 150));
-        assertTrue(m.recent(AllayPath.Misses.key("claim-1", new double[]{10.9, 64.1, 0.2}), 199));   // same block
-        assertFalse(m.recent(AllayPath.Misses.key("claim-2", B), 150));                               // another base
-        assertFalse(m.recent(AllayPath.Misses.key("claim-1", A), 150));                               // another block
+        assertTrue(m.recent(AllayPath.Misses.key("claim-1", new double[]{0.9, 64.1, 0.2}, new double[]{10.9, 64.1, 0.2}), 199));   // same blocks
+        assertFalse(m.recent(AllayPath.Misses.key("claim-2", A, B), 150));                                // another base
+        assertFalse(m.recent(AllayPath.Misses.key("claim-1", A, new double[]{20.5, 64.5, 0.5}), 150));   // another target
         assertFalse(m.recent(k, 200));
         assertEquals(0, m.size());   // forgotten, not kept forever
     }
 
+    @Test void aMissFromOneStartDoesNotBlockAnother() {
+        double[] sealed = {3.5, 64.5, 3.5};
+        assertNotEquals(AllayPath.Misses.key("claim-1", sealed, B), AllayPath.Misses.key("claim-1", A, B));
+        AllayPath.Misses m = new AllayPath.Misses(100);
+        m.add(AllayPath.Misses.key("claim-1", sealed, B), 0);   // one allay boxed in found no way to B
+        assertTrue(m.recent(AllayPath.Misses.key("claim-1", sealed, B), 50));
+        assertFalse(m.recent(AllayPath.Misses.key("claim-1", A, B), 50), "another allay's trip to B still searches, not straight through walls");
+    }
+
     @Test void missesStayBounded() {
         AllayPath.Misses m = new AllayPath.Misses(20);
-        for (int i = 0; i < 5_000; i++) m.add(AllayPath.Misses.key("b", new double[]{i, 64, 0}), i);
+        for (int i = 0; i < 5_000; i++) m.add(AllayPath.Misses.key("b", A, new double[]{i, 64, 0}), i);
         assertTrue(m.size() <= 1_024);
-        assertTrue(m.recent(AllayPath.Misses.key("b", new double[]{4_999, 64, 0}), 5_000));
+        assertTrue(m.recent(AllayPath.Misses.key("b", A, new double[]{4_999, 64, 0}), 5_000));
     }
 
     /** A one-block-wide corridor that winds back and forth, with nothing open but itself, so straightening can only skip along a leg. */

@@ -196,6 +196,8 @@ public final class Allays implements Listener {
     private final boolean enabled, previewStaff, customSkins;
     private final ItemStack[][] skinItems = buildSkinItems();
     private final File file;
+    /** allays.yml couldn't be read or moved aside, so saving would wipe it: nothing is written until it's fixed. */
+    private boolean saveBlocked;
 
     /** {@code zone}: where staff may test flight. {@code sandbox}: the Arena's Foundry, where everything is free and nothing is saved. */
     Allays(BlackForgeCore plugin, BaseStation station, Predicate<Location> zone, boolean sandbox) {
@@ -359,7 +361,7 @@ public final class Allays implements Listener {
      * save would come back after a crash and be doubled. A crash can lose a load instead.
      */
     private void save(boolean withLoads) {
-        if (sandbox) return;
+        if (sandbox || saveBlocked) return;
         YamlConfiguration y = new YamlConfiguration();
         int i = 0;
         for (Base b : bases.values()) {
@@ -376,7 +378,18 @@ public final class Allays implements Listener {
     }
 
     private void load() {
-        ConfigurationSection all = YamlConfiguration.loadConfiguration(file).getConfigurationSection("bases");
+        if (!file.exists()) return;   // a fresh start
+        YamlConfiguration y = new YamlConfiguration();
+        try { y.load(file); }
+        catch (Exception ex) {
+            // starting clean would overwrite every base's allays at the next save, so the unreadable file is kept for fixing
+            File broken = new File(file.getParentFile(), file.getName() + ".broken");
+            try { java.nio.file.Files.move(file.toPath(), broken.toPath()); }
+            catch (Exception moveFailed) { saveBlocked = true; }
+            plugin.getLogger().severe("allays.yml can't be read: " + ex.getMessage() + (saveBlocked ? ". Allays won't be saved until it's fixed." : ". It was moved to " + broken.getName() + "."));
+            return;
+        }
+        ConfigurationSection all = y.getConfigurationSection("bases");
         if (all == null) return;
         for (String i : all.getKeys(false)) {
             ConfigurationSection s = all.getConfigurationSection(i);
@@ -628,6 +641,7 @@ public final class Allays implements Listener {
         if (!station.pay(p, cost.money(), cost.essence())) return;
         if (b == null) { b = new Base(region, p.getUniqueId()); bases.put(region, b); }
         b.tier = t;
+        b.lastScan = Long.MIN_VALUE / 2;   // a bigger flock needs its packed hover layout redone now, not at the next scan
         save(false);
         p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_RESONATE, 1f, 1.2f);
         p.sendMessage(Ui.mm("<#4fd1b5>Your base now has a Tier " + Spawners.roman(t) + " " + TIER_NAME[t - 1] + ". <gray>" + TIER_JOB[t - 1] + "."));
@@ -800,7 +814,7 @@ public final class Allays implements Listener {
         World world = w.entity.getWorld();
         AllayPath.Free open = (x, y, z) -> free(world, x, y, z);
         if (AllayPath.needsSearch(w.from, w.to, open)) {
-            String miss = AllayPath.Misses.key(w.region, w.to);
+            String miss = AllayPath.Misses.key(w.region, w.from, w.to);
             AllayPath.Route found = null;
             if (!misses.recent(miss, now)) {   // it found no way here a moment ago, so it won't now: straight, without the search
                 if (searchesThisTick >= maxSearches) return false;
