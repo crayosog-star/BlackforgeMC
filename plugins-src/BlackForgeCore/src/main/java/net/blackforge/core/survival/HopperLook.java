@@ -1,11 +1,9 @@
 package net.blackforge.core.survival;
 
 import net.blackforge.core.BlackForgeCore;
-import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.Particle;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Directional;
@@ -22,17 +20,15 @@ import java.util.Set;
 /**
  * An upgraded hopper's colour. A block can't be recoloured by itself, so a display of the pack's hopper shape sits over the
  * real one, a hair bigger: Tier II glimmering orange, Tier III a flowing rainbow. It never saves, and the hopper underneath
- * still does all the work, so turning this off changes nothing but the look.
+ * still does all the work, so turning this off changes nothing but the look. Its movement is in the texture, not particles.
  */
 final class HopperLook {
     private static final float SHELL_SCALE = 1.01f;
-    private static final int SPARKLE_EVERY = 3;
 
     private record Shell(ItemDisplay display, int tier) {}
 
     private final boolean active;
     private final Map<Block, Shell> shells = new HashMap<>();
-    private int seconds;
 
     HopperLook(BlackForgeCore plugin) {
         active = plugin.getConfig().getBoolean("resource-pack-live", false) && plugin.getConfig().getBoolean("hopper-looks", true);
@@ -42,7 +38,7 @@ final class HopperLook {
 
     void dress(Block b, int tier) {
         Shell s = shells.get(b);
-        if (s != null && s.display().isValid() && s.tier() == tier) { sparkle(b, tier); return; }
+        if (s != null && s.display().isValid() && s.tier() == tier) return;
         remove(b);
         BlockFace facing = b.getBlockData() instanceof Directional d ? d.getFacing() : BlockFace.DOWN;
         boolean side = facing != BlockFace.DOWN;
@@ -63,13 +59,6 @@ final class HopperLook {
             d.setBrightness(new Display.Brightness(12, 15));
             d.setTransformationMatrix(new Matrix4f().rotateY(turn).scale(SHELL_SCALE));
         }), tier));
-    }
-
-    private void sparkle(Block b, int tier) {
-        if (Math.floorMod(++seconds + b.getX() + b.getZ(), SPARKLE_EVERY) != 0) return;
-        Location at = b.getLocation().add(0.5, 1.05, 0.5);
-        if (tier == 2) at.getWorld().spawnParticle(Particle.WAX_ON, at, 1, 0.3, 0.05, 0.3, 0);
-        else at.getWorld().spawnParticle(Particle.DUST, at, 2, 0.3, 0.05, 0.3, 0, new Particle.DustOptions(Color.fromRGB(AllayFlight.rainbow(seconds * 0.03)), 0.8f));
     }
 
     void remove(Block b) {
