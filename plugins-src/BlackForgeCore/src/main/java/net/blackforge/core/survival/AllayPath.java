@@ -99,6 +99,18 @@ final class AllayPath {
         return new Route(pts);
     }
 
+    /**
+     * The same route ending at a new spot, for a flock's moving place in its circle. If the last leg to that spot would hit
+     * something, it's the old route: landing a little off is better than cutting a corner.
+     */
+    static Route withLanding(Route r, double[] landing, Free free) {
+        double[][] p = r.points;
+        if (!clear(p[p.length - 2], landing, free)) return r;
+        List<double[]> pts = new ArrayList<>(List.of(p));
+        pts.set(pts.size() - 1, landing);
+        return new Route(pts);
+    }
+
     /** Whether a search is worth starting: true when the straight line is clear and no search is needed. */
     static boolean needsSearch(double[] from, double[] to, Free free) { return !clear(from, to, free); }
 
@@ -123,19 +135,20 @@ final class AllayPath {
     }
 
     /**
-     * Trips that found no way lately, by base, start block and target block, so a sealed base or a target past the search
+     * Trips that found no way lately, by base, start area and target block, so a sealed base or a target past the search
      * limit doesn't search again on every trip: those fly straight until the entry is forgotten, after {@code ttl} ticks.
-     * The start counts too, so one allay stuck in a sealed spot doesn't send every other trip to that block through walls.
+     * The start counts, so one allay stuck in a sealed spot doesn't send trips from elsewhere through walls. It's a few blocks
+     * wide, not one, because an allay rarely starts two trips from the same block.
      */
     static final class Misses {
-        private static final int MAX = 1024;
+        private static final int MAX = 1024, START_AREA_BITS = 2;
         private final long ttl;
         private final Map<String, Long> until = new HashMap<>();
 
         Misses(long ttl) { this.ttl = ttl; }
 
         static String key(String base, double[] from, double[] to) {
-            return base + '|' + cell(from[0]) + ',' + cell(from[1]) + ',' + cell(from[2]) + '|' + cell(to[0]) + ',' + cell(to[1]) + ',' + cell(to[2]);
+            return base + '|' + (cell(from[0]) >> START_AREA_BITS) + ',' + (cell(from[1]) >> START_AREA_BITS) + ',' + (cell(from[2]) >> START_AREA_BITS) + '|' + cell(to[0]) + ',' + cell(to[1]) + ',' + cell(to[2]);
         }
 
         /** Did a search for this fail less than {@code ttl} ticks ago? */
@@ -156,45 +169,69 @@ final class AllayPath {
         int size() { return until.size(); }
     }
 
+    /** How far past the trip's own box a search may look, so it can't flood the open sky before it finds a door. */
+    static final int SEARCH_MARGIN = 8, SEARCH_ABOVE = 4, SEARCH_BELOW = 2;
+
     private record Node(long key, int x, int y, int z, double score) {}
 
-    /** A* over blocks: straight-line distance guides it, a little greedily, because the route gets straightened afterwards anyway. */
+    /** One end of a search: what it has reached, and how it got there. */
+    private static final class Side {
+        final int goalX, goalY, goalZ;
+        final PriorityQueue<Node> open = new PriorityQueue<>((a, b) -> Double.compare(a.score(), b.score()));
+        final Map<Long, Double> cost = new HashMap<>();
+        final Map<Long, Long> came = new HashMap<>();
+        final Set<Long> done = new HashSet<>();
+
+        Side(int x, int y, int z, int goalX, int goalY, int goalZ) {
+            this.goalX = goalX; this.goalY = goalY; this.goalZ = goalZ;
+            long k = key(x, y, z);
+            cost.put(k, 0.0);
+            open.add(new Node(k, x, y, z, 0));
+        }
+    }
+
+    /**
+     * A* over blocks from both ends at once, a little greedily, because the route gets straightened afterwards anyway. The end
+     * with less open around it goes first: a room runs out of air long before the sky does, so it finds its door quickly, and
+     * a sealed room is known to be sealed as soon as it's full. Both ends stay inside the trip's box, so neither floods the sky.
+     */
     private static List<double[]> search(double[] from, double[] to, Free free, int maxNodes) {
         int sx = cell(from[0]), sy = cell(from[1]), sz = cell(from[2]), gx = cell(to[0]), gy = cell(to[1]), gz = cell(to[2]);
         long start = key(sx, sy, sz), goal = key(gx, gy, gz);
-        PriorityQueue<Node> open = new PriorityQueue<>((a, b) -> Double.compare(a.score(), b.score()));
-        Map<Long, Double> cost = new HashMap<>();
-        Map<Long, Long> came = new HashMap<>();
-        Set<Long> done = new HashSet<>();
-        cost.put(start, 0.0);
-        open.add(new Node(start, sx, sy, sz, 0));
-        while (!open.isEmpty() && done.size() < maxNodes) {
-            Node n = open.poll();
-            if (!done.add(n.key())) continue;
-            if (n.key() == goal) return walkBack(came, start, goal, from, to);
-            double c = cost.get(n.key());
+        int[] box = {Math.min(sx, gx) - SEARCH_MARGIN, Math.max(sx, gx) + SEARCH_MARGIN, Math.min(sy, gy) - SEARCH_BELOW, Math.max(sy, gy) + SEARCH_ABOVE,
+                Math.min(sz, gz) - SEARCH_MARGIN, Math.max(sz, gz) + SEARCH_MARGIN};
+        Side a = new Side(sx, sy, sz, gx, gy, gz), b = new Side(gx, gy, gz, sx, sy, sz);
+        while (!a.open.isEmpty() && !b.open.isEmpty() && a.done.size() + b.done.size() < maxNodes) {
+            Side side = a.open.size() <= b.open.size() ? a : b, other = side == a ? b : a;
+            Node n = side.open.poll();
+            if (!side.done.add(n.key())) continue;
+            if (other.done.contains(n.key())) return join(a, b, n.key(), start, goal, from, to);
+            double c = side.cost.get(n.key());
             for (int[] s : STEPS) {
                 int x = n.x() + s[0], y = n.y() + s[1], z = n.z() + s[2];
+                if (x < box[0] || x > box[1] || y < box[2] || y > box[3] || z < box[4] || z > box[5]) continue;
                 long k = key(x, y, z);
-                if (done.contains(k) || !(k == goal || free.at(x, y, z))) continue;
+                if (side.done.contains(k) || !(k == goal || k == start || free.at(x, y, z))) continue;
                 double next = c + 1;
-                Double known = cost.get(k);
+                Double known = side.cost.get(k);
                 if (known != null && known <= next) continue;
-                cost.put(k, next);
-                came.put(k, n.key());
-                double h = Math.sqrt(Math.pow(x - gx, 2) + Math.pow(y - gy, 2) + Math.pow(z - gz, 2));
-                open.add(new Node(k, x, y, z, next + 1.2 * h));
+                side.cost.put(k, next);
+                side.came.put(k, n.key());
+                double h = Math.sqrt(Math.pow(x - side.goalX, 2) + Math.pow(y - side.goalY, 2) + Math.pow(z - side.goalZ, 2));
+                side.open.add(new Node(k, x, y, z, next + 1.2 * h));
             }
         }
         return null;
     }
 
-    private static List<double[]> walkBack(Map<Long, Long> came, long start, long goal, double[] from, double[] to) {
+    /** The two halves joined where they met, from the exact start to the exact target. */
+    private static List<double[]> join(Side a, Side b, long meet, long start, long goal, double[] from, double[] to) {
         List<double[]> out = new ArrayList<>();
-        out.add(to);
-        for (Long k = came.get(goal); k != null && k != start; k = came.get(k)) out.add(centre(k));
+        for (Long k = meet; k != null && k != start; k = a.came.get(k)) if (k != goal) out.add(centre(k));
         out.add(from);
         Collections.reverse(out);
+        for (Long k = b.came.get(meet); k != null && k != goal; k = b.came.get(k)) if (k != start) out.add(centre(k));
+        out.add(to);
         return out;
     }
 

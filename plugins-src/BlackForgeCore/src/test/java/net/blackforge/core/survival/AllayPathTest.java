@@ -115,12 +115,56 @@ class AllayPathTest {
     }
 
     @Test void aMissFromOneStartDoesNotBlockAnother() {
-        double[] sealed = {3.5, 64.5, 3.5};
+        double[] sealed = {8.5, 64.5, 8.5};
         assertNotEquals(AllayPath.Misses.key("claim-1", sealed, B), AllayPath.Misses.key("claim-1", A, B));
         AllayPath.Misses m = new AllayPath.Misses(100);
         m.add(AllayPath.Misses.key("claim-1", sealed, B), 0);   // one allay boxed in found no way to B
         assertTrue(m.recent(AllayPath.Misses.key("claim-1", sealed, B), 50));
         assertFalse(m.recent(AllayPath.Misses.key("claim-1", A, B), 50), "another allay's trip to B still searches, not straight through walls");
+    }
+
+    @Test void nearbyStartsShareAMiss() {
+        AllayPath.Misses m = new AllayPath.Misses(100);
+        m.add(AllayPath.Misses.key("claim-1", new double[]{0.5, 64.5, 0.5}, B), 0);
+        assertTrue(m.recent(AllayPath.Misses.key("claim-1", new double[]{2.5, 65.5, 3.5}, B), 50), "same few blocks, so no second search");
+    }
+
+    /** A 9x9 house, walls and roof one thick, with a two-high door in its south wall and solid ground under it. */
+    private static final Free HOUSE = (x, y, z) -> {
+        if (y < 64) return false;
+        if (x < 0 || x > 8 || z < 0 || z > 8 || y > 68) return true;
+        if (x == 0 || x == 8 || z == 0 || z == 8 || y == 68) return z == 8 && x == 4 && y <= 65;
+        return true;
+    };
+
+    @Test void findsTheDoorOfAClosedHouseWithinTheDefaultLimit() {
+        double[] home = {4.5, 66.5, 4.5};
+        double[][] starts = {{4.5, 66, -12}, {-14, 66, 4.5}, {22, 66, 4.5}, {-10, 65, -10}, {4.5, 65, 20}, {18, 64.5, 18}};
+        for (double[] from : starts) {
+            Route r = AllayPath.route(from, home, HOUSE, 500);
+            assertNotNull(r, "no way in from " + from[0] + "," + from[2]);
+            for (double d = 0; d <= r.length; d += 0.1) {
+                double[] p = r.at(d);
+                assertTrue(HOUSE.at((int) Math.floor(p[0]), (int) Math.floor(p[1]), (int) Math.floor(p[2])), "in a wall at " + d);
+            }
+            assertArrayEquals(from, r.at(0), 1e-9);
+            assertArrayEquals(home, r.at(r.length), 1e-9);
+        }
+    }
+
+    @Test void aSealedRoomIsKnownSealedWithoutASkyFullOfLookups() {
+        int[] used = {0};
+        Free sealed = (x, y, z) -> { used[0]++; return !(x == 0 || x == 8 || z == 0 || z == 8 || y == 64 || y == 68) || x < 0 || x > 8 || z < 0 || z > 8 || y < 64 || y > 68; };
+        assertNull(AllayPath.route(new double[]{20.5, 66.5, 4.5}, new double[]{4.5, 66.5, 4.5}, sealed, 100_000));
+        assertTrue(used[0] < 5_000, "looked up " + used[0]);
+    }
+
+    @Test void aNewLandingKeepsAClearLastLeg() {
+        Route r = new Route(List.of(A, B));
+        double[] near = {10.5, 65.5, 1.5};
+        assertArrayEquals(near, AllayPath.withLanding(r, near, OPEN).at(1e9), 1e-9);
+        Free wall = (x, y, z) -> !(x == 10 && z == 1);
+        assertSame(r, AllayPath.withLanding(r, near, wall), "the last leg would hit the wall, so the old route stays");
     }
 
     @Test void missesStayBounded() {

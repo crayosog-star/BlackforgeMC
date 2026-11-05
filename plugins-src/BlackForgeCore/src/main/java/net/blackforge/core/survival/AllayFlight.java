@@ -29,6 +29,20 @@ final class AllayFlight {
         return Math.min(MAX_LIFT, Math.abs(distance) / 8) * Math.sin(Math.PI * c);
     }
 
+    /** Does a straight flight stay out of the blocks with its lift added? If not, it flies level, so it can't pass through a low ceiling. */
+    static boolean liftFits(AllayPath.Route r, AllayPath.Free free) {
+        int n = Math.max(16, (int) Math.ceil(r.length * 4));
+        double[] start = r.at(0);
+        int sx = (int) Math.floor(start[0]), sy = (int) Math.floor(start[1]), sz = (int) Math.floor(start[2]);
+        for (int i = 1; i <= n; i++) {
+            double t = (double) i / n;
+            double[] p = r.at(ease(t) * r.length);
+            int x = (int) Math.floor(p[0]), y = (int) Math.floor(p[1] + lift(t, r.length)), z = (int) Math.floor(p[2]);
+            if ((x != sx || y != sy || z != sz) && !free.at(x, y, z)) return false;
+        }
+        return true;
+    }
+
     /** Offset from its idle spot above the Station at this tick: a slow circle with its flock, evenly spaced, and a gentle bob. */
     static double[] hover(int index, int flock, long tick) {
         double angle = 2 * Math.PI * index / Math.max(1, flock) + tick * 0.015;

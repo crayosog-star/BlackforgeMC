@@ -57,7 +57,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -77,7 +76,7 @@ public final class Allays implements Listener {
     /** The highest tier with its job built so far. Higher cards say so rather than sell nothing. */
     private static final int BUILT_TIER = 3;
     private static final int[] CARD_SLOTS = {11, 13, 15};
-    private static final int BACK_SLOT = 22, MENU_SIZE = 27;
+    private static final int BACK_SLOT = 22, MENU_SIZE = 27, STATUS_SLOT = 4;
     private static final int RETRY_TICKS = 40, NEVER_PICKED_UP = 1000, WORK_CHECK_TICKS = 10;
     /** An item frame holding this marks a sell chest, not a sorting chest. */
     private static final Material SELL_MARK = Material.EMERALD;
@@ -98,6 +97,12 @@ public final class Allays implements Listener {
     private static final double ARRIVAL_SPREAD = 0.4;
     private static final double TRAIL_MIN_MOVE = 0.04, TRAIL_MAX_MOVE = 2, RIBBON_WIDTH = 0.4, HALO_RADIUS = 0.6;
     private static final int BURST_POINTS = 18;
+    /** Tier III's circling motes while it hovers: a slower beat, since a whole base can sit idle for hours. */
+    private static final int HOVER_MOTE_TICKS = 6, WORK_MOTE_TICKS = 2;
+    /** Particles are skipped when nobody's this close: the game only draws them from about 32 blocks. */
+    private static final int WATCH_BLOCKS = 48, WATCH_CHECK_TICKS = 20;
+    /** After a sale that couldn't be paid, how long a flock leaves the sell chests alone, so it doesn't shuttle a load back and forth. */
+    private static final int SELL_HOLD_TICKS = 60 * 20;
 
     /** A test allay flying back and forth between two points. */
     private static final class Flyer {
@@ -112,6 +117,10 @@ public final class Allays implements Listener {
         State state = State.IDLE;
         /** The trip under way. */
         double[] from, to; int tick, ticks;
+        /** This trip has room for its upward arc. */
+        boolean lifts;
+        /** A player is near enough to see its particles. */
+        boolean watched = true;
         /** Its way there, or null while it waits its turn for a search. */
         AllayPath.Route route;
         /** How it idles: the circle, or packed just above a Station with no room for one. */
@@ -153,6 +162,8 @@ public final class Allays implements Listener {
         final List<Robots.Bot> thirsty = new ArrayList<>();
         long lastScan = Long.MIN_VALUE / 2, lastLinkScan = Long.MIN_VALUE / 2;
         AllayFlight.Hover hover = AllayFlight.Hover.CIRCLE;
+        boolean watched = true;
+        long sellHold = Long.MIN_VALUE;
         Base(String region, UUID buyer) { this.region = region; this.buyer = buyer; }
     }
 
@@ -570,8 +581,37 @@ public final class Allays implements Listener {
         ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
         for (int i = 0; i < MENU_SIZE; i++) m.inv.setItem(i, pane);
         for (int t = 1; t <= AllayRules.MAX_TIER; t++) m.inv.setItem(CARD_SLOTS[t - 1], card(t, tier, region));
+        if (b != null) m.inv.setItem(STATUS_SLOT, statusItem(b));
         m.inv.setItem(BACK_SLOT, Ui.item(Material.ARROW, "<yellow>Back to the Forge"));
         p.openInventory(m.inv);
+    }
+
+    /** What the flock is up to right now, so a player can see why it isn't doing something. */
+    private ItemStack statusItem(Base b) {
+        int flying = 0, carrying = 0;
+        for (Worker w : b.workers) {
+            if (w.entity != null && w.entity.isValid()) flying++;
+            if (w.carried != null) carrying++;
+        }
+        List<String> lore = new ArrayList<>(List.of("<gray>Flying: <white>" + flying + "/" + table.flock(b.tier), "<gray>Carrying: <white>" + carrying,
+                "<gray>Loose drops in reach: <white>" + b.jobs.size()));
+        if (AllayRules.canSort(b.tier)) {
+            lore.add("<gray>Sorting chests found: <white>" + b.links.size());
+            lore.add("<gray>Agents low on fuel: <white>" + b.thirsty.size());
+        }
+        if (AllayRules.canSell(b.tier)) {
+            lore.add("<gray>Sell chests found: <white>" + b.sellChests.size());
+            UUID owner = owner(b);
+            if (owner == null || Bukkit.getPlayer(owner) == null) lore.add("<red>Not selling: the owner's offline");
+            else if (now < b.sellHold) lore.add("<red>Not selling for now: the last sale couldn't be paid");
+        }
+        if (stationFull(b)) lore.add("<red>The Station is full");
+        if (AllayRules.canSort(b.tier)) {
+            lore.add("");
+            if (b.links.isEmpty()) lore.add("<dark_gray>Hang an item frame on a chest and put an item in it");
+            lore.add("<dark_gray>Frames are checked every " + linkScanTicks / 20 + " seconds");
+        }
+        return Ui.item(Material.SPYGLASS, "<#4fd1b5><bold>Your Flock", lore.toArray(String[]::new));
     }
 
     /** Every base's allay tier. */
@@ -703,27 +743,39 @@ public final class Allays implements Listener {
         while (b.workers.size() < flock) b.workers.add(new Worker(b.workers.size()));
         scan(b, at);
         scanLinks(b, at);
+        if ((now + b.region.hashCode()) % WATCH_CHECK_TICKS == 0) b.watched = !at.getNearbyPlayers(WATCH_BLOCKS).isEmpty();
+        boolean full = stationFull(b);
         Set<UUID> taken = new HashSet<>();
         for (Worker w : b.workers) if (w.job != null) taken.add(w.job);
         for (Worker w : b.workers) {
             w.tier = b.tier;
             w.hover = b.hover;
             w.region = b.region;
+            w.watched = b.watched;
             if (w.entity == null || !w.entity.isValid()) wake(w, at, flock);
             w.trail = 0.6f + 0.2f * b.tier;   // a higher tier burns brighter
             work(b, w, at, flock, taken);
-            label(w, b.tier, w.state == State.WAIT || stationFull(b) ? "<red>Station full" : null);
+            label(w, b.tier, w.state == State.WAIT || full ? "<red>Station full" : null);
             moveTag(w);
             dress(w);
-            effects(w);
+            if (w.watched) effects(w);
         }
     }
 
-    /** Drops are waiting but there's no room for them. Without this it just circles with no explanation. */
+    /** Drops are waiting but there's no room for any of them. Without this it just circles with no explanation. */
     private boolean stationFull(Base b) {
         if (b.jobs.isEmpty()) return false;
         Inventory store = station.storageIn(b.region);
-        return store != null && store.firstEmpty() < 0;
+        return store != null && store.firstEmpty() < 0 && jobsWithRoom(b, store).isEmpty();
+    }
+
+    /** The drops the Station can take. With a free slot that's all of them; when it's full, a drop can still top up a stack. */
+    private List<AllayJobs.Job> jobsWithRoom(Base b, Inventory store) {
+        if (store.firstEmpty() >= 0) return b.jobs;
+        List<AllayJobs.Job> out = new ArrayList<>();
+        for (AllayJobs.Job j : b.jobs)
+            if (Bukkit.getEntity(j.id()) instanceof Item d && room(store, d.getItemStack()) > 0) out.add(j);
+        return out;
     }
 
     /** A new entity for this allay. If it was carrying something when its last one went, it takes that home first. */
@@ -752,8 +804,7 @@ public final class Allays implements Listener {
                 if (AllayRules.canSell(b.tier) && startSell(b, w)) return;
                 // a drop can be picked up or despawn between scans, so don't fly to where one used to be
                 b.jobs.removeIf(j -> !(Bukkit.getEntity(j.id()) instanceof Item d) || !d.isValid());
-                var job = store.firstEmpty() < 0 ? Optional.<AllayJobs.Job>empty()
-                        : AllayJobs.nearest(xyz(w.entity.getLocation()), b.jobs, taken);
+                var job = AllayJobs.nearest(xyz(w.entity.getLocation()), jobsWithRoom(b, store), taken);
                 if (job.isPresent()) {
                     w.job = job.get().id();
                     taken.add(w.job);
@@ -847,14 +898,10 @@ public final class Allays implements Listener {
     private void landOnTime(Worker w, Location at, int flock) {
         if (w.state != State.RETURN) return;
         double[] landing = hover(at, w, flock, now + w.ticks);
-        double[][] p = w.route.points;
-        if (p.length == 2) w.route = new AllayPath.Route(List.of(w.from, landing));
-        else {   // a curve's last leg just bends a little to meet the spot
-
-            List<double[]> pts = new ArrayList<>(List.of(p));
-            pts.set(pts.size() - 1, landing);
-            w.route = new AllayPath.Route(pts);
-        }
+        World world = w.entity.getWorld();
+        AllayPath.Route landed = AllayPath.withLanding(w.route, landing, (x, y, z) -> free(world, x, y, z));   // only the last leg bends to meet the spot
+        if (landed == w.route) return;
+        w.route = landed;
         w.to = landing;
     }
 
@@ -864,11 +911,12 @@ public final class Allays implements Listener {
             if (!plan(w)) return false;   // still waiting its turn
             landOnTime(w, at, flock);
         }
+        World world = w.entity.getWorld();
         w.tick++;
+        if (w.tick == 1) w.lifts = w.route.straight() && AllayFlight.liftFits(w.route, (x, y, z) -> free(world, x, y, z));
         double along = AllayFlight.ease((double) w.tick / w.ticks) * w.route.length;
         double[] p = w.route.at(along);
-        if (w.route.straight()) p[1] += AllayFlight.lift((double) w.tick / w.ticks, w.route.length);
-        World world = w.entity.getWorld();
+        if (w.lifts) p[1] += AllayFlight.lift((double) w.tick / w.ticks, w.route.length);
         if (!world.isChunkLoaded((int) Math.floor(p[0]) >> 4, (int) Math.floor(p[2]) >> 4)) {
             if (w.state == State.FETCH || w.state == State.DELIVER || w.state == State.COLLECT) goHome(w, at, flock);
             else { w.tick = w.ticks; return true; }   // home is the Station's own area: being unloaded here means we're about to sleep anyway
@@ -876,7 +924,7 @@ public final class Allays implements Listener {
         }
         double[] here = xyz(w.entity.getLocation());
         moveTo(w.entity, p, p[0] - here[0], p[2] - here[2]);   // faces the way it's moving, including round a corner
-        if (w.tier == 1 && w.tick % 2 == 0 && w.tick < w.ticks)
+        if (w.watched && w.tier == 1 && w.tick % 2 == 0 && w.tick < w.ticks)
             world.spawnParticle(Particle.DUST_COLOR_TRANSITION, p[0], p[1] + 0.3, p[2], 1, 0.08, 0.08, 0.08, 0, new Particle.DustTransition(COPPER, VERDIGRIS, w.trail));
         return w.tick >= w.ticks;
     }
@@ -957,10 +1005,16 @@ public final class Allays implements Listener {
         return AllayJobs.nearestPlace(xyz(w.entity.getLocation()), places.keySet()).map(places::get).orElse(null);
     }
 
-    private static boolean hasRoom(Inventory inv, ItemStack it) {
-        if (inv.firstEmpty() >= 0) return true;
-        for (ItemStack s : inv.getContents()) if (s != null && s.isSimilar(it) && s.getAmount() < s.getMaxStackSize()) return true;
-        return false;
+    private static boolean hasRoom(Inventory inv, ItemStack it) { return room(inv, it) > 0; }
+
+    /** How many of this item fit. */
+    private static int room(Inventory inv, ItemStack it) {
+        int n = 0;
+        for (ItemStack s : inv.getStorageContents()) {
+            if (s == null || s.getType().isAir()) n += it.getMaxStackSize();
+            else if (s.isSimilar(it)) n += Math.max(0, s.getMaxStackSize() - s.getAmount());
+        }
+        return n;
     }
 
     /** Puts the load in its chest. Whatever doesn't fit, or a load whose chest has gone, goes back to the Station. */
@@ -968,8 +1022,10 @@ public final class Allays implements Listener {
         Block chest = w.dest;
         w.dest = null;
         if (w.carried == null || chest == null || !(chest.getState(false) instanceof Container c)) return;
+        int before = w.carried.getAmount();
         Map<Integer, ItemStack> left = c.getInventory().addItem(w.carried);
         w.carried = left.isEmpty() ? null : left.values().iterator().next();
+        if (w.carried != null && w.carried.getAmount() >= before) return;   // the chest filled up meanwhile: nothing was sorted
         counts[1]++;
         chest.getWorld().playSound(chest.getLocation(), Sound.BLOCK_AMETHYST_CLUSTER_PLACE, 0.4f, 1.3f);
     }
@@ -996,7 +1052,7 @@ public final class Allays implements Listener {
     /** Heads for a sell chest with something the Trader buys. It only sells with the owner online, so nothing moves otherwise. */
     private boolean startSell(Base b, Worker w) {
         UUID owner = owner(b);
-        if (owner == null || Bukkit.getPlayer(owner) == null) return false;
+        if (owner == null || Bukkit.getPlayer(owner) == null || now < b.sellHold) return false;
         for (Block chest : b.sellChests) {
             if (!chest.getWorld().isChunkLoaded(chest.getX() >> 4, chest.getZ() >> 4) || !(chest.getState(false) instanceof Container c)) continue;
             boolean taken = false;
@@ -1047,6 +1103,10 @@ public final class Allays implements Listener {
         // the Foundry shows what it would have paid and pays nothing
         boolean paid = owner != null && net > 0 && (sandbox || plugin.economy().deposit(owner, net));
         if (!paid) {
+            if (owner != null) {
+                b.sellHold = now + SELL_HOLD_TICKS;
+                owner.sendActionBar(Ui.mm("<red>That sale couldn't be paid, so your allay is taking it back. It'll try again in a minute."));
+            }
             if (from != null && from.getState(false) instanceof Container) {
                 w.dest = from;
                 w.state = State.DELIVER;
@@ -1073,7 +1133,10 @@ public final class Allays implements Listener {
         if (id == null || !(Bukkit.getEntity(id) instanceof Item drop) || !drop.isValid() || drop.getWorld() != w.entity.getWorld()
                 || drop.getLocation().distanceSquared(w.entity.getLocation()) > REACH_SQ) return;
         ItemStack stack = drop.getItemStack();
-        int n = Math.min(stack.getAmount(), carry);
+        Inventory store = station.storageIn(b.region);
+        // no more than the Station can take, so it isn't left holding the rest and unable to do anything else
+        int n = Math.min(Math.min(stack.getAmount(), carry), store == null ? 0 : room(store, stack));
+        if (n <= 0) return;
         ItemStack load = stack.clone();
         load.setAmount(n);
         if (n >= stack.getAmount()) drop.remove();
@@ -1166,18 +1229,19 @@ public final class Allays implements Listener {
     }
 
     /**
-     * What an upgraded allay leaves behind. Tier II drags a glowing orange trail. Tier III draws two rainbow ribbons off its
-     * wingtips, with sparks in its wake and motes circling it, even when it's hovering.
+     * What an upgraded allay leaves behind on a trip. Tier II drags a glowing orange trail. Tier III draws two rainbow ribbons
+     * off its wingtips with sparks in its wake, and has motes circling it, more slowly while it hovers.
      */
     private void effects(Worker w) {
         if (w.tier < 2) return;
         Location at = w.entity.getLocation().add(0, SKIN_HEIGHT, 0);
         World world = at.getWorld();
+        boolean hovering = w.state == State.IDLE || w.state == State.PAUSE || w.state == State.WAIT;
         double[] was = w.lastPos;
         w.lastPos = new double[]{at.getX(), at.getY(), at.getZ()};
         if (was != null) {
             double dx = at.getX() - was[0], dy = at.getY() - was[1], dz = at.getZ() - was[2], moved = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if (moved > TRAIL_MIN_MOVE && moved < TRAIL_MAX_MOVE) {
+            if (!hovering && moved > TRAIL_MIN_MOVE && moved < TRAIL_MAX_MOVE) {
                 double bx = -dx / moved, by = -dy / moved, bz = -dz / moved;   // behind it, whichever way it's going
                 Location tail = at.clone().add(bx * 0.4, by * 0.4, bz * 0.4);
                 if (w.tier == 2) {
@@ -1195,7 +1259,7 @@ public final class Allays implements Listener {
         }
         if (w.tier == 2) {
             if ((now + w.index * 7) % SPARKLE_TICKS == 0) world.spawnParticle(Particle.WAX_ON, at, 1, 0.3, 0.3, 0.3, 0);
-        } else if ((now + w.index) % 2 == 0) {
+        } else if ((now + w.index) % (hovering ? HOVER_MOTE_TICKS : WORK_MOTE_TICKS) == 0) {
             double angle = now * 0.3 + w.index * 2.1;
             for (int i = 0; i < 2; i++) {
                 double a = angle + i * Math.PI;

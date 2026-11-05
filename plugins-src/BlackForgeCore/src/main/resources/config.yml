@@ -223,6 +223,7 @@ allays:
 # Skins and work animations for Agents, and skins for upgraded hoppers. Both need resource-pack-live.
 agent-looks: true
 hopper-looks: true
+hopper-looks-max-per-chunk: 32   # skins per chunk, own tiers first; the rest still run at their tier
 
 # Agents, called robots in the code and saves (Survival + Skyblock copper golems). NOT read by the plugin yet - a later task wires these up.
 # fish-seconds (per robot tier I..V) and fisher-burn match the built-in values in RobotRules; the rest are for the
