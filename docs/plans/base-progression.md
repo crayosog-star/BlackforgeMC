@@ -1,6 +1,6 @@
 # Base Progression
 **Status:** In progress
-**Next task:** P2.T1, after the Phase 1 gate
+**Next task:** P2.T2
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -152,7 +152,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Rollback:** revert the PR. No saved data changes.
 - **Phase gate:** a tester confirms at Level 1: only the Farmer can be selected, clicking Miner says it needs Level 2, a Grinder item places as a Farmer with a message, and allay cards say which level they need. At Level 5, `/foundry check` passes as it does today.
 
-### [ ] P2.T1: Gate Agent jobs
+### [x] P2.T1: Gate Agent jobs
 - **Needs:** P1.T3; `S/Robots.java:278`, `790`; `S/BaseStation.java:196` (`regionAt`).
 - **Files:** change `S/Robots.java`, `S/SurvivalModule.java`, `S/FoundrySystems.java`.
 - **Steps:**
@@ -163,7 +163,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** an Agent already doing a locked job keeps working until its job changes; picking it up and placing it at the same base keeps the job only if unlocked there; staff follow the same rules, so the gate can be tested; test bots use slots 11 and 17, so slot positions stay.
 - **Done when:** the job checks in the Phase 2 gate pass.
 - **Leaves ready:** gated jobs.
-- **Evidence:**
+- **Evidence:** Verified by code review: an Agent keeps a locked job until it's changed, and servers without levels skip the check. Automerge runs the real build. Untested in game: all job checks, in the Phase 2 gate.
 
 ### [ ] P2.T2: Gate Forge Allays
 - **Needs:** P2.T1; `S/Allays.java:546`, `577`.

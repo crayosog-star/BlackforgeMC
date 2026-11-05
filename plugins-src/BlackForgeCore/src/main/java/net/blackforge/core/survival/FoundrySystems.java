@@ -66,6 +66,7 @@ public final class FoundrySystems {
         station.setRadius(c.getInt("foundry.agent-radius", 40));
         levels = new BaseLevels(plugin, true);
         station.setLevels(levels);
+        robots.setLevels(levels);
         allays = new Allays(plugin, station, zone, true);
         station.setAllays(allays);
         allays.setRobots(robots);
