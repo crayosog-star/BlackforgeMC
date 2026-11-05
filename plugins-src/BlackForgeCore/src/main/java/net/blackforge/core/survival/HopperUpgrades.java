@@ -71,7 +71,6 @@ public final class HopperUpgrades implements Listener {
     final int price, essence;
     private final boolean enabled;
     private BiPredicate<Player, Location> access = (p, l) -> false;
-    private int ticks;
     private HopperLook look;
 
     HopperUpgrades(BlackForgeCore plugin) {
@@ -143,7 +142,6 @@ public final class HopperUpgrades implements Listener {
     // ------------------------------------------------------------------ the speed-up
 
     private void tick() {
-        boolean sparks = ++ticks % 40 == 0;
         for (Loaded l : loaded.values()) {
             boolean changed = false;
             for (Iterator<Map.Entry<Integer, Integer>> it = l.tiers.entrySet().iterator(); it.hasNext(); ) {
@@ -153,8 +151,6 @@ public final class HopperUpgrades implements Listener {
                 if (!(b.getState(false) instanceof Hopper h)) { it.remove(); changed = true; continue; }   // replaced without a break event
                 int wait = delay(en.getValue());
                 if (h.getTransferCooldown() > wait) h.setTransferCooldown(wait);
-                if (sparks && en.getValue() >= HopperTiers.MAX_TIER)
-                    l.world.spawnParticle(Particle.ELECTRIC_SPARK, b.getLocation().add(0.5, 1.05, 0.5), 2, 0.2, 0.02, 0.2, 0);
             }
             if (changed) writeIndex(l);
         }
