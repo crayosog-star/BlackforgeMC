@@ -78,4 +78,42 @@ class AllayFlightTest {
         assertEquals(AllayFlight.MAX_LIFT, AllayFlight.lift(0.5, 100), EPS);
         assertEquals(0.5, AllayFlight.lift(0.5, 4), EPS);
     }
+
+    // a Station at block (0, 64, 0): its packed flock sits in block (0, 65, 0)
+    private static final double[] TIGHT = {0.5, 65.3, 0.5};
+
+    private static void allFit(AllayFlight.Hover h, int flock, AllayPath.Free free) {
+        for (int i = 0; i < flock; i++) {
+            double[] o = AllayFlight.tightOffset(h, i, flock);
+            assertTrue(AllayFlight.bodyFree(new double[]{TIGHT[0] + o[0], TIGHT[1] + o[1], TIGHT[2] + o[2]}, free), h + " allay " + i + " is in a block");
+        }
+    }
+
+    @Test void openSpaceIsARowAlongX() {
+        assertEquals(AllayFlight.Hover.ROW_X, AllayFlight.tightLayout(TIGHT, 3, (x, y, z) -> true));
+        assertArrayEquals(new double[]{-0.7, 0, 0}, AllayFlight.tightOffset(AllayFlight.Hover.ROW_X, 0, 3), EPS);
+        assertArrayEquals(new double[]{0.7, 0, 0}, AllayFlight.tightOffset(AllayFlight.Hover.ROW_X, 2, 3), EPS);
+    }
+
+    @Test void aNookRunningAlongZTurnsTheRow() {
+        AllayPath.Free nook = (x, y, z) -> x == 0;   // walls either side in x
+        assertFalse(AllayFlight.bodyFree(new double[]{TIGHT[0] + 0.7, TIGHT[1], TIGHT[2]}, nook));   // the old spot was half in the wall
+        AllayFlight.Hover h = AllayFlight.tightLayout(TIGHT, 3, nook);
+        assertEquals(AllayFlight.Hover.ROW_Z, h);
+        allFit(h, 3, nook);
+    }
+
+    @Test void aShaftStacksThem() {
+        AllayPath.Free shaft = (x, y, z) -> x == 0 && z == 0;
+        AllayFlight.Hover h = AllayFlight.tightLayout(TIGHT, 4, shaft);
+        assertEquals(AllayFlight.Hover.STACK, h);
+        allFit(h, 4, shaft);
+    }
+
+    @Test void aCubbyKeepsThemInTheMiddle() {
+        AllayPath.Free cubby = (x, y, z) -> x == 0 && z == 0 && y == 65;
+        AllayFlight.Hover h = AllayFlight.tightLayout(TIGHT, 3, cubby);
+        assertEquals(AllayFlight.Hover.CENTRE, h);
+        allFit(h, 3, cubby);
+    }
 }

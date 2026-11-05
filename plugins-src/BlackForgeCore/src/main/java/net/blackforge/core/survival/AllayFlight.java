@@ -35,6 +35,49 @@ final class AllayFlight {
         return new double[]{Math.cos(angle) * 1.4, Math.sin(tick * 0.05 + index) * 0.25, Math.sin(angle) * 1.4};
     }
 
+    /** How a flock idles at its Station: the circle when there's room, otherwise packed into whatever space there is. */
+    enum Hover { CIRCLE, ROW_X, ROW_Z, STACK, CENTRE }
+
+    /** Between allays packed side by side or stacked. */
+    static final double TIGHT_SPACING = 0.7;
+    /** Half an allay's width and its height, with a little to spare. */
+    private static final double HALF_WIDTH = 0.2, HEIGHT = 0.6;
+    private static final Hover[] TIGHT_TRIES = {Hover.ROW_X, Hover.ROW_Z, Hover.STACK};
+
+    /** Offset from the tight idle spot for this layout. A row is centred on it; a stack goes up from it. */
+    static double[] tightOffset(Hover h, int index, int flock) {
+        double o = (index - (flock - 1) / 2.0) * TIGHT_SPACING;
+        return switch (h) {
+            case ROW_X -> new double[]{o, 0, 0};
+            case ROW_Z -> new double[]{0, 0, o};
+            case STACK -> new double[]{0, index * TIGHT_SPACING, 0};
+            default -> new double[]{0, 0, 0};
+        };
+    }
+
+    /**
+     * The first packed layout that keeps every allay's whole body out of the blocks: a row along x, a row along z, then a
+     * stack. If none fits, they share the centre, since a teleport ignores blocks and would show them half inside a wall.
+     */
+    static Hover tightLayout(double[] centre, int flock, AllayPath.Free free) {
+        for (Hover h : TIGHT_TRIES) {
+            boolean fits = true;
+            for (int i = 0; i < flock && fits; i++) {
+                double[] o = tightOffset(h, i, flock);
+                fits = bodyFree(new double[]{centre[0] + o[0], centre[1] + o[1], centre[2] + o[2]}, free);
+            }
+            if (fits) return h;
+        }
+        return Hover.CENTRE;
+    }
+
+    /** Is an allay standing at this spot (its feet) clear of blocks on every side? */
+    static boolean bodyFree(double[] p, AllayPath.Free free) {
+        for (double dx : new double[]{-HALF_WIDTH, HALF_WIDTH}) for (double dz : new double[]{-HALF_WIDTH, HALF_WIDTH}) for (double dy : new double[]{0, HEIGHT})
+            if (!free.at((int) Math.floor(p[0] + dx), (int) Math.floor(p[1] + dy), (int) Math.floor(p[2] + dz))) return false;
+        return true;
+    }
+
     /** A colour around the rainbow as packed RGB, for a Steward's trail. {@code t} wraps, so it can just keep counting. */
     static int rainbow(double t) {
         double h = (t - Math.floor(t)) * 6;

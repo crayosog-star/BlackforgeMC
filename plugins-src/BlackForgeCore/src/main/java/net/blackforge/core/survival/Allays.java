@@ -97,7 +97,7 @@ public final class Allays implements Listener {
     private static final int FLAP_TICKS = 2, SPARKLE_TICKS = 12;
     /** Closed, half, swept, half: it steps through each one, because a jump between two far-apart poses looks like two pairs of wings. */
     private static final int[] FLAP_ORDER = {0, 1, 2, 1};
-    private static final double TIGHT_SPACING = 0.7, ARRIVAL_SPREAD = 0.4;
+    private static final double ARRIVAL_SPREAD = 0.4;
     private static final double TRAIL_MIN_MOVE = 0.04, TRAIL_MAX_MOVE = 2, RIBBON_WIDTH = 0.4, HALO_RADIUS = 0.6;
     private static final float STEWARD_SCALE = 1.15f;
     private static final int BURST_POINTS = 18;
@@ -117,8 +117,10 @@ public final class Allays implements Listener {
         double[] from, to; int tick, ticks;
         /** Its way there, or null while it waits its turn for a search. */
         AllayPath.Route route;
-        /** No room for the circle round this Station, so it hovers just above it. */
-        boolean tight;
+        /** How it idles: the circle, or packed just above a Station with no room for one. */
+        AllayFlight.Hover hover = AllayFlight.Hover.CIRCLE;
+        /** Its base, for remembering trips with no way there. */
+        String region;
         /** What it's fetching, and what it's holding. Holding is kept in memory, because the item has left the world. */
         UUID job; ItemStack carried;
         int rest, hold; String label; float trail = 0.8f;
@@ -153,7 +155,7 @@ public final class Allays implements Listener {
         final List<Block> sellChests = new ArrayList<>();
         final List<Robots.Bot> thirsty = new ArrayList<>();
         long lastScan = Long.MIN_VALUE / 2, lastLinkScan = Long.MIN_VALUE / 2;
-        boolean tight;
+        AllayFlight.Hover hover = AllayFlight.Hover.CIRCLE;
         Base(String region, UUID buyer) { this.region = region; this.buyer = buyer; }
     }
 
@@ -176,6 +178,7 @@ public final class Allays implements Listener {
     private double deathX, deathY, deathZ;
     private int deathTick = -1, scansThisTick, searchesThisTick;
     private final int pathMaxNodes, maxSearches;
+    private final AllayPath.Misses misses;
     private final List<Flyer> flyers = new ArrayList<>();
     private final Map<String, Base> bases = new HashMap<>();
     private long now;
@@ -212,7 +215,8 @@ public final class Allays implements Listener {
         this.maxScans = Math.max(1, c.getInt("allays.max-scans-per-tick", 4));
         this.sellFee = c.getDouble("allays.sell-fee", 0.10);
         this.customSkins = c.getBoolean("resource-pack-live", false) && c.getBoolean("allays.custom-skins", true);
-        this.pathMaxNodes = Math.max(100, c.getInt("allays.path-max-nodes", 2000));
+        this.pathMaxNodes = Math.max(100, c.getInt("allays.path-max-nodes", 500));
+        this.misses = new AllayPath.Misses(Math.max(1, c.getInt("allays.no-route-seconds", 5)) * 20L);
         this.maxSearches = Math.max(1, c.getInt("allays.max-path-searches-per-tick", 2));
         this.enabled = c.getBoolean("allays.enabled", false);
         this.previewStaff = c.getBoolean("allays.preview-staff", false);
@@ -682,7 +686,8 @@ public final class Allays implements Listener {
         for (Worker w : b.workers) if (w.job != null) taken.add(w.job);
         for (Worker w : b.workers) {
             w.tier = b.tier;
-            w.tight = b.tight;
+            w.hover = b.hover;
+            w.region = b.region;
             if (w.entity == null || !w.entity.isValid()) wake(w, at, flock);
             w.trail = 0.6f + 0.2f * b.tier;   // a higher tier burns brighter
             work(b, w, at, flock, taken);
@@ -792,9 +797,14 @@ public final class Allays implements Listener {
         World world = w.entity.getWorld();
         AllayPath.Free open = (x, y, z) -> free(world, x, y, z);
         if (AllayPath.needsSearch(w.from, w.to, open)) {
-            if (searchesThisTick >= maxSearches) return false;
-            searchesThisTick++;
-            AllayPath.Route found = AllayPath.route(w.from, w.to, open, pathMaxNodes);
+            String miss = AllayPath.Misses.key(w.region, w.to);
+            AllayPath.Route found = null;
+            if (!misses.recent(miss, now)) {   // it found no way here a moment ago, so it won't now: straight, without the search
+                if (searchesThisTick >= maxSearches) return false;
+                searchesThisTick++;
+                found = AllayPath.route(w.from, w.to, open, pathMaxNodes);
+                if (found == null) misses.add(miss, now);
+            }
             w.route = found != null ? found : new AllayPath.Route(List.of(w.from, w.to));
         } else w.route = AllayPath.bowed(w.from, w.to, w.index, open);   // each goes its own way, not in single file
         w.ticks = AllayFlight.ticks(w.route.length, speed);
@@ -1235,7 +1245,8 @@ public final class Allays implements Listener {
         if (scansThisTick >= maxScans || !AllayJobs.due(b.lastScan, now, scanTicks)) return;
         scansThisTick++;
         b.lastScan = now;
-        b.tight = !roomToCircle(at);
+        b.hover = roomToCircle(at) ? AllayFlight.Hover.CIRCLE
+                : AllayFlight.tightLayout(tightSpot(at), table.flock(b.tier), (x, y, z) -> free(at.getWorld(), x, y, z));
         b.jobs.clear();
         int leash = table.leash(b.tier);
         for (Entity e : at.getWorld().getNearbyEntities(at, leash, leash, leash, x -> x instanceof Item)) {
@@ -1303,11 +1314,17 @@ public final class Allays implements Listener {
     }
 
     private static double[] hover(Location station, Worker w, int flock, long tick) {
-        // no room to circle: side by side, so a flock can't stack up and look like one blurred allay
-        if (w.tight) return new double[]{station.getX() + 0.5 + (w.index - (flock - 1) / 2.0) * TIGHT_SPACING, station.getY() + 1.3, station.getZ() + 0.5};
+        // no room to circle: side by side or stacked where there's space, so a flock doesn't blur into one allay or sit in a wall
+        if (w.hover != AllayFlight.Hover.CIRCLE) {
+            double[] c = tightSpot(station), o = AllayFlight.tightOffset(w.hover, w.index, flock);
+            return new double[]{c[0] + o[0], c[1] + o[1], c[2] + o[2]};
+        }
         double[] h = AllayFlight.hover(w.index, flock, tick);
         return new double[]{station.getX() + 0.5 + h[0], station.getY() + 2.2 + h[1], station.getZ() + 0.5 + h[2]};
     }
+
+    /** The middle of a packed flock, just above the Station. */
+    private static double[] tightSpot(Location station) { return new double[]{station.getX() + 0.5, station.getY() + 1.3, station.getZ() + 0.5}; }
 
     /** Can an allay fly through this block? Never into an unloaded chunk, which would load it, and never lava. */
     private static boolean free(World world, int x, int y, int z) {

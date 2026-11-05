@@ -4,6 +4,11 @@ import net.blackforge.core.survival.AllayPath.Free;
 import net.blackforge.core.survival.AllayPath.Route;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Pure-logic tests for how a Forge Allay gets around blocks (no server needed). */
@@ -94,5 +99,62 @@ class AllayPathTest {
             assertTrue(AllayPath.dist(last, p) <= 0.1 + 1e-9);
             last = p;
         }
+    }
+
+    @Test void aMissIsRememberedThenForgotten() {
+        AllayPath.Misses m = new AllayPath.Misses(100);
+        String k = AllayPath.Misses.key("claim-1", B);
+        assertFalse(m.recent(k, 0));
+        m.add(k, 100);
+        assertTrue(m.recent(k, 150));
+        assertTrue(m.recent(AllayPath.Misses.key("claim-1", new double[]{10.9, 64.1, 0.2}), 199));   // same block
+        assertFalse(m.recent(AllayPath.Misses.key("claim-2", B), 150));                               // another base
+        assertFalse(m.recent(AllayPath.Misses.key("claim-1", A), 150));                               // another block
+        assertFalse(m.recent(k, 200));
+        assertEquals(0, m.size());   // forgotten, not kept forever
+    }
+
+    @Test void missesStayBounded() {
+        AllayPath.Misses m = new AllayPath.Misses(20);
+        for (int i = 0; i < 5_000; i++) m.add(AllayPath.Misses.key("b", new double[]{i, 64, 0}), i);
+        assertTrue(m.size() <= 1_024);
+        assertTrue(m.recent(AllayPath.Misses.key("b", new double[]{4_999, 64, 0}), 5_000));
+    }
+
+    /** A one-block-wide corridor that winds back and forth, with nothing open but itself, so straightening can only skip along a leg. */
+    private static List<double[]> snake(int length, Set<Long> cells) {
+        List<double[]> pts = new ArrayList<>();
+        int x = 0, z = 0, dz = 1;
+        while (pts.size() < length) {
+            pts.add(new double[]{x + 0.5, 64.5, z + 0.5});
+            cells.add((long) x * 1_000 + z);
+            int step = pts.size() % 8;   // six along z, then two along x
+            if (step >= 1 && step <= 6) z += dz;
+            else { x++; if (step == 0) dz = -dz; }
+        }
+        return pts;
+    }
+
+    @Test void straighteningHasAWorkLimit() {
+        Set<Long> cells = new HashSet<>();
+        List<double[]> grid = snake(400, cells);
+        int[] used = {0};
+        Free corridor = (x, y, z) -> { used[0]++; return y == 64 && cells.contains((long) x * 1_000 + z); };
+        List<double[]> out = AllayPath.straighten(grid, new AllayPath.Budget(corridor, 2_000));
+        assertTrue(used[0] <= 2_000 + 1_000, "looked up " + used[0]);   // the budget, plus at most one line check past it
+        assertArrayEquals(grid.get(0), out.get(0), 1e-9);
+        assertArrayEquals(grid.get(grid.size() - 1), out.get(out.size() - 1), 1e-9);
+        for (int i = 1; i < out.size(); i++) assertTrue(AllayPath.clear(out.get(i - 1), out.get(i), corridor), "cut through a wall at " + i);
+        used[0] = 0;
+        AllayPath.straighten(grid, new AllayPath.Budget(corridor, Integer.MAX_VALUE));
+        assertTrue(used[0] > 20_000, "the snake should be expensive without a limit: " + used[0]);
+    }
+
+    @Test void aSpentBudgetKeepsTheGridRoute() {
+        Set<Long> cells = new HashSet<>();
+        List<double[]> grid = snake(20, cells);
+        List<double[]> out = AllayPath.straighten(grid, new AllayPath.Budget(OPEN, 0));
+        assertEquals(grid.size(), out.size());
+        assertEquals(2, AllayPath.straighten(grid, new AllayPath.Budget(OPEN, 1_000)).size());   // open air: straight across
     }
 }
