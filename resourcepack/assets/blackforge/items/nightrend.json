@@ -78,5 +78,6 @@
       "type": "minecraft:model",
       "model": "blackforge:item/nightrend"
     }
-  }
+  },
+  "hand_animation_on_swap": false
 }
