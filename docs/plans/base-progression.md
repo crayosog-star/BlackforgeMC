@@ -129,7 +129,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
   3. Save to `base-levels.yml` every minute when changed and on shutdown, with no file in the sandbox. Unknown keys are ignored.
   4. `BaseStation.setLevels(BaseLevels)`. In `deliver`, count the amount that went in, using the input amount minus the leftover.
   5. Construct it on Survival and in the Foundry, not on Skyblock. In the sandbox every region shares one test level, default 5.
-- **Edge cases:** a full Station counts nothing; a partial stack counts only what fit; a bad save file logs and starts clean without overwriting it until the next real change; the count is capped at `Long.MAX_VALUE`; a shutdown saves; a flag-off server counts nothing and writes nothing.
+- **Edge cases:** a full Station counts nothing; a partial stack counts only what fit; an unreadable save file logs an error and moves to `base-levels.yml.broken`, and if it can't be moved, saving stops so it isn't overwritten; the count is capped at `Long.MAX_VALUE`; a shutdown saves; a flag-off server counts nothing and writes nothing.
 - **Done when:** a code review confirms `deliver` is the only count call. Automerge's build passes. The in-game delivery check runs in the Phase 1 gate.
 - **Leaves ready:** a saved level for each base.
 - **Evidence:** Verified by code review: `BaseStation.deliver` is the only call to `countDelivery`, and it counts the stack's amount from before `addItem`, less what's left. Automerge runs the real build. Untested in game: the delivery check runs in the Phase 1 gate once P1.T3 can show it.
@@ -327,6 +327,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 | Date | Change | Approved by |
 |---|---|---|
 | 2026-11-04 | Starter Farmer and the 256-per-chunk hopper limit moved from assumptions to decisions | Colin, in chat |
+| 2026-11-04 | P1.T2 keeps an unreadable save file instead of overwriting it at the next delivery. The check is stronger, from a review of PR #124 | Flagged to Colin |
 | 2026-11-04 | Plan created from Colin's decisions, and approved to build with "start building" | Colin, in chat |
 
 ## Later ideas

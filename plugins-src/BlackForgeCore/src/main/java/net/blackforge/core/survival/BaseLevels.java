@@ -24,7 +24,7 @@ final class BaseLevels {
     private final File file;
     private final Map<String, Base> bases = new HashMap<>();
     private final Base test = new Base();
-    private boolean dirty;
+    private boolean dirty, saveBlocked;
 
     BaseLevels(BlackForgeCore plugin, boolean sandbox) {
         this.plugin = plugin;
@@ -103,7 +103,17 @@ final class BaseLevels {
     void shutdown() { save(); }
 
     private void load() {
-        ConfigurationSection all = YamlConfiguration.loadConfiguration(file).getConfigurationSection("bases");
+        if (!file.exists()) return;
+        YamlConfiguration y = new YamlConfiguration();
+        try { y.load(file); }
+        catch (Exception ex) {
+            // starting clean would overwrite every base within a minute, so the unreadable file is kept for fixing
+            File broken = new File(file.getParentFile(), file.getName() + ".broken");
+            saveBlocked = broken.exists() || !file.renameTo(broken);
+            plugin.getLogger().severe("base-levels.yml can't be read: " + ex.getMessage() + (saveBlocked ? ". Base levels won't be saved until it's fixed." : ". It was moved to " + broken.getName() + "."));
+            return;
+        }
+        ConfigurationSection all = y.getConfigurationSection("bases");
         if (all == null) return;
         for (String i : all.getKeys(false)) {
             ConfigurationSection s = all.getConfigurationSection(i);
@@ -116,9 +126,8 @@ final class BaseLevels {
         }
     }
 
-    /** Only after a real change, so an unreadable file stays there to be fixed until then. */
     private void save() {
-        if (sandbox || !dirty) return;
+        if (sandbox || !dirty || saveBlocked) return;
         YamlConfiguration y = new YamlConfiguration();
         int i = 0;
         for (Map.Entry<String, Base> en : bases.entrySet()) {
