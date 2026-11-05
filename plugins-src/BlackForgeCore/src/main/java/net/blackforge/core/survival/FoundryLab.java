@@ -44,6 +44,8 @@ final class FoundryLab {
     private final Husk[] mobs;
     private final java.util.Random rnd = new java.util.Random();
     private final Runnable onEmpty;
+    /** Is anyone testing, counting a player in the leave grace who has stepped out? */
+    private final java.util.function.BooleanSupplier testing;
     private static final int WHEAT_SECONDS = 30;
     private static final float LABEL_VIEW_RANGE = 0.3f;
     private int wheatTimer;
@@ -59,8 +61,9 @@ final class FoundryLab {
     private static final int COURIER_Z_OFFSET = -5, COURIER_SPACING = 2;
     private final org.bukkit.entity.ItemFrame[] courierFrames = new org.bukkit.entity.ItemFrame[COURIER_ITEMS.length];
 
-    FoundryLab(BlackForgeCore plugin, World world, HopperUpgrades hoppers, BaseStation station, Predicate<Location> zone, Layout layout, Runnable onEmpty) {
+    FoundryLab(BlackForgeCore plugin, World world, HopperUpgrades hoppers, BaseStation station, Predicate<Location> zone, Layout layout, java.util.function.BooleanSupplier testing, Runnable onEmpty) {
         this.onEmpty = onEmpty;
+        this.testing = testing;
         this.mobs = new Husk[layout.mobs().length];
         this.world = world; this.hoppers = hoppers; this.station = station; this.zone = zone; this.layout = layout;
         for (int i = 0; i < layout.laneZ().length; i++) {
@@ -74,8 +77,9 @@ final class FoundryLab {
         if (layout.forge().getBlock().getType() != Material.BARREL) return;   // still being built
         station.adopt(layout.forge().getBlock());
         if (labels.isEmpty()) spawnLabels();
-        boolean occupied = false;
-        for (Player p : world.getPlayers()) if (zone.test(p.getLocation())) occupied = true;
+        boolean standing = false;
+        for (Player p : world.getPlayers()) if (zone.test(p.getLocation())) standing = true;
+        boolean occupied = FoundryTestRules.occupied(standing, testing.getAsBoolean());
         if (layout.forge().getBlock().getState(false) instanceof Barrel b) {
             if (!occupied) b.getInventory().clear();   // shared storage, so it resets too
             else if (b.getInventory().firstEmpty() < 0) clearGoods(b);   // a full Forge would stop every bench; a plot's own Station can still fill up

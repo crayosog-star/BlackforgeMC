@@ -34,18 +34,24 @@ public final class FoundrySystems {
     private final org.bukkit.plugin.Plugin plugin;
     private final int checkSeconds;
     private final int[] mineWall, pond;
+    private final java.util.function.BooleanSupplier testing;
     private boolean checking;
+    private static final Robots.Job[] DEMO_JOBS = {Robots.Job.MINER, Robots.Job.FARMER, Robots.Job.FISHERMAN, Robots.Job.GRINDER};
 
     /** Where the fixed benches are, from the hub's layout. */
     public record Layout(int[] laneZ, int laneX, int y, Location forge, Location penMobs, int[][] mobs, Location title, Location[] supply, Location allayBench, Location[] demo, int[] farm, Sign[] signs, int mineX1, int mineX2, int mineZ, int mineHeight, int[] pond) {}
     /** A bench's fixed label. */
     public record Sign(Location at, String text) {}
 
-    /** {@code region}: which base a spot counts as part of. {@code sharedRegion}: the Forge's, which belongs to nobody. */
+    /**
+     * {@code region}: which base a spot counts as part of. {@code sharedRegion}: the Forge's, which belongs to nobody.
+     * {@code testing}: is anyone's test running, counting a player in the leave grace.
+     */
     public FoundrySystems(BlackForgeCore plugin, World world, Layout at, java.util.function.ToIntFunction<Location> supplyAt, Predicate<Location> zone,
-                          Function<Location, String> region, String sharedRegion, BiPredicate<Player, Location> access) {
+                          Function<Location, String> region, String sharedRegion, BiPredicate<Player, Location> access, java.util.function.BooleanSupplier testing) {
         var c = plugin.getConfig();
         this.plugin = plugin;
+        this.testing = testing;
         this.checkSeconds = Math.max(10, c.getInt("foundry.check-seconds", 60));
         this.mineWall = new int[]{at.mineX1(), at.mineX2(), at.mineZ(), at.mineHeight()};
         this.pond = new int[]{at.pond()[0], at.pond()[1], at.pond()[2], at.pond()[3]};
@@ -81,7 +87,7 @@ public final class FoundrySystems {
             return null;
         });
         Bukkit.getPluginManager().registerEvents(new FoundrySupply(supplyAt, hoppers), plugin);
-        lab = new FoundryLab(plugin, world, hoppers, station, zone, new FoundryLab.Layout(at.laneZ(), at.laneX(), at.y(), at.forge(), at.penMobs(), at.mobs(), at.title(), at.supply(), at.allayBench(), at.farm(), at.signs()), () -> { allays.resetShared(); levels.resetTest(); hoppers.refreshClaims(); });
+        lab = new FoundryLab(plugin, world, hoppers, station, zone, new FoundryLab.Layout(at.laneZ(), at.laneX(), at.y(), at.forge(), at.penMobs(), at.mobs(), at.title(), at.supply(), at.allayBench(), at.farm(), at.signs()), testing, () -> { allays.resetShared(); levels.resetTest(); hoppers.refreshClaims(); });
     }
 
     // ------------------------------------------------------------------ what /foundry uses
@@ -131,10 +137,20 @@ public final class FoundrySystems {
     public void addTestDeliveries(long items) { levels.countDelivery(sharedRegion, items); }
 
     /** One Tier I agent at each bench. Returns how many went down. */
-    public int demo(Player p) {
-        Robots.Job[] jobs = {Robots.Job.MINER, Robots.Job.FARMER, Robots.Job.FISHERMAN, Robots.Job.GRINDER};
+    public int demo(Player p) { return placeDemoSet(p, List.of()); }
+
+    /**
+     * The demo set, for /foundry demo and /foundry check: one agent per job on its bench spot, skipping {@code skip} and
+     * any spot that already has an agent or that this player couldn't place on by hand. Returns how many went down.
+     */
+    private int placeDemoSet(Player p, List<Robots.Job> skip) {
         int n = 0;
-        for (int i = 0; i < jobs.length; i++) if (robots.place(p, Robots.robotItem(jobs[i], 1, 0, 0, 1), demoSpots[i].getBlock(), 180f)) n++;
+        for (int i = 0; i < DEMO_JOBS.length; i++) {
+            if (skip.contains(DEMO_JOBS[i])) continue;
+            org.bukkit.block.Block at = demoSpots[i].getBlock();
+            if (!FoundryTestRules.demoSpotFree(robots.agentOn(at), Robots.hasRoom(at), robots.mayBuild(p, at))) continue;
+            if (robots.place(p, Robots.robotItem(DEMO_JOBS[i], 1, 0, 0, 1), at, 180f)) n++;
+        }
         return n;
     }
 
@@ -160,27 +176,26 @@ public final class FoundrySystems {
     /**
      * Tests everything by really running it: puts one agent at each bench, turns on Tier III, runs the agents low on fuel,
      * then after {@code foundry.check-seconds} says which jobs were really done. It reads counters, so a PASS means it
-     * happened. It proves the job ran, not how it looks.
+     * happened. It proves the job ran, not how it looks. False if a check was already running, so nothing was placed.
      */
-    public void check(Player p, java.util.function.Consumer<String> say) {
-        if (checking) { say.accept("<gray>A check is already running. It'll report soon."); return; }
+    public boolean check(Player p, java.util.function.Consumer<String> say) {
+        if (checking) { say.accept("<gray>A check is already running. It'll report soon."); return false; }
         checking = true;
         int before = allays.sharedTier(), seconds = checkSeconds;
         say.accept("<gold>Testing everything for " + seconds + " seconds. <gray>You can watch, or keep testing. Your agents stay placed.");
         allays.resetCounts();
         robots.resetWorkCounts();
-        allays.setSharedTier(p.getUniqueId(), 3);
+        allays.setSharedTier(p.getUniqueId(), FoundryTestRules.CHECK_TIER);
         List<Robots.Job> have = new ArrayList<>();
         for (Robots.Bot b : robots.agentsOf(p.getUniqueId())) have.add(b.job);
-        Robots.Job[] jobs = {Robots.Job.MINER, Robots.Job.FARMER, Robots.Job.FISHERMAN, Robots.Job.GRINDER};
-        for (int i = 0; i < jobs.length; i++) if (!have.contains(jobs[i])) robots.place(p, Robots.robotItem(jobs[i], 1, 0, 0, 1), demoSpots[i].getBlock(), 180f);
+        placeDemoSet(p, have);
         fuelLow(p);
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             checking = false;
             say.accept("<gradient:#ffb347:#ff5a1a><bold>Foundry check</bold></gradient>");
             say.accept(result(station.storageIn(sharedRegion) != null, "The Forge", "storage"));
             lab.benchChecks(new int[]{mineWall[0], mineWall[1], mineWall[2], mineWall[3]}, pond).forEach(say);
-            for (Robots.Job job : jobs) {
+            for (Robots.Job job : DEMO_JOBS) {
                 int done = 0, placed = 0;
                 if (p.isOnline()) for (Robots.Bot b : robots.agentsOf(p.getUniqueId())) if (b.job == job) { done += b.workCount; placed++; }
                 say.accept(result(done > 0, job.label + " Agent", placed == 0 ? "couldn't be placed" : done + " jobs done"));
@@ -192,9 +207,13 @@ public final class FoundrySystems {
             say.accept(result(c[1] > 0, "Courier sorting", c[1] + " loads put in framed chests"));
             say.accept(result(c[2] > 0, "Courier refuelling", c[2] + " Agents refuelled"));
             say.accept(result(c[3] > 0, "Steward", c[3] + " sales"));
-            allays.setSharedTier(p.getUniqueId(), Math.max(before, 0));
-            say.accept("<gray>Allays are back to how you had them. A FAIL can also mean it just ran out of time, so run it again before calling it a bug.");
+            // an island that emptied keeps no flock, and a tier someone set during the check stays
+            boolean restore = FoundryTestRules.restoreAfterCheck(testing.getAsBoolean(), allays.sharedTier());
+            if (restore) allays.setSharedTier(p.getUniqueId(), Math.max(before, 0));
+            say.accept("<gray>" + (restore ? "Allays are back to how you had them." : "Allays left as they are: someone changed the tier, or the island emptied, during the check.")
+                    + " A FAIL can also mean it just ran out of time, so run it again before calling it a bug.");
         }, seconds * 20L);
+        return true;
     }
 
     /** Everything worth checking when something looks wrong, as chat lines. */

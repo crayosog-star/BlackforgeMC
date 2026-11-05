@@ -61,7 +61,8 @@ public final class Foundry implements Listener {
                 new int[]{FoundryZone.POND_X1, FoundryZone.POND_X2, FoundryZone.POND_Z1, FoundryZone.POND_Z2}),
                 l -> l.getWorld() == w ? FoundryZone.supplyAt(l.getBlockX(), l.getBlockY(), l.getBlockZ()) : -1, this::inZone,
                 l -> FoundryZone.regionAt(l.getBlockX(), l.getBlockZ()), FoundryZone.SHARED_REGION,
-                (p, l) -> inZone(l) && (placed.owner(pos(l.getBlock())) == null || p.getUniqueId().equals(placed.owner(pos(l.getBlock())))));
+                (p, l) -> inZone(l) && (placed.owner(pos(l.getBlock())) == null || p.getUniqueId().equals(placed.owner(pos(l.getBlock())))),
+                () -> !inside.isEmpty());   // includes anyone in the leave grace, so stepping out doesn't reset the island
         this.bar = systems.hotbar();
         arena.setFoundryKit(p -> inside.contains(p.getUniqueId()) && !builder(p), systems::hotbar, systems::extras);
         new FoundryCommand(this, arena);
@@ -193,7 +194,16 @@ public final class Foundry implements Listener {
     String demo(Player p) {
         if (!demoed.add(p.getUniqueId())) return "<gray>Your demo agents are already running. <white>/foundry status<gray> shows them.";
         int n = systems.demo(p);
+        if (n == 0) {
+            demoed.remove(p.getUniqueId());
+            return "<gray>No demo agents went down: another tester's agents may already be on the bench spots. <white>/foundry status<gray> shows yours.";
+        }
         return "<green>" + n + " demo agents placed at the benches. <gray>What they make goes to the Forge. <white>/foundry status<gray> shows where each one delivers.";
+    }
+
+    /** /foundry check places the demo set too, so a /foundry demo after it doesn't stack a second one. */
+    void check(Player p, java.util.function.Consumer<String> say) {
+        if (systems.check(p, say)) demoed.add(p.getUniqueId());
     }
 
     private void left(Player p) {

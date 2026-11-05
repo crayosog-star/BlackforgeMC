@@ -84,7 +84,7 @@ final class FoundryCommand {
                 else p.sendMessage(Ui.mm("<gray>Use <white>/foundry fuel low"));
             }
             case "reset" -> reset(p);
-            case "check" -> foundry.systems().check(p, line -> p.sendMessage(Ui.mm(line)));
+            case "check" -> foundry.check(p, line -> p.sendMessage(Ui.mm(line)));
             case "status" -> foundry.systems().status(p).forEach(line -> p.sendMessage(Ui.mm(line)));
             default -> help(p);
         }
