@@ -177,6 +177,7 @@ public final class SurvivalModule implements Listener {
         station.setStarterRule((p, l) -> p.getUniqueId().equals(claims.ownerAt(l)));
         if (levels.active()) Bukkit.getScheduler().runTaskLater(plugin, this::raiseExistingBases, 200L);
         if (levels.active()) hoppers.setClaimTier(l -> levels.hopperTier(station.regionAt(l)), levels.claimHopperCap());
+        claims.setOnClaimed(hoppers::refreshClaim);   // hoppers already in a newly claimed chunk get its tier at once
         allays = new Allays(plugin, station, l -> false, false);
         allays.setRobots(robots);
         allays.setLevels(levels);

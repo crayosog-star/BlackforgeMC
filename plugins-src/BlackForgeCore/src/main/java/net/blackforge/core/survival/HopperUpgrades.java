@@ -123,6 +123,16 @@ public final class HopperUpgrades implements Listener {
         }
     }
 
+    /** One chunk was just claimed: hoppers already in it join the claim's tier now, not on the next chunk load. */
+    void refreshClaim(Chunk ch) {
+        if (claimTier == null || !enabled) return;
+        ChunkId id = ChunkId.of(ch.getWorld(), ch.getX(), ch.getZ());
+        Loaded l = loaded.get(id);
+        if (l == null) l = new Loaded(ch.getWorld(), ch.getX(), ch.getZ());
+        scanClaim(ch, l);
+        if (!l.tiers.isEmpty() || !l.claim.isEmpty()) loaded.put(id, l);
+    }
+
     private void scanClaim(Chunk ch, Loaded l) {
         l.claim.clear();
         if (claimTier == null) return;
