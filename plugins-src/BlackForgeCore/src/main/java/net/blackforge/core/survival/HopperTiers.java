@@ -15,6 +15,9 @@ final class HopperTiers {
 
     static int clampTier(int tier) { return Math.max(1, Math.min(MAX_TIER, tier)); }
 
+    /** How fast a hopper runs: its own tier or its claim's, whichever is higher. */
+    static int effective(int own, int claim) { return clampTier(Math.max(own, claim)); }
+
     /** Upgrades needed to leave this tier, or 0 at the top. */
     static int upgradesToLeave(int tier, int[] needed) {
         return tier < 1 || tier >= MAX_TIER ? 0 : needed[tier - 1];

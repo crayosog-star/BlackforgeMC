@@ -77,6 +77,7 @@ public final class BaseStation implements Listener {
     private Economy eco;
     private Allays allays;
     private BaseLevels levels;
+    private java.util.function.Predicate<String> claimHoppers = r -> true;
 
     BaseStation(BlackForgeCore plugin, Robots robots, HopperUpgrades hoppers) { this(plugin, robots, hoppers, false); }
 
@@ -106,6 +107,8 @@ public final class BaseStation implements Listener {
     void setEconomy(Economy e) { this.eco = e; }
     void setAllays(Allays a) { this.allays = a; }
     void setLevels(BaseLevels l) { this.levels = l; }
+    /** Which bases buy hopper tiers for the whole claim, when levels are on. */
+    void setClaimHoppers(java.util.function.Predicate<String> rule) { this.claimHoppers = rule; }
 
     // ------------------------------------------------------------------ items
 
@@ -359,7 +362,9 @@ public final class BaseStation implements Listener {
             } else title.text("gui_l1", CARD_X[i], i < allowed ? "EMPTY" : "RANK", i < allowed ? 0x8A8078 : 0x6E3A1C);
         }
         title.text("gui_l4", 40, "HOPPERS", 0xFFD9A0);
-        title.text("gui_l4", 143, sandbox ? "FREE" : StationText.money(hoppers.price) + " EACH", 0x7ED957);
+        String region = regionOf.apply(at);
+        boolean claimWide = sellsClaimTiers(region);
+        title.text("gui_l4", 143, claimWide ? "WHOLE CLAIM" : sandbox ? "FREE" : StationText.money(hoppers.price) + " EACH", 0x7ED957);
         m.inv = Bukkit.createInventory(m, FORGE_SIZE, StationUi.art() ? title.done() : Ui.mm("<dark_gray>The Forge " + shown + "/" + RobotRules.MAX_AGENTS));
         if (!StationUi.art()) {
             ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
@@ -374,16 +379,57 @@ public final class BaseStation implements Listener {
                     ? Ui.item(Material.LIGHT_GRAY_DYE, "<gray><bold>Empty Slot", sandbox ? "<gray>Take an agent from the Agents chest and place it." : "<gray>Get an agent at <white>/agents<gray> and place it.")
                     : Ui.item(Material.IRON_BARS, "<dark_gray><bold>Locked", "<gray>Ranks unlock more agents, up to <white>" + RobotRules.MAX_AGENTS + "<gray>."));
         }
-        m.inv.setItem(HOPPER_INFO, Ui.item(Material.HOPPER, "<gold><bold>Hopper Tiers",
+        m.inv.setItem(HOPPER_INFO, claimWide ? Ui.item(Material.HOPPER, "<gold><bold>Hopper Tiers",
+                "<gray>Tier I: <white>" + hoppers.rate(1) + "<gray> items a second",
+                "<gray>Tier II: <white>" + hoppers.rate(2) + "<gray> a second",
+                "<gray>Tier III: <white>" + hoppers.rate(3) + "<gray> a second",
+                "", "<dark_gray>A tier upgrades every hopper in this claim,", "<dark_gray>including ones you place later") : Ui.item(Material.HOPPER, "<gold><bold>Hopper Tiers",
                 "<gray>Tier I: <white>" + hoppers.rate(1) + "<gray> items a second",
                 "<gray>Tier II: <white>" + hoppers.rate(2) + "<gray> a second, takes <white>" + hoppers.needed(1) + "<gray> upgrade",
                 "<gray>Tier III: <white>" + hoppers.rate(3) + "<gray> a second, takes <white>" + hoppers.needed(2) + "<gray> upgrades",
                 "", "<dark_gray>Sneak and right-click a hopper to apply"));
         if (pages > 1) m.inv.setItem(NEXT_PAGE, Ui.item(Material.ARROW, "<yellow><bold>Next Agents", "<gray>Page <white>" + (page + 1) + "<gray> of <white>" + pages));
-        m.inv.setItem(BUY_SLOTS[0], buyIcon(1));
-        m.inv.setItem(BUY_SLOTS[1], buyIcon(10));
+        m.inv.setItem(BUY_SLOTS[0], claimWide ? claimTierIcon(region, 2) : buyIcon(1));
+        m.inv.setItem(BUY_SLOTS[1], claimWide ? claimTierIcon(region, 3) : buyIcon(10));
         if (allays != null && allays.available(p)) m.inv.setItem(ALLAY_SLOT, allays.forgeIcon(regionOf.apply(at)));
         p.openInventory(m.inv);
+    }
+
+    private boolean sellsClaimTiers(String region) {
+        return levels != null && levels.active() && region != null && claimHoppers.test(region);
+    }
+
+    private ItemStack claimTierIcon(String region, int tier) {
+        BaseLevelRules.Table t = levels.table();
+        int have = levels.hopperTier(region), level = levels.level(region);
+        BaseLevelRules.Price price = t.hopperCost(tier);
+        String state = have >= tier ? "<green><bold>Owned"
+                : have < tier - 1 ? "<dark_gray>Needs Tier " + Spawners.roman(tier - 1) + " first"
+                : !t.hopperUnlocked(level, tier) ? "<red>Needs Base Level " + t.hopperLevel(tier)
+                : sandbox ? "<green>Free in the Foundry <yellow>- click to buy"
+                : "<green>" + NetEconomy.money(price.money()) + " <dark_gray>+ <#9d7bff>" + price.essence() + " Mob Essence <yellow>- click to buy";
+        return Ui.item(Material.HOPPER, "<gold><bold>Hopper Tier " + Spawners.roman(tier), "<gray>Every hopper in this claim moves", "<white>" + hoppers.rate(tier) + "<gray> items a second.", "", state);
+    }
+
+    private void buyClaimTier(Player p, Location at, int tier) {
+        String region = regionOf.apply(at);
+        if (!hoppers.enabled()) { p.sendMessage(Ui.mm("<gray>Hopper upgrades are switched off right now.")); return; }
+        // read again here: a menu can stay open while someone else buys or the base levels up
+        int have = levels.hopperTier(region);
+        if (have >= tier) { p.sendActionBar(Ui.mm("<gold>This claim already has Hopper Tier " + Spawners.roman(tier) + ".")); return; }
+        if (have < tier - 1) { p.sendActionBar(Ui.mm("<red>Buy Hopper Tier " + Spawners.roman(tier - 1) + " first.")); return; }
+        BaseLevelRules.Table t = levels.table();
+        if (!t.hopperUnlocked(levels.level(region), tier)) {
+            p.sendActionBar(Ui.mm("<red>Hopper Tier " + Spawners.roman(tier) + " needs Base Level " + t.hopperLevel(tier) + "."));
+            p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6f, 0.8f);
+            return;
+        }
+        BaseLevelRules.Price price = t.hopperCost(tier);
+        if (!pay(p, price.money(), price.essence())) return;
+        levels.setHopperTier(region, tier);
+        hoppers.refreshClaims();
+        p.playSound(p.getLocation(), Sound.BLOCK_SMITHING_TABLE_USE, 0.8f, 1.2f);
+        p.sendMessage(Ui.mm("<gold><bold>Hopper Tier " + Spawners.roman(tier) + "</bold> <gray>- every hopper in this claim now moves <white>" + hoppers.rate(tier) + "<gray> items a second."));
     }
 
     private ItemStack buyIcon(int n) {
@@ -413,7 +459,11 @@ public final class BaseStation implements Listener {
         int slot = e.getRawSlot();
         if (slot == NEXT_PAGE && m.pages > 1) { forge(p, m.at, m.page + 1); return; }
         if (slot == ALLAY_SLOT && allays != null && allays.available(p)) { allays.openMenu(p, m.at); return; }
-        if (slot == BUY_SLOTS[0] || slot == BUY_SLOTS[1]) { buyUpgrades(p, slot == BUY_SLOTS[0] ? 1 : 10); return; }
+        if (slot == BUY_SLOTS[0] || slot == BUY_SLOTS[1]) {
+            if (sellsClaimTiers(regionOf.apply(m.at))) { buyClaimTier(p, m.at, slot == BUY_SLOTS[0] ? 2 : 3); forge(p, m.at, m.page); }
+            else buyUpgrades(p, slot == BUY_SLOTS[0] ? 1 : 10);
+            return;
+        }
         String id = m.agents.get(slot);
         if (id == null) return;
         robots.upgradeFromStation(p, id);

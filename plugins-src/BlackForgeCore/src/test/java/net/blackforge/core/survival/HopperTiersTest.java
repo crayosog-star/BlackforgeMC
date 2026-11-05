@@ -12,6 +12,13 @@ class HopperTiersTest {
         assertEquals(20, HopperTiers.itemsPerSecond(HopperTiers.DELAYS[2]), 1e-9);
     }
 
+    @Test void aHopperRunsAtItsOwnTierOrItsClaimsWhicheverIsHigher() {
+        assertEquals(1, HopperTiers.effective(1, 1));
+        assertEquals(2, HopperTiers.effective(1, 2));
+        assertEquals(3, HopperTiers.effective(3, 2));
+        assertEquals(3, HopperTiers.effective(9, 1));
+    }
+
     @Test void upgradesGetFarMoreExpensive() {
         assertEquals(1, HopperTiers.upgradesToLeave(1, HopperTiers.UPGRADES_NEEDED));
         assertEquals(10, HopperTiers.upgradesToLeave(2, HopperTiers.UPGRADES_NEEDED));

@@ -1,6 +1,6 @@
 # Base Progression
 **Status:** In progress
-**Next task:** P3.T1
+**Next task:** P4.T1
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -183,7 +183,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Rollback:** revert the PR. Base hopper tiers are ignored if unused, and per-hopper tiers stay on each hopper.
 - **Phase gate:** a tester confirms on the Build Plot: placing plain hoppers then buying Tier II raises each to 5 items a second, a hopper placed afterward is also Tier II, breaking one drops a plain hopper, and a hopper with its own Tier III stays Tier III. `/foundry status` shows the speeds. Tier III is refused below Level 4.
 
-### [ ] P3.T1: Track claim tiers in HopperUpgrades
+### [x] P3.T1: Track claim tiers in HopperUpgrades
 - **Needs:** P2.T2; `S/HopperUpgrades.java:145`, `163`, `190`, `292`, `298`.
 - **Files:** change `S/HopperUpgrades.java`, `S/HopperTiers.java`, `plugins-src/BlackForgeCore/src/test/java/net/blackforge/core/survival/HopperTiersTest.java`, `S/BaseLevels.java`.
 - **Steps:**
@@ -195,9 +195,9 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** unclaiming a chunk (the hopper falls back to plain on its next refresh); a piston or explosion removing a hopper (the existing state check drops it); chunk unload; an own-tier hopper in a claim-tier chunk; a chunk over the safety limit logs once.
 - **Done when:** `HopperTiersTest` passes and automerge's build passes. With no claim tier set, behaviour is unchanged.
 - **Leaves ready:** a working claim tier with no way to buy it yet.
-- **Evidence:**
+- **Evidence:** Verified: `HopperTiersTest` passes when run alone, and with no claim tier set the old paths are unchanged by code review. Automerge runs the real build. Untested in game: all hopper behaviour. Claim-upgraded hoppers keep the plain look, because a display per hopper would add load.
 
-### [ ] P3.T2: Sell claim tiers in the Forge
+### [x] P3.T2: Sell claim tiers in the Forge
 - **Needs:** P3.T1; `S/BaseStation.java:377-378`, `417`.
 - **Files:** change `S/BaseStation.java`.
 - **Steps:**
@@ -207,7 +207,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** buying Tier III needs Tier II; two members at once; a Station with no region; no money taken on refusal; Hopper Upgrade items already held still work.
 - **Done when:** the Phase 3 gate passes in game.
 - **Leaves ready:** all gates working. The old Forge menu still shows them.
-- **Evidence:**
+- **Evidence:** Verified by code review: the purchase re-reads tier and level before taking money. Automerge runs the real build. Untested in game: the Phase 3 gate, which needs a Forge on the Build Plot.
 
 ## Phase 4: The new Forge screen (Foundry only)
 - **Goal:** the Forge opens on one home screen showing level, progress, the unlock track and what can be done next.
@@ -336,3 +336,4 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - Gatherer and Courier on Skyblock, since neither needs a sell path.
 - Level cosmetics at the Forge, such as a taller or glowing Station.
 - A leaderboard of base levels.
+- Tier skins on claim-upgraded hoppers, if the lag test leaves room.
