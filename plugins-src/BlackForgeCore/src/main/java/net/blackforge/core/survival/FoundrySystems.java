@@ -27,6 +27,7 @@ public final class FoundrySystems {
     private final Allays allays;
     private final BaseStation station;
     private final BaseLevels levels;
+    private final HopperUpgrades hoppers;
     private final Function<Location, String> region;
     private final String sharedRegion;
     private final Location[] demoSpots;
@@ -51,7 +52,7 @@ public final class FoundrySystems {
         this.region = region;
         this.sharedRegion = sharedRegion;
         this.demoSpots = at.demo();
-        HopperUpgrades hoppers = new HopperUpgrades(plugin);
+        hoppers = new HopperUpgrades(plugin);
         hoppers.setSandbox(c.getInt("foundry.max-upgraded-hoppers-per-chunk", 64));
         hoppers.setAccess(access);
         robots = new Robots(plugin, true);
@@ -67,6 +68,9 @@ public final class FoundrySystems {
         levels = new BaseLevels(plugin, true);
         station.setLevels(levels);
         robots.setLevels(levels);
+        // the benches around the shared Forge have fixed tiers to measure against, so only the Build Plot's squares count as claims
+        hoppers.setClaimTier(l -> sharedRegion.equals(station.regionAt(l)) ? 1 : levels.hopperTier(station.regionAt(l)), levels.claimHopperCap());
+        station.setClaimHoppers(r -> !sharedRegion.equals(r));
         allays = new Allays(plugin, station, zone, true);
         station.setAllays(allays);
         allays.setRobots(robots);
@@ -77,7 +81,7 @@ public final class FoundrySystems {
             return null;
         });
         Bukkit.getPluginManager().registerEvents(new FoundrySupply(supplyAt, hoppers), plugin);
-        lab = new FoundryLab(plugin, world, hoppers, station, zone, new FoundryLab.Layout(at.laneZ(), at.laneX(), at.y(), at.forge(), at.penMobs(), at.mobs(), at.title(), at.supply(), at.allayBench(), at.farm(), at.signs()), () -> { allays.resetShared(); levels.resetTest(); });
+        lab = new FoundryLab(plugin, world, hoppers, station, zone, new FoundryLab.Layout(at.laneZ(), at.laneX(), at.y(), at.forge(), at.penMobs(), at.mobs(), at.title(), at.supply(), at.allayBench(), at.farm(), at.signs()), () -> { allays.resetShared(); levels.resetTest(); hoppers.refreshClaims(); });
     }
 
     // ------------------------------------------------------------------ what /foundry uses
@@ -98,7 +102,7 @@ public final class FoundrySystems {
     public int allayTier() { return allays.sharedTier(); }
     public boolean setAllayTier(UUID by, int tier) { return allays.setSharedTier(by, tier); }
     public String allayTierText(int tier) { return allays.tierText(tier); }
-    public void reset() { lab.reset(); levels.resetTest(); }
+    public void reset() { lab.reset(); levels.resetTest(); hoppers.refreshClaims(); }
 
     /** What /foundry level shows: the island's level, its progress and what's next. */
     public List<String> levelStatus() {

@@ -174,6 +174,7 @@ public final class SurvivalModule implements Listener {
         levels = new BaseLevels(plugin, false);
         station.setLevels(levels);
         robots.setLevels(levels);
+        if (levels.active()) hoppers.setClaimTier(l -> levels.hopperTier(station.regionAt(l)), levels.claimHopperCap());
         allays = new Allays(plugin, station, l -> false, false);
         allays.setRobots(robots);
         allays.setLevels(levels);

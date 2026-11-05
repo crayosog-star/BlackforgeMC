@@ -58,6 +58,8 @@ public final class HopperUpgrades implements Listener {
     /** One loaded chunk's upgraded hoppers: packed position -> tier. */
     private static final class Loaded {
         final World world; final int cx, cz; final Map<Integer, Integer> tiers = new HashMap<>();
+        /** Hoppers running at their claim's tier: packed position -> tier. Never saved, and never an item's tier. */
+        final Map<Integer, Integer> claim = new HashMap<>();
         Loaded(World world, int cx, int cz) { this.world = world; this.cx = cx; this.cz = cz; }
     }
     private record ChunkId(UUID world, long key) {
@@ -73,8 +75,13 @@ public final class HopperUpgrades implements Listener {
     private BiPredicate<Player, Location> access = (p, l) -> false;
     private int ticks;
     private HopperLook look;
+    private final BlackForgeCore plugin;
+    /** The tier a spot's claim has bought, or null where hoppers are only upgraded one at a time. */
+    private java.util.function.Function<Location, Integer> claimTier;
+    private int claimCap = Integer.MAX_VALUE;
 
     HopperUpgrades(BlackForgeCore plugin) {
+        this.plugin = plugin;
         var c = plugin.getConfig();
         delays = ints(c.getIntegerList("hopper-upgrades.delays"), HopperTiers.DELAYS);
         needed = ints(c.getIntegerList("hopper-upgrades.upgrades-needed"), HopperTiers.UPGRADES_NEEDED);
@@ -98,6 +105,40 @@ public final class HopperUpgrades implements Listener {
     }
 
     void setAccess(BiPredicate<Player, Location> rule) { this.access = rule; }
+
+    /** Upgrades every hopper by its claim's tier. {@code capPerChunk} is a safety limit against lag. */
+    void setClaimTier(java.util.function.Function<Location, Integer> rule, int capPerChunk) {
+        this.claimTier = rule;
+        this.claimCap = capPerChunk;
+    }
+
+    /** A claim's tier changed: looks at every loaded chunk again. Rare enough that a full pass is fine. */
+    void refreshClaims() {
+        if (claimTier == null || !enabled) return;
+        for (World w : Bukkit.getWorlds()) for (Chunk ch : w.getLoadedChunks()) {
+            Loaded l = loaded.get(ChunkId.of(w, ch.getX(), ch.getZ()));
+            if (l == null) l = new Loaded(w, ch.getX(), ch.getZ());
+            scanClaim(ch, l);
+            if (!l.tiers.isEmpty() || !l.claim.isEmpty()) loaded.put(ChunkId.of(w, ch.getX(), ch.getZ()), l);
+        }
+    }
+
+    private void scanClaim(Chunk ch, Loaded l) {
+        l.claim.clear();
+        if (claimTier == null) return;
+        for (BlockState st : ch.getTileEntities(false))
+            if (st instanceof Hopper) addClaim(l, st.getBlock());
+    }
+
+    private void addClaim(Loaded l, Block b) {
+        int tier = claimTier.apply(b.getLocation());
+        if (tier <= 1) return;
+        if (l.claim.size() >= claimCap) {
+            plugin.getLogger().warning("Chunk " + l.cx + "," + l.cz + " in " + l.world.getName() + " passed the limit of " + claimCap + " claim-upgraded hoppers. The rest run at their own tier.");
+            return;
+        }
+        l.claim.put(HopperTiers.pack(b.getX(), b.getY(), b.getZ()), HopperTiers.clampTier(tier));
+    }
 
     /** The Arena's Foundry: one upgrade raises a tier and isn't used up, so Tier III can be tested with the kit's single upgrade. */
     void setSandbox(int maxPerChunk) { this.sandbox = true; this.maxPerChunk = maxPerChunk; }
@@ -157,12 +198,34 @@ public final class HopperUpgrades implements Listener {
                     l.world.spawnParticle(Particle.ELECTRIC_SPARK, b.getLocation().add(0.5, 1.05, 0.5), 2, 0.2, 0.02, 0.2, 0);
             }
             if (changed) writeIndex(l);
+            tickClaim(l, sparks);
+        }
+    }
+
+    private void tickClaim(Loaded l, boolean sparks) {
+        boolean recheck = ticks % 100 == 0;   // a chunk can be unclaimed at any time
+        for (Iterator<Map.Entry<Integer, Integer>> it = l.claim.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<Integer, Integer> en = it.next();
+            int pos = en.getKey();
+            Block b = blockAt(l, pos);
+            if (!(b.getState(false) instanceof Hopper h)) { it.remove(); continue; }
+            if (recheck) {
+                int now = claimTier.apply(b.getLocation());
+                if (now <= 1) { it.remove(); continue; }
+                en.setValue(HopperTiers.clampTier(now));
+            }
+            int tier = en.getValue();
+            if (l.tiers.getOrDefault(pos, 1) >= tier) continue;   // its own tier is already as fast
+            int wait = delay(tier);
+            if (h.getTransferCooldown() > wait) h.setTransferCooldown(wait);
+            if (sparks && tier >= HopperTiers.MAX_TIER)
+                l.world.spawnParticle(Particle.ELECTRIC_SPARK, b.getLocation().add(0.5, 1.05, 0.5), 2, 0.2, 0.02, 0.2, 0);
         }
     }
 
     private void load(Chunk ch) {
         int[] list = ch.getPersistentDataContainer().get(INDEX, PersistentDataType.INTEGER_ARRAY);
-        if (list == null || list.length == 0) return;
+        if (list == null) list = new int[0];
         Loaded l = new Loaded(ch.getWorld(), ch.getX(), ch.getZ());
         for (int pos : list) {
             Block b = ch.getBlock(HopperTiers.localX(pos), HopperTiers.y(pos), HopperTiers.localZ(pos));
@@ -172,7 +235,8 @@ public final class HopperUpgrades implements Listener {
             }
         }
         if (l.tiers.size() != list.length) writeIndex(l);
-        if (!l.tiers.isEmpty()) loaded.put(ChunkId.of(l.world, l.cx, l.cz), l);
+        scanClaim(ch, l);
+        if (!l.tiers.isEmpty() || !l.claim.isEmpty()) loaded.put(ChunkId.of(l.world, l.cx, l.cz), l);
     }
 
     private void writeIndex(Loaded l) {
@@ -227,6 +291,11 @@ public final class HopperUpgrades implements Listener {
         if (l != null && l.tiers.remove(HopperTiers.pack(b.getX(), b.getY(), b.getZ())) != null) writeIndex(l);
     }
 
+    private int claimTierAt(Block b) {
+        Loaded l = loaded.get(ChunkId.of(b.getWorld(), b.getX() >> 4, b.getZ() >> 4));
+        return l == null ? 1 : l.claim.getOrDefault(HopperTiers.pack(b.getX(), b.getY(), b.getZ()), 1);
+    }
+
     // ------------------------------------------------------------------ using an upgrade
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -272,7 +341,8 @@ public final class HopperUpgrades implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onOpen(InventoryOpenEvent e) {
         if (e.getInventory().getType() != InventoryType.HOPPER || e.getInventory().getLocation() == null) return;
-        int tier = tierAt(e.getInventory().getLocation().getBlock());
+        Block at = e.getInventory().getLocation().getBlock();
+        int tier = HopperTiers.effective(tierAt(at), claimTierAt(at));
         if (tier > 1 && e.getPlayer() instanceof Player p)
             p.sendActionBar(Ui.mm("<gold>Hopper Tier " + ROMAN[tier] + " <gray>- <white>" + rate(tier) + "<gray> items a second"));
     }
@@ -292,12 +362,19 @@ public final class HopperUpgrades implements Listener {
     public void onPlace(BlockPlaceEvent e) {
         int tier = itemTier(e.getItemInHand());
         if (tier > 1) setTier(e.getBlockPlaced(), HopperTiers.clampTier(tier));
+        Block b = e.getBlockPlaced();
+        if (claimTier != null && enabled && b.getType() == Material.HOPPER && claimTier.apply(b.getLocation()) > 1) {
+            Loaded l = loaded.computeIfAbsent(ChunkId.of(b.getWorld(), b.getX() >> 4, b.getZ() >> 4), k -> new Loaded(b.getWorld(), b.getX() >> 4, b.getZ() >> 4));
+            addClaim(l, b);
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBreak(BlockBreakEvent e) {
         Block b = e.getBlock();
         if (b.getType() != Material.HOPPER) return;
+        Loaded inChunk = loaded.get(ChunkId.of(b.getWorld(), b.getX() >> 4, b.getZ() >> 4));
+        if (inChunk != null) inChunk.claim.remove(HopperTiers.pack(b.getX(), b.getY(), b.getZ()));
         int tier = tierAt(b);
         if (tier <= 1) return;
         forget(b);

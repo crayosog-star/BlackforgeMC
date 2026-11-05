@@ -16,7 +16,7 @@ import java.util.Map;
  * In the Foundry nothing is saved, and the whole island shares one test level, starting at the top so its tests keep working.
  */
 final class BaseLevels {
-    private static final class Base { int level = 1; long delivered; }
+    private static final class Base { int level = 1, hopperTier = 1; long delivered; }
 
     private final BlackForgeCore plugin;
     private final boolean sandbox, enabled;
@@ -24,6 +24,8 @@ final class BaseLevels {
     private final File file;
     private final Map<String, Base> bases = new HashMap<>();
     private final Base test = new Base();
+    private final Map<String, Integer> testHoppers = new HashMap<>();
+    private final int claimHopperCap;
     private boolean dirty, saveBlocked;
 
     BaseLevels(BlackForgeCore plugin, boolean sandbox) {
@@ -33,6 +35,7 @@ final class BaseLevels {
         this.enabled = c.getBoolean("base-levels.enabled", false);
         this.table = table(plugin, c);
         this.file = new File(plugin.getDataFolder(), "base-levels.yml");
+        this.claimHopperCap = Math.max(1, c.getInt("base-levels.claim-hopper-max-per-chunk", 256));
         resetTest();
         if (sandbox || !enabled) return;
         load();
@@ -80,6 +83,23 @@ final class BaseLevels {
         return b == null ? 0 : b.delivered;
     }
 
+    /** The hopper tier this whole claim has bought. */
+    int hopperTier(String region) {
+        if (region == null) return 1;
+        if (sandbox) return testHoppers.getOrDefault(region, 1);
+        Base b = bases.get(region);
+        return b == null ? 1 : b.hopperTier;
+    }
+
+    void setHopperTier(String region, int tier) {
+        if (region == null || tier < 1 || tier > HopperTiers.MAX_TIER) throw new IllegalArgumentException("bad hopper tier: " + region + " " + tier);
+        if (sandbox) testHoppers.put(region, tier);
+        else base(region).hopperTier = tier;
+        dirty = true;
+    }
+
+    int claimHopperCap() { return claimHopperCap; }
+
     /** Agents put this many items in this base's Forge. */
     void countDelivery(String region, long amount) {
         if (!active() || region == null || amount <= 0) return;
@@ -98,6 +118,7 @@ final class BaseLevels {
     void resetTest() {
         test.level = BaseLevelRules.MAX_LEVEL;
         test.delivered = 0;
+        testHoppers.clear();
     }
 
     void shutdown() { save(); }
@@ -122,6 +143,7 @@ final class BaseLevels {
             Base b = new Base();
             b.level = Math.max(1, Math.min(BaseLevelRules.MAX_LEVEL, s.getInt("level", 1)));
             b.delivered = Math.max(0, s.getLong("delivered"));
+            b.hopperTier = HopperTiers.clampTier(s.getInt("hopper-tier", 1));
             bases.put(region, b);
         }
     }
@@ -135,6 +157,7 @@ final class BaseLevels {
             y.set(k + "region", en.getKey());
             y.set(k + "level", en.getValue().level);
             y.set(k + "delivered", en.getValue().delivered);
+            y.set(k + "hopper-tier", en.getValue().hopperTier);
         }
         try { y.save(file); dirty = false; } catch (Exception e) { plugin.getLogger().warning("base level save failed: " + e.getMessage()); }
     }
