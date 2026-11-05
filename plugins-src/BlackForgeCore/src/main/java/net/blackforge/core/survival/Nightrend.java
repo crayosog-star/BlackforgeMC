@@ -97,7 +97,7 @@ public final class Nightrend implements Listener, Hackable {
     private final Set<UUID> heldMain = new HashSet<>(), heldOff = new HashSet<>();   // a Nightrend in that hand last check
     private final Set<UUID> debug = new HashSet<>();      // staff who turned on /nrdebug
     private final Set<ItemDisplay> live = new HashSet<>();
-    private final Set<UUID> flipping = new HashSet<>();   // a flip is playing for them
+    private final Map<UUID, Integer> flipping = new HashMap<>();   // how many flips are playing for them (a second draw can overlap the first)
     private final BukkitTask task;
     private long tick;
 
@@ -211,7 +211,7 @@ public final class Nightrend implements Listener, Hackable {
         if (main) heldMain.add(id); else heldMain.remove(id);
         if (off) heldOff.add(id); else heldOff.remove(id);
         if (here && !p.isDead() && (drewMain || drewOff)) draw(p, drewMain, drewOff, now);
-        if (auraNow && here && (main || off) && !flipping.contains(p.getUniqueId()) && visible(p)) aura(p, main, off);
+        if (auraNow && here && (main || off) && !flipping.containsKey(p.getUniqueId()) && visible(p)) aura(p, main, off);
     }
 
     /** Equipping reacts on the very next tick instead of waiting for the 2-tick check, so the draw starts at once. */
@@ -238,13 +238,13 @@ public final class Nightrend implements Listener, Hackable {
         }
     }
 
-    private static void showHands(Player p, Collection<Player> viewers) {
+    private static void showHands(Player p, Collection<Player> viewers, boolean mainHand, boolean offHand) {
         if (!p.isOnline()) return;
         var inv = p.getInventory();
         for (Player v : viewers) {
             if (v == p || !v.isOnline()) continue;
-            v.sendEquipmentChange(p, EquipmentSlot.HAND, inv.getItemInMainHand());
-            v.sendEquipmentChange(p, EquipmentSlot.OFF_HAND, inv.getItemInOffHand());
+            if (mainHand) v.sendEquipmentChange(p, EquipmentSlot.HAND, inv.getItemInMainHand());
+            if (offHand) v.sendEquipmentChange(p, EquipmentSlot.OFF_HAND, inv.getItemInOffHand());
         }
     }
 
@@ -363,7 +363,7 @@ public final class Nightrend implements Listener, Hackable {
             p.hideEntity(plugin, d[i]);   // not for the flipper: your own camera keeps your real daggers, no copy mid-screen
             live.add(d[i]);
         }
-        flipping.add(p.getUniqueId());
+        flipping.merge(p.getUniqueId(), 1, Integer::sum);
         Set<Player> viewers = new HashSet<>(p.getTrackedBy());
         hideHands(p, viewers, mainHand, offHand);   // everyone else sees only the flipping copies, never two daggers
         World w = p.getWorld();
@@ -379,8 +379,8 @@ public final class Nightrend implements Listener, Hackable {
             if (gone || t[0] >= NightrendMath.FLIP_TOTAL) {
                 // the handover, all in one tick: copies gone, real daggers back on everyone's screen
                 for (ItemDisplay x : d) { if (x.isValid()) x.remove(); live.remove(x); }
-                flipping.remove(p.getUniqueId());
-                showHands(p, viewers);
+                flipping.computeIfPresent(p.getUniqueId(), (k, n) -> n > 1 ? n - 1 : null);
+                showHands(p, viewers, mainHand, offHand);   // only the hands this flip hid: another draw's copy may still be playing
                 run.cancel();
                 return;
             }
