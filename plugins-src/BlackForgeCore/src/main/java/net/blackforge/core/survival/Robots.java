@@ -124,6 +124,7 @@ public final class Robots implements Listener {
     private Ranks ranks;
     private Economy eco;
     private BaseStation stations;
+    private BaseLevels levels;
     private final Map<UUID, Naming> naming = new java.util.concurrent.ConcurrentHashMap<>();   // who we're waiting on for a name
     private record Naming(String botId, long until) {}
     private final Random rnd = new Random();
@@ -175,6 +176,14 @@ public final class Robots implements Listener {
     void setRanks(Ranks r) { this.ranks = r; }
     void setEconomy(Economy e) { this.eco = e; }
     void setStations(BaseStation s) { this.stations = s; }
+    void setLevels(BaseLevels l) { this.levels = l; }
+
+    /** The base level this job needs here, or 0 if it's available. Servers without levels, like Skyblock, never lock a job. */
+    private int lockedUntil(Job job, Location at) {
+        if (levels == null || !levels.active() || stations == null) return 0;
+        String name = job.name().toLowerCase(Locale.ROOT);
+        return levels.table().jobUnlocked(levels.level(stations.regionAt(at)), name) ? 0 : levels.table().jobLevel(name);
+    }
 
     int limit(Player p) {
         if (sandbox) return sandboxPerPlayer;
@@ -303,6 +312,12 @@ public final class Robots implements Listener {
         b.loc = at.getLocation().add(0.5, 0, 0.5);
         b.loc.setYaw(yaw);
         b.storage = Bukkit.createInventory(null, STORAGE[b.tier - 1]);
+        // placed, not refused, so an Agent from a crate is never stuck in someone's inventory
+        int needs = lockedUntil(b.job, b.loc);
+        if (needs > 0) {
+            p.sendMessage(Ui.mm("<yellow>" + b.job.label + " Agents need Base Level " + needs + " here, so this one starts as a Farmer."));
+            b.job = Job.FARMER;
+        }
         bots.put(b.id, b);
         spawn(b);
         item.setAmount(item.getAmount() - 1);
@@ -719,7 +734,8 @@ public final class Robots implements Listener {
         m.inv.setItem(SLOT_PICKUP, Ui.item(Material.HOPPER, "<red><bold>Pick Up Agent", "<gray>Gives you the agent item (keeps tier,", "<gray>charge and fuel) and its storage."));
         for (int i = 0; i < 4; i++) {
             Job j = Job.values()[i];
-            ItemStack icon = Ui.item(j.icon, j.color + "<bold>" + j.label, "<gray>" + j.desc, "", j == b.job ? "<green>✔ Current job" : "<yellow>Click to switch");
+            int needs = lockedUntil(j, b.loc);
+            ItemStack icon = Ui.item(j.icon, j.color + "<bold>" + j.label, "<gray>" + j.desc, "", j == b.job ? "<green>✔ Current job" : needs > 0 ? "<red>Needs Base Level " + needs : "<yellow>Click to switch");
             if (j == b.job) icon.editMeta(x -> x.setEnchantmentGlintOverride(true));
             m.inv.setItem(JOB_SLOTS[i], icon);
         }
@@ -787,6 +803,12 @@ public final class Robots implements Listener {
             case SLOT_PICKUP -> pickUp(p, b);
             default -> {
                 for (int i = 0; i < 4; i++) if (JOB_SLOTS[i] == slot && b.job != Job.values()[i]) {
+                    int needs = lockedUntil(Job.values()[i], b.loc);
+                    if (needs > 0) {
+                        p.sendActionBar(Ui.mm("<red>" + Job.values()[i].label + " Agents need Base Level " + needs + "."));
+                        p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6f, 0.8f);
+                        return;
+                    }
                     b.job = Job.values()[i];
                     b.timer = 0;
                     b.workProgress = 0;

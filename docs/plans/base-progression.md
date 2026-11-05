@@ -1,6 +1,6 @@
 # Base Progression
 **Status:** In progress
-**Next task:** P2.T1, after the Phase 1 gate
+**Next task:** P3.T1
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -152,7 +152,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Rollback:** revert the PR. No saved data changes.
 - **Phase gate:** a tester confirms at Level 1: only the Farmer can be selected, clicking Miner says it needs Level 2, a Grinder item places as a Farmer with a message, and allay cards say which level they need. At Level 5, `/foundry check` passes as it does today.
 
-### [ ] P2.T1: Gate Agent jobs
+### [x] P2.T1: Gate Agent jobs
 - **Needs:** P1.T3; `S/Robots.java:278`, `790`; `S/BaseStation.java:196` (`regionAt`).
 - **Files:** change `S/Robots.java`, `S/SurvivalModule.java`, `S/FoundrySystems.java`.
 - **Steps:**
@@ -163,9 +163,9 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** an Agent already doing a locked job keeps working until its job changes; picking it up and placing it at the same base keeps the job only if unlocked there; staff follow the same rules, so the gate can be tested; test bots use slots 11 and 17, so slot positions stay.
 - **Done when:** the job checks in the Phase 2 gate pass.
 - **Leaves ready:** gated jobs.
-- **Evidence:**
+- **Evidence:** Verified by code review: an Agent keeps a locked job until it's changed, and servers without levels skip the check. Automerge runs the real build. Untested in game: all job checks, in the Phase 2 gate.
 
-### [ ] P2.T2: Gate Forge Allays
+### [x] P2.T2: Gate Forge Allays
 - **Needs:** P2.T1; `S/Allays.java:546`, `577`.
 - **Files:** change `S/Allays.java`, `S/SurvivalModule.java`, `S/FoundrySystems.java`.
 - **Steps:**
@@ -175,7 +175,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** `/foundry allays` bypasses the gate, since it's a test tool; a base already owning a tier keeps it; two players with the menu open; no money taken on refusal.
 - **Done when:** the allay checks in the Phase 2 gate pass.
 - **Leaves ready:** every level gate except hoppers.
-- **Evidence:**
+- **Evidence:** Verified by code review: `buy` re-checks the level before taking money, and `/foundry allays` doesn't pass through it. Automerge runs the real build. Untested in game: all allay checks, in the Phase 2 gate.
 
 ## Phase 3: Claim-wide hoppers (Foundry only)
 - **Goal:** in the Foundry's Build Plot, buying a tier upgrades every hopper in that plot, including ones placed later.
@@ -321,11 +321,12 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 ## Blockers log
 | Date | Task | Problem | Decision |
 |---|---|---|---|
-| 2026-11-04 | Phase 1 gate | The Phase 1 in-game checks need a tester before Phase 2 can start (rule 9). P2.T1 and P2.T2 are prepared on stacked branches, unopened | Waiting on Colin |
+| 2026-11-04 | Phase 1 gate | The Phase 1 in-game checks need a tester before Phase 2 can start (rule 9) | Colin said to keep building. The checks carry into the launch gate |
 
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | Colin said to keep building and not wait on PRs. Phase gates aren't recorded as played and their checks carry forward. Stacked tasks ship one PR per phase to save restarts, and everything stays behind `base-levels.enabled` | Colin, in chat |
 | 2026-11-04 | Starter Farmer and the 256-per-chunk hopper limit moved from assumptions to decisions | Colin, in chat |
 | 2026-11-04 | P1.T2 keeps an unreadable save file instead of overwriting it at the next delivery. The check is stronger, from a review of PR #124 | Flagged to Colin |
 | 2026-11-04 | Plan created from Colin's decisions, and approved to build with "start building" | Colin, in chat |

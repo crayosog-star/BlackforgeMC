@@ -173,8 +173,10 @@ public final class SurvivalModule implements Listener {
         station.requireLiveDeliveryRegion();
         levels = new BaseLevels(plugin, false);
         station.setLevels(levels);
+        robots.setLevels(levels);
         allays = new Allays(plugin, station, l -> false, false);
         allays.setRobots(robots);
+        allays.setLevels(levels);
         allays.setOwnerOf(region -> UUID.fromString(region.substring("claim:".length())));
         station.setAllays(allays);
         koth.setScrap(scrap);

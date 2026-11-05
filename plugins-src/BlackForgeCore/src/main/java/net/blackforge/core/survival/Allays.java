@@ -183,6 +183,7 @@ public final class Allays implements Listener {
     private int sandboxLimit = Integer.MAX_VALUE;
     private final boolean sausageFlip;
     private Robots robots;
+    private BaseLevels levels;
     private GroveTrader trader;
     private Function<String, UUID> ownerOf;
     /** The Foundry's Forge: its flock belongs to the island, not to whoever got there first. */
@@ -230,6 +231,13 @@ public final class Allays implements Listener {
 
     void setSandboxLimit(int total) { this.sandboxLimit = total; }
     void setRobots(Robots r) { this.robots = r; }
+    void setLevels(BaseLevels l) { this.levels = l; }
+
+    /** The base level this tier needs here, or 0 if it can be bought. */
+    private int lockedUntil(String region, int tier) {
+        if (levels == null || !levels.active()) return 0;
+        return levels.table().allayUnlocked(levels.level(region), tier) ? 0 : levels.table().allayLevel(tier);
+    }
     void setTrader(GroveTrader t) { this.trader = t; }
     /** Who a region's sales pay. Without this, the Foundry's case, it's whoever bought the upgrade. */
     void setOwnerOf(Function<String, UUID> rule) { this.ownerOf = rule; }
@@ -526,36 +534,40 @@ public final class Allays implements Listener {
         int tier = b == null ? 0 : b.tier;
         ItemStack it = Ui.item(Material.ALLAY_SPAWN_EGG, NAME, "<gray>A crew that stays at your Station", "<gray>and moves items for you.", "",
                 tier == 0 ? "<gray>Not summoned yet" : "<gray>Tier: <white>" + Spawners.roman(tier) + " <gray>" + TIER_NAME[tier - 1],
+                tier < AllayRules.MAX_TIER && lockedUntil(region, tier + 1) > 0 ? "<red>" + TIER_NAME[tier] + " needs Base Level " + lockedUntil(region, tier + 1) : "",
                 "<dark_gray>Use a Name Tag on one to name it", "", "<yellow>Click to open");
         it.setAmount(Math.max(1, tier));
         return it;
     }
 
     void openMenu(Player p, Location at) {
-        Base b = bases.get(station.regionAt(at));
+        String region = station.regionAt(at);
+        Base b = bases.get(region);
         int tier = b == null ? 0 : b.tier;
         Menu m = new Menu(at);
         m.inv = Bukkit.createInventory(m, MENU_SIZE, Ui.mm("<dark_gray>Forge Allays"));
         ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
         for (int i = 0; i < MENU_SIZE; i++) m.inv.setItem(i, pane);
-        for (int t = 1; t <= AllayRules.MAX_TIER; t++) m.inv.setItem(CARD_SLOTS[t - 1], card(t, tier));
+        for (int t = 1; t <= AllayRules.MAX_TIER; t++) m.inv.setItem(CARD_SLOTS[t - 1], card(t, tier, region));
         m.inv.setItem(BACK_SLOT, Ui.item(Material.ARROW, "<yellow>Back to the Forge"));
         p.openInventory(m.inv);
     }
 
-    private ItemStack card(int t, int have) {
+    private ItemStack card(int t, int have, String region) {
+        int needs = have >= t ? 0 : lockedUntil(region, t);
         AllayRules.Cost cost = table.cost(t);
         List<String> lore = new ArrayList<>(List.of("<gray>" + TIER_JOB[t - 1] + ".", "",
                 "<gray>Allays: <white>" + table.flock(t), "<gray>Reach: <white>" + table.leash(t) + " blocks", ""));
         if (have >= t) lore.add("<green><bold>Summoned");
         else if (t > BUILT_TIER) lore.add("<dark_gray>Not ready yet");
+        else if (needs > 0) lore.add("<red>Needs Base Level " + needs);
         else if (t > have + 1) lore.add("<dark_gray>Needs Tier " + Spawners.roman(t - 1) + " first");
         else {
             lore.add(sandbox ? "<green>Free in the Foundry" : "<green>" + NetEconomy.money(cost.money()) + " <dark_gray>+ <#9d7bff>" + cost.essence() + " Mob Essence");
             lore.add("");
             lore.add("<yellow>Click to summon");
         }
-        Material icon = have >= t ? Material.ALLAY_SPAWN_EGG : t == have + 1 && t <= BUILT_TIER ? Material.AMETHYST_SHARD : Material.GRAY_DYE;
+        Material icon = have >= t ? Material.ALLAY_SPAWN_EGG : t == have + 1 && t <= BUILT_TIER && needs == 0 ? Material.AMETHYST_SHARD : Material.GRAY_DYE;
         return Ui.item(icon, "<#4fd1b5><bold>Tier " + Spawners.roman(t) + ": " + TIER_NAME[t - 1], lore.toArray(String[]::new));
     }
 
@@ -581,6 +593,12 @@ public final class Allays implements Listener {
         Base b = bases.get(region);
         // read from the base, not the card: two members can have this menu open at once
         if ((b == null ? 0 : b.tier) != t - 1 || t > BUILT_TIER) return;
+        int needs = lockedUntil(region, t);
+        if (needs > 0) {
+            p.sendActionBar(Ui.mm("<red>" + TIER_NAME[t - 1] + " needs Base Level " + needs + "."));
+            p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6f, 0.8f);
+            return;
+        }
         if (sandbox) {
             int all = table.flock(t) - (b == null ? 0 : b.workers.size());
             for (Base o : bases.values()) all += o.workers.size();
