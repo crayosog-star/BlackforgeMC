@@ -58,18 +58,6 @@ final class NightrendMath {
         return roll < c ? lastWasOff : !lastWasOff;
     }
 
-    /** The "blood surge" when an arm goes twice in a row: how long the blade's glow lasts, in ticks. */
-    static final int GLOW_TICKS = 20;
-
-    /**
-     * Size of the glow particles at tick {@code t} of a blood surge: swells from the normal aura size to about
-     * double over the first half and shrinks back by the end (a sine pulse, so it never pops).
-     */
-    static double glowSize(int t) {
-        double x = Math.max(0, Math.min(1, t / (double) GLOW_TICKS));
-        return 0.55 + 0.65 * Math.sin(Math.PI * x);
-    }
-
     /** Eased progress of the slash at tick {@code t} (0..SLASH_TICKS): fast out of the swing, slowing at the end. */
     static double slashProgress(int t) {
         double x = Math.max(0, Math.min(1, t / (double) SLASH_TICKS));

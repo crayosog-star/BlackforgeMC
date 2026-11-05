@@ -57,14 +57,6 @@ class NightrendTest {
         assertTrue(NightrendMath.nextIsOffHand(false, 0.95, 5));      // a bad config never locks one arm forever
     }
 
-    @Test void glowSwellsAndSettlesWithoutPopping() {
-        assertEquals(0.55, NightrendMath.glowSize(0), EPS);                          // starts at the normal aura size
-        assertEquals(0.55, NightrendMath.glowSize(NightrendMath.GLOW_TICKS), 1e-9);  // and ends there
-        assertEquals(1.2, NightrendMath.glowSize(NightrendMath.GLOW_TICKS / 2), EPS); // about double at the peak
-        for (int t = 1; t <= NightrendMath.GLOW_TICKS; t++)
-            assertTrue(Math.abs(NightrendMath.glowSize(t) - NightrendMath.glowSize(t - 1)) < 0.15, "tick " + t);
-    }
-
     @Test void repeatChanceComesOutRoughlyRight() {
         java.util.Random r = new java.util.Random(1);
         int repeats = 0, n = 100_000;

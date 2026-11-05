@@ -64,12 +64,17 @@ def main() -> None:
         # 0, so a dagger with no cooldown falls through to the plain model
         threshold = round(1 - (k + 1) / FRAMES, 4) if k < FRAMES - 1 else 0.001
         entries.append({"threshold": threshold, "model": {"type": "minecraft:model", "model": f"blackforge:item/{name}"}})
-    item = {"model": {
-        "type": "minecraft:range_dispatch",
-        "property": "minecraft:cooldown",
-        "entries": entries,
-        "fallback": {"type": "minecraft:model", "model": "blackforge:item/nightrend"},
-    }}
+    item = {
+        "model": {
+            "type": "minecraft:range_dispatch",
+            "property": "minecraft:cooldown",
+            "entries": entries,
+            "fallback": {"type": "minecraft:model", "model": "blackforge:item/nightrend"},
+        },
+        # no down-and-up dip when the plugin changes the dagger's swing length (Nightrend.setQuick); the draw flip
+        # above is the pull-out animation instead
+        "hand_animation_on_swap": False,
+    }
     (ROOT / "items/nightrend.json").write_text(json.dumps(item, indent=2) + "\n")
     print(f"wrote {FRAMES} frames and items/nightrend.json")
 

@@ -1,6 +1,8 @@
 package net.blackforge.core.survival;
 
 import net.blackforge.core.BlackForgeCore;
+import io.papermc.paper.datacomponent.DataComponentTypes;
+import io.papermc.paper.datacomponent.item.SwingAnimation;
 import net.blackforge.core.Ui;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
@@ -46,10 +48,9 @@ import java.util.function.Predicate;
  *   <li>One dagger in your main hand hits for {@code damage} (5) at {@code attack-speed} (2.0 a second) with
  *   {@code reach-change} (-0.5) blocks of reach. It isn't a sword, so there's no sweep: one target per hit.</li>
  *   <li>With a Nightrend in <b>each</b> hand you attack at {@code pair-attack-speed} (2.6), and swings alternate
- *   arms: right on the first swing after you draw them, then left, right... After each swing there's a
- *   {@code same-side-chance} (5%) that the next one uses the same arm again, and that blade's glow swells for a second
- *   (a "blood surge"). A hit slashes a red arc off the blade that swung (cosmetic; same damage). Drop either dagger
- *   and the bonus is gone.</li>
+ *   arms on every click: right on the first after you draw them, then left, right... After each swing there's a
+ *   {@code same-side-chance} (5%) that the next one uses the same arm again. A hit slashes a red arc off the blade that
+ *   swung (cosmetic; same damage). Drop either dagger and the bonus is gone.</li>
  *   <li>A different sword in the off hand gives a smaller boost, {@code mixed-attack-speed} (2.3); speed only.</li>
  *   <li>Hits from the arc behind the target ({@code behind-arc-degrees}, 120) only do {@code behind-damage} (60%),
  *   with a duller sound. Players and mobs alike. "Behind" is where the target is facing, not where it's walking.</li>
@@ -78,13 +79,15 @@ public final class Nightrend implements Listener, Hackable {
     private static final int TICK_EVERY = 2;         // pair / aura check interval
     private static final int AURA_EVERY = 10;        // aura puff every half second
     private static final String DRAW_SOUND = "blackforge:item.nightrend.draw";   // resourcepack sounds.json
+    /** The main dagger's swing on a left turn: one tick long, so your own game barely moves the right arm. */
+    private static final SwingAnimation QUICK = SwingAnimation.swingAnimation().type(SwingAnimation.Animation.WHACK).duration(1).build();
 
     private final BlackForgeCore plugin;
     private final Predicate<Location> allowedAt;
     private final boolean enabled;
     private final double damage, singleSpeed, pairSpeed, mixedSpeed, reachChange, behindArc, behindDamage, sameSideChance;
     private final long empMillis, drawCooldownMillis;
-    private final int leftSwingDelay;   // ticks: lets your own client accept the left swing (see onSwing)
+    private final boolean quickRight;   // shorten your own right swing on left turns (see onSwing)
     private final boolean packLive;
     private final NamespacedKey tagKey, damageKey, speedKey, reachKey, pairKey, mixedKey, drawGroup;
     private final Set<UUID> pairOn = new HashSet<>();     // a Nightrend in each hand
@@ -117,7 +120,7 @@ public final class Nightrend implements Listener, Hackable {
         // a new key, so the 5% applies on live servers too (their config keeps the old repeat-side-chance: 0.03)
         this.sameSideChance = Math.max(0, Math.min(0.9, c.getDouble("nightrend.same-side-chance", 0.05)));
         this.packLive = c.getBoolean("resource-pack-live", false);
-        this.leftSwingDelay = Math.max(0, Math.min(6, c.getInt("nightrend.left-swing-delay-ticks", 3)));
+        this.quickRight = c.getBoolean("nightrend.quick-right-on-left-turns", true);
         this.drawCooldownMillis = Math.round(Math.max(0, c.getDouble("nightrend.draw-cooldown-seconds", 0.4)) * 1000);
         this.tagKey = new NamespacedKey(BlackForgeCore.NS, "nightrend");
         this.damageKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_damage");
@@ -211,6 +214,7 @@ public final class Nightrend implements Listener, Hackable {
         if (main) heldMain.add(id); else heldMain.remove(id);
         if (off) heldOff.add(id); else heldOff.remove(id);
         if (here && !p.isDead() && (drewMain || drewOff)) draw(p, drewMain, drewOff, now);
+        setQuick(p, pairOn.contains(id) && nextOff.getOrDefault(id, false));
         if (auraNow && here && (main || off) && !flipping.containsKey(p.getUniqueId()) && visible(p)) aura(p, main, off);
     }
 
@@ -260,7 +264,10 @@ public final class Nightrend implements Listener, Hackable {
             pairOn.add(id);
             nextOff.put(id, false);      // the first swing with a fresh pair is always the right arm
             swingWasOff.remove(id);      // and it can't count as "the same arm twice"
-        } else pairOn.remove(id);
+        } else {
+            pairOn.remove(id);
+            setQuick(p, false);
+        }
     }
 
     /** Any sword that isn't a Nightrend. */
@@ -434,18 +441,21 @@ public final class Nightrend implements Listener, Hackable {
         UUID id = p.getUniqueId();
         boolean off = swingTick.getOrDefault(id, -1) == Bukkit.getCurrentTick()
                 ? swingWasOff.getOrDefault(id, false) : nextOff.getOrDefault(id, false);
-        if (off) Bukkit.getScheduler().runTaskLater(plugin, () -> slash(p, true), Math.max(1, leftSwingDelay));   // in step with the left arm
-        else slash(p, false);
+        slash(p, off);
     }
 
     /**
-     * Every left-click swing with the pair, hit or miss, uses one arm: right, left, right... and now and then
-     * ({@code same-side-chance}) the same arm twice. On a left-arm turn the right-arm swing is cancelled, so other
-     * players see only the left arm. Cancelling also stops Paper's attack-charge reset that comes after the event, so
-     * we reset it ourselves: without that every left swing kept full charge. Your own client starts a right swing the moment you click and ignores any new
-     * swing during the first half of it (3 ticks), so the left swing is sent {@code left-swing-delay-ticks} (3) later or
-     * you'd never see it yourself. You'll still see the right arm on every click in first person: the game draws that
-     * before the server hears about it.
+     * Every left-click with the pair, hit or miss, swings one arm: right, left, right... and now and then
+     * ({@code same-side-chance}) the same arm twice.
+     * <ul>
+     *   <li>Right turn: the normal swing.</li>
+     *   <li>Left turn: the right swing is cancelled, so other players don't see it, and the left swing is sent the same
+     *   tick. Cancelling also skips Paper's attack-charge reset that comes after the event, so it's done here.</li>
+     *   <li>Your own screen: your game swings the main-hand item the moment you click, before the server hears about
+     *   it, and ignores a new swing for the first half of one. So before a left turn the main dagger's swing is made
+     *   one tick long ({@link #setQuick}): your right arm barely twitches and the left swing shows straight away. The
+     *   pack's {@code hand_animation_on_swap: false} keeps that change from dipping the dagger.</li>
+     * </ul>
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onSwing(PlayerAnimationEvent e) {
@@ -457,46 +467,42 @@ public final class Nightrend implements Listener, Hackable {
         if (off) {
             e.setCancelled(true);   // others don't see the right arm this time
             p.resetCooldown();      // what Paper does after an uncancelled swing: the attack charge starts again
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                if (!p.isOnline() || p.isDead() || !pairOn.contains(id)) return;
-                p.swingOffHand();
-                if (debug.contains(id)) p.sendMessage(Ui.mm("<dark_gray>[Nightrend] <gray>  left swing sent (tick " + Bukkit.getCurrentTick() + ")"));
-            }, Math.max(1, leftSwingDelay));
+            p.swingOffHand();       // the same tick: the left arm is the swing for this click
         }
         Boolean prev = swingWasOff.get(id);
         boolean same = prev != null && prev == off;
-        if (same) bloodSurge(p, off);   // the same arm twice: its blade flares
         swingTick.put(id, Bukkit.getCurrentTick());
         swingWasOff.put(id, off);
         nextOff.put(id, NightrendMath.nextIsOffHand(off, rnd.nextDouble(), sameSideChance));
+        setQuick(p, nextOff.get(id));   // ready for the next click before it comes
         if (debug.contains(id)) p.sendMessage(Ui.mm("<dark_gray>[Nightrend] <gray>swing (tick " + Bukkit.getCurrentTick() + "): <white>"
                 + (off ? "LEFT" : "RIGHT") + (same ? " <red>same side" : "") + "<gray>, next " + (nextOff.get(id) ? "left" : "right")));
     }
 
     /**
-     * Blood surge: when the same arm swings twice in a row, that blade's red glow swells to about double and an aura
-     * of embers wraps the blade for {@link NightrendMath#GLOW_TICKS} ticks, then settles. Cosmetic only. It follows the
-     * hand by body facing, and stops early if the pair is put away.
+     * Makes the main dagger's own swing one tick long (before a left turn) or normal again. Only writes when it
+     * changes. An off-hand dagger is always normal, since its swing is the left arm's. Off with
+     * {@code quick-right-on-left-turns: false}.
      */
-    private void bloodSurge(Player p, boolean offHand) {
-        if (!visible(p)) return;
-        World w = p.getWorld();
-        double mainSide = p.getMainHand() == org.bukkit.inventory.MainHand.LEFT ? -1 : 1;
-        double side = offHand ? -mainSide : mainSide;
-        w.playSound(p.getLocation(), Sound.PARTICLE_SOUL_ESCAPE, 0.9f, 0.7f);   // a low, hungry whisper
-        w.playSound(p.getLocation(), Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 0.25f, 1.8f);
-        int[] t = {0};
-        Bukkit.getScheduler().runTaskTimer(plugin, run -> {
-            if (++t[0] > NightrendMath.GLOW_TICKS || !p.isOnline() || p.isDead() || p.getWorld() != w
-                    || !pairOn.contains(p.getUniqueId())) { run.cancel(); return; }
-            float size = (float) NightrendMath.glowSize(t[0]);
-            Particle.DustTransition glow = new Particle.DustTransition(Color.fromRGB(0xE23048), BLOOD, size);
-            Location h = hand(p, side, 0);
-            // a column of glow up the blade, from the grip to the tip, and a looser aura round it
-            for (int i = 0; i < 4; i++)
-                w.spawnParticle(Particle.DUST_COLOR_TRANSITION, h.clone().add(0, 0.12 + i * 0.16, 0), 1, 0.02, 0.02, 0.02, 0, glow);
-            w.spawnParticle(Particle.DUST_COLOR_TRANSITION, h.clone().add(0, 0.35, 0), 3, 0.18, 0.3, 0.18, 0, EMBER);
-        }, 0L, 1L);
+    private void setQuick(Player p, boolean quick) {
+        var inv = p.getInventory();
+        ItemStack main = inv.getItemInMainHand(), off = inv.getItemInOffHand();
+        boolean want = quick && quickRight;
+        if (isNightrend(main) && isQuick(main) != want) {
+            ItemStack it = main.clone();
+            if (want) it.setData(DataComponentTypes.ATTACK_ANIMATION, QUICK);
+            else it.resetData(DataComponentTypes.ATTACK_ANIMATION);
+            inv.setItemInMainHand(it);
+        }
+        if (isNightrend(off) && isQuick(off)) {
+            ItemStack it = off.clone();
+            it.resetData(DataComponentTypes.ATTACK_ANIMATION);
+            inv.setItemInOffHand(it);
+        }
+    }
+
+    private static boolean isQuick(ItemStack it) {
+        return it.isDataOverridden(DataComponentTypes.ATTACK_ANIMATION);
     }
 
     /**
@@ -580,6 +586,7 @@ public final class Nightrend implements Listener, Hackable {
     /** {@code leaving}: they're quitting, so drop everything kept about them (isOnline() is still true in the quit event). */
     private void forget(Player p, boolean leaving) {
         setPair(p, false);
+        setQuick(p, false);
         setMixed(p, false);
         AttributeInstance ai = p.getAttribute(Attribute.ATTACK_SPEED);
         if (ai != null) { ai.removeModifier(pairKey); ai.removeModifier(mixedKey); }   // belt and braces: never leave a bonus behind
