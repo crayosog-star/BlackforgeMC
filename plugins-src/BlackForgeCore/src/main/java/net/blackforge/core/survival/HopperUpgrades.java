@@ -78,6 +78,7 @@ public final class HopperUpgrades implements Listener {
     /** The tier a spot's claim has bought, or null where hoppers are only upgraded one at a time. */
     private java.util.function.Function<Location, Integer> claimTier;
     private int claimCap = Integer.MAX_VALUE;
+    private int claimClock;
 
     HopperUpgrades(BlackForgeCore plugin) {
         this.plugin = plugin;
@@ -183,6 +184,7 @@ public final class HopperUpgrades implements Listener {
     // ------------------------------------------------------------------ the speed-up
 
     private void tick() {
+        boolean recheck = ++claimClock % 100 == 0;   // a chunk can be unclaimed at any time
         for (Loaded l : loaded.values()) {
             boolean changed = false;
             for (Iterator<Map.Entry<Integer, Integer>> it = l.tiers.entrySet().iterator(); it.hasNext(); ) {
@@ -194,12 +196,11 @@ public final class HopperUpgrades implements Listener {
                 if (h.getTransferCooldown() > wait) h.setTransferCooldown(wait);
             }
             if (changed) writeIndex(l);
-            tickClaim(l, sparks);
+            tickClaim(l, recheck);
         }
     }
 
-    private void tickClaim(Loaded l, boolean sparks) {
-        boolean recheck = ticks % 100 == 0;   // a chunk can be unclaimed at any time
+    private void tickClaim(Loaded l, boolean recheck) {
         for (Iterator<Map.Entry<Integer, Integer>> it = l.claim.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<Integer, Integer> en = it.next();
             int pos = en.getKey();
@@ -214,8 +215,6 @@ public final class HopperUpgrades implements Listener {
             if (l.tiers.getOrDefault(pos, 1) >= tier) continue;   // its own tier is already as fast
             int wait = delay(tier);
             if (h.getTransferCooldown() > wait) h.setTransferCooldown(wait);
-            if (sparks && tier >= HopperTiers.MAX_TIER)
-                l.world.spawnParticle(Particle.ELECTRIC_SPARK, b.getLocation().add(0.5, 1.05, 0.5), 2, 0.2, 0.02, 0.2, 0);
         }
     }
 
