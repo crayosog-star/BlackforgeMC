@@ -106,7 +106,51 @@ final class AllayPath {
     static Route route(double[] from, double[] to, Free free, int maxNodes) {
         if (clear(from, to, free)) return new Route(List.of(from, to));
         List<double[]> grid = search(from, to, free, maxNodes);
-        return grid == null ? null : new Route(round(straighten(grid, free), free));
+        if (grid == null) return null;
+        Budget work = new Budget(free, SMOOTH_LOOKUPS);
+        return new Route(round(straighten(grid, work), work));
+    }
+
+    /** Block lookups straightening and rounding a route may make between them, so a long winding one can't cost a tick. */
+    static final int SMOOTH_LOOKUPS = 3_000;
+
+    /** Counts block lookups. Once it's spent, smoothing stops and keeps the points it has, which are already clear. */
+    static final class Budget implements Free {
+        private final Free free; private int left;
+        Budget(Free free, int lookups) { this.free = free; this.left = lookups; }
+        public boolean at(int x, int y, int z) { left--; return free.at(x, y, z); }
+        boolean spent() { return left <= 0; }
+    }
+
+    /**
+     * Trips that found no way lately, by base and target block, so a sealed base or a target past the search limit
+     * doesn't search again on every trip: those fly straight until the entry is forgotten, after {@code ttl} ticks.
+     */
+    static final class Misses {
+        private static final int MAX = 1024;
+        private final long ttl;
+        private final Map<String, Long> until = new HashMap<>();
+
+        Misses(long ttl) { this.ttl = ttl; }
+
+        static String key(String base, double[] to) { return base + '|' + cell(to[0]) + ',' + cell(to[1]) + ',' + cell(to[2]); }
+
+        /** Did a search for this fail less than {@code ttl} ticks ago? */
+        boolean recent(String key, long now) {
+            Long u = until.get(key);
+            if (u == null) return false;
+            if (now < u) return true;
+            until.remove(key);
+            return false;
+        }
+
+        void add(String key, long now) {
+            if (until.size() >= MAX) until.values().removeIf(u -> u <= now);
+            if (until.size() >= MAX) until.clear();   // only if a thousand fresh misses at once: dropping them just means searching again
+            until.put(key, now + ttl);
+        }
+
+        int size() { return until.size(); }
     }
 
     private record Node(long key, int x, int y, int z, double score) {}
@@ -151,29 +195,32 @@ final class AllayPath {
         return out;
     }
 
-    /** Skips every point it can see past. */
-    private static List<double[]> straighten(List<double[]> pts, Free free) {
+    /** Skips every point it can see past, until the budget runs out; after that it keeps the grid route as it is, just less smooth. */
+    static List<double[]> straighten(List<double[]> pts, Budget free) {
         List<double[]> out = new ArrayList<>();
         int i = 0;
         out.add(pts.get(0));
         while (i < pts.size() - 1) {
             int far = pts.size() - 1;
-            while (far > i + 1 && !clear(pts.get(i), pts.get(far), free)) far--;
+            while (far > i + 1 && (free.spent() || !clear(pts.get(i), pts.get(far), free))) {
+                if (free.spent()) { far = i + 1; break; }
+                far--;
+            }
             out.add(pts.get(far));
             i = far;
         }
         return out;
     }
 
-    /** Cuts each corner, keeping a cut only if it stays out of the blocks, and always keeping the two ends. */
-    private static List<double[]> round(List<double[]> pts, Free free) {
+    /** Cuts each corner, keeping a cut only if it stays out of the blocks, and always keeping the two ends. A spent budget keeps the corner. */
+    private static List<double[]> round(List<double[]> pts, Budget free) {
         List<double[]> cur = pts;
         for (int pass = 0; pass < ROUND_PASSES; pass++) {
             ArrayDeque<double[]> out = new ArrayDeque<>();
             out.add(cur.get(0));
             for (int i = 1; i < cur.size() - 1; i++) {
                 double[] a = lerp(cur.get(i), cur.get(i - 1), 0.25), b = lerp(cur.get(i), cur.get(i + 1), 0.25);
-                if (clear(a, b, free)) { out.add(a); out.add(b); }
+                if (!free.spent() && clear(a, b, free)) { out.add(a); out.add(b); }
                 else out.add(cur.get(i));
             }
             out.add(cur.get(cur.size() - 1));
