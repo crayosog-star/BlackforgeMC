@@ -1,6 +1,6 @@
 # Base Progression
 **Status:** In progress
-**Next task:** P1.T1
+**Next task:** P1.T2
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -108,7 +108,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Rollback:** revert the PR. Nothing reads the new file while the flag is off.
 - **Phase gate:** a tester confirms in the Foundry: `/foundry level` shows Level 5 and its progress, `/foundry level 1` then `/foundry level add 500` change what it shows, an Agent delivering to the Forge raises progress by the amount delivered, and a hopper feeding the Forge doesn't.
 
-### [ ] P1.T1: Add level rules and config
+### [x] P1.T1: Add level rules and config
 - **Needs:** `S/AllayRules.java` as the pattern for pure rules.
 - **Files:** create `S/BaseLevelRules.java`, `plugins-src/BlackForgeCore/src/test/java/net/blackforge/core/survival/BaseLevelRulesTest.java`; change `plugins-src/BlackForgeCore/src/main/resources/config.yml`.
 - **Steps:**
@@ -118,7 +118,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** out-of-range levels and tiers throw; an unknown job name throws; a table with the wrong length throws; targets that don't rise throw, because a bad config shouldn't make a level unreachable or free.
 - **Done when:** `BaseLevelRulesTest` covers each method and the defaults match this plan. It passes when run alone, and automerge's build passes.
 - **Leaves ready:** rules and config.
-- **Evidence:**
+- **Evidence:** Verified: all 8 `BaseLevelRulesTest` tests pass when run alone with a small stand-in for JUnit, and the config parses as YAML. Automerge runs them on the `BlackForgeCore` build and won't merge if they fail. Nothing reads the config yet, so there's nothing to play.
 
 ### [ ] P1.T2: Save levels and count Agent deliveries
 - **Needs:** P1.T1; `S/BaseStation.java:181`; `S/Allays.java:349-385` as the save pattern.
