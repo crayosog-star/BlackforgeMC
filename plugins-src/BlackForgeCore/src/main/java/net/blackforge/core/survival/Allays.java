@@ -553,6 +553,12 @@ public final class Allays implements Listener {
         p.openInventory(m.inv);
     }
 
+    /** A tier's card for the Forge's home screen. */
+    ItemStack homeCard(int t, String region) {
+        Base b = bases.get(region);
+        return card(t, b == null ? 0 : b.tier, region);
+    }
+
     private ItemStack card(int t, int have, String region) {
         int needs = have >= t ? 0 : lockedUntil(region, t);
         AllayRules.Cost cost = table.cost(t);
@@ -579,7 +585,7 @@ public final class Allays implements Listener {
         // the station can be broken, or the player's access lost, while a menu stays open
         if (!station.usable(p, m.at)) { p.closeInventory(); return; }
         int slot = e.getRawSlot();
-        if (slot == BACK_SLOT) { station.openForge(p, m.at); return; }
+        if (slot == BACK_SLOT) { station.openMain(p, m.at); return; }
         for (int t = 1; t <= AllayRules.MAX_TIER; t++) if (slot == CARD_SLOTS[t - 1]) buy(p, m.at, t);
     }
 

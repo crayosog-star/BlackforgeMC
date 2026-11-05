@@ -77,6 +77,7 @@ public final class BaseStation implements Listener {
     private Economy eco;
     private Allays allays;
     private BaseLevels levels;
+    private ForgeHome home;
     private java.util.function.Predicate<String> claimHoppers = r -> true;
 
     BaseStation(BlackForgeCore plugin, Robots robots, HopperUpgrades hoppers) { this(plugin, robots, hoppers, false); }
@@ -106,7 +107,11 @@ public final class BaseStation implements Listener {
     void requireLiveDeliveryRegion() { requireLiveDeliveryRegion = true; }
     void setEconomy(Economy e) { this.eco = e; }
     void setAllays(Allays a) { this.allays = a; }
-    void setLevels(BaseLevels l) { this.levels = l; }
+    void setLevels(BaseLevels l) {
+        this.levels = l;
+        if (l.active()) home = new ForgeHome(plugin, this, l, robots);
+    }
+    Allays allays() { return allays; }
     /** Which bases buy hopper tiers for the whole claim, when levels are on. */
     void setClaimHoppers(java.util.function.Predicate<String> rule) { this.claimHoppers = rule; }
 
@@ -307,7 +312,7 @@ public final class BaseStation implements Listener {
         Location l = e.getClickedBlock().getLocation();
         if (!access.test(p, l)) { p.sendActionBar(Ui.mm("<red>That's someone else's Base Station.")); return; }
         if (p.isSneaking()) openStorage(p, l);   // the forge menu is upgrades only
-        else forge(p, l);
+        else openMain(p, l);
     }
 
     /** Card columns: an agent's card is its well on the top row plus the two rows of text under it. */
@@ -315,7 +320,7 @@ public final class BaseStation implements Listener {
     private static final int[] CARD_X = {18, 52, 88, 124, 158};
     private static final int HOPPER_INFO = 31, FORGE_SIZE = 36;
     private static final int[] BUY_SLOTS = {32, 33};
-    private static final int NEXT_PAGE = 27, ALLAY_SLOT = 34;
+    private static final int NEXT_PAGE = 27, BACK_SLOT = 30, ALLAY_SLOT = 34;
 
     /** The Foundry's prebuilt Forge: marks the barrel a station. It's in its own chunk's region, like any other. */
     void adopt(Block b) {
@@ -330,6 +335,12 @@ public final class BaseStation implements Listener {
     private void forge(Player p, Location at) { forge(p, at, 0); }
 
     void openForge(Player p, Location at) { forge(p, at); }
+
+    /** The Forge's first screen. */
+    void openMain(Player p, Location at) {
+        if (home != null) home.open(p, at);
+        else forge(p, at);
+    }
 
     /** Is it still a station, and can this player still use it? A menu can outlast either. */
     boolean usable(Player p, Location at) { return isStation(at.getBlock()) && access.test(p, at); }
@@ -392,14 +403,15 @@ public final class BaseStation implements Listener {
         m.inv.setItem(BUY_SLOTS[0], claimWide ? claimTierIcon(region, 2) : buyIcon(1));
         m.inv.setItem(BUY_SLOTS[1], claimWide ? claimTierIcon(region, 3) : buyIcon(10));
         if (allays != null && allays.available(p)) m.inv.setItem(ALLAY_SLOT, allays.forgeIcon(regionOf.apply(at)));
+        if (home != null) m.inv.setItem(BACK_SLOT, Ui.item(Material.ARROW, "<yellow>Back to Base Levels"));
         p.openInventory(m.inv);
     }
 
-    private boolean sellsClaimTiers(String region) {
+    boolean sellsClaimTiers(String region) {
         return levels != null && levels.active() && region != null && claimHoppers.test(region);
     }
 
-    private ItemStack claimTierIcon(String region, int tier) {
+    ItemStack claimTierIcon(String region, int tier) {
         BaseLevelRules.Table t = levels.table();
         int have = levels.hopperTier(region), level = levels.level(region);
         BaseLevelRules.Price price = t.hopperCost(tier);
@@ -411,7 +423,7 @@ public final class BaseStation implements Listener {
         return Ui.item(Material.HOPPER, "<gold><bold>Hopper Tier " + Spawners.roman(tier), "<gray>Every hopper in this claim moves", "<white>" + hoppers.rate(tier) + "<gray> items a second.", "", state);
     }
 
-    private void buyClaimTier(Player p, Location at, int tier) {
+    void buyClaimTier(Player p, Location at, int tier) {
         String region = regionOf.apply(at);
         if (!hoppers.enabled()) { p.sendMessage(Ui.mm("<gray>Hopper upgrades are switched off right now.")); return; }
         // read again here: a menu can stay open while someone else buys or the base levels up
@@ -441,7 +453,7 @@ public final class BaseStation implements Listener {
         return it;
     }
 
-    private void openStorage(Player p, Location at) {
+    void openStorage(Player p, Location at) {
         if (!(at.getBlock().getState() instanceof Barrel b) || !b.getPersistentDataContainer().has(ITEM)) { p.closeInventory(); return; }
         b.customName(StationUi.title(StationUi.Screen.STORAGE, "Station Storage"));
         b.update(true, false);
@@ -458,6 +470,7 @@ public final class BaseStation implements Listener {
         if (!usable(p, m.at)) { p.closeInventory(); return; }
         int slot = e.getRawSlot();
         if (slot == NEXT_PAGE && m.pages > 1) { forge(p, m.at, m.page + 1); return; }
+        if (slot == BACK_SLOT && home != null) { home.open(p, m.at); return; }
         if (slot == ALLAY_SLOT && allays != null && allays.available(p)) { allays.openMenu(p, m.at); return; }
         if (slot == BUY_SLOTS[0] || slot == BUY_SLOTS[1]) {
             if (sellsClaimTiers(regionOf.apply(m.at))) { buyClaimTier(p, m.at, slot == BUY_SLOTS[0] ? 2 : 3); forge(p, m.at, m.page); }

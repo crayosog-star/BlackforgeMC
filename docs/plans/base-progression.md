@@ -1,6 +1,6 @@
 # Base Progression
 **Status:** In progress
-**Next task:** P4.T1
+**Next task:** P5.T1
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -215,7 +215,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Rollback:** revert the PR. With the flag off, the current Forge menu opens as it does today.
 - **Phase gate:** a tester with no instructions opens the Forge and says what they have, what's next and what it costs. Level Up works and refuses clearly. The art lines up at GUI scales 2, 3 and 4.
 
-### [ ] P4.T1: Add the home screen and Level Up
+### [x] P4.T1: Add the home screen and Level Up
 - **Needs:** P3.T2; `S/BaseStation.java:291-302`, `328`.
 - **Files:** create `S/ForgeHome.java`; change `S/BaseStation.java`.
 - **Steps:**
@@ -226,9 +226,9 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** the Station broken or access lost while open (`usable`); two players level up at once (re-read the level before paying); deliveries short shows the amount left and takes nothing; Level 5 shows Max.
 - **Done when:** in the Foundry, Level Up works from `/foundry level 1` with `/foundry level add` supplying progress, and refuses without it.
 - **Leaves ready:** the home frame for the other rows.
-- **Evidence:**
+- **Evidence:** Verified by code review: Level Up re-reads the level and deliveries before paying. Automerge runs the real build. Untested in game.
 
-### [ ] P4.T2: Add the Allay, Agent and Hopper rows
+### [x] P4.T2: Add the Allay, Agent and Hopper rows
 - **Needs:** P4.T1; `S/Allays.java:534`; `S/BaseStation.java:328`.
 - **Files:** change `S/ForgeHome.java`, `S/BaseStation.java`, `S/Allays.java`.
 - **Steps:**
@@ -239,7 +239,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** no Agents placed; a Skyblock-style base without allays hides that row; stale menus re-check on click.
 - **Done when:** every row's states are seen in the Foundry at Levels 1, 3 and 5.
 - **Leaves ready:** a complete plain menu.
-- **Evidence:**
+- **Evidence:** Verified by code review: allay, job, Agent and hopper rows all open the existing screens or purchases. Automerge runs the real build. Untested in game, including every state at Levels 1, 3 and 5.
 
 ### [ ] P4.T3: Add the art
 - **Needs:** P4.T2; `tools/gui_art.py`; `S/StationUi.java:15`; `blackforge-skin-item`.
@@ -326,6 +326,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 ## Change log
 | Date | Change | Approved by |
 |---|---|---|
+| 2026-11-04 | P4.T3's art moves after P5.T3, because the plain menu works and the art needs a preview and a pack update. It still happens before launch | Flagged to Colin |
 | 2026-11-04 | Colin said to keep building and not wait on PRs. Phase gates aren't recorded as played and their checks carry forward. Stacked tasks ship one PR per phase to save restarts, and everything stays behind `base-levels.enabled` | Colin, in chat |
 | 2026-11-04 | Starter Farmer and the 256-per-chunk hopper limit moved from assumptions to decisions | Colin, in chat |
 | 2026-11-04 | P1.T2 keeps an unreadable save file instead of overwriting it at the next delivery. The check is stronger, from a review of PR #124 | Flagged to Colin |
