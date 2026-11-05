@@ -14,10 +14,10 @@ final class FoundryTestRules {
     static boolean demoSpotFree(boolean agentThere, boolean room, boolean mayBuild) { return !agentThere && room && mayBuild; }
 
     /**
-     * After /foundry check, put the allays back only if someone's still testing and nobody has changed the tier since:
+     * After /foundry check, put the allays back only if its own Tier III went on, someone's still testing and nobody has changed the tier since:
      * an empty island must stay empty, and another tester's choice wins.
      */
-    static boolean restoreAfterCheck(boolean anyoneTesting, int tierNow) { return anyoneTesting && tierNow == CHECK_TIER; }
+    static boolean restoreAfterCheck(boolean tierSet, boolean anyoneTesting, int tierNow) { return tierSet && anyoneTesting && tierNow == CHECK_TIER; }
 
     /** /foundry check passes the flock only if Tier III went on and its whole configured flock is up. */
     static boolean flockFlying(boolean tierSet, int flying, int flock) { return tierSet && flying == flock; }
