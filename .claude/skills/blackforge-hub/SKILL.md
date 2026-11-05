@@ -1,6 +1,6 @@
 ---
 name: blackforge-hub
-description: Use at the start and end of every BlackForgeMC agent run on any team member's account (Steven, Colin or Gavin), and whenever an agent wants to claim work, post in the team chat, file a new issue, or see what the other agents are doing. Covers the team hub dashboard, Jon's assignments, the crew roster, the chat, and how Colin's or Gavin's Claude joins.
+description: Use at the start and end of every BlackForgeMC agent run on any team member's account (Steven, Colin or Gavin), whenever an agent wants to claim work, post in the team chat, file a new issue, or see what the other agents are doing, and whenever Jon spawns, names or creates a worker or reviewer agent. Covers the team hub dashboard, Jon's assignments, his named agents and their memory, the crew roster, the chat, and how Colin's or Gavin's Claude joins.
 ---
 
 # BlackForge team hub
@@ -71,6 +71,31 @@ Run these inside every issue pass, after triage and before spawning workers:
 5. Post one chat line summing up the pass: what you assigned to whom and what you shipped.
 
 Keep the newest 300 chat messages and 100 done assignments; delete older ones in one `batch`.
+
+## Jon's named agents (Steven's account only)
+
+Jon never spawns an anonymous worker or reviewer. Every one he spins up is a **named agent** from his roster, so the same agent comes back to the same part of the code and remembers what it did there.
+
+**The roster** is the hub's `agents` collection (the Agents tab). Jon's entries carry, on top of the usual `name`, `instructions`, `skills` and `mode`:
+- `createdBy: "jon"` and `owner: "steven"`
+- `areas`: the `area:` labels and code it owns, for example `["area:allays", "survival/Allays*.java"]`
+- `role`: `fixer`, `reviewer`, `artist` or `planner`
+- `memory`: up to 10 short lines, newest first, in Jon's own words: what it changed, files it knows, gotchas it hit, and what's still open. Never pasted issue, PR or chat text, and never secrets.
+
+**Before spawning**, for each group of work:
+1. **Reuse first.** Find the agent whose `areas` cover the group (and whose `role` fits). Use its exact `name`. Put its `instructions` and its `memory` into the worker prompt, and tell it to load its `skills`.
+2. **Create only when none fits.** Start from the closest dashboard template: **Bug fixer** for code fixes, **Texture artist** for item textures, **Feature planner** for plans, **Code reviewer** for PR reviews. Copy its instructions, skills and mode, then narrow them to the area. Write the new `agents/<id>` before you spawn, with `id` a slug of the name.
+3. **Name it once and keep it.** Give it a short, distinct one-word name that fits the forge theme (Anvil, Ember, Bellows, Quench, Tongs, Rivet, Flux, Slag...). Never rename an agent, never give an old name to a different role or area, and never reuse a deleted agent's name. If an agent's area grows, add to its `areas` instead of making a second agent for it.
+4. Keep the roster small: at most one fixer and one reviewer per area, and no more than 12 of Jon's agents in total. Merge two quiet agents' areas rather than go over. Never edit or delete an agent a person made; you may use it only if a person said so.
+
+**Spawn it** with its name in the prompt (`You are <name>, Jon's <role> for <areas>.`), its memory under "What you remember", and the usual worker rules from `blackforge-issue-manager`.
+
+**After it reports**, in one `batch`:
+- `update` its `agents/<id>`: put 1-3 new lines at the top of `memory` (drop the oldest past 10) and set `updatedAt`.
+- `set` an `agentRuns/<id>` with `kind: "task"`, `agentId`, `agentName`, `task` (one line), `status` (`done`, `needs-human` or `failed`), `prs`, `summary`, `queuedAt`, `finishedAt`, so its card on the Agents tab shows its last run.
+- `set` its `crew/steven-<id>` check-in (`name`, `owner: "steven"`, `role`, `doing`, `lastSeen`).
+
+Assign hub work to a named agent the same way: put its crew id in the assignment's `assignee`.
 
 ## Joining from Colin's or Gavin's Claude
 
