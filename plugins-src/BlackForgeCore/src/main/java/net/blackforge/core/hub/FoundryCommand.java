@@ -22,6 +22,9 @@ final class FoundryCommand {
             {"/foundry start", "/foundry start", "Takes you to the island, swaps your hotbar to test tools and starts Tier I allays"},
             {"/foundry stop", "/foundry stop", "Removes your agents and blocks, and gives your combat kit back"},
             {"/foundry allays [1|2|3|off]", "/foundry allays ", "Sets the allay tier: 1 Gatherer carries drops, 2 Courier sorts and refuels, 3 Steward sells"},
+            {"/foundry level", "/foundry level", "Shows the island's base level, its Agent deliveries and what's next"},
+            {"/foundry level [1-5]", "/foundry level ", "Sets the base level for the whole island"},
+            {"/foundry level add [items]", "/foundry level add ", "Adds Agent deliveries, so you can test progress without waiting"},
             {"/foundry demo", "/foundry demo", "Places one fuelled agent at each bench, so the whole chain runs by itself"},
             {"/foundry tp [place]", "/foundry tp ", "Takes you to a bench: forge, supply, allays, courier, lanes, farm, pond, mine, pen or plot"},
             {"/foundry fuel low", "/foundry fuel low", "Runs your agents low and stocks the Forge with Fuel Cells, so a Courier comes to refuel them"},
@@ -38,21 +41,23 @@ final class FoundryCommand {
             {"/allay drain", "/allay drain", "Runs your Agents within 20 blocks down to a minute of fuel"},
     };
 
+    private static final long MAX_TEST_DELIVERIES = 1_000_000_000L;
     private final Foundry foundry;
     private final TestArena arena;
 
     FoundryCommand(Foundry foundry, TestArena arena) {
         this.foundry = foundry;
         this.arena = arena;
-        Bukkit.getCommandMap().register("blackforge", new Command("foundry", "Test agents, hoppers and allays in the Arena", "/foundry [start|stop|allays|demo|tp|fuel|reset|check|status]", List.of()) {
+        Bukkit.getCommandMap().register("blackforge", new Command("foundry", "Test agents, hoppers and allays in the Arena", "/foundry [start|stop|allays|level|demo|tp|fuel|reset|check|status]", List.of()) {
             @Override public boolean execute(CommandSender s, String label, String[] a) {
                 if (!(s instanceof Player p)) return true;
                 run(p, a);
                 return true;
             }
             @Override public List<String> tabComplete(CommandSender s, String alias, String[] a) {
-                if (a.length == 1) return List.of("start", "stop", "allays", "demo", "tp", "fuel", "reset", "status");
+                if (a.length == 1) return List.of("start", "stop", "allays", "level", "demo", "tp", "fuel", "reset", "status");
                 if (a.length == 2 && a[0].equalsIgnoreCase("allays")) return List.of("1", "2", "3", "off");
+                if (a.length == 2 && a[0].equalsIgnoreCase("level")) return List.of("1", "2", "3", "4", "5", "add");
                 if (a.length == 2 && a[0].equalsIgnoreCase("tp")) return List.copyOf(new TreeSet<>(FoundryZone.SPOTS.keySet()));
                 if (a.length == 2 && a[0].equalsIgnoreCase("fuel")) return List.of("low");
                 return List.of();
@@ -71,6 +76,7 @@ final class FoundryCommand {
         if (!foundry.testing(p)) { p.sendMessage(Ui.mm("<gray>Start a test first: <white>/foundry start")); return; }
         switch (what) {
             case "allays" -> allays(p, a);
+            case "level" -> level(p, a);
             case "demo" -> p.sendMessage(Ui.mm(foundry.demo(p)));
             case "tp" -> tp(p, a);
             case "fuel" -> {
@@ -111,6 +117,28 @@ final class FoundryCommand {
         if (tier < 0) { p.sendMessage(Ui.mm("<gray>Use <white>/foundry allays 1<gray>, <white>2<gray>, <white>3<gray> or <white>off")); return; }
         if (!foundry.systems().setAllayTier(p.getUniqueId(), tier)) { p.sendMessage(Ui.mm("<red>The Foundry has enough allays flying right now. Try a lower tier.")); return; }
         foundry.tell("<#4fd1b5>" + p.getName() + " set the Forge's allays to " + foundry.systems().allayTierText(tier));
+    }
+
+    private void level(Player p, String[] a) {
+        if (a.length > 1) {
+            String want = a[1].toLowerCase(Locale.ROOT);
+            if (want.equals("add")) {
+                long items = a.length > 2 ? number(a[2]) : -1;
+                if (items < 1 || items > MAX_TEST_DELIVERIES) { p.sendMessage(Ui.mm("<gray>Use <white>/foundry level add <gray>and a number from 1 to " + MAX_TEST_DELIVERIES)); return; }
+                foundry.systems().addTestDeliveries(items);
+                foundry.tell("<#4fd1b5>" + p.getName() + " added " + items + " Agent deliveries to the island's test base.");
+            } else {
+                long level = number(want);
+                if (level < 1 || level > 5) { p.sendMessage(Ui.mm("<gray>Use <white>/foundry level 1 <gray>to <white>5<gray>, or <white>/foundry level add <gray>and a number")); return; }
+                foundry.systems().setTestLevel((int) level);
+                foundry.tell("<#4fd1b5>" + p.getName() + " set the island to Base Level " + level + ".");
+            }
+        }
+        foundry.systems().levelStatus().forEach(line -> p.sendMessage(Ui.mm(line)));
+    }
+
+    private static long number(String text) {
+        try { return Long.parseLong(text); } catch (NumberFormatException ex) { return -1; }
     }
 
     private void tp(Player p, String[] a) {

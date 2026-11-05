@@ -1,6 +1,6 @@
 # Base Progression
 **Status:** In progress
-**Next task:** P1.T3
+**Next task:** P2.T1, after the Phase 1 gate
 
 ## Rules of engagement
 > 1. **Read first.** At the start of every session, read this whole document and list open PRs. Start at the task named in **Next task**.
@@ -144,7 +144,7 @@ Every number below has a key under `base-levels:` in `plugins-src/BlackForgeCore
 - **Edge cases:** a bad number shows usage; `add` caps at a huge number; a level change announces itself through `foundry.tell`, since the island is shared.
 - **Done when:** the Phase 1 gate passes in game.
 - **Leaves ready:** a quick way to test every later gate.
-- **Evidence:**
+- **Evidence:** Verified: `BaseLevelRulesTest`, including what each level unlocks, passes when run alone. Automerge runs the real build. Untested in game: all commands. This stays unticked until the Phase 1 gate is played.
 
 ## Phase 2: Gates (Foundry only)
 - **Goal:** in the Foundry, jobs and allays obey the level, and every refusal explains itself. Level 5 behaves exactly as today.

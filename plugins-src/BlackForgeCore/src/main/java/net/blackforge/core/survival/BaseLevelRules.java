@@ -1,5 +1,6 @@
 package net.blackforge.core.survival;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -14,6 +15,8 @@ final class BaseLevelRules {
     /** Agent jobs by the name the Academy saves them under, in the order Table.jobLevels lists them. */
     static final List<String> JOBS = List.of("farmer", "miner", "fisherman", "grinder");
     private static final int ALLAY_TIERS = 3, HOPPER_TIERS = 3;
+    private static final List<String> JOB_NAMES = List.of("Farmer", "Miner", "Fisherman", "Grinder");
+    private static final List<String> ALLAY_NAMES = List.of("Gatherer", "Courier", "Steward");
 
     /** What it takes to reach a level. */
     record Cost(long deliveries, int money, int essence) {}
@@ -112,6 +115,16 @@ final class BaseLevelRules {
             checkHopper(tier);
             if (tier == 1) throw new IllegalArgumentException("tier 1 is a plain hopper");
             return new Price(hopperMoney[tier - 2], hopperEssence[tier - 2]);
+        }
+
+        /** What this level unlocks, in words players see. */
+        List<String> unlocks(int level) {
+            checkLevel(level);
+            List<String> out = new ArrayList<>();
+            for (int i = 0; i < JOBS.size(); i++) if (jobLevels[i] == level) out.add(JOB_NAMES.get(i));
+            for (int t = 1; t <= ALLAY_TIERS; t++) if (allayLevel(t) == level) out.add(ALLAY_NAMES.get(t - 1));
+            for (int t = 2; t <= HOPPER_TIERS; t++) if (hopperLevel(t) == level) out.add("Hopper Tier " + (t == 2 ? "II" : "III"));
+            return out;
         }
 
         /** The lowest level that keeps everything a base already has, so nobody loses anything when levels arrive. */
