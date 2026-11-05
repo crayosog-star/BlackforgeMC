@@ -94,6 +94,47 @@ final class AllayFlight {
         return (int) Math.round(rgb[0] * 255) << 16 | (int) Math.round(rgb[1] * 255) << 8 | (int) Math.round(rgb[2] * 255);
     }
 
+    /** Where a flock member idles above the Station block at (x, y, z): its packed spot, or its place on the slow circle. */
+    static double[] idleSpot(double x, double y, double z, Hover h, int index, int flock, long tick) {
+        if (h != Hover.CIRCLE) {
+            double[] c = tightSpot(x, y, z), o = tightOffset(h, index, flock);
+            return new double[]{c[0] + o[0], c[1] + o[1], c[2] + o[2]};
+        }
+        double[] o = hover(index, flock, tick);
+        return new double[]{x + 0.5 + o[0], y + 2.2 + o[1], z + 0.5 + o[2]};
+    }
+
+    /** The middle of a packed flock, just above the Station block at (x, y, z). */
+    static double[] tightSpot(double x, double y, double z) { return new double[]{x + 0.5, y + 1.3, z + 0.5}; }
+
+    /** Ticks between wing poses. */
+    static final int FLAP_TICKS = 2;
+    /** Closed, half, swept, half: it steps through each one, because a jump between two far-apart poses looks like two pairs of wings. */
+    private static final int[] FLAP_ORDER = {0, 1, 2, 1};
+    /** The top tier is a little bigger. */
+    static final float STEWARD_SCALE = 1.15f;
+
+    /** Does this allay change wing pose this tick? Its index staggers a flock so they don't flap in step. */
+    static boolean flapsNow(long now, int index) { return (now + index) % FLAP_TICKS == 0; }
+
+    /** The step after this one in the flap cycle. */
+    static int nextFlap(int flap) { return (flap + 1) % FLAP_ORDER.length; }
+
+    /** Which of a tier's three wing models this step of the cycle shows. */
+    static int flapFrame(int flap) { return FLAP_ORDER[flap]; }
+
+    /** How big a tier's skin is drawn. */
+    static float skinScale(int tier) { return tier >= 3 ? STEWARD_SCALE : 1f; }
+
+    /** How far a skin turns about z: half a turn when the allay is flipped upside down, otherwise none. */
+    static float skinRoll(boolean flip) { return flip ? (float) Math.PI : 0f; }
+
+    /** Which way is to one side of travel along (dx, dz), as {x, z}: along x when it's moving straight up or down. */
+    static double[] side(double dx, double dz) {
+        double flat = Math.hypot(dx, dz);
+        return flat < 1e-6 ? new double[]{1, 0} : new double[]{-dz / flat, dx / flat};
+    }
+
     /** Where it is at this tick of the trip, as {x, y, z}. */
     static double[] at(double[] from, double[] to, int tick, int ticks) {
         double t = (double) tick / ticks, e = ease(t);

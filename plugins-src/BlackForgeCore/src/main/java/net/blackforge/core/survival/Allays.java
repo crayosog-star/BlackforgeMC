@@ -94,12 +94,9 @@ public final class Allays implements Listener {
     private static final float TAG_VIEW_RANGE = 0.2f;
     private static final Color COPPER = Color.fromRGB(0xC8743A), VERDIGRIS = Color.fromRGB(0x4FD1B5), ORANGE = Color.fromRGB(0xF28C2C), GOLD = Color.fromRGB(0xFFE096);
     private static final double SKIN_HEIGHT = 0.35, RAINBOW_SPEED = 0.01;
-    private static final int FLAP_TICKS = 2, SPARKLE_TICKS = 12;
-    /** Closed, half, swept, half: it steps through each one, because a jump between two far-apart poses looks like two pairs of wings. */
-    private static final int[] FLAP_ORDER = {0, 1, 2, 1};
+    private static final int SPARKLE_TICKS = 12;
     private static final double ARRIVAL_SPREAD = 0.4;
     private static final double TRAIL_MIN_MOVE = 0.04, TRAIL_MAX_MOVE = 2, RIBBON_WIDTH = 0.4, HALO_RADIUS = 0.6;
-    private static final float STEWARD_SCALE = 1.15f;
     private static final int BURST_POINTS = 18;
 
     /** A test allay flying back and forth between two points. */
@@ -638,6 +635,8 @@ public final class Allays implements Listener {
             for (Base o : bases.values()) all += o.workers.size();
             if (all > sandboxLimit) { p.sendActionBar(Ui.mm("<red>The Foundry has enough allays flying right now. Try again soon.")); return; }
         }
+        // save() does nothing while allays.yml is blocked, so a tier bought now would be gone after a restart with nothing refunded
+        if (saveBlocked) { p.sendActionBar(Ui.mm("<red>Allays can't be saved right now, so no tiers can be bought. Tell staff.")); return; }
         AllayRules.Cost cost = table.cost(t);
         if (!station.pay(p, cost.money(), cost.essence())) return;
         if (b == null) { b = new Base(region, p.getUniqueId()); bases.put(region, b); }
@@ -1156,9 +1155,9 @@ public final class Allays implements Listener {
             // the game's own upside-down rule only touches the real allay, so a skin turns itself over to match
             w.skin.setTransformation(skinTransform(w.tier, flip));
         }
-        if ((now + w.index) % FLAP_TICKS == 0) {
-            w.flap = (w.flap + 1) % FLAP_ORDER.length;
-            w.skin.setItemStack(skinItem(w.tier, FLAP_ORDER[w.flap]));
+        if (AllayFlight.flapsNow(now, w.index)) {
+            w.flap = AllayFlight.nextFlap(w.flap);
+            w.skin.setItemStack(skinItem(w.tier, AllayFlight.flapFrame(w.flap)));
         }
     }
 
@@ -1181,7 +1180,8 @@ public final class Allays implements Listener {
                     world.spawnParticle(Particle.DUST_COLOR_TRANSITION, tail, 2, 0.06, 0.06, 0.06, 0, new Particle.DustTransition(ORANGE, GOLD, 1.3f));
                     if ((now + w.index) % 3 == 0) world.spawnParticle(Particle.FLAME, tail, 1, 0.05, 0.05, 0.05, 0.002);
                 } else {
-                    double flat = Math.hypot(dx, dz), sx = flat < 1e-6 ? 1 : -dz / flat, sz = flat < 1e-6 ? 0 : dx / flat;
+                    double[] side = AllayFlight.side(dx, dz);
+                    double sx = side[0], sz = side[1];
                     double hue = now * RAINBOW_SPEED + w.index * 0.33;
                     ribbon(world, tail.clone().add(sx * RIBBON_WIDTH, 0.1, sz * RIBBON_WIDTH), hue);
                     ribbon(world, tail.clone().add(-sx * RIBBON_WIDTH, 0.1, -sz * RIBBON_WIDTH), hue + 0.2);
@@ -1216,8 +1216,8 @@ public final class Allays implements Listener {
     }
 
     private static Transformation skinTransform(int tier, boolean flip) {
-        float scale = tier >= 3 ? STEWARD_SCALE : 1f;   // the top tier is a little bigger
-        return new Transformation(new Vector3f(), flip ? new AxisAngle4f((float) Math.PI, 0, 0, 1) : new AxisAngle4f(), new Vector3f(scale, scale, scale), new AxisAngle4f());
+        float scale = AllayFlight.skinScale(tier);
+        return new Transformation(new Vector3f(), new AxisAngle4f(AllayFlight.skinRoll(flip), 0, 0, 1), new Vector3f(scale, scale, scale), new AxisAngle4f());
     }
 
     /** One of a tier's three wing positions. Both tiers carry the enchantment shine. */
@@ -1333,16 +1333,11 @@ public final class Allays implements Listener {
 
     private static double[] hover(Location station, Worker w, int flock, long tick) {
         // no room to circle: side by side or stacked where there's space, so a flock doesn't blur into one allay or sit in a wall
-        if (w.hover != AllayFlight.Hover.CIRCLE) {
-            double[] c = tightSpot(station), o = AllayFlight.tightOffset(w.hover, w.index, flock);
-            return new double[]{c[0] + o[0], c[1] + o[1], c[2] + o[2]};
-        }
-        double[] h = AllayFlight.hover(w.index, flock, tick);
-        return new double[]{station.getX() + 0.5 + h[0], station.getY() + 2.2 + h[1], station.getZ() + 0.5 + h[2]};
+        return AllayFlight.idleSpot(station.getX(), station.getY(), station.getZ(), w.hover, w.index, flock, tick);
     }
 
     /** The middle of a packed flock, just above the Station. */
-    private static double[] tightSpot(Location station) { return new double[]{station.getX() + 0.5, station.getY() + 1.3, station.getZ() + 0.5}; }
+    private static double[] tightSpot(Location station) { return AllayFlight.tightSpot(station.getX(), station.getY(), station.getZ()); }
 
     /** Can an allay fly through this block? Never into an unloaded chunk, which would load it, and never lava. */
     private static boolean free(World world, int x, int y, int z) {
