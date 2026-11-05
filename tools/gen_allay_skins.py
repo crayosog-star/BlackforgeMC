@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """Forge Allay skins for Tier II and III: writes the textures, models and item definitions into resourcepack/.
 
-Tier II (courier): orange and copper, with a bright sparkle pattern. Tier III (steward): a flowing rainbow gradient, an
+Tier II (courier): orange and copper, with a slow, faint shimmer and sparkles that twinkle (an animated texture). Tier III (steward): a flowing rainbow gradient, an
 animated texture. Each has three models, wings closed to swept back, which the plugin steps through to flap. Wings are
 pale, see-through and smaller than the body, so from behind it still reads as one allay with its head showing. Run it from the repo root,
 then build the pack as blackforge-skin-item describes. Output is stable, so re-running changes nothing.
 """
 import colorsys
 import json
+import math
 from pathlib import Path
 
 from PIL import Image
 
 ROOT = Path("resourcepack/assets/blackforge")
 SIZE = 32          # texture pixels; model UVs run 0-16, so one UV unit is 2 pixels
-FRAMES = 16        # rainbow animation frames
+FRAMES = 16        # animation frames for both skins
+COURIER_FRAMETIME = 5   # ticks per frame, so the shimmer loops every 4 seconds; the rainbow's is 3
 WING_TOP = 16      # pixels at y >= this and x >= this are the wing area
 
 
@@ -31,17 +33,34 @@ def wing_shape(x, y):
     return not (v > 10 and u % 4 == 3)
 
 
-def courier(x, y):
+def shade(base, light, amount):
+    return tuple(round(a + (b - a) * amount) for a, b in zip(base, light))
+
+
+def twinkle(x, y, frame):
+    """0 to 1, with each sparkle on its own beat. Whole cycles only, so the loop has no seam."""
+    return 0.5 + 0.5 * math.cos(2 * math.pi * (frame / FRAMES - (x * 3 + y * 5) % FRAMES / FRAMES))
+
+
+def sheen(x, y, frame):
+    """A soft light drifting across the skin, kept faint on purpose: at most 18% towards the light colour."""
+    return 0.18 * (0.5 + 0.5 * math.cos(2 * math.pi * (frame / FRAMES - (x + y) / SIZE)))
+
+
+def courier(x, y, frame):
     if x >= WING_TOP and y >= WING_TOP:
         if not wing_shape(x, y):
             return (0, 0, 0, 0)
-        return (255, 240, 205, 190) if (x + y) % 5 == 0 else (255, 214, 150, 150)
+        if (x + y) % 5 == 0:
+            return shade((255, 226, 178), (255, 244, 216), twinkle(x, y, frame)) + (190,)
+        return (255, 214, 150, 150)
     if eyes(x, y) and x < 10 and y < 10:
         return (58, 24, 8, 255)
-    # a soft orange fade from the top, with a repeating scatter of brighter pixels for the glimmer
+    base = (255, 168, 62) if y % 16 < 8 else (242, 140, 44)
+    # the same scatter of brighter pixels as before, now fading in and out for the glimmer
     if (x * 7 + y * 13) % 19 == 0:
-        return (255, 224, 150, 255)
-    return (255, 168, 62, 255) if y % 16 < 8 else (242, 140, 44, 255)
+        return shade(shade(base, (255, 224, 150), 0.45), (255, 236, 176), twinkle(x, y, frame)) + (255,)
+    return shade(base, (255, 196, 110), sheen(x, y, frame)) + (255,)
 
 
 def steward(x, y, frame):
@@ -106,9 +125,10 @@ def write_models(name):
 def main():
     tex = ROOT / "textures/item/allay"
     tex.mkdir(parents=True, exist_ok=True)
-    img = Image.new("RGBA", (SIZE, SIZE))
-    img.putdata([courier(x, y) for y in range(SIZE) for x in range(SIZE)])
-    img.save(tex / "courier.png")
+    glow = Image.new("RGBA", (SIZE, SIZE * FRAMES))
+    glow.putdata([courier(x, y, f) for f in range(FRAMES) for y in range(SIZE) for x in range(SIZE)])
+    glow.save(tex / "courier.png")
+    (tex / "courier.png.mcmeta").write_text(json.dumps({"animation": {"frametime": COURIER_FRAMETIME, "interpolate": True}}, indent=2) + "\n")
     strip = Image.new("RGBA", (SIZE, SIZE * FRAMES))
     strip.putdata([steward(x, y, f) for f in range(FRAMES) for y in range(SIZE) for x in range(SIZE)])
     strip.save(tex / "steward.png")
