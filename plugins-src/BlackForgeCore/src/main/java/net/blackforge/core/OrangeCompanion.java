@@ -126,9 +126,10 @@ final class OrangeCompanion {
     void follow(Location ownerAt, Consumer<BlockDisplay> hideFromOptedOut, BiConsumer<Entity, String> playVoice) {
         boolean rebuild = anchor == null || anchor.getWorld() != ownerAt.getWorld()
                 || displays.size() != MODEL.size() || displays.stream().anyMatch(d -> !d.isValid());
-        if (rebuild || anchor.distanceSquared(ownerAt) > PetAnim.LEASH * PetAnim.LEASH
+        boolean stuck = !rebuild && PetAnim.stuck(chasing, blockedFrames);
+        if (rebuild || stuck || anchor.distanceSquared(ownerAt) > PetAnim.LEASH * PetAnim.LEASH
                 || Math.abs(anchor.getY() - ownerAt.getY()) > 4) {
-            Location at = spotAround(ownerAt, PetAnim.ROAM_MIN, 5);
+            Location at = spotAround(ownerAt, PetAnim.ROAM_MIN, stuck ? 4.5 : 5);
             if (at == null) at = grounded(ownerAt, 2.2);
             if (at == null) removeModel();
             else spawn(at, ownerAt, hideFromOptedOut);
@@ -219,7 +220,7 @@ final class OrangeCompanion {
         if (goal == null || goal.getWorld() != anchor.getWorld()) goal = grounded(ownerAt, 2.2);
         if (goal == null) return null;
         Location step = stepToward(goal, leaping ? PetAnim.LEAP_STEP : PetAnim.STEP);
-        blockedFrames = step == null ? blockedFrames + 1 : 0;
+        blockedFrames = PetAnim.blocked(blockedFrames, step != null);
         return step;
     }
 
@@ -230,13 +231,13 @@ final class OrangeCompanion {
     /** Called on touchdown. Bound on, carry on to the roam point, or stop and hang out. */
     private void landed(Location ownerAt) {
         frame = 0;
-        boolean blocked = blockedFrames >= 3;
-        if (blocked) blockedFrames = 0;
-        if (chasing) {
+        if (chasing) {   // the blocked count carries across leaps, so follow() can catch a pet stuck behind a wall
             leaping = true;
             goal = spotAround(ownerAt, PetAnim.ROAM_MIN, 4.5);
             return;
         }
+        boolean blocked = blockedFrames >= 3;
+        if (blocked) blockedFrames = 0;
         leaping = false;
         boolean arrived = goal == null || flat(anchor, goal) < .5;
         boolean stale = goal != null && flat(goal, ownerAt) > PetAnim.ROAM_MAX + 1;

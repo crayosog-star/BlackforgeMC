@@ -82,6 +82,22 @@ class PetAnimTest {
         assertTrue(blocksPerSecond > 5.7, "sprint is about 5.6 blocks a second, got " + blocksPerSecond);
     }
 
+    /** Owner shuts a door or climbs a 2-block step 5-10 blocks away: the pet must not leap on the spot forever. */
+    @Test
+    void aChaseBlockedAcrossLeapsPutsThePetBack() {
+        int blocked = 0, frames = 0;
+        while (!PetAnim.stuck(true, blocked)) {
+            for (int f = 0; f < PetAnim.hopFrames(true); f++, frames++) {
+                if (PetAnim.airborne(f, true)) blocked = PetAnim.blocked(blocked, false);
+            }
+            assertTrue(frames < 40, "gives up within a few leaps");
+        }
+        assertEquals(PetAnim.STUCK_FRAMES, blocked);
+        assertFalse(PetAnim.stuck(false, blocked), "only while bounding back");
+        assertFalse(PetAnim.stuck(true, PetAnim.blocked(blocked, true)), "any step clears it");
+        assertFalse(PetAnim.stuck(true, PetAnim.STUCK_FRAMES - 1), "a short snag is not a wall");
+    }
+
     @Test
     void turnsTheShortWayRound() {
         assertEquals(1f, PetAnim.turnToward(.8f, 1f, .45f));
