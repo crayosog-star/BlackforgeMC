@@ -46,18 +46,20 @@ import java.util.function.Predicate;
  *   <li>One dagger in your main hand hits for {@code damage} (5) at {@code attack-speed} (2.0 a second) with
  *   {@code reach-change} (-0.5) blocks of reach. It isn't a sword, so there's no sweep: one target per hit.</li>
  *   <li>With a Nightrend in <b>each</b> hand you attack at {@code pair-attack-speed} (2.6), and swings alternate
- *   arms, right then left. A {@code repeat-side-chance} (3%) of swings use the same arm twice, and that blade's glow
- *   swells for a second (a "blood surge"). A hit slashes a red arc off the blade that swung (cosmetic; same damage).
- *   Drop either dagger and the bonus is gone.</li>
+ *   arms: right on the first swing after you draw them, then left, right... After each swing there's a
+ *   {@code same-side-chance} (5%) that the next one uses the same arm again, and that blade's glow swells for a second
+ *   (a "blood surge"). A hit slashes a red arc off the blade that swung (cosmetic; same damage). Drop either dagger
+ *   and the bonus is gone.</li>
  *   <li>A different sword in the off hand gives a smaller boost, {@code mixed-attack-speed} (2.3); speed only.</li>
  *   <li>Hits from the arc behind the target ({@code behind-arc-degrees}, 120) only do {@code behind-damage} (60%),
  *   with a duller sound. Players and mobs alike. "Behind" is where the target is facing, not where it's walking.</li>
  *   <li>A slight aura: a few dark-red embers drift off each blade while you hold it. Off while invisible or vanished.</li>
  *   <li>The EMP shuts the pair bonus off for {@code emp-seconds} (4); the daggers still hit at the single speed.</li>
- *   <li>Equip flourish: the moment you hold the pair, both blades flip up out of your hands and settle in your grip
- *   (display entities; at most once per {@code flip-cooldown-seconds}). Other players see the flipping copies with the
- *   real held daggers hidden (a fake equipment packet), then the real ones come back the tick the copies go. The
- *   flipper never sees the copies: their own view keeps their real daggers. Putting the pair away ends it at once.</li>
+ *   <li>Draw: whenever a Nightrend comes into either hand, one dagger or two, it flips up into your grip with a
+ *   blade-drawn sound (at most once per {@code draw-cooldown-seconds}). Your own view: the dagger goes on a short item
+ *   cooldown and the pack's model plays the flip from it (tools/gen_nightrend_draw.py), in first and third person.
+ *   Everyone else: their clients don't get that cooldown, so they see display-entity copies flipping with the real
+ *   held daggers hidden (a fake equipment packet) until the copies go. Putting the dagger away ends it at once.</li>
  * </ul>
  *
  * Two variants are the same dagger: {@link #item()} and {@link #offItem()} differ only in a tag the Arena kit uses
@@ -75,22 +77,25 @@ public final class Nightrend implements Listener, Hackable {
     private static final byte MAIN = 1, OFF = 2;     // tag values: which hand the Arena kit puts it in
     private static final int TICK_EVERY = 2;         // pair / aura check interval
     private static final int AURA_EVERY = 10;        // aura puff every half second
+    private static final String DRAW_SOUND = "blackforge:item.nightrend.draw";   // resourcepack sounds.json
 
     private final BlackForgeCore plugin;
     private final Predicate<Location> allowedAt;
     private final boolean enabled;
-    private final double damage, singleSpeed, pairSpeed, mixedSpeed, reachChange, behindArc, behindDamage, repeatChance;
-    private final long empMillis, flipCooldownMillis;
+    private final double damage, singleSpeed, pairSpeed, mixedSpeed, reachChange, behindArc, behindDamage, sameSideChance;
+    private final long empMillis, drawCooldownMillis;
     private final int leftSwingDelay;   // ticks: lets your own client accept the left swing (see onSwing)
     private final boolean packLive;
-    private final NamespacedKey tagKey, damageKey, speedKey, reachKey, pairKey, mixedKey;
+    private final NamespacedKey tagKey, damageKey, speedKey, reachKey, pairKey, mixedKey, drawGroup;
     private final Set<UUID> pairOn = new HashSet<>();     // a Nightrend in each hand
     private final Set<UUID> mixedOn = new HashSet<>();    // a Nightrend in the main hand, another sword in the off hand
     private final Map<UUID, Boolean> nextOff = new HashMap<>();   // which arm swings next (true = off hand)
     private final Map<UUID, Integer> swingTick = new HashMap<>();
     private final Map<UUID, Boolean> swingWasOff = new HashMap<>();
     private final Random rnd = new Random();
-    private final Map<UUID, Long> hackedUntil = new HashMap<>(), lastFlip = new HashMap<>();
+    private final Map<UUID, Long> hackedUntil = new HashMap<>(), lastDraw = new HashMap<>();
+    private final Set<UUID> heldMain = new HashSet<>(), heldOff = new HashSet<>();   // a Nightrend in that hand last check
+    private final Set<UUID> debug = new HashSet<>();      // staff who turned on /nrdebug
     private final Set<ItemDisplay> live = new HashSet<>();
     private final Set<UUID> flipping = new HashSet<>();   // a flip is playing for them
     private final BukkitTask task;
@@ -109,17 +114,20 @@ public final class Nightrend implements Listener, Hackable {
         this.behindDamage = Math.max(0, Math.min(1, c.getDouble("nightrend.behind-damage", 0.6)));
         this.empMillis = Math.round(Math.max(0, c.getDouble("nightrend.emp-seconds", 4)) * 1000);
         this.mixedSpeed = Math.max(singleSpeed, Math.min(pairSpeed, c.getDouble("nightrend.mixed-attack-speed", 2.3)));
-        this.repeatChance = Math.max(0, Math.min(0.9, c.getDouble("nightrend.repeat-side-chance", 0.03)));
+        // a new key, so the 5% applies on live servers too (their config keeps the old repeat-side-chance: 0.03)
+        this.sameSideChance = Math.max(0, Math.min(0.9, c.getDouble("nightrend.same-side-chance", 0.05)));
         this.packLive = c.getBoolean("resource-pack-live", false);
         this.leftSwingDelay = Math.max(0, Math.min(6, c.getInt("nightrend.left-swing-delay-ticks", 3)));
-        this.flipCooldownMillis = Math.round(Math.max(0, c.getDouble("nightrend.flip-cooldown-seconds", 3)) * 1000);
+        this.drawCooldownMillis = Math.round(Math.max(0, c.getDouble("nightrend.draw-cooldown-seconds", 0.4)) * 1000);
         this.tagKey = new NamespacedKey(BlackForgeCore.NS, "nightrend");
         this.damageKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_damage");
         this.speedKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_speed");
         this.reachKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_reach");
         this.pairKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_pair");
         this.mixedKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_mixed");
+        this.drawGroup = new NamespacedKey("blackforge", "nightrend_draw");
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        registerDebugCommand();
         this.task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, TICK_EVERY);
     }
 
@@ -154,6 +162,11 @@ public final class Nightrend implements Listener, Hackable {
             if (reachChange != 0) m.addAttributeModifier(Attribute.ENTITY_INTERACTION_RANGE, new AttributeModifier(reachKey,
                     reachChange, AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.MAINHAND));
             m.getPersistentDataContainer().set(tagKey, PersistentDataType.BYTE, hand);
+            // its own cooldown group, so the draw cooldown only touches Nightrends (flint has no use, so nothing else does)
+            var cd = m.getUseCooldown();
+            cd.setCooldownSeconds(NightrendMath.FLIP_TICKS / 20f);
+            cd.setCooldownGroup(drawGroup);
+            m.setUseCooldown(cd);
         });
         return it;
     }
@@ -193,10 +206,15 @@ public final class Nightrend implements Listener, Hackable {
         boolean hacked = hackedUntil.getOrDefault(p.getUniqueId(), 0L) > now;
         setPair(p, here && main && off && !hacked && !p.isDead());
         setMixed(p, here && main && !off && isOtherSword(inv.getItemInOffHand()) && !hacked && !p.isDead());
+        UUID id = p.getUniqueId();
+        boolean drewMain = main && !heldMain.contains(id), drewOff = off && !heldOff.contains(id);
+        if (main) heldMain.add(id); else heldMain.remove(id);
+        if (off) heldOff.add(id); else heldOff.remove(id);
+        if (here && !p.isDead() && (drewMain || drewOff)) draw(p, drewMain, drewOff, now);
         if (auraNow && here && (main || off) && !flipping.contains(p.getUniqueId()) && visible(p)) aura(p, main, off);
     }
 
-    /** Equipping reacts on the very next tick instead of waiting for the 2-tick check, so the flip starts at once. */
+    /** Equipping reacts on the very next tick instead of waiting for the 2-tick check, so the draw starts at once. */
     private void soon(Player p) { Bukkit.getScheduler().runTask(plugin, () -> { if (p.isOnline()) refresh(p, System.currentTimeMillis(), false); }); }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true) public void onHeld(PlayerItemHeldEvent e) { soon(e.getPlayer()); }
@@ -211,12 +229,12 @@ public final class Nightrend implements Listener, Hackable {
      * equipment packet to those viewers: the flipper's own items, inventory and attack charge are never touched,
      * and any real equipment change (or {@link #showHands}) puts the true items back on their screens.
      */
-    private static void hideHands(Player p, Collection<Player> viewers) {
+    private static void hideHands(Player p, Collection<Player> viewers, boolean mainHand, boolean offHand) {
         ItemStack air = new ItemStack(Material.AIR);
         for (Player v : viewers) {
             if (v == p || !v.isOnline()) continue;
-            v.sendEquipmentChange(p, EquipmentSlot.HAND, air);
-            v.sendEquipmentChange(p, EquipmentSlot.OFF_HAND, air);
+            if (mainHand) v.sendEquipmentChange(p, EquipmentSlot.HAND, air);
+            if (offHand) v.sendEquipmentChange(p, EquipmentSlot.OFF_HAND, air);
         }
     }
 
@@ -240,8 +258,8 @@ public final class Nightrend implements Listener, Hackable {
             ai.addTransientModifier(new AttributeModifier(pairKey, NightrendMath.pairBonus(singleSpeed, pairSpeed),
                     AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.ANY));
             pairOn.add(id);
-            long now = System.currentTimeMillis();
-            if (now - lastFlip.getOrDefault(id, 0L) >= flipCooldownMillis && visible(p)) { lastFlip.put(id, now); flipUp(p); }
+            nextOff.put(id, false);      // the first swing with a fresh pair is always the right arm
+            swingWasOff.remove(id);      // and it can't count as "the same arm twice"
         } else pairOn.remove(id);
     }
 
@@ -299,18 +317,42 @@ public final class Nightrend implements Listener, Hackable {
     }
 
     /**
-     * Both blades start pointing down at the hips, flip forward and up (a snappy half-turn with a small settle),
-     * hold for a beat, then shrink into the held items. Curves in {@link NightrendMath}; one display per hand.
+     * A Nightrend came into one or both hands: the blade-drawn sound, the flip on your own screen (the draw cooldown,
+     * which the pack's item model animates) and the flip for everyone else ({@link #flipUp}).
      */
-    private void flipUp(Player p) {
+    private void draw(Player p, boolean mainHand, boolean offHand, long now) {
+        UUID id = p.getUniqueId();
+        if (now - lastDraw.getOrDefault(id, 0L) < drawCooldownMillis) return;
+        lastDraw.put(id, now);
+        ItemStack held = mainHand ? p.getInventory().getItemInMainHand() : p.getInventory().getItemInOffHand();
+        p.setCooldown(held, NightrendMath.FLIP_TICKS);   // one group, so both hands flip together on a pair draw
+        if (visible(p)) {
+            p.getWorld().playSound(p.getLocation(), DRAW_SOUND, SoundCategory.PLAYERS, 0.8f, 1f);
+            flipUp(p, mainHand, offHand);
+        } else p.playSound(p.getLocation(), DRAW_SOUND, SoundCategory.PLAYERS, 0.8f, 1f);   // a hidden player hears it alone
+        if (debug.contains(id)) p.sendMessage(Ui.mm("<dark_gray>[Nightrend] <gray>draw: " + (mainHand ? "main" : "") + (mainHand && offHand ? " + " : "") + (offHand ? "off" : "") + " hand"));
+    }
+
+    /**
+     * What other players see when you draw: the drawn blades start pointing down at the hips, flip forward and up (a
+     * snappy half-turn with a small settle) and hold for a beat, while the real ones are hidden from them. Curves in
+     * {@link NightrendMath}; one display per drawn hand. You never see these: your own flip is the item model's.
+     */
+    private void flipUp(Player p, boolean mainHand, boolean offHand) {
         double side = p.getMainHand() == org.bukkit.inventory.MainHand.LEFT ? -1 : 1;
-        ItemDisplay[] d = new ItemDisplay[2];
-        double[] sides = {side, -side};
-        for (int i = 0; i < 2; i++) {
-            // show the daggers actually in hand, so the flip wears the same pack texture as the held items
-            ItemStack held = i == 0 ? p.getInventory().getItemInMainHand() : p.getInventory().getItemInOffHand();
-            ItemStack shown = isNightrend(held) ? held.asOne() : (i == 0 ? item() : offItem());
-            d[i] = p.getWorld().spawn(hand(p, sides[i], 0), ItemDisplay.class, e -> {
+        List<Boolean> hands = new ArrayList<>();      // true = off hand
+        if (mainHand) hands.add(false);
+        if (offHand) hands.add(true);
+        ItemDisplay[] d = new ItemDisplay[hands.size()];
+        double[] sides = new double[hands.size()];
+        for (int i = 0; i < d.length; i++) {
+            boolean isOff = hands.get(i);
+            sides[i] = isOff ? -side : side;
+            // show the dagger actually in hand, so the flip wears the same pack texture as the held item
+            ItemStack held = isOff ? p.getInventory().getItemInOffHand() : p.getInventory().getItemInMainHand();
+            ItemStack shown = isNightrend(held) ? held.asOne() : (isOff ? offItem() : item());
+            double s0 = sides[i];
+            d[i] = p.getWorld().spawn(hand(p, s0, 0), ItemDisplay.class, e -> {
                 e.setItemStack(shown);
                 e.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.FIXED);
                 e.setPersistent(false);
@@ -323,15 +365,17 @@ public final class Nightrend implements Listener, Hackable {
         }
         flipping.add(p.getUniqueId());
         Set<Player> viewers = new HashSet<>(p.getTrackedBy());
-        hideHands(p, viewers);   // everyone else sees only the flipping copies, never two pairs
+        hideHands(p, viewers, mainHand, offHand);   // everyone else sees only the flipping copies, never two daggers
         World w = p.getWorld();
-        w.playSound(p.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.3f, 1.8f);
         int[] t = {0};
         Bukkit.getScheduler().runTaskTimer(plugin, run -> {
             t[0]++;
-            // put away mid-flip (the pair broke), or gone: stop at once, nothing left floating
-            boolean gone = !p.isOnline() || p.isDead() || p.getWorld() != w || !d[0].isValid() || !d[1].isValid()
-                    || !pairOn.contains(p.getUniqueId());
+            // put away mid-flip, or gone: stop at once, nothing left floating
+            boolean gone = !p.isOnline() || p.isDead() || p.getWorld() != w;
+            for (int i = 0; i < d.length && !gone; i++) {
+                ItemStack now = hands.get(i) ? p.getInventory().getItemInOffHand() : p.getInventory().getItemInMainHand();
+                gone = !d[i].isValid() || !isNightrend(now);
+            }
             if (gone || t[0] >= NightrendMath.FLIP_TOTAL) {
                 // the handover, all in one tick: copies gone, real daggers back on everyone's screen
                 for (ItemDisplay x : d) { if (x.isValid()) x.remove(); live.remove(x); }
@@ -340,14 +384,10 @@ public final class Nightrend implements Listener, Hackable {
                 run.cancel();
                 return;
             }
-            for (int i = 0; i < 2; i++) {
+            for (int i = 0; i < d.length; i++) {
                 d[i].teleport(hand(p, sides[i], NightrendMath.flipLift(t[0])));
                 d[i].setInterpolationDelay(0);
                 d[i].setTransformation(frame(t[0]));
-            }
-            if (t[0] == NightrendMath.FLIP_TICKS - 6) {   // the blades click into the grip as they come upright
-                w.playSound(p.getLocation(), Sound.ITEM_ARMOR_EQUIP_NETHERITE, 0.6f, 1.5f);
-                w.playSound(p.getLocation(), Sound.ITEM_TRIDENT_HIT, 0.3f, 1.9f);
             }
             if (t[0] == NightrendMath.FLIP_TICKS)
                 for (ItemDisplay x : d) w.spawnParticle(Particle.DUST_COLOR_TRANSITION, x.getLocation(), 4, 0.08, 0.15, 0.08, 0, EDGE);
@@ -400,8 +440,9 @@ public final class Nightrend implements Listener, Hackable {
 
     /**
      * Every left-click swing with the pair, hit or miss, uses one arm: right, left, right... and now and then
-     * ({@code repeat-side-chance}) the same arm twice. On a left-arm turn the right-arm swing is cancelled, so other
-     * players see only the left arm. Your own client starts a right swing the moment you click and ignores any new
+     * ({@code same-side-chance}) the same arm twice. On a left-arm turn the right-arm swing is cancelled, so other
+     * players see only the left arm. Cancelling also stops Paper's attack-charge reset that comes after the event, so
+     * we reset it ourselves: without that every left swing kept full charge. Your own client starts a right swing the moment you click and ignores any new
      * swing during the first half of it (3 ticks), so the left swing is sent {@code left-swing-delay-ticks} (3) later or
      * you'd never see it yourself. You'll still see the right arm on every click in first person: the game draws that
      * before the server hears about it.
@@ -415,15 +456,21 @@ public final class Nightrend implements Listener, Hackable {
         boolean off = nextOff.getOrDefault(id, false);
         if (off) {
             e.setCancelled(true);   // others don't see the right arm this time
+            p.resetCooldown();      // what Paper does after an uncancelled swing: the attack charge starts again
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                if (p.isOnline() && !p.isDead() && pairOn.contains(id)) p.swingOffHand();
+                if (!p.isOnline() || p.isDead() || !pairOn.contains(id)) return;
+                p.swingOffHand();
+                if (debug.contains(id)) p.sendMessage(Ui.mm("<dark_gray>[Nightrend] <gray>  left swing sent (tick " + Bukkit.getCurrentTick() + ")"));
             }, Math.max(1, leftSwingDelay));
         }
         Boolean prev = swingWasOff.get(id);
-        if (prev != null && prev == off) bloodSurge(p, off);   // the same arm twice: its blade flares
+        boolean same = prev != null && prev == off;
+        if (same) bloodSurge(p, off);   // the same arm twice: its blade flares
         swingTick.put(id, Bukkit.getCurrentTick());
         swingWasOff.put(id, off);
-        nextOff.put(id, NightrendMath.nextIsOffHand(off, rnd.nextDouble(), repeatChance));
+        nextOff.put(id, NightrendMath.nextIsOffHand(off, rnd.nextDouble(), sameSideChance));
+        if (debug.contains(id)) p.sendMessage(Ui.mm("<dark_gray>[Nightrend] <gray>swing (tick " + Bukkit.getCurrentTick() + "): <white>"
+                + (off ? "LEFT" : "RIGHT") + (same ? " <red>same side" : "") + "<gray>, next " + (nextOff.get(id) ? "left" : "right")));
     }
 
     /**
@@ -481,6 +528,20 @@ public final class Nightrend implements Listener, Hackable {
         }, 0L, 1L);
     }
 
+    // ------------------------------------------------------------------ staff debug
+
+    /** /nrdebug (staff): turns on chat lines for your own draws and swings, to see what the server chose and sent. */
+    private void registerDebugCommand() {
+        Bukkit.getCommandMap().register("blackforge", new org.bukkit.command.Command("nrdebug", "Nightrend debug lines (staff)", "/nrdebug", List.of()) {
+            @Override public boolean execute(org.bukkit.command.CommandSender s, String label, String[] a) {
+                if (!(s instanceof Player p) || !p.hasPermission("blackforge.admin")) return true;
+                boolean on = debug.add(p.getUniqueId()) || !debug.remove(p.getUniqueId());
+                p.sendMessage(Ui.mm("<dark_gray>[Nightrend] <gray>debug " + (on ? "<green>on" : "<red>off")));
+                return true;
+            }
+        });
+    }
+
     // ------------------------------------------------------------------ EMP
 
     /** The EMP shuts off the pair and mixed speed bonuses of everyone it reaches (never the caster's) for {@code emp-seconds}. */
@@ -523,7 +584,8 @@ public final class Nightrend implements Listener, Hackable {
         AttributeInstance ai = p.getAttribute(Attribute.ATTACK_SPEED);
         if (ai != null) { ai.removeModifier(pairKey); ai.removeModifier(mixedKey); }   // belt and braces: never leave a bonus behind
         nextOff.remove(p.getUniqueId()); swingTick.remove(p.getUniqueId()); swingWasOff.remove(p.getUniqueId());
-        if (leaving) { lastFlip.remove(p.getUniqueId()); hackedUntil.remove(p.getUniqueId()); }
+        heldMain.remove(p.getUniqueId()); heldOff.remove(p.getUniqueId());   // back with a dagger in hand = a fresh draw
+        if (leaving) { lastDraw.remove(p.getUniqueId()); hackedUntil.remove(p.getUniqueId()); debug.remove(p.getUniqueId()); }
     }
 
     /** On plugin disable: take the pair bonus off everyone. */

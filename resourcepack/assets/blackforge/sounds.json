@@ -37,5 +37,9 @@
   },
   "pet.check_the_corner": {
     "sounds": ["blackforge:pet/check_the_corner"]
+  },
+  "item.nightrend.draw": {
+    "sounds": ["blackforge:item/nightrend_draw"],
+    "subtitle": "Blade drawn"
   }
 }
