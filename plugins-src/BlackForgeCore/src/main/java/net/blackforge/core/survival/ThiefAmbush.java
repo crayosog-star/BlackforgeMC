@@ -1,7 +1,9 @@
 package net.blackforge.core.survival;
 
 import net.blackforge.core.BlackForgeCore;
+import io.papermc.paper.datacomponent.item.ResolvableProfile;
 import net.blackforge.core.Ui;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.milkbowl.vault.economy.Economy;
@@ -27,6 +29,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.profile.PlayerTextures;
 import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
 import org.joml.Quaternionf;
@@ -45,6 +48,11 @@ import java.util.function.Predicate;
  * <p>A thief that lands a hit may steal: half the time he rips the weapon from your hands and turns it on you, otherwise
  * he snatches your most valuable item and runs (shown floating over his head). Kill him before he gets away to get it
  * back. Wiping out the gang pays coins and a small chance at a crate key.
+ *
+ * <p>Looks: each thief is a Mannequin wearing the skin and a copy of the gear of the player he came for (a mage wears
+ * the robed {@code blackforge:entity/thief_mage} skin from the pack). The real mob, a zombie or an illusioner, walks
+ * and fights hidden and silent underneath it: the Mannequin follows it every tick, swings when it hits, and passes
+ * any damage it takes on to the mob, so armour, knockback and kill credit all work as normal.
  *
  * <p>"Your base" is a claim you're trusted on. Thieves never spawn inside any claim or in the protected areas the
  * module passes in. Thieves are not persistent: a restart or a chunk unload can't leave one behind, and a shutdown hands
@@ -66,6 +74,8 @@ final class ThiefAmbush implements Listener {
     private final Map<UUID, Thief> thieves = new HashMap<>();   // by entity id
     private final Map<UUID, Gang> gangOf = new HashMap<>();     // by player id
     private final Map<UUID, Long> cooldownUntil = new HashMap<>();
+    private final Map<UUID, Thief> viewOf = new HashMap<>();     // by the Mannequin's id
+    private final Set<UUID> dyingViews = new HashSet<>();        // Mannequins playing their death fall
 
     // config (read once; /blackforge reload restarts the server module anyway)
     private final boolean enabled;
@@ -122,7 +132,8 @@ final class ThiefAmbush implements Listener {
     // ------------------------------------------------------------------ state
 
     private final class Thief {
-        final Mob mob;
+        final Mob mob;             // hidden, silent: the AI, hitbox for mobs, armour and the real health
+        Mannequin view;            // what players see and hit
         final boolean mage;
         final Gang gang;
         UUID mark;                 // the player this thief is after
@@ -230,6 +241,8 @@ final class ThiefAmbush implements Listener {
             t.castIn = ThiefGang.FIRE_DELAY + rnd.nextInt(40);
             g.members.add(t);
             thieves.put(mob.getUniqueId(), t);
+            t.view = spawnView(at, roles.get(i) ? null : mark, mob);
+            viewOf.put(t.view.getUniqueId(), t);
             mob.setTarget(mark);
             at.getWorld().spawnParticle(Particle.LARGE_SMOKE, at.clone().add(0, 1, 0), 18, 0.35, 0.6, 0.35, 0.01, null, true);
         }
@@ -274,8 +287,8 @@ final class ThiefAmbush implements Listener {
             z.setCanPickupItems(false);
             z.setPersistent(false);
             z.setRemoveWhenFarAway(false);
-            z.customName(Ui.mm("<#8a8a8a>Night Thief"));
-            z.setCustomNameVisible(true);
+            z.setVisibleByDefault(false);   // players see the Mannequin, never the zombie
+            z.setSilent(true);
             EntityEquipment eq = z.getEquipment();
             PlayerInventory inv = copy.getInventory();
             eq.setHelmet(copyOf(inv.getHelmet()));
@@ -297,13 +310,49 @@ final class ThiefAmbush implements Listener {
             m.setCanPickupItems(false);
             m.setPersistent(false);
             m.setRemoveWhenFarAway(false);
-            m.customName(Ui.mm("<#9a5ee6>Night Thief Mage"));
-            m.setCustomNameVisible(true);
+            m.setVisibleByDefault(false);
+            m.setSilent(true);
             EntityEquipment eq = m.getEquipment();
             eq.setItemInMainHand(new ItemStack(Material.AMETHYST_SHARD));   // no bow: the Hex Bolt is its only attack
             noDrops(eq);
             stats(m, mult, 0.75);
         });
+    }
+
+    /** The player-shaped body: the marked player's own skin (or the mage robe), the driver's gear, its name tag. */
+    private Mannequin spawnView(Location at, Player skinOf, Mob driver) {
+        return at.getWorld().spawn(at, Mannequin.class, v -> {
+            v.setPersistent(false);
+            v.setRemoveWhenFarAway(false);
+            v.setGravity(false);
+            v.setImmovable(true);
+            v.setCollidable(false);
+            v.setSilent(true);
+            v.setProfile(skinOf != null
+                    ? ResolvableProfile.resolvableProfile(skinOf.getPlayerProfile())
+                    : ResolvableProfile.resolvableProfile().skinPatch(sp -> sp.body(Key.key("blackforge", "entity/thief_mage")).model(PlayerTextures.SkinModel.CLASSIC)).build());
+            v.customName(Ui.mm(skinOf != null ? "<#8a8a8a>Night Thief" : "<#9a5ee6>Night Thief Mage"));
+            v.setCustomNameVisible(true);
+            v.setDescription(Ui.mm(skinOf != null ? "<dark_gray>Wearing a face you know" : "<dark_gray>Hex-thrower"));
+            EntityEquipment from = driver.getEquipment(), eq = v.getEquipment();
+            eq.setHelmet(from.getHelmet());
+            eq.setChestplate(from.getChestplate());
+            eq.setLeggings(from.getLeggings());
+            eq.setBoots(from.getBoots());
+            eq.setItemInMainHand(from.getItemInMainHand());
+            noDrops(eq);
+            base(v, Attribute.SCALE, ThiefGang.growIn(0));
+        });
+    }
+
+    /** Keep the Mannequin on the hidden mob: same spot, facing and size. Teleporting every tick lets the client blend it. */
+    private void syncView(Thief t) {
+        Mannequin v = t.view;
+        if (v == null || !v.isValid()) return;
+        v.teleport(t.mob.getLocation());
+        v.setBodyYaw(t.mob.getBodyYaw());
+        AttributeInstance s = t.mob.getAttribute(Attribute.SCALE);
+        if (s != null) base(v, Attribute.SCALE, s.getValue());
     }
 
     private void stats(Mob m, double mult, double healthShare) {
@@ -373,9 +422,10 @@ final class ThiefAmbush implements Listener {
             if (last != null && last.getWorld() == now.getWorld()) g.velocity.put(id, now.clone().subtract(last));
         }
         for (Thief t : new ArrayList<>(g.members)) {
-            if (!t.mob.isValid()) {   // unloaded or removed by something else: he got away
+            if (!t.mob.isValid() || t.view == null || !t.view.isValid()) {   // unloaded or removed by something else: he got away
                 if (!t.mob.isDead()) lose(t, "<gray>The thief slipped away into the dark");
                 dropThief(t);
+                if (!t.mob.isDead()) t.mob.remove();
                 continue;
             }
             tickThief(t, live);
@@ -401,6 +451,7 @@ final class ThiefAmbush implements Listener {
         if (t.shrinkTick >= 0) {   // vanishing: shrink over a few ticks, then gone
             t.shrinkTick++;
             base(m, Attribute.SCALE, ThiefGang.growIn(Math.max(0, ThiefGang.GROW_TICKS - t.shrinkTick)));
+            syncView(t);
             m.setAI(false);
             moveLootShow(t);
             if (t.shrinkTick >= ThiefGang.GROW_TICKS) {
@@ -411,6 +462,7 @@ final class ThiefAmbush implements Listener {
             }
             return;
         }
+        syncView(t);
         Player mark = mark(t, live);
         if (mark == null) { lose(t, "<gray>The thief slipped away into the dark"); vanish(t); return; }
 
@@ -442,7 +494,9 @@ final class ThiefAmbush implements Listener {
     public void onThiefHit(EntityDamageByEntityEvent e) {
         if (!(e.getEntity() instanceof Player p)) return;
         Thief t = thieves.get(e.getDamager().getUniqueId());
-        if (t == null || t.mage || t.loot != null || t.fleeing() || t.shrinkTick >= 0) return;
+        if (t == null) return;
+        if (t.view != null && t.view.isValid()) t.view.swingMainHand();
+        if (t.mage || t.loot != null || t.fleeing() || t.shrinkTick >= 0) return;
         if (!t.gang.players.contains(p.getUniqueId())) return;
         if (rnd.nextDouble() >= stealChance) return;
         PlayerInventory inv = p.getInventory();
@@ -454,6 +508,7 @@ final class ThiefAmbush implements Listener {
             inv.setItemInMainHand(null);
             t.mob.getEquipment().setItemInMainHand(copyOf(t.loot));
             t.mob.getEquipment().setItemInMainHandDropChance(0);
+            if (t.view != null) t.view.getEquipment().setItemInMainHand(copyOf(t.loot));
             p.sendMessage(Ui.mm("<red>⚔ <gray>The thief rips <white>" + name(t.loot) + "<gray> out of your hands and turns it on you! <red>Kill him to get it back."));
             p.playSound(p.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1f, 0.6f);
             p.getWorld().playSound(t.mob.getLocation(), Sound.ITEM_ARMOR_EQUIP_NETHERITE, 1f, 0.8f);
@@ -635,7 +690,10 @@ final class ThiefAmbush implements Listener {
             double u = (b.tick - ThiefGang.CHARGE) / (double) ThiefGang.LOCK;
             b.pos = handPoint(m).subtract(b.dir.clone().multiply(0.35 * u * u));
             show(b, 0.5f);
-            if (b.tick == ThiefGang.FIRE_DELAY) w.playSound(b.pos, Sound.ENTITY_ILLUSIONER_CAST_SPELL, 1f, 1.3f);
+            if (b.tick == ThiefGang.FIRE_DELAY) {
+                w.playSound(b.pos, Sound.ENTITY_ILLUSIONER_CAST_SPELL, 1f, 1.3f);
+                if (b.caster.view != null && b.caster.view.isValid()) b.caster.view.swingMainHand();
+            }
             return;
         }
         double v = ThiefGang.boltSpeed(b.flying++);
@@ -708,6 +766,13 @@ final class ThiefAmbush implements Listener {
         t.gang.members.remove(t);
         if (t.lootShow != null) t.lootShow.remove();
         if (t.bolt != null) { ItemDisplay d = t.bolt.show; t.bolt = null; d.remove(); }
+        Mannequin v = t.view;
+        if (v == null) return;
+        viewOf.remove(v.getUniqueId());
+        t.view = null;
+        if (!v.isValid()) return;
+        if (t.mob.isDead()) { dyingViews.add(v.getUniqueId()); v.setHealth(0); }   // the death fall, not a pop
+        else v.remove();
     }
 
     /** Everyone left fades into the night; anything stolen goes with them. */
@@ -760,9 +825,11 @@ final class ThiefAmbush implements Listener {
 
     @EventHandler
     public void onDeath(EntityDeathEvent e) {
+        if (dyingViews.remove(e.getEntity().getUniqueId())) { e.getDrops().clear(); e.setDroppedExp(0); return; }
         Thief t = thieves.get(e.getEntity().getUniqueId());
         if (t == null) return;
         e.getDrops().clear();
+        e.getEntity().getWorld().playSound(e.getEntity().getLocation(), Sound.ENTITY_PLAYER_DEATH, 1f, 0.8f);
         e.setDroppedExp((int) Math.round(8 * t.gang.mult));
         Location at = e.getEntity().getLocation();
         if (t.loot != null) {   // whatever he stole falls where he dies, and only its owner can pick it up
@@ -777,6 +844,27 @@ final class ThiefAmbush implements Listener {
         if (e.getEntity().getKiller() != null) t.gang.killed++;
         dropThief(t);
         // tickGang notices the gang is empty and pays out
+    }
+
+    /** Players hit the Mannequin; the hit lands on the hidden mob, with its armour, knockback and kill credit. */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onViewHurt(EntityDamageEvent e) {
+        Thief t = viewOf.get(e.getEntity().getUniqueId());
+        if (t == null) return;
+        e.setCancelled(true);   // the body itself never takes damage
+        if (!(e instanceof EntityDamageByEntityEvent be) || !t.mob.isValid() || t.mob.isDead() || t.shrinkTick >= 0) return;
+        Entity by = be.getDamager();
+        if (by instanceof Projectile pr && pr.getShooter() instanceof Entity shooter) by = shooter;
+        if (thieves.containsKey(by.getUniqueId())) return;   // no thief hurts another
+        t.mob.damage(e.getDamage(), by);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDriverHurt(EntityDamageEvent e) {
+        Thief t = thieves.get(e.getEntity().getUniqueId());
+        if (t == null || t.view == null || !t.view.isValid()) return;
+        t.view.playHurtAnimation(t.view.getLocation().getYaw());
+        t.mob.getWorld().playSound(t.mob.getLocation(), Sound.ENTITY_PLAYER_HURT, 1f, 0.9f);
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -862,6 +950,7 @@ final class ThiefAmbush implements Listener {
         gangs.clear();
         thieves.clear();
         gangOf.clear();
+        viewOf.clear();
     }
 
     private static String name(ItemStack it) {
