@@ -13,11 +13,13 @@ final class StationUi {
     private StationUi() {}
 
     enum Screen {
-        FORGE('', 176), STORAGE('', 176), AGENT('', 176), WORKSHOP('', 176), HOME('', 176);
+        FORGE('', 176), STORAGE('', 176), AGENT('', 176), WORKSHOP('', 176), HOME_1('', 176), HOME_2('', 176), HOME_3('', 176), HOME_4('', 176), HOME_5('', 176);
         final char glyph; final int width;
         Screen(char glyph, int width) { this.glyph = glyph; this.width = width; }
     }
 
+    /** Home screen overlays: unlocked wells for rows 2-4, a ready well, and the progress bar. */
+    static final char HOME_ON_2 = '', HOME_ON_3 = '', HOME_ON_4 = '', HOME_READY = '', HOME_BAR_ON = '', HOME_BAR_OFF = '';
     static final char PIP_ON = '', PIP_OFF = '', COUNT_ON = '', COUNT_OFF = '';
     private static final Key GUI = Key.key("blackforge", "gui");
     private static final int TITLE_X = 8;
@@ -49,6 +51,14 @@ final class StationUi {
             Component c = Component.text(text).color(TextColor.color(rgb));
             out = out.append(line.equals("title") ? c : c.font(Key.key("blackforge", line)));
             cursor += StationText.width(text);
+            return this;
+        }
+
+        /** One glyph at x, the given number of pixels wide. */
+        Canvas glyph(int x, char glyph, int width) {
+            moveTo(x);
+            out = out.append(Component.text(String.valueOf(glyph)).font(GUI));
+            cursor += width + 1;
             return this;
         }
 
