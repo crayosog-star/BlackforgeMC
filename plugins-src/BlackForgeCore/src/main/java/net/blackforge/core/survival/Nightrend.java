@@ -56,8 +56,8 @@ import java.util.function.Predicate;
  *   with a duller sound. Players and mobs alike. "Behind" is where the target is facing, not where it's walking.</li>
  *   <li>A slight aura: a few dark-red embers drift off each blade while you hold it. Off while invisible or vanished.</li>
  *   <li>The EMP shuts the pair bonus off for {@code emp-seconds} (4); the daggers still hit at the single speed.</li>
- *   <li>Draw: whenever a Nightrend comes into either hand, one dagger or two, it flips up into your grip with a
- *   blade-drawn sound (at most once per {@code draw-cooldown-seconds}). Your own view: the dagger goes on a short item
+ *   <li>Draw: whenever a Nightrend comes into either hand, one dagger or two, it flips up into your grip, silently
+ *   for now (at most once per {@code draw-cooldown-seconds}). Your own view: the dagger goes on a short item
  *   cooldown and the pack's model plays the flip from it (tools/gen_nightrend_draw.py), in first and third person.
  *   Everyone else: their clients don't get that cooldown, so they see display-entity copies flipping with the real
  *   held daggers hidden (a fake equipment packet) until the copies go. Putting the dagger away ends it at once.</li>
@@ -78,7 +78,6 @@ public final class Nightrend implements Listener, Hackable {
     private static final byte MAIN = 1, OFF = 2;     // tag values: which hand the Arena kit puts it in
     private static final int TICK_EVERY = 2;         // pair / aura check interval
     private static final int AURA_EVERY = 10;        // aura puff every half second
-    private static final String DRAW_SOUND = "blackforge:item.nightrend.draw";   // resourcepack sounds.json
     /** The main dagger's swing on a left turn: one tick long, so your own game barely moves the right arm. */
     private static final SwingAnimation QUICK = SwingAnimation.swingAnimation().type(SwingAnimation.Animation.WHACK).duration(1).build();
 
@@ -324,7 +323,7 @@ public final class Nightrend implements Listener, Hackable {
     }
 
     /**
-     * A Nightrend came into one or both hands: the blade-drawn sound, the flip on your own screen (the draw cooldown,
+     * A Nightrend came into one or both hands: the flip on your own screen (the draw cooldown,
      * which the pack's item model animates) and the flip for everyone else ({@link #flipUp}).
      */
     private void draw(Player p, boolean mainHand, boolean offHand, long now) {
@@ -333,10 +332,8 @@ public final class Nightrend implements Listener, Hackable {
         lastDraw.put(id, now);
         ItemStack held = mainHand ? p.getInventory().getItemInMainHand() : p.getInventory().getItemInOffHand();
         p.setCooldown(held, NightrendMath.FLIP_TICKS);   // one group, so both hands flip together on a pair draw
-        if (visible(p)) {
-            p.getWorld().playSound(p.getLocation(), DRAW_SOUND, SoundCategory.PLAYERS, 0.8f, 1f);
-            flipUp(p, mainHand, offHand);
-        } else p.playSound(p.getLocation(), DRAW_SOUND, SoundCategory.PLAYERS, 0.8f, 1f);   // a hidden player hears it alone
+        // no draw sound for now (the pack still has blackforge:item.nightrend.draw, to bring it back later)
+        if (visible(p)) flipUp(p, mainHand, offHand);
         if (debug.contains(id)) p.sendMessage(Ui.mm("<dark_gray>[Nightrend] <gray>draw: " + (mainHand ? "main" : "") + (mainHand && offHand ? " + " : "") + (offHand ? "off" : "") + " hand"));
     }
 

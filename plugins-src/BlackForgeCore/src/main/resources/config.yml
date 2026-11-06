@@ -50,7 +50,7 @@ emp:
 # a `same-side-chance` that the next uses the same arm again, when that blade's glow swells for a second (cosmetic). A
 # different sword in the off hand gives `mixed-attack-speed` instead (speed only). Hits from the `behind-arc-degrees`
 # arc behind the target (centred on its back) do `behind-damage` of normal damage (0.6 = 60%). An EMP turns both speed
-# bonuses off for `emp-seconds`. Drawing a Nightrend into either hand flips it up with a blade-drawn sound, at most once
+# bonuses off for `emp-seconds`. Drawing a Nightrend into either hand flips it up (silently for now), at most once
 # per `draw-cooldown-seconds`. Staff: /nightrend (/daggers) gives one, /nrdebug shows each swing. Set enabled false to
 # stop it.
 nightrend:

@@ -4,73 +4,346 @@
     "property": "minecraft:cooldown",
     "entries": [
       {
-        "threshold": 0.9,
+        "threshold": 0.9942,
         "model": {
           "type": "minecraft:model",
           "model": "blackforge:item/nightrend_draw_0"
         }
       },
       {
-        "threshold": 0.8,
+        "threshold": 0.9885,
         "model": {
           "type": "minecraft:model",
           "model": "blackforge:item/nightrend_draw_1"
         }
       },
       {
-        "threshold": 0.7,
+        "threshold": 0.9825,
         "model": {
           "type": "minecraft:model",
           "model": "blackforge:item/nightrend_draw_2"
         }
       },
       {
-        "threshold": 0.6,
+        "threshold": 0.9765,
         "model": {
           "type": "minecraft:model",
           "model": "blackforge:item/nightrend_draw_3"
         }
       },
       {
-        "threshold": 0.5,
+        "threshold": 0.9705,
         "model": {
           "type": "minecraft:model",
           "model": "blackforge:item/nightrend_draw_4"
         }
       },
       {
-        "threshold": 0.4,
+        "threshold": 0.9643,
         "model": {
           "type": "minecraft:model",
           "model": "blackforge:item/nightrend_draw_5"
         }
       },
       {
-        "threshold": 0.3,
+        "threshold": 0.958,
         "model": {
           "type": "minecraft:model",
           "model": "blackforge:item/nightrend_draw_6"
         }
       },
       {
-        "threshold": 0.2,
+        "threshold": 0.9517,
         "model": {
           "type": "minecraft:model",
           "model": "blackforge:item/nightrend_draw_7"
         }
       },
       {
-        "threshold": 0.1,
+        "threshold": 0.9453,
         "model": {
           "type": "minecraft:model",
           "model": "blackforge:item/nightrend_draw_8"
         }
       },
       {
-        "threshold": 0.001,
+        "threshold": 0.9387,
         "model": {
           "type": "minecraft:model",
           "model": "blackforge:item/nightrend_draw_9"
+        }
+      },
+      {
+        "threshold": 0.932,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_10"
+        }
+      },
+      {
+        "threshold": 0.9253,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_11"
+        }
+      },
+      {
+        "threshold": 0.9183,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_12"
+        }
+      },
+      {
+        "threshold": 0.9113,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_13"
+        }
+      },
+      {
+        "threshold": 0.904,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_14"
+        }
+      },
+      {
+        "threshold": 0.8965,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_15"
+        }
+      },
+      {
+        "threshold": 0.889,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_16"
+        }
+      },
+      {
+        "threshold": 0.8812,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_17"
+        }
+      },
+      {
+        "threshold": 0.8732,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_18"
+        }
+      },
+      {
+        "threshold": 0.8652,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_19"
+        }
+      },
+      {
+        "threshold": 0.857,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_20"
+        }
+      },
+      {
+        "threshold": 0.8485,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_21"
+        }
+      },
+      {
+        "threshold": 0.8397,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_22"
+        }
+      },
+      {
+        "threshold": 0.8307,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_23"
+        }
+      },
+      {
+        "threshold": 0.8215,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_24"
+        }
+      },
+      {
+        "threshold": 0.812,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_25"
+        }
+      },
+      {
+        "threshold": 0.8023,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_26"
+        }
+      },
+      {
+        "threshold": 0.792,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_27"
+        }
+      },
+      {
+        "threshold": 0.7815,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_28"
+        }
+      },
+      {
+        "threshold": 0.7705,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_29"
+        }
+      },
+      {
+        "threshold": 0.7592,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_30"
+        }
+      },
+      {
+        "threshold": 0.7475,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_31"
+        }
+      },
+      {
+        "threshold": 0.7352,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_32"
+        }
+      },
+      {
+        "threshold": 0.7223,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_33"
+        }
+      },
+      {
+        "threshold": 0.7085,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_34"
+        }
+      },
+      {
+        "threshold": 0.694,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_35"
+        }
+      },
+      {
+        "threshold": 0.6785,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_36"
+        }
+      },
+      {
+        "threshold": 0.662,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_37"
+        }
+      },
+      {
+        "threshold": 0.6442,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_38"
+        }
+      },
+      {
+        "threshold": 0.6248,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_39"
+        }
+      },
+      {
+        "threshold": 0.6033,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_40"
+        }
+      },
+      {
+        "threshold": 0.5787,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_41"
+        }
+      },
+      {
+        "threshold": 0.5503,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_42"
+        }
+      },
+      {
+        "threshold": 0.5152,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_43"
+        }
+      },
+      {
+        "threshold": 0.4675,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_44"
+        }
+      },
+      {
+        "threshold": 0.3898,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_45"
+        }
+      },
+      {
+        "threshold": 0.2538,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_46"
+        }
+      },
+      {
+        "threshold": 0.1102,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_47"
+        }
+      },
+      {
+        "threshold": 0.001,
+        "model": {
+          "type": "minecraft:model",
+          "model": "blackforge:item/nightrend_draw_48"
         }
       }
     ],
