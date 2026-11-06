@@ -48,7 +48,7 @@ final class LabExperiments {
         Lab.register("sit", Seats.NAME, Material.OAK_STAIRS, true,
                 "<gray>Right-click a stair or slab with an", "<gray>empty hand to sit. Sneak to stand.");
         Lab.register("forge-post", ForgePost.NAME, Material.BARREL, true,
-                "<gray>Send items and money to anyone, even", "<gray>offline: <white>/post<gray>. Collect from the post", "<gray>box at spawn or with /post.");
+                "<gray>Send items and money to anyone, even", "<gray>offline: <white>/post<gray>. Collect it", "<gray>with /post.");
 
         // live Survival: nothing at all unless an idea has graduated there
         if (here("ash-urns")) new AshUrns(c);
