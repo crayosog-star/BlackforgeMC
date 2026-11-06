@@ -28,6 +28,8 @@ SERVERS = {
     "factions": {"port": 30004, "mode": "factions", "display": "Factions", "join": ""},
     "arcade":   {"port": 30005, "mode": "arcade", "display": "Arcade", "join": ""},
     "raft":     {"port": 30006, "mode": "raft", "display": "Raft", "join": "raft"},
+    # Survival 2: staff-only test copy of Survival, own wallet and progress files (BlackForgeCore Lab)
+    "survival2": {"port": 30007, "mode": "survival", "display": "Survival 2", "join": "", "lab": True},
 }
 
 secret_file = ROOT / "tools" / "rcon.secret"
@@ -73,6 +75,9 @@ for name, s in SERVERS.items():
     if name not in targets:
         continue
     d = ROOT / name
+    if not (d / "paper.jar").exists():   # not set up on this PC yet (run setup_network.py first): nothing to deploy
+        print(f"{name}: not set up yet - skipped")
+        continue
     plugins = d / "plugins"
     for old in plugins.glob("TAB*.jar"):
         old.unlink()
@@ -98,7 +103,10 @@ for name, s in SERVERS.items():
     ] if s["mode"] == "skyblock" else []
     (cfg / "config.yml").write_text("\n".join([
         "# hub | arcade | survival | skyblock | factions | raft | backend", f"mode: {s['mode']}", f"display-name: {s['display']}",
-        f"join-command: '{s['join']}'", f"address: '{ADDRESS}'", "resource-pack-live: true", *koth, ""]), encoding="utf-8")
+        f"join-command: '{s['join']}'", f"address: '{ADDRESS}'", "resource-pack-live: true", *koth,
+        *(["lab:", "  enabled: true", f"  id: {name}"] if s.get("lab") else
+          ["lab:", "  enabled: false", "  graduated: []   # Survival 2 ideas that run here for real"] if s["mode"] == "survival" else []),
+        ""]), encoding="utf-8")
     set_props(d / "server.properties", {
         "enable-rcon": "true", "rcon.port": str(s["port"] + 1000), "rcon.password": RCON_PASS,
         "broadcast-rcon-to-ops": "false", "motd": f"BlackForgeMC {s['display']}",

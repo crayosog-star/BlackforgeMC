@@ -48,6 +48,7 @@ public final class BlackForgeCore extends JavaPlugin implements Listener {
     public void onEnable() {
         saveDefaultConfig();
         mode = getConfig().getString("mode", "backend");
+        Lab.init(this);   // Survival 2: before the economy, which picks the wallet from it
         // source tells a value from a missing key: an empty list reads the same either way
         getLogger().info("Academy live-modes=" + getConfig().getStringList("academy.live-modes") + " source="
                 + (getConfig().contains("academy.live-modes", true) ? "server-config"
@@ -55,12 +56,17 @@ public final class BlackForgeCore extends JavaPlugin implements Listener {
         net = new Net(this);
         economy = new NetEconomy(this);
         new LocatorRange(this);
-        try { shared = new File(getServer().getWorldContainer().getCanonicalFile().getParentFile(), "shared"); }
-        catch (java.io.IOException e) { shared = new File(getServer().getWorldContainer().getAbsoluteFile().getParentFile(), "shared"); }
-        Bukkit.getPluginManager().registerEvents(new TestGuard(shared), this);
+        File network;
+        try { network = new File(getServer().getWorldContainer().getCanonicalFile().getParentFile(), "shared"); }
+        catch (java.io.IOException e) { network = new File(getServer().getWorldContainer().getAbsoluteFile().getParentFile(), "shared"); }
+        // Survival 2 gets its own copy of the progress files (quests, pass, stats, cosmetics, market, events...), so testing
+        // never counts on live servers. Identity, moderation and friends (network below) stay shared with everyone.
+        shared = Lab.on() ? new File(network, "lab/" + Lab.id()) : network;
+        shared.mkdirs();
+        Bukkit.getPluginManager().registerEvents(new TestGuard(network), this);
         // network-wide stats and cosmetics listen to the kill/arcade hooks, so they exist before the game modes
-        Nicks.init(this, shared);
-        Titles.init(this, shared);
+        Nicks.init(this, network);
+        Titles.init(this, network);
         new Media(this);
         sharedStats = new SharedStats(shared);
         cosmetics = new Cosmetics(this, shared);
@@ -73,14 +79,14 @@ public final class BlackForgeCore extends JavaPlugin implements Listener {
         // moderation and cheat checks run on every server
         AutoMod automod = new AutoMod(this);
         new Guardian(this, automod.store());
-        new net.blackforge.core.moderation.Punish(this, automod.store(), shared);
+        new net.blackforge.core.moderation.Punish(this, automod.store(), network);
         // store supporter ranks: badge, trails, /store - on every server
         supporters = new Supporters(this, mode);
         // network-wide progression and social features: before the game modes, which feed them
         new Events(this, mode, shared);
         achievements = new Achievements(this, mode, shared);
-        social = new Social(this, mode, shared);
-        discord = new DiscordLink(this, mode, shared);
+        social = new Social(this, mode, network);
+        discord = new DiscordLink(this, mode, network);
         switch (mode) {
             case "hub" -> hub = new HubModule(this);
             case "arcade" -> arcade = new ArcadeModule(this);
@@ -93,8 +99,8 @@ public final class BlackForgeCore extends JavaPlugin implements Listener {
         if (survival != null || skyblock != null || factions != null) Bukkit.getPluginManager().registerEvents(new KillFeed(mode), this);
         if (arcade != null) { supporters.setTrailBlocked(arcade::inGame); cosmetics.setBlocked(arcade::inGame); }
         // /discord, chat tips, /report and the Discord feed - on every server
-        Community community = new Community(this, mode, shared);
-        new News(this, shared, community);
+        Community community = new Community(this, mode, network);
+        new News(this, network, community);
         if (survival != null || skyblock != null || factions != null || arcade != null) challenges = new Challenges(this, mode);
         new HallowEvent(this, mode, cosmetics);
         new FrostEvent(this, mode, cosmetics);
