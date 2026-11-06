@@ -13,6 +13,50 @@ lab:
   id: survival2
   graduated: []
 
+# Survival 2 experiments (switch each on/off live in /lab). Numbers only; every key falls back to the default shown.
+lab-experiments:
+  ash-urns:            # dying (not to a player, not in a PvP zone) puts your items in an urn where you fell
+    lock-minutes: 10   # only the owner can open it for this long
+    life-minutes: 60   # then it crumbles and spills what's left
+  hearth-contracts:    # /contracts buy orders: money held up front, sellers paid at once
+    max-open: 5
+    max-amount: 2304   # items per order (36 stacks)
+    expire-days: 7     # unfilled orders refund after this
+    fee-percent: 1.0   # posting fee (not refunded), so posting and cancelling over and over costs something
+    fee-min: 25
+  kindle-draw:         # /draw lottery
+    ticket-price: 100
+    house-cut: 0.10    # share of the pot removed from the economy
+    max-tickets: 100   # per player per draw
+    every-hours: 6
+  living-prices:       # Grove Trader prices fall with server-wide sales and recover
+    half-price-at: 2000             # recent sales of one item that halve its price
+    floor: 0.3                      # never below 30% of the normal price
+    recover-half-life-hours: 6
+  ember-bonds:         # /bonds: lock money, get it back with interest
+    short-days: 3
+    short-rate-percent: 3
+    long-days: 7
+    long-rate-percent: 8
+    max-locked: 50000
+    min: 1000
+  ashfall-nights:      # ash every few nights, ember-touched mobs drop Ashmarks (/ashmarks)
+    every-nights: 5
+    health-multiplier: 1.5
+  forge-rifts:         # a rift opens in the wild: 3 waves, then it bursts with loot
+    every-minutes: 90
+    first-after-minutes: 10
+    open-minutes: 20   # closes by itself if nobody clears it
+    reward-money: 400  # per player who fought
+  vein-timber:         # sneak-break a vein (Miner) or a tree (Lumberjack)
+    job-level: 20
+    max-ore: 16
+    max-logs: 64
+  sit:
+    height: 0.5        # seat height above the block: raise or lower if players sit too low or high
+  forge-post:          # /post parcels and money, even to offline players
+    postage: 10
+
 # Gale Bellows PvP item (survival only). Every player gets one on first join; /jbello gives another if they
 # don't carry one. Set false to stop it firing. Its custom texture needs the resource pack: leave custom-model
 # false until the pack is live (otherwise it shows as the purple/black missing model); until then it is a

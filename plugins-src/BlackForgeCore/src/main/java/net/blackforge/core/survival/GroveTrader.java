@@ -101,7 +101,7 @@ final class GroveTrader implements Listener {
             Offer o = offers.get(i);
             int have = held(p.getInventory(), o.material()), left = Math.max(0, softCap - sold(id, o.item().id()));
             inv.setItem(i, Ui.item(o.material(), "<white>" + o.item().label(),
-                    "<gray>Price: <gold>" + NetEconomy.money(o.price()) + " <gray>each",
+                    "<gray>Price: <gold>" + NetEconomy.money(LabMath.round2(o.price() * LivingPrices.factor(o.item().id()))) + " <gray>each",
                     "<gray>You have: <white>" + have,
                     "<gray>Full price left today: <white>" + left,
                     "<yellow>Click <gray>sells a stack, <yellow>shift-click <gray>sells all"));
@@ -156,11 +156,13 @@ final class GroveTrader implements Listener {
     }
 
     private double saleValue(UUID owner, Offer o, int amount) {
-        return SellCatalog.payout(o.price(), sold(owner, o.item().id()), amount, softCap, overRate);
+        double price = o.price() * LivingPrices.factor(o.item().id());   // Survival 2 "living-prices": 1 unless it's on
+        return SellCatalog.payout(price, sold(owner, o.item().id()), amount, softCap, overRate);
     }
 
     private void recordSale(UUID owner, Offer o, int amount) {
         data.set(key(owner, o.item().id()), sold(owner, o.item().id()) + amount);
+        LivingPrices.sold(o.item().id(), amount);
     }
 
     /** Removes the items, pays once, records the day's total. Returns the money paid; if payment fails the items go back. */
