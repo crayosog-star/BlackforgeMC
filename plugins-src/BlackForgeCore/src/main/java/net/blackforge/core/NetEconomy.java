@@ -32,6 +32,8 @@ public final class NetEconomy implements org.bukkit.event.Listener {
     private final BlackForgeCore plugin;
     private final File dir;
     private final String mode;
+    /** This server's own wallet (Survival 2's on the lab server), or null on the hub. */
+    private final String homeWallet;
     /** The wallet a player uses on this server right now (null = none here, earnings wait as pending). */
     private Function<UUID, String> wallet;
 
@@ -39,6 +41,7 @@ public final class NetEconomy implements org.bukkit.event.Listener {
         this.plugin = plugin;
         this.mode = plugin.getConfig().getString("mode", "backend");
         String w = walletForMode(mode, Lab.on() ? Lab.id() : null);   // Survival 2 keeps its own balances
+        this.homeWallet = w;
         this.wallet = id -> w;
         File serverDir;
         try { serverDir = plugin.getServer().getWorldContainer().getCanonicalFile(); }
@@ -275,8 +278,7 @@ public final class NetEconomy implements org.bukkit.event.Listener {
 
     /** name -> money in this server's wallet (the first one on the hub), richest first. */
     public List<Map.Entry<String, Double>> top(int n) {
-        String w = walletForMode(mode);
-        return top(w == null ? "survival" : w, n);
+        return top(homeWallet == null ? "survival" : homeWallet, n);
     }
 
     // ------------------------------------------------------------------ commands
@@ -357,7 +359,7 @@ public final class NetEconomy implements org.bukkit.event.Listener {
             plugin.getLogger().info("[pay] " + w + " " + p.getName() + " -> " + tName + " " + money(amt));
         });
         reg("baltop", List.of("balancetop", "richest"), (s, a) -> {
-            String w = s instanceof Player p ? walletOf(p.getUniqueId()) : walletForMode(mode);
+            String w = s instanceof Player p ? walletOf(p.getUniqueId()) : homeWallet;   // the console on Survival 2 sees its wallet too
             if (w == null) { s.sendMessage(Ui.mm(NO_MONEY_HERE)); return; }
             s.sendMessage(Ui.mm("<gold><bold>Richest players in " + walletName(w)));
             int i = 1;
