@@ -3,6 +3,7 @@ package net.blackforge.core.survival;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -12,10 +13,13 @@ import java.util.Optional;
 final class RobotRules {
     private RobotRules() {}
 
+    /** The most agents one player can place, whatever their rank. Anyone already over it keeps theirs. */
+    static final int MAX_AGENTS = 5;
+
     /** Charge multiplier per Fuel Cell tier I..V (moved from Robots.FUEL_CHARGE, values unchanged). */
     static final double[] FUEL_CHARGE = {1.0, 1.25, 1.5, 2.0, 3.0};
     /** Milliseconds per fish, per robot tier I..V. */
-    static final long[] FISH_INTERVAL_MS = {180_000, 150_000, 120_000, 90_000, 60_000};
+    static final long[] FISH_INTERVAL_MS = {120_000, 100_000, 80_000, 60_000, 40_000};
     /** A Fisherman burns fuel (and builds Charge) at this fraction of the normal rate. */
     static final double FISHER_BURN = 0.25;
     /** Fuel meter thresholds: 5m, 15m, 30m, 1h, 3h, 12h, 24h. */
@@ -98,4 +102,46 @@ final class RobotRules {
     static Optional<FuelCell> lowestTierCell(List<FuelCell> cells) {
         return cells.stream().min(Comparator.comparingInt(FuelCell::tier));
     }
+
+    // ---------------------------------------------------------------- grinder
+
+    /** Why a Grinder leaves a mob alone. */
+    enum GrindSkip { TAMED, OUTSIDE_WORK_AREA, VILLAGER, NAMED, BREEDING_STOCK }
+
+    /** What a Grinder needs to know about one mob, as plain values. sameTypeNearby counts this mob too. */
+    record GrindTarget(boolean tamed, boolean hostile, boolean inWorkArea, boolean villager, boolean named,
+                       boolean fromSpawner, boolean animal, boolean adult, int sameTypeNearby) {}
+
+    /** Why this mob is spared, or empty if the Grinder may hit it. Hostile mobs count anywhere; animals only on the owner's land. */
+    static Optional<GrindSkip> grindSkip(GrindTarget t) {
+        if (t.tamed()) return Optional.of(GrindSkip.TAMED);
+        if (!t.hostile() && !t.inWorkArea()) return Optional.of(GrindSkip.OUTSIDE_WORK_AREA);
+        if (t.villager()) return Optional.of(GrindSkip.VILLAGER);
+        if (t.named() && !t.fromSpawner()) return Optional.of(GrindSkip.NAMED);
+        // leave a breeding pair and the young of farm animals alone
+        if (t.animal() && !t.fromSpawner() && (t.sameTypeNearby() <= 2 || !t.adult())) return Optional.of(GrindSkip.BREEDING_STOCK);
+        return Optional.empty();
+    }
+
+    /** How many mobs one swing can hit: tier + 1. */
+    static int grindHitsPerSwing(int tier) { return checkTier(tier) + 1; }
+
+    /** The Grinder's name tag after a cycle: what it's doing, or why it isn't doing anything. */
+    static String grindStatus(int mobs, int hits) {
+        if (hits > 0) return "<#ff5e5e>Grinding " + hits;
+        return mobs > 0 ? "<gray>Mobs here are protected" : "<gray>No mobs in range";
+    }
+
+    /** One Grinder cycle for the log. Skip reasons are in a fixed order, so the same result always reads the same. */
+    static String grindSummary(int mobs, Map<GrindSkip, Integer> skipped, int hits, int noEffect, int kills) {
+        StringBuilder sb = new StringBuilder("mobs=" + mobs + " hits=" + hits + " noEffect=" + noEffect + " kills=" + kills);
+        for (GrindSkip reason : GrindSkip.values()) {
+            Integer n = skipped.get(reason);
+            if (n != null && n > 0) sb.append(' ').append(reason).append('=').append(n);
+        }
+        return sb.toString();
+    }
+
+    /** An agent's name: 1-16 letters or digits, so it's safe inside MiniMessage text and saved item data. */
+    static boolean validName(String name) { return name != null && name.matches("[A-Za-z0-9]{1,16}"); }
 }

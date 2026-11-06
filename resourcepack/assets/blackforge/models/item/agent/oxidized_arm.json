@@ -1,0 +1,76 @@
+{
+  "textures": {
+    "skin": "blackforge:item/agent/oxidized",
+    "particle": "blackforge:item/agent/oxidized"
+  },
+  "elements": [
+    {
+      "from": [
+        7.25,
+        3,
+        7
+      ],
+      "to": [
+        8.75,
+        8.2,
+        9
+      ],
+      "faces": {
+        "south": {
+          "uv": [
+            6,
+            0,
+            10,
+            4
+          ],
+          "texture": "#skin"
+        },
+        "east": {
+          "uv": [
+            6,
+            0,
+            10,
+            4
+          ],
+          "texture": "#skin"
+        },
+        "west": {
+          "uv": [
+            6,
+            0,
+            10,
+            4
+          ],
+          "texture": "#skin"
+        },
+        "up": {
+          "uv": [
+            6,
+            0,
+            10,
+            4
+          ],
+          "texture": "#skin"
+        },
+        "down": {
+          "uv": [
+            6,
+            0,
+            10,
+            4
+          ],
+          "texture": "#skin"
+        },
+        "north": {
+          "uv": [
+            6,
+            0,
+            10,
+            4
+          ],
+          "texture": "#skin"
+        }
+      }
+    }
+  ]
+}

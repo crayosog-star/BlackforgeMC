@@ -49,6 +49,8 @@ public final class SkyblockModule implements Listener {
     private final RankKits rankKits;
     private final Spawners spawners;
     private final Robots robots;
+    private final HopperUpgrades hoppers;
+    private final BaseStation station;
     private final OneBlockExtras oneblockExtras;
     private final List<TextDisplay> holos = new ArrayList<>();
     private final Map<UUID, Long> gateCooldown = new HashMap<>();
@@ -108,9 +110,15 @@ public final class SkyblockModule implements Listener {
         spawners = new Spawners(plugin);
         spawners.setAccess(this::islandMember);
         oneblockExtras = new OneBlockExtras(plugin, spawners);
+        OwnerView.install(plugin, this::onOthersIsland);
         robots = new Robots(plugin);
         robots.setAccess(this::islandMember);
         robots.setRanks(ranks);
+        hoppers = new HopperUpgrades(plugin);
+        hoppers.setAccess(this::islandMember);
+        station = new BaseStation(plugin, robots, hoppers);
+        station.setAccess(this::islandMember);
+        station.setRegion(this::islandId);
         scrap.addRobotOffers();
         world.setSpawnLocation(spawn());
         for (int cx = -4; cx <= 3; cx++) for (int cz = -4; cz <= 3; cz++) world.addPluginChunkTicket(cx, cz, plugin);
@@ -123,6 +131,7 @@ public final class SkyblockModule implements Listener {
             eco = reg.getProvider();
             spawners.setEconomy(eco);
             robots.setEconomy(eco);
+            station.setEconomy(eco);
             ah = new AuctionHouse(plugin, eco);
             ahOneBlock = new AuctionHouse(plugin, eco, "auctions-oneblock.yml");
             tags.setEconomy(eco);
@@ -177,6 +186,20 @@ public final class SkyblockModule implements Listener {
     private World islandWorld() { return Bukkit.getWorld("bskyblock_world"); }
 
     /** Is this spot on an island the player belongs to? (staff may use anything) */
+    /** On an island this player isn't a member of. Unlike islandMember, staff permission doesn't count as membership. */
+    private boolean onOthersIsland(Player p, Location l) {
+        try {
+            Object im = islands();
+            if (im == null) return false;
+            Optional<?> island = (Optional<?>) im.getClass().getMethod("getIslandAt", Location.class).invoke(im, l);
+            if (island.isEmpty()) return false;
+            @SuppressWarnings("unchecked") Set<UUID> members = (Set<UUID>) island.get().getClass().getMethod("getMemberSet").invoke(island.get());
+            return !members.contains(p.getUniqueId());
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
     private boolean islandMember(Player p, Location l) {
         if (p.hasPermission("blackforge.admin")) return true;
         try {
@@ -187,6 +210,16 @@ public final class SkyblockModule implements Listener {
             @SuppressWarnings("unchecked") Set<UUID> members = (Set<UUID>) island.get().getClass().getMethod("getMemberSet").invoke(island.get());
             return members.contains(p.getUniqueId());
         } catch (Exception e) { return false; }
+    }
+
+    /** Which island this spot is on, or null. */
+    private String islandId(Location l) {
+        try {
+            Object im = islands();
+            if (im == null) return null;
+            Optional<?> island = (Optional<?>) im.getClass().getMethod("getIslandAt", Location.class).invoke(im, l);
+            return island.isEmpty() ? null : "island:" + island.get().getClass().getMethod("getUniqueId").invoke(island.get());
+        } catch (Exception e) { return null; }
     }
 
     /** Is the player standing on an island they belong to? */
@@ -433,8 +466,7 @@ public final class SkyblockModule implements Listener {
     @EventHandler public void onDamage(EntityDamageEvent e) { if (e.getEntity() instanceof Player p && protectedHere(p.getLocation())) e.setCancelled(true); }
     @EventHandler public void onHunger(FoodLevelChangeEvent e) { if (e.getEntity() instanceof Player p && protectedHere(p.getLocation()) && e.getFoodLevel() < p.getFoodLevel()) e.setCancelled(true); }
     @EventHandler public void onSpawnMob(CreatureSpawnEvent e) {
-        if (e.getSpawnReason() == CreatureSpawnEvent.SpawnReason.NATURAL && protectedHere(e.getLocation())) e.setCancelled(true);
-        if (e.getEntity() instanceof Monster && e.getSpawnReason() != CreatureSpawnEvent.SpawnReason.CUSTOM && protectedHere(e.getLocation())) e.setCancelled(true);
+        if (protectedHere(e.getLocation()) && net.blackforge.core.Shared.zoneBlocksSpawn(e.getSpawnReason())) e.setCancelled(true);
     }
     @EventHandler public void onPortal(PlayerPortalEvent e) { if (protectedHere(e.getFrom())) e.setCancelled(true); }
 

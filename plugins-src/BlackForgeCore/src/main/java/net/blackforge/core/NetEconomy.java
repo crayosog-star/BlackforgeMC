@@ -8,9 +8,14 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
 import java.io.File;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.file.*;
+import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Money and Scrap, one separate balance per game mode: Survival, Skyblock, OneBlock, Factions and Arcade each have
@@ -27,13 +32,17 @@ public final class NetEconomy implements org.bukkit.event.Listener {
     private final BlackForgeCore plugin;
     private final File dir;
     private final String mode;
+    /** This server's own wallet (Survival 2's on the lab server), or null on the hub. */
+    private final String homeWallet;
     /** The wallet a player uses on this server right now (null = none here, earnings wait as pending). */
     private Function<UUID, String> wallet;
 
     NetEconomy(BlackForgeCore plugin) {
         this.plugin = plugin;
         this.mode = plugin.getConfig().getString("mode", "backend");
-        this.wallet = id -> walletForMode(mode);
+        String w = walletForMode(mode, Lab.on() ? Lab.id() : null);   // Survival 2 keeps its own balances
+        this.homeWallet = w;
+        this.wallet = id -> w;
         File serverDir;
         try { serverDir = plugin.getServer().getWorldContainer().getCanonicalFile(); }
         catch (Exception e) { serverDir = plugin.getServer().getWorldContainer().getAbsoluteFile(); }
@@ -45,6 +54,12 @@ public final class NetEconomy implements org.bukkit.event.Listener {
             try { VaultHook.register(plugin, this); plugin.getLogger().info("Economy registered with Vault (" + mode + " balances)"); }
             catch (Throwable t) { plugin.getLogger().warning("Vault hook failed: " + t); }
         }
+    }
+
+    /** {@code lab} is the Survival 2 id on the lab server (its own wallet, so test money never reaches live), else null. */
+    static String walletForMode(String mode, String lab) {
+        if (lab != null && walletForMode(mode) != null) return lab;
+        return walletForMode(mode);
     }
 
     static String walletForMode(String mode) {
@@ -62,18 +77,39 @@ public final class NetEconomy implements org.bukkit.event.Listener {
     public static String walletName(String w) {
         return w == null ? "the hub" : switch (w) {
             case "oneblock" -> "OneBlock";
+            case "survival2" -> "Survival 2";
             default -> Character.toUpperCase(w.charAt(0)) + w.substring(1);
         };
     }
 
     public static String money(double d) { return "$" + MONEY.format(d); }
 
+    /** Player-entered prices must be exactly representable in cents before they reach either wallet. */
+    public static double parsePrice(String value, long multiplier) {
+        if (value.length() > 40) return -1;
+        try {
+            BigDecimal price = new BigDecimal(value).multiply(BigDecimal.valueOf(multiplier));
+            if (price.signum() < 0 || price.stripTrailingZeros().scale() > 2
+                    || price.compareTo(BigDecimal.valueOf(1_000_000_000_000L)) > 0) return -1;
+            return price.doubleValue();
+        } catch (NumberFormatException | ArithmeticException ex) {
+            return -1;
+        }
+    }
+
+    public static boolean validPrice(double value) {
+        return Double.isFinite(value) && parsePrice(Double.toString(value), 1) >= 0;
+    }
+
     /** A player's name is kept in their file (for /baltop and /pay to offline players); pending rewards are paid out. */
     @org.bukkit.event.EventHandler
     public void onJoin(org.bukkit.event.player.PlayerJoinEvent e) {
         Player p = e.getPlayer();
-        YamlConfiguration y = load(p.getUniqueId());
-        if (!p.getName().equals(y.getString("name"))) { y.set("name", p.getName()); save(p.getUniqueId(), y); }
+        updateAccount(p.getUniqueId(), y -> {
+            if (p.getName().equals(y.getString("name"))) return false;
+            y.set("name", p.getName());
+            return true;
+        });
         Bukkit.getScheduler().runTaskLater(plugin, () -> { if (p.isOnline()) flushPending(p); }, 50L);
     }
 
@@ -81,10 +117,29 @@ public final class NetEconomy implements org.bukkit.event.Listener {
 
     private File file(UUID id) { return new File(dir, id + ".yml"); }
 
-    private synchronized YamlConfiguration load(UUID id) { return YamlConfiguration.loadConfiguration(file(id)); }
+    private YamlConfiguration load(UUID id) { return YamlConfiguration.loadConfiguration(file(id)); }
 
-    private synchronized void save(UUID id, YamlConfiguration y) {
-        try { y.save(file(id)); } catch (Exception e) { plugin.getLogger().warning("economy save failed for " + id + ": " + e.getMessage()); }
+    /** All backends share these files. Lock the read and write together, then replace the YAML in one move. */
+    private synchronized boolean updateAccount(UUID id, Predicate<YamlConfiguration> change) {
+        Path account = file(id).toPath();
+        Path lock = account.resolveSibling(account.getFileName() + ".lock");
+        try (FileChannel channel = FileChannel.open(lock, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock ignored = channel.lock()) {
+            YamlConfiguration y = new YamlConfiguration();
+            if (Files.exists(account)) y.load(account.toFile());
+            if (!change.test(y)) return false;
+            Path temp = Files.createTempFile(account.getParent(), id + "-", ".tmp");
+            try {
+                y.save(temp.toFile());
+                Files.move(temp, account, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } finally {
+                Files.deleteIfExists(temp);
+            }
+            return true;
+        } catch (Exception e) {
+            plugin.getLogger().warning("economy save failed for " + id + ": " + e.getMessage());
+            return false;
+        }
     }
 
     public synchronized boolean hasAccount(UUID id) {
@@ -96,46 +151,49 @@ public final class NetEconomy implements org.bukkit.event.Listener {
     public synchronized void ensureAccount(OfflinePlayer p) {
         String w = walletOf(p.getUniqueId());
         if (w == null) return;
-        YamlConfiguration y = load(p.getUniqueId());
-        if (y.contains("w." + w)) return;
-        y.set("w." + w + ".money", STARTING_MONEY);
-        y.set("w." + w + ".scrap", 0L);
-        if (p.getName() != null) y.set("name", p.getName());
-        save(p.getUniqueId(), y);
+        updateAccount(p.getUniqueId(), y -> {
+            if (y.contains("w." + w)) return false;
+            return writeBalance(y, p, w, STARTING_MONEY);
+        });
     }
 
     public synchronized double balance(UUID id) {
         String w = walletOf(id);
-        if (w == null) return 0;
-        YamlConfiguration y = load(id);
-        return y.contains("w." + w) ? y.getDouble("w." + w + ".money") : STARTING_MONEY;
+        return w == null ? 0 : readBalance(load(id), w);
+    }
+
+    private static double readBalance(YamlConfiguration y, String wallet) {
+        return y.contains("w." + wallet) ? y.getDouble("w." + wallet + ".money") : STARTING_MONEY;
+    }
+
+    private static boolean writeBalance(YamlConfiguration y, OfflinePlayer p, String w, double amount) {
+        if (!Double.isFinite(amount) || amount < 0 || amount > Long.MAX_VALUE / 100.0) return false;
+        y.set("w." + w + ".money", Math.round(amount * 100) / 100.0);
+        if (!y.contains("w." + w + ".scrap")) y.set("w." + w + ".scrap", 0L);
+        if (p.getName() != null) y.set("name", p.getName());
+        return true;
     }
 
     public synchronized boolean setBalance(OfflinePlayer p, double v) {
         String w = walletOf(p.getUniqueId());
-        if (w == null || v < 0 || Double.isNaN(v)) return false;
-        ensureAccount(p);
-        YamlConfiguration y = load(p.getUniqueId());
-        y.set("w." + w + ".money", Math.round(v * 100) / 100.0);
-        if (p.getName() != null) y.set("name", p.getName());
-        save(p.getUniqueId(), y);
-        return true;
+        return w != null && updateAccount(p.getUniqueId(), y -> writeBalance(y, p, w, v));
     }
 
     /** Pays into this mode's wallet; in the hub it waits as pending for the next game mode. */
     public synchronized boolean deposit(OfflinePlayer p, double amount) {
-        if (amount < 0) return false;
-        if (walletOf(p.getUniqueId()) == null) return addPending(p, amount, 0);
-        ensureAccount(p);
-        return setBalance(p, balance(p.getUniqueId()) + amount);
+        if (!Double.isFinite(amount) || amount < 0 || amount > Long.MAX_VALUE / 100.0) return false;
+        String w = walletOf(p.getUniqueId());
+        if (w == null) return addPending(p, amount, 0);
+        return updateAccount(p.getUniqueId(), y -> writeBalance(y, p, w, readBalance(y, w) + amount));
     }
 
     public synchronized boolean withdraw(OfflinePlayer p, double amount) {
-        if (amount < 0 || walletOf(p.getUniqueId()) == null) return false;
-        ensureAccount(p);
-        double b = balance(p.getUniqueId());
-        if (b + 1e-9 < amount) return false;
-        return setBalance(p, b - amount);
+        if (!Double.isFinite(amount) || amount < 0) return false;
+        String w = walletOf(p.getUniqueId());
+        return w != null && updateAccount(p.getUniqueId(), y -> {
+            double current = readBalance(y, w);
+            return current + 1e-9 >= amount && writeBalance(y, p, w, Math.max(0, current - amount));
+        });
     }
 
     public synchronized long scrap(UUID id) {
@@ -146,56 +204,62 @@ public final class NetEconomy implements org.bukkit.event.Listener {
     public synchronized void addScrap(OfflinePlayer p, long n) {
         String w = walletOf(p.getUniqueId());
         if (w == null) { if (n > 0) addPending(p, 0, n); return; }
-        ensureAccount(p);
-        YamlConfiguration y = load(p.getUniqueId());
-        y.set("w." + w + ".scrap", Math.max(0, y.getLong("w." + w + ".scrap") + n));
-        if (p.getName() != null) y.set("name", p.getName());
-        save(p.getUniqueId(), y);
+        updateAccount(p.getUniqueId(), y -> {
+            if (!y.contains("w." + w)) writeBalance(y, p, w, STARTING_MONEY);
+            y.set("w." + w + ".scrap", Math.max(0, Math.addExact(y.getLong("w." + w + ".scrap"), n)));
+            if (p.getName() != null) y.set("name", p.getName());
+            return true;
+        });
     }
 
     public synchronized boolean takeScrap(OfflinePlayer p, long n) {
         String w = walletOf(p.getUniqueId());
-        if (w == null) return false;
-        YamlConfiguration y = load(p.getUniqueId());
-        long have = y.getLong("w." + w + ".scrap");
-        if (have < n) return false;
-        y.set("w." + w + ".scrap", have - n);
-        save(p.getUniqueId(), y);
-        return true;
+        return w != null && n >= 0 && updateAccount(p.getUniqueId(), y -> {
+            long have = y.getLong("w." + w + ".scrap");
+            if (have < n) return false;
+            if (!y.contains("w." + w)) writeBalance(y, p, w, STARTING_MONEY);
+            y.set("w." + w + ".scrap", have - n);
+            return true;
+        });
     }
 
     // ------------------------------------------------------------------ the hub: earnings wait for a game mode
 
     private synchronized boolean addPending(OfflinePlayer p, double money, long scrap) {
-        YamlConfiguration y = load(p.getUniqueId());
-        y.set("pending.money", Math.round((y.getDouble("pending.money") + money) * 100) / 100.0);
-        y.set("pending.scrap", y.getLong("pending.scrap") + scrap);
-        if (p.getName() != null) y.set("name", p.getName());
-        save(p.getUniqueId(), y);
-        return true;
+        return updateAccount(p.getUniqueId(), y -> {
+            double total = y.getDouble("pending.money") + money;
+            if (!Double.isFinite(total) || total > Long.MAX_VALUE / 100.0) return false;
+            y.set("pending.money", Math.round(total * 100) / 100.0);
+            y.set("pending.scrap", Math.addExact(y.getLong("pending.scrap"), scrap));
+            if (p.getName() != null) y.set("name", p.getName());
+            return true;
+        });
     }
 
     public synchronized double pendingMoney(UUID id) { return load(id).getDouble("pending.money"); }
     public synchronized long pendingScrap(UUID id) { return load(id).getLong("pending.scrap"); }
 
-    /** In a game mode now: pay anything earned in the hub into this mode's wallet. */
+    private record PendingReward(double money, long scrap) {}
+
+    /** Move pending rewards and clear the pending pot in the same account update. */
     public void flushPending(Player p) {
+        if (Lab.on()) return;   // hub rewards belong to a live wallet, never the Survival 2 test wallet
         String w = walletOf(p.getUniqueId());
         if (w == null) return;
-        double m;
-        long s;
-        synchronized (this) {
-            YamlConfiguration y = load(p.getUniqueId());
-            m = y.getDouble("pending.money");
-            s = y.getLong("pending.scrap");
-            if (m <= 0 && s <= 0) return;
+        java.util.concurrent.atomic.AtomicReference<PendingReward> paid = new java.util.concurrent.atomic.AtomicReference<>();
+        if (!updateAccount(p.getUniqueId(), y -> {
+            double money = y.getDouble("pending.money");
+            long scrap = y.getLong("pending.scrap");
+            if (money <= 0 && scrap <= 0) return false;
+            if (!writeBalance(y, p, w, readBalance(y, w) + Math.max(0, money))) return false;
+            if (scrap > 0) y.set("w." + w + ".scrap", Math.addExact(y.getLong("w." + w + ".scrap"), scrap));
             y.set("pending", null);
-            save(p.getUniqueId(), y);
-        }
-        if (m > 0) deposit(p, m);
-        if (s > 0) addScrap(p, s);
+            paid.set(new PendingReward(money, scrap));
+            return true;
+        })) return;
+        PendingReward reward = paid.get();
         p.sendMessage(Ui.mm("<gold>✦ <gray>Rewards you earned in the hub went into your <white>" + walletName(w) + " <gray>balance: "
-                + (m > 0 ? "<green>+" + money(m) + " " : "") + (s > 0 ? "<#c6a15b>+" + s + " Scrap" : "")));
+                + (reward.money() > 0 ? "<green>+" + money(reward.money()) + " " : "") + (reward.scrap() > 0 ? "<#c6a15b>+" + reward.scrap() + " Scrap" : "")));
     }
 
     /** name -> money in one wallet, richest first. */
@@ -214,8 +278,7 @@ public final class NetEconomy implements org.bukkit.event.Listener {
 
     /** name -> money in this server's wallet (the first one on the hub), richest first. */
     public List<Map.Entry<String, Double>> top(int n) {
-        String w = walletForMode(mode);
-        return top(w == null ? "survival" : w, n);
+        return top(homeWallet == null ? "survival" : homeWallet, n);
     }
 
     // ------------------------------------------------------------------ commands
@@ -241,12 +304,12 @@ public final class NetEconomy implements org.bukkit.event.Listener {
         });
     }
 
-    private double parseAmount(String s) {
+    public static double parseAmount(String s) {
         try {
-            String t = s.toLowerCase().replace(",", "").replace("$", "");
-            double mul = t.endsWith("k") ? 1_000 : t.endsWith("m") ? 1_000_000 : 1;
+            String t = s.toLowerCase(Locale.ROOT).replace(",", "").replace("$", "");
+            long mul = t.endsWith("k") ? 1_000 : t.endsWith("m") ? 1_000_000 : 1;
             if (mul > 1) t = t.substring(0, t.length() - 1);
-            return Double.parseDouble(t) * mul;
+            return parsePrice(t, mul);
         } catch (Exception e) { return -1; }
     }
 
@@ -284,7 +347,11 @@ public final class NetEconomy implements org.bukkit.event.Listener {
             if (!w.equals(walletOf(t.getUniqueId()))) { p.sendMessage(Ui.mm("<red>" + t.getName() + " is playing a different game mode: money only moves within " + walletName(w) + ".")); return; }
             if (amt < 0.01) { p.sendMessage(Ui.mm("<red>Bad amount.")); return; }
             if (!withdraw(p, amt)) { p.sendMessage(Ui.mm("<red>You don't have " + money(amt) + ".")); return; }
-            deposit(t, amt);
+            if (!deposit(t, amt)) {
+                if (!deposit(p, amt)) plugin.getLogger().severe("Could not refund failed payment from " + p.getUniqueId());
+                p.sendMessage(Ui.mm("<red>Payment could not be completed."));
+                return;
+            }
             String tName = t.getName() != null ? t.getName() : a[0];
             p.sendMessage(Ui.mm("<green>Sent " + money(amt) + " to " + tName + "."));
             Player tp = t.getPlayer();
@@ -292,7 +359,7 @@ public final class NetEconomy implements org.bukkit.event.Listener {
             plugin.getLogger().info("[pay] " + w + " " + p.getName() + " -> " + tName + " " + money(amt));
         });
         reg("baltop", List.of("balancetop", "richest"), (s, a) -> {
-            String w = s instanceof Player p ? walletOf(p.getUniqueId()) : walletForMode(mode);
+            String w = s instanceof Player p ? walletOf(p.getUniqueId()) : homeWallet;   // the console on Survival 2 sees its wallet too
             if (w == null) { s.sendMessage(Ui.mm(NO_MONEY_HERE)); return; }
             s.sendMessage(Ui.mm("<gold><bold>Richest players in " + walletName(w)));
             int i = 1;

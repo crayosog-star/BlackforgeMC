@@ -44,6 +44,8 @@ public final class TestArenaBuilder {
         fallenLog();
         trees();
         plants();
+        foundryBridge();
+        foundryIsland();
         return c;
     }
 
@@ -83,7 +85,8 @@ public final class TestArenaBuilder {
 
     /** Kept level: the showcase forecourt and the archery lane. */
     private static boolean flatZone(int x, int z) {
-        return (x >= -17 && x <= -6 && Math.abs(z) <= 7) || (Math.abs(x) <= 7 && z <= -10 && z >= -23);
+        return (x >= -17 && x <= -6 && Math.abs(z) <= 7) || (Math.abs(x) <= 7 && z <= -10 && z >= -23)
+                || (Math.abs(x) <= FoundryZone.BRIDGE_HALF && z <= FoundryZone.BRIDGE_FROM_Z);   // level with the Foundry bridge
     }
 
     private void ground() {
@@ -278,6 +281,191 @@ public final class TestArenaBuilder {
             if (v >= 0 && !c.isSet(x, Y + v + 1, z) && "minecraft:grass_block".equals(c.get(x, Y + v, z)))
                 c.setLate(x, Y + v + 1, z, "minecraft:pink_petals[flower_amount=" + (1 + rnd.nextInt(4)) + "]");
         }
+    }
+
+    // ------------------------------------------------------------------ the Foundry
+
+    /** Carries on straight from the archery lane: run past the targets and over the bridge to the gate. */
+    private void foundryBridge() {
+        int half = FoundryZone.BRIDGE_HALF, gate = FoundryZone.GATE_Z;
+        for (int z = FoundryZone.BRIDGE_FROM_Z; z >= gate; z--) {
+            boolean land = hAt(0, z) >= 0 && hAt(half, z) >= 0 && hAt(-half, z) >= 0;
+            for (int x = -half; x <= half; x++) {
+                c.set(x, Y + 1, z, "minecraft:air");                      // no flowers or bushes in the way
+                c.set(x, Y + 2, z, "minecraft:air");
+                if (hAt(x, z) < 0) {
+                    c.set(x, Y, z, "minecraft:dark_oak_planks");
+                    c.set(x, Y - 1, z, "minecraft:stripped_dark_oak_log[axis=x]");
+                }
+            }
+            if (land) continue;
+            for (int x : new int[]{-half - 1, half + 1}) {
+                if (hAt(x, z) >= 0) continue;
+                c.set(x, Y, z, "minecraft:dark_oak_planks");
+                c.set(x, Y + 1, z, "minecraft:dark_oak_fence");
+                if (Math.floorMod(z, 6) == 0) c.setLate(x, Y + 2, z, "minecraft:lantern");
+            }
+        }
+        // the gate
+        for (int x : new int[]{-half - 1, half + 1})
+            for (int y = Y + 1; y <= Y + 5; y++) c.set(x, y, gate, y % 2 == 0 ? "minecraft:gilded_blackstone" : "minecraft:polished_blackstone_bricks");
+        for (int x = -half - 2; x <= half + 2; x++) c.set(x, Y + 6, gate, "minecraft:polished_blackstone_bricks");
+    }
+
+    private void foundryIsland() {
+        int cx = FoundryZone.ISLAND_X, cz = FoundryZone.ISLAND_Z, R = FoundryZone.ISLAND_R;
+        for (int x = cx - R; x <= cx + R; x++)
+            for (int z = cz - R; z <= cz + R; z++) {
+                double r = Math.hypot(x - cx, z - cz);
+                if (r > R) continue;
+                int k = rnd.nextInt(10);
+                c.set(x, Y, z, r > R - 1.5 ? "minecraft:gilded_blackstone" : k < 6 ? "minecraft:polished_blackstone_bricks" : k < 9 ? "minecraft:deepslate_tiles" : "minecraft:cracked_polished_blackstone_bricks");
+                int depth = (int) Math.round((R - r) * 0.7) + 2 + rnd.nextInt(2);
+                for (int d = 1; d <= depth; d++) c.set(x, Y - d, z, d == 1 ? "minecraft:deepslate" : rnd.nextBoolean() ? "minecraft:blackstone" : "minecraft:basalt");
+                boolean atGate = Math.abs(x) <= FoundryZone.BRIDGE_HALF + 1 && z > cz;
+                if (r > R - 1 && !atGate) c.set(x, Y + 1, z, "minecraft:deepslate_brick_wall");   // nobody falls off by accident
+            }
+        foundryWings();
+        foundrySupply();
+        foundryForge();
+        foundryLanes();
+        foundryFarm();
+        foundryPond();
+        foundryMine();
+        foundryPen();
+        foundryPlot();
+    }
+
+    private void foundrySupply() {
+        for (int x : FoundryZone.SUPPLY_X) {
+            c.set(x, Y + 1, FoundryZone.SUPPLY_Z, "minecraft:chest[facing=south]");
+            c.set(x, Y, FoundryZone.SUPPLY_Z, "minecraft:gold_block");
+        }
+    }
+
+    /** The monument in the middle: pillars out past the flock's circle, beams crossing high above it, and a light hanging in the centre. */
+    private void foundryForge() {
+        int x = FoundryZone.FORGE_X, z = FoundryZone.FORGE_Z, p = FoundryZone.PILLAR_OFFSET;
+        for (int dx = -FoundryZone.PLAZA_R; dx <= FoundryZone.PLAZA_R; dx++)
+            for (int dz = -FoundryZone.PLAZA_R; dz <= FoundryZone.PLAZA_R; dz++) {
+                double r = Math.hypot(dx, dz);
+                if (r > FoundryZone.PLAZA_R + 0.4) continue;
+                boolean ring = r > FoundryZone.PLAZA_R - 0.6 || (r > 2.6 && r < 3.5);
+                c.set(x + dx, Y, z + dz, ring ? "minecraft:gilded_blackstone" : "minecraft:polished_blackstone");
+            }
+        c.set(x, Y, z, "minecraft:gold_block");
+        c.set(x, Y + 1, z, "minecraft:barrel[facing=up]");
+        for (int sx : new int[]{-p, p}) for (int sz : new int[]{-p, p}) {
+            for (int y = Y + 1; y <= Y + 6; y++) c.set(x + sx, y, z + sz, y % 2 == 0 ? "minecraft:gilded_blackstone" : "minecraft:polished_blackstone_bricks");
+            c.setLate(x + sx, Y + 7, z + sz, "minecraft:soul_lantern");
+        }
+        for (int i = -p; i <= p; i++) {
+            c.set(x + i, Y + 6, z + i, "minecraft:polished_blackstone_bricks");
+            c.set(x + i, Y + 6, z - i, "minecraft:polished_blackstone_bricks");
+        }
+        c.setLate(x, Y + 5, z, "minecraft:lantern[hanging=true]");
+    }
+
+    /** Each wing has its own colour, on the path that leads there, so you can see where to go from the Forge. The way in is gold. */
+    private void foundryWings() {
+        int fx = FoundryZone.FORGE_X, fz = FoundryZone.FORGE_Z;
+        path(0, FoundryZone.GATE_Z - 1, fx, fz, "minecraft:gilded_blackstone");
+        path(fx, fz, (FoundryZone.FARM_X1 + FoundryZone.FARM_X2) / 2, (FoundryZone.FARM_Z1 + FoundryZone.FARM_Z2) / 2, "minecraft:green_terracotta");
+        path(fx, fz, (FoundryZone.POND_X1 + FoundryZone.POND_X2) / 2, (FoundryZone.POND_Z1 + FoundryZone.POND_Z2) / 2, "minecraft:cyan_terracotta");
+        path(fx, fz, 0, FoundryZone.PEN_Z2 + 1, "minecraft:red_nether_bricks");
+        path(fx, fz, (FoundryZone.MINE_X1 + FoundryZone.MINE_X2) / 2, FoundryZone.MINE_Z + 1, "minecraft:waxed_cut_copper");
+        path(fx, fz, FoundryZone.LANE_X - 2, FoundryZone.LANE_Z[1], "minecraft:orange_terracotta");
+        path(fx, fz, (FoundryZone.PLOT_X1 + FoundryZone.PLOT_X2) / 2, FoundryZone.PLOT_Z1, "minecraft:calcite");
+        emberGarden();
+        rimBraziers();
+    }
+
+    /** A 3-wide straight line of floor, drawn before the benches so they sit on top of it. */
+    private void path(int x1, int z1, int x2, int z2, String block) {
+        int steps = Math.max(Math.abs(x2 - x1), Math.abs(z2 - z1));
+        for (int i = 0; i <= steps; i++) {
+            int x = x1 + (int) Math.round((x2 - x1) * (double) i / steps), z = z1 + (int) Math.round((z2 - z1) * (double) i / steps);
+            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) c.set(x + dx, Y, z + dz, block);
+        }
+    }
+
+    /** The quiet corner by the way in: nothing to test, just the forge's own furniture among the embers. */
+    private void emberGarden() {
+        int x = -13, z = -58;
+        for (int dx = -4; dx <= 4; dx++) for (int dz = -4; dz <= 4; dz++) {
+            double r = Math.hypot(dx, dz);
+            if (r > 4.4) continue;
+            c.set(x + dx, Y, z + dz, rnd.nextInt(5) == 0 ? "minecraft:crying_obsidian" : rnd.nextBoolean() ? "minecraft:blackstone" : "minecraft:polished_basalt");
+        }
+        c.set(x, Y, z, "minecraft:shroomlight");
+        c.set(x, Y + 1, z, "minecraft:anvil");
+        c.set(x + 2, Y + 1, z + 1, "minecraft:campfire");
+        c.set(x - 2, Y + 1, z - 1, "minecraft:campfire");
+        c.set(x + 1, Y + 1, z - 2, "minecraft:grindstone[face=floor]");
+        c.set(x - 2, Y + 1, z + 2, "minecraft:smithing_table");
+    }
+
+    /** Fire along the wall, so the island reads from across the sky. */
+    private void rimBraziers() {
+        int cx = FoundryZone.ISLAND_X, cz = FoundryZone.ISLAND_Z, R = FoundryZone.ISLAND_R;
+        for (int deg = 15; deg < 360; deg += 30) {
+            int x = cx + (int) Math.round(Math.sin(Math.toRadians(deg)) * (R - 0.5)), z = cz + (int) Math.round(Math.cos(Math.toRadians(deg)) * (R - 0.5));
+            if (Math.abs(x) <= FoundryZone.BRIDGE_HALF + 1 && z > cz) continue;
+            c.set(x, Y + 1, z, "minecraft:polished_blackstone_bricks");
+            c.set(x, Y + 2, z, "minecraft:campfire");
+        }
+    }
+
+    private void foundryLanes() {
+        for (int z : FoundryZone.LANE_Z) {
+            int x = FoundryZone.LANE_X;
+            c.fill(x - 1, Y, z - 1, x + 2, Y, z + 1, "minecraft:polished_deepslate");
+            c.set(x, Y + 1, z, "minecraft:hopper[facing=east]");
+            c.set(x, Y + 2, z, "minecraft:chest[facing=west]");
+            c.set(x + 1, Y + 1, z, "minecraft:chest[facing=west]");
+        }
+    }
+
+    private void foundryFarm() {
+        int mx = (FoundryZone.FARM_X1 + FoundryZone.FARM_X2) / 2, mz = (FoundryZone.FARM_Z1 + FoundryZone.FARM_Z2) / 2;
+        for (int x = FoundryZone.FARM_X1; x <= FoundryZone.FARM_X2; x++)
+            for (int z = FoundryZone.FARM_Z1; z <= FoundryZone.FARM_Z2; z++) {
+                if (x == mx && z == mz) { c.set(x, Y, z, "minecraft:water"); c.set(x, Y + 1, z, "minecraft:hay_block"); continue; }   // capped: a one-block hole is a trap
+                c.set(x, Y, z, "minecraft:farmland[moisture=7]");
+                c.setLate(x, Y + 1, z, "minecraft:wheat[age=7]");
+            }
+    }
+
+    private void foundryPond() {
+        for (int x = FoundryZone.POND_X1; x <= FoundryZone.POND_X2; x++)
+            for (int z = FoundryZone.POND_Z1; z <= FoundryZone.POND_Z2; z++) {
+                c.set(x, Y, z, "minecraft:water");
+                c.set(x, Y - 1, z, "minecraft:gravel");
+            }
+    }
+
+    private void foundryMine() {
+        String[] ores = {"coal_ore", "iron_ore", "copper_ore", "gold_ore", "redstone_ore", "lapis_ore", "diamond_ore", "emerald_ore", "stone"};
+        for (int x = FoundryZone.MINE_X1; x <= FoundryZone.MINE_X2; x++)
+            for (int y = 1; y <= FoundryZone.MINE_HEIGHT; y++)
+                c.set(x, Y + y, FoundryZone.MINE_Z, "minecraft:" + ores[Math.floorMod(x * 3 + y * 5, ores.length)]);
+    }
+
+    /** Open floor for your own Base Station. The squares show which spots count as one base. */
+    private void foundryPlot() {
+        for (int x = FoundryZone.PLOT_X1; x <= FoundryZone.PLOT_X2; x++)
+            for (int z = FoundryZone.PLOT_Z1; z <= FoundryZone.PLOT_Z2; z++)
+                c.set(x, Y, z, (((x >> 3) + (z >> 3)) & 1) == 0 ? "minecraft:calcite" : "minecraft:polished_diorite");
+    }
+
+    private void foundryPen() {
+        for (int x = FoundryZone.PEN_X1; x <= FoundryZone.PEN_X2; x++)
+            for (int z = FoundryZone.PEN_Z1; z <= FoundryZone.PEN_Z2; z++) {
+                c.set(x, Y, z, "minecraft:coarse_dirt");
+                if (x == FoundryZone.PEN_X1 || x == FoundryZone.PEN_X2 || z == FoundryZone.PEN_Z1 || z == FoundryZone.PEN_Z2)
+                    c.set(x, Y + 1, z, x == (FoundryZone.PEN_X1 + FoundryZone.PEN_X2) / 2 && z == FoundryZone.PEN_Z2
+                            ? "minecraft:dark_oak_fence_gate[facing=south]" : "minecraft:dark_oak_fence");   // the gate faces the rest of the island
+            }
     }
 
     // ------------------------------------------------------------------ noise (same scheme as MapKit, kept local so this stays server-free)

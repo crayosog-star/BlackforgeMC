@@ -116,6 +116,12 @@ public final class SkyHub implements Listener {
 
     // ------------------------------------------------------------------ joining and portals
 
+    /** The lobby is a peaceful void: nothing spawns there by itself. */
+    @EventHandler
+    public void onMobSpawn(org.bukkit.event.entity.CreatureSpawnEvent e) {
+        if (e.getLocation().getWorld() == hub && net.blackforge.core.Shared.zoneBlocksSpawn(e.getSpawnReason())) e.setCancelled(true);
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onJoin(PlayerJoinEvent e) {
         Player p = e.getPlayer();

@@ -2,6 +2,7 @@ package net.blackforge.core.survival;
 
 import net.blackforge.core.BlackForgeCore;
 import net.blackforge.core.Ui;
+import net.kyori.adventure.text.event.ClickEvent;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -12,10 +13,18 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.*;
 import org.bukkit.event.entity.*;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
+import org.bukkit.event.inventory.InventoryMoveItemEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
+import org.bukkit.inventory.DoubleChestInventory;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.event.player.*;
 import org.bukkit.projectiles.ProjectileSource;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 
 /**
@@ -25,18 +34,26 @@ import java.util.*;
 public final class Claims implements Listener {
     private final BlackForgeCore plugin;
     private final File file;
-    private final Map<String, UUID> owners = new HashMap<>();          // "world;cx;cz" -> owner
-    private final Map<UUID, Set<UUID>> trusted = new HashMap<>();
+    private final boolean qol;
+    private final Map<UUID, Confirmation> confirmations = new HashMap<>();
+    private Set<UUID> pendingRtpTips = new HashSet<>();
+    private Map<String, UUID> owners = new HashMap<>();          // "world;cx;cz" -> owner
+    private Map<UUID, Set<UUID>> trusted = new HashMap<>();
     private final Map<UUID, String> lastArea = new HashMap<>();
     private final Set<UUID> bypass = new HashSet<>();
     private Ranks ranks;
+    private java.util.function.Consumer<Chunk> onClaimed = ch -> {};
 
     void setRanks(Ranks r) { this.ranks = r; }
+
+    /** Runs after a chunk is claimed and saved, so blocks already there can pick up the new owner's perks. */
+    void setOnClaimed(java.util.function.Consumer<Chunk> hook) { this.onClaimed = hook; }
 
     static final int BASE_CLAIMS = 6, PER_HOURS = 2, MAX_CLAIMS = 120;   // +PER_HOURS claims per hour played
 
     Claims(BlackForgeCore plugin) {
         this.plugin = plugin;
+        qol = plugin.getConfig().getBoolean("survival-claims-base-qol.enabled", false);
         file = new File(plugin.getDataFolder(), "claims.yml");
         YamlConfiguration y = YamlConfiguration.loadConfiguration(file);
         var cs = y.getConfigurationSection("chunks");
@@ -47,14 +64,43 @@ public final class Claims implements Listener {
             for (String id : ts.getStringList(k)) s.add(UUID.fromString(id));
             trusted.put(UUID.fromString(k), s);
         }
+        for (String id : y.getStringList("pending-rtp-tips")) pendingRtpTips.add(UUID.fromString(id));
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
-    private void save() {
-        YamlConfiguration y = new YamlConfiguration();
-        owners.forEach((k, v) -> y.set("chunks." + k.replace(';', '|'), v.toString()));
-        trusted.forEach((k, v) -> y.set("trusted." + k, v.stream().map(UUID::toString).toList()));
-        try { y.save(file); } catch (Exception e) { plugin.getLogger().warning("claims save failed: " + e.getMessage()); }
+    /** Commit on the server thread so permission checks only see a saved snapshot. */
+    private boolean commit(Player player, Map<String, UUID> nextOwners, Map<UUID, Set<UUID>> nextTrusted) {
+        return commit(player, nextOwners, nextTrusted, pendingRtpTips);
+    }
+
+    private boolean commit(Player player, Map<String, UUID> nextOwners, Map<UUID, Set<UUID>> nextTrusted,
+                           Set<UUID> nextTips) {
+        Path target = file.toPath();
+        Path temp = null;
+        try {
+            YamlConfiguration y = new YamlConfiguration();
+            nextOwners.forEach((k, v) -> y.set("chunks." + k.replace(';', '|'), v.toString()));
+            nextTrusted.forEach((k, v) -> y.set("trusted." + k, v.stream().map(UUID::toString).toList()));
+            if (!nextTips.isEmpty()) y.set("pending-rtp-tips", nextTips.stream().map(UUID::toString).toList());
+            temp = Files.createTempFile(target.getParent(), "claims-", ".tmp");
+            y.save(temp.toFile());
+            Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception e) {
+            if (temp != null) {
+                try {
+                    Files.deleteIfExists(temp);
+                } catch (IOException | SecurityException cleanup) {
+                    e.addSuppressed(cleanup);
+                }
+            }
+            plugin.getLogger().log(java.util.logging.Level.WARNING, "Could not save claim changes", e);
+            if (player != null) msg(player, "<red>Couldn't save your claim changes. Please try again.");
+            return false;
+        }
+        owners = nextOwners;
+        trusted = nextTrusted;
+        pendingRtpTips = nextTips;
+        return true;
     }
 
     static String key(Chunk ch) { return ch.getWorld().getName() + ";" + ch.getX() + ";" + ch.getZ(); }
@@ -70,6 +116,31 @@ public final class Claims implements Listener {
         return owner.equals(p.getUniqueId()) || trusted.getOrDefault(owner, Set.of()).contains(p.getUniqueId());
     }
 
+    private UUID stockOwner(Inventory inventory) {
+        Location at = inventory instanceof DoubleChestInventory chest ? chest.getLeftSide().getLocation() : inventory.getLocation();
+        return at == null ? null : ownerAt(at);
+    }
+
+    // Wilderness is a separate owner. An unclaimed half cannot authorize a claimed half.
+    boolean ownsStock(UUID owner, Inventory stock) {
+        if (stock instanceof DoubleChestInventory chest)
+            return ownsStock(owner, chest.getLeftSide()) && ownsStock(owner, chest.getRightSide());
+        return Objects.equals(owner, stockOwner(stock));
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onInventoryMove(InventoryMoveItemEvent e) {
+        UUID owner = stockOwner(e.getSource());
+        if (!ownsStock(owner, e.getSource()) || !ownsStock(owner, e.getDestination())) e.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onChestOpen(InventoryOpenEvent e) {
+        if (!(e.getPlayer() instanceof Player p) || !(e.getInventory() instanceof DoubleChestInventory chest)) return;
+        Location left = chest.getLeftSide().getLocation(), right = chest.getRightSide().getLocation();
+        if ((left != null && deny(p, left)) || (right != null && deny(p, right))) e.setCancelled(true);
+    }
+
     int count(UUID owner) { int n = 0; for (UUID u : owners.values()) if (u.equals(owner)) n++; return n; }
 
     int allowance(Player p) {
@@ -82,31 +153,180 @@ public final class Claims implements Listener {
         return op.getName() != null ? op.getName() : id.toString().substring(0, 8);
     }
 
-    private boolean nearProtectedArea(Chunk ch) {
-        int x = (ch.getX() << 4) + 8, z = (ch.getZ() << 4) + 8;
+    private boolean nearProtectedArea(int cx, int cz) {
+        int x = (cx << 4) + 8, z = (cz << 4) + 8;
         return Math.hypot(x, z) < 96 || Math.hypot(x - SurvivalLayout.KOTH_X, z - SurvivalLayout.KOTH_Z) < 96
                 || (Math.abs(x - SurvivalLayout.PVP_X) < SurvivalLayout.PVP_HALF + 48 && Math.abs(z - SurvivalLayout.PVP_Z) < SurvivalLayout.PVP_HALF + 48);
     }
 
+    enum LandRelation { WILDERNESS, OWNED, TRUSTED, FOREIGN }
+
+    enum ClaimDenial { NONE, OCCUPIED, MAIN_END_ISLAND, PROTECTED_AREA, ALLOWANCE }
+
+    record ClaimEligibility(String world, int chunkX, int chunkZ, UUID owner, LandRelation relation,
+                            ClaimDenial denial, int used, int allowance) {
+        boolean eligible() { return denial == ClaimDenial.NONE; }
+    }
+
+    /** Checks the proposed location without loading chunks or mutating claim state. */
+    ClaimEligibility claimEligibility(Player player, Location at) {
+        World world = at.getWorld();
+        int cx = at.getBlockX() >> 4, cz = at.getBlockZ() >> 4;
+        UUID playerId = player.getUniqueId(), owner = owners.get(key(world, cx, cz));
+        LandRelation relation = owner == null ? LandRelation.WILDERNESS
+                : owner.equals(playerId) ? LandRelation.OWNED
+                : trusted.getOrDefault(owner, Set.of()).contains(playerId) ? LandRelation.TRUSTED : LandRelation.FOREIGN;
+        int used = count(playerId), max = allowance(player);
+        ClaimDenial denial = ClaimDenial.NONE;
+        if (owner != null) denial = ClaimDenial.OCCUPIED;
+        else if (world.getEnvironment() == World.Environment.THE_END && Math.hypot(at.getX(), at.getZ()) < 300)
+            denial = ClaimDenial.MAIN_END_ISLAND;
+        else if (nearProtectedArea(cx, cz)) denial = ClaimDenial.PROTECTED_AREA;
+        else if (used >= max && !player.hasPermission("blackforge.admin")) denial = ClaimDenial.ALLOWANCE;
+        return new ClaimEligibility(world.getName(), cx, cz, owner, relation, denial, used, max);
+    }
+
+    boolean qolEnabled() { return qol; }
+
+    void noteNewPlayer(Player p) {
+        UUID id = p.getUniqueId();
+        if (!qol || pendingRtpTips.contains(id) || count(id) != 0) return;
+        Set<UUID> next = new HashSet<>(pendingRtpTips);
+        next.add(id);
+        commit(null, owners, trusted, next);
+    }
+
+    void onRtpLanding(Player p, Location at) {
+        UUID id = p.getUniqueId();
+        if (!qol || !pendingRtpTips.contains(id)) return;
+        ClaimEligibility claim = claimEligibility(p, at);
+        if (!claim.eligible() || claim.used() != 0) return;
+        if (!commit(null, owners, trusted, withoutRtpTip(id))) return;
+        msg(p, "<gold><bold>Ready to build your first base?</bold> <gray>Find a spot you like and type <white>/claim<gray>. "
+                + "You’ll see the exact chunk you’re about to protect. Check the outline, then click <yellow>Confirm Claim<gray>. "
+                + "If your build needs more room, step into the next chunk and repeat. Type <white>/claim help<gray> anytime for borders, trust, and more.");
+    }
+
+    private Set<UUID> withoutRtpTip(UUID id) {
+        if (!pendingRtpTips.contains(id)) return pendingRtpTips;
+        Set<UUID> next = new HashSet<>(pendingRtpTips);
+        next.remove(id);
+        return next;
+    }
+
     // ------------------------------------------------------------------ commands
+
+    private static final long CONFIRM_NANOS = 20_000_000_000L;
+
+    private record Confirmation(String code, String action, String chunkKey, UUID owner, Set<String> chunks, long expiresAt) {
+        boolean expired() { return System.nanoTime() - expiresAt >= 0; }
+    }
+
+    private Set<String> ownedChunks(UUID owner) {
+        Set<String> chunks = new HashSet<>();
+        owners.forEach((k, v) -> { if (v.equals(owner)) chunks.add(k); });
+        return chunks;
+    }
+
+    private void offerConfirmation(Player p, String action, Chunk chunk, UUID owner, Set<String> chunks, String button) {
+        Confirmation preview = new Confirmation(UUID.randomUUID().toString().substring(0, 8), action,
+                chunk == null ? null : key(chunk), owner, chunks, System.nanoTime() + CONFIRM_NANOS);
+        confirmations.put(p.getUniqueId(), preview);
+        String command = "/claim confirm " + preview.code();
+        p.sendMessage(Ui.mm("<dark_gray>[<gold>Claims<dark_gray>] ")
+                .append(Ui.mm("<yellow><underlined>[" + button + "]</underlined>").clickEvent(ClickEvent.runCommand(command)))
+                .append(Ui.mm(" <gray>or type <white>" + command + "<gray>. Expires in 20 seconds. <white>/claim cancel")));
+        if (chunk != null) show(p, chunk, preview);
+    }
+
+    private static String bounds(Chunk chunk) {
+        int x = chunk.getX() << 4, z = chunk.getZ() << 4;
+        return chunk.getWorld().getName() + " · X " + x + " to " + (x + 15) + ", Z " + z + " to " + (z + 15) + " · full height";
+    }
+
+    private void guide(Player p) {
+        msg(p, "<gold><bold>Claiming land in BlackForgeMC Survival</bold>");
+        msg(p, "<yellow>1. Find a spot. <gray>Use <white>/rtp<gray> to head into the wild. You can claim eligible wilderness away from protected areas.");
+        msg(p, "<yellow>2. Preview your land. <gray>Stand where you want to build and type <white>/claim<gray>. Each claim covers one 16 × 16 chunk "
+                + "from the bottom of the world to the top. Check the outline before you confirm.");
+        msg(p, "<yellow>3. Confirm the claim. <gray>Click <white>Confirm Claim<gray> or type the confirmation command shown in chat. "
+                + "You’ll see how many claims you have left. Only you and players you trust can build in your claim.");
+        msg(p, "<yellow>Need more room? <gray>Walk into the next chunk and type <white>/claim<gray> again. "
+                + "<white>/claim info<gray> shows your allowance. You earn more as you play.");
+        msg(p, "<yellow>See your borders. <gray>Use <white>/claim show<gray> for the current outline, <white>/claim map<gray> for a chat map, "
+                + "or <white>/claim list<gray> to find your own chunks.");
+        msg(p, "<yellow>Build with a friend. <gray>Use <white>/trust \\<player><gray> to give them access to all your claims. "
+                + "Use <white>/untrust \\<player><gray> to remove access. See your trust list in <white>/claim info<gray>.");
+        msg(p, "<yellow>Give up land. <gray>Stand in the chunk and type <white>/unclaim<gray>. Review the location before confirming. "
+                + "Other players may gain access to the blocks and containers there.");
+    }
 
     public boolean command(Player p, String label, String[] a) {
         String sub = label.equalsIgnoreCase("claim") ? (a.length > 0 ? a[0].toLowerCase() : "here")
                 : label.equalsIgnoreCase("unclaim") ? "unclaim" : label.equalsIgnoreCase("trust") ? "trust" : label.equalsIgnoreCase("untrust") ? "untrust" : "help";
         String arg = label.equalsIgnoreCase("claim") ? (a.length > 1 ? a[1] : null) : (a.length > 0 ? a[0] : null);
-        Chunk ch = p.getLocation().getChunk();
+        Location at = p.getLocation();
+        Chunk ch = at.getChunk();
         String k = key(ch);
+        Confirmation confirmed = null;
+        if (qol && sub.equals("cancel")) {
+            boolean cancelled = confirmations.remove(p.getUniqueId()) != null;
+            msg(p, cancelled ? "<yellow>Claim preview cancelled." : "<gray>You have no claim preview.");
+            return true;
+        }
+        if (qol && sub.equals("confirm")) {
+            confirmed = confirmations.get(p.getUniqueId());
+            if (confirmed == null || confirmed.expired()) {
+                confirmations.remove(p.getUniqueId());
+                msg(p, "<red>There’s no active preview. Start again with the original command.");
+                return true;
+            }
+            if (!confirmed.code().equals(arg)) {
+                msg(p, "<red>That code doesn’t match your current preview. Use the newest confirmation.");
+                return true;
+            }
+            confirmations.remove(p.getUniqueId());
+            if (confirmed.chunkKey() != null && !confirmed.chunkKey().equals(k)) {
+                msg(p, "<red>You’ve left the previewed chunk. Start again with the original command.");
+                return true;
+            }
+            sub = confirmed.action();
+        } else if (qol && (sub.equals("here") || sub.equals("unclaim") || sub.equals("unclaimall"))) {
+            confirmations.remove(p.getUniqueId());
+        }
         switch (sub) {
             case "here" -> {
-                UUID cur = owners.get(k);
-                if (cur != null) { msg(p, cur.equals(p.getUniqueId()) ? "<yellow>You already own this chunk." : "<red>This chunk belongs to <white>" + name(cur) + "<red>."); show(p, ch); return true; }
-                if (p.getWorld().getEnvironment() == World.Environment.THE_END && Math.hypot(p.getLocation().getX(), p.getLocation().getZ()) < 300) { msg(p, "<red>You can't claim the main End island."); return true; }
-                if (nearProtectedArea(ch)) { msg(p, "<red>Too close to spawn or the KOTH arena to claim."); return true; }
-                int have = count(p.getUniqueId()), max = allowance(p);
-                if (have >= max && !p.hasPermission("blackforge.admin")) { msg(p, "<red>You've used all <white>" + max + "<red> claims. Play more to earn extra (<white>+" + PER_HOURS + "<red> per hour)."); return true; }
-                owners.put(k, p.getUniqueId());
-                save();
-                msg(p, "<green>✔ Chunk claimed! <gray>(" + (have + 1) + "/" + max + ") Only you and trusted players can build here.");
+                ClaimEligibility claim = claimEligibility(p, at);
+                if (!claim.eligible()) {
+                    switch (claim.denial()) {
+                        case OCCUPIED -> {
+                            msg(p, claim.relation() == LandRelation.OWNED ? "<yellow>You already own this chunk."
+                                    : "<red>This chunk belongs to <white>" + name(claim.owner()) + "<red>.");
+                            show(p, ch);
+                        }
+                        case MAIN_END_ISLAND -> msg(p, "<red>You can't claim the main End island.");
+                        case PROTECTED_AREA -> msg(p, qol ? "<red>This area is protected. <white>/rtp<gray> takes you to the wild."
+                                : "<red>Too close to spawn or the KOTH arena to claim.");
+                        case ALLOWANCE -> msg(p, "<red>You've used all <white>" + claim.allowance()
+                                + "<red> claims. Play more to earn extra (<white>+" + PER_HOURS + "<red> per hour).");
+                        case NONE -> throw new IllegalStateException("Eligible claim denied");
+                    }
+                    return true;
+                }
+                if (qol && confirmed == null) {
+                    int remaining = Math.max(0, claim.allowance() - claim.used() - 1);
+                    msg(p, "<gold>Claim preview <gray>· <white>" + bounds(ch));
+                    msg(p, "<green>You can claim here. <gray>Used <white>" + claim.used() + "/" + claim.allowance()
+                            + "<gray>. After confirming, <white>" + remaining + "<gray> remaining.");
+                    offerConfirmation(p, sub, ch, null, Set.of(), "Confirm Claim");
+                    return true;
+                }
+                Map<String, UUID> next = new HashMap<>(owners);
+                next.put(k, p.getUniqueId());
+                if (!commit(p, next, trusted, withoutRtpTip(p.getUniqueId()))) return true;
+                onClaimed.accept(ch);
+                msg(p, "<green>✔ Chunk claimed! <gray>(" + (claim.used() + 1) + "/" + claim.allowance() + ") Only you and trusted players can build here.");
+                if (qol) msg(p, "<gray>Claims remaining: <white>" + Math.max(0, claim.allowance() - claim.used() - 1));
                 p.playSound(p.getLocation(), Sound.BLOCK_ANVIL_USE, 0.6f, 1.4f);
                 show(p, ch);
             }
@@ -114,14 +334,38 @@ public final class Claims implements Listener {
                 UUID cur = owners.get(k);
                 if (cur == null) { msg(p, "<gray>This chunk isn't claimed."); return true; }
                 if (!cur.equals(p.getUniqueId()) && !p.hasPermission("blackforge.admin")) { msg(p, "<red>That's not your chunk."); return true; }
-                owners.remove(k);
-                save();
+                if (qol && confirmed == null) {
+                    msg(p, "<gold>Unclaim preview <gray>· <white>" + bounds(ch));
+                    msg(p, "<yellow>Other players may gain access to this land and containers, and automation may stop.");
+                    offerConfirmation(p, sub, ch, cur, Set.of(), "Confirm Unclaim");
+                    return true;
+                }
+                if (confirmed != null && !cur.equals(confirmed.owner())) {
+                    msg(p, "<red>Ownership changed. Run /unclaim again to review this chunk.");
+                    return true;
+                }
+                Map<String, UUID> next = new HashMap<>(owners);
+                next.remove(k);
+                if (!commit(p, next, trusted)) return true;
                 msg(p, "<yellow>Chunk unclaimed.");
             }
             case "unclaimall" -> {
-                int n = 0;
-                for (var it = owners.entrySet().iterator(); it.hasNext(); ) if (it.next().getValue().equals(p.getUniqueId())) { it.remove(); n++; }
-                save();
+                Set<String> chunks = ownedChunks(p.getUniqueId());
+                if (qol && confirmed == null) {
+                    if (chunks.isEmpty()) { msg(p, "<gray>You have no claimed chunks."); return true; }
+                    msg(p, "<yellow>Release all <white>" + chunks.size() + "<yellow> chunks across all worlds? "
+                            + "Other players may gain access to the land and containers, and automation may stop.");
+                    offerConfirmation(p, sub, null, null, chunks, "Confirm Unclaim All");
+                    return true;
+                }
+                if (confirmed != null && !chunks.equals(confirmed.chunks())) {
+                    msg(p, "<red>Your claims changed. Run /claim unclaimall again to review the new total.");
+                    return true;
+                }
+                Map<String, UUID> next = new HashMap<>(owners);
+                next.keySet().removeAll(chunks);
+                int n = chunks.size();
+                if (!commit(p, next, trusted)) return true;
                 msg(p, "<yellow>Unclaimed <white>" + n + "<yellow> chunks.");
             }
             case "trust", "untrust" -> {
@@ -129,9 +373,12 @@ public final class Claims implements Listener {
                 OfflinePlayer t = Bukkit.getOfflinePlayerIfCached(arg);
                 if (t == null) t = Bukkit.getPlayerExact(arg);
                 if (t == null) { msg(p, "<red>Never seen a player called " + arg + "."); return true; }
-                Set<UUID> s = trusted.computeIfAbsent(p.getUniqueId(), x -> new HashSet<>());
-                if (sub.equals("trust")) s.add(t.getUniqueId()); else s.remove(t.getUniqueId());
-                save();
+                UUID owner = p.getUniqueId();
+                Map<UUID, Set<UUID>> next = new HashMap<>(trusted);
+                Set<UUID> members = new HashSet<>(trusted.getOrDefault(owner, Set.of()));
+                if (sub.equals("trust")) members.add(t.getUniqueId()); else members.remove(t.getUniqueId());
+                next.put(owner, members);
+                if (!commit(p, owners, next)) return true;
                 msg(p, sub.equals("trust") ? "<green>" + t.getName() + " can now build in all your claims." : "<yellow>" + t.getName() + " is no longer trusted.");
             }
             case "info" -> {
@@ -145,7 +392,12 @@ public final class Claims implements Listener {
             case "show" -> show(p, ch);
             case "list" -> {
                 List<String> mine = new ArrayList<>();
-                owners.forEach((kk, v) -> { if (v.equals(p.getUniqueId())) { String[] s = kk.split(";"); mine.add("(" + (Integer.parseInt(s[1]) * 16 + 8) + ", " + (Integer.parseInt(s[2]) * 16 + 8) + ")"); } });
+                for (String owned : ownedChunks(p.getUniqueId())) {
+                    String[] parts = owned.split(";");
+                    int x = (Integer.parseInt(parts[1]) << 4) + 8, z = (Integer.parseInt(parts[2]) << 4) + 8;
+                    mine.add((qol ? parts[0] + " " : "") + "(" + x + ", " + z + ")");
+                }
+                if (qol) Collections.sort(mine);
                 msg(p, "<gray>Your claims (" + mine.size() + "/" + allowance(p) + "): <white>" + (mine.isEmpty() ? "none" : String.join(" ", mine)));
             }
             case "bypass" -> {
@@ -154,6 +406,7 @@ public final class Claims implements Listener {
                 msg(p, "<gold>Claim bypass " + (bypass.contains(p.getUniqueId()) ? "ON" : "OFF"));
             }
             default -> {
+                if (qol) { guide(p); return true; }
                 msg(p, "<gold><bold>Land claims</bold> <gray>- protect your builds, one chunk at a time");
                 msg(p, "<yellow>/claim <gray>claim this chunk  <yellow>/unclaim <gray>release it");
                 msg(p, "<yellow>/claim map <gray>see nearby claims  <yellow>/claim show <gray>see chunk edges");
@@ -192,17 +445,19 @@ public final class Claims implements Listener {
      * outline follows the outside edge of the whole connected area (no lines between your own chunks), with a
      * taller post at every corner. An unclaimed chunk is outlined on its own.
      */
-    void show(Player p, Chunk ch) {
+    void show(Player p, Chunk ch) { show(p, ch, null); }
+
+    private void show(Player p, Chunk ch, Confirmation preview) {
         World w = ch.getWorld();
         UUID o = owners.get(key(ch));
-        Color col = o == null ? Color.GRAY : o.equals(p.getUniqueId()) ? Color.LIME : Color.RED;
+        Color col = preview != null ? Color.YELLOW : o == null ? Color.GRAY : o.equals(p.getUniqueId()) ? Color.LIME : Color.RED;
         Particle.DustOptions dust = new Particle.DustOptions(col, 1.4f);
         // the connected area: flood-fill neighbouring chunks with the same owner (capped so a huge claim stays cheap)
         Set<Long> area = new HashSet<>();
         Deque<long[]> todo = new ArrayDeque<>();
         todo.add(new long[]{ch.getX(), ch.getZ()});
         area.add(pack(ch.getX(), ch.getZ()));
-        while (o != null && !todo.isEmpty() && area.size() < 400) {
+        while (preview == null && o != null && !todo.isEmpty() && area.size() < 400) {
             long[] c = todo.poll();
             for (int[] d : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
                 int nx = (int) c[0] + d[0], nz = (int) c[1] + d[1];
@@ -227,7 +482,11 @@ public final class Claims implements Listener {
         if (area.size() > 1) msg(p, (o.equals(p.getUniqueId()) ? "<green>Your claim" : "<red>" + name(o) + "'s claim") + " <gray>here is <white>" + area.size() + " chunks<gray> - outlined for 10 seconds.");
         final int[] runs = {0};
         Bukkit.getScheduler().runTaskTimer(plugin, task -> {
-            if (!p.isOnline() || p.getWorld() != w || ++runs[0] > 20) { task.cancel(); return; }
+            if (!p.isOnline() || p.getWorld() != w
+                    || (preview == null ? ++runs[0] > 20 : preview.expired() || confirmations.get(p.getUniqueId()) != preview)) {
+                task.cancel();
+                return;
+            }
             Location at = p.getLocation();
             double y = at.getY() + 1;
             for (int[] e : edges) {
@@ -364,6 +623,30 @@ public final class Claims implements Listener {
         else p.sendActionBar(Ui.mm(o.equals(p.getUniqueId()) ? "<gold>⌂ <yellow>Your land" : "<gold>⌂ <white>" + name(o) + "<gray>'s land"));
     }
 
+    private void clearMovedPreview(Player p, Location to) {
+        Confirmation pending = confirmations.get(p.getUniqueId());
+        if (pending != null && pending.chunkKey() != null
+                && !pending.chunkKey().equals(key(to.getWorld(), to.getBlockX() >> 4, to.getBlockZ() >> 4))) {
+            confirmations.remove(p.getUniqueId());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPreviewMove(PlayerMoveEvent e) { clearMovedPreview(e.getPlayer(), e.getTo()); }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPreviewTeleport(PlayerTeleportEvent e) { clearMovedPreview(e.getPlayer(), e.getTo()); }
+
     @EventHandler
-    public void onQuit(PlayerQuitEvent e) { lastArea.remove(e.getPlayer().getUniqueId()); }
+    public void onPreviewWorldChange(PlayerChangedWorldEvent e) { confirmations.remove(e.getPlayer().getUniqueId()); }
+
+    @EventHandler
+    public void onPreviewDeath(PlayerDeathEvent e) { confirmations.remove(e.getEntity().getUniqueId()); }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent e) {
+        UUID player = e.getPlayer().getUniqueId();
+        lastArea.remove(player);
+        confirmations.remove(player);
+    }
 }

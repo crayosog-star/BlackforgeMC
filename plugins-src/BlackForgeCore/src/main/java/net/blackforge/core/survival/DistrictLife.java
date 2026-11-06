@@ -46,10 +46,15 @@ final class DistrictLife implements Listener {
     static final int BELL_X = 0, BELL_Z = D - 3;
     static Location marketWarp(World world) { return new Location(world, 0.5, Y + 1, BELL_Z - 2.5, 0f, 0f); }
 
+    /** /sell's landing point. */
+    static Location groveWarp(World world) { return new Location(world, KingdomLayout.GROVE_WARP_X, KingdomLayout.GROVE_WARP_Y, KingdomLayout.GROVE_WARP_Z + 0.5, 0f, 0f); }
+    static boolean groveBuilt(BlackForgeCore plugin) { return new java.io.File(plugin.getDataFolder(), "spawn-upgrade-phase4").exists(); }
+
     private final BlackForgeCore plugin;
     private final World world;
     private final NamespacedKey tag;
     private final List<TextDisplay> holos = new ArrayList<>();
+    private GroveTrader trader;
 
     DistrictLife(BlackForgeCore plugin, World world) {
         this.plugin = plugin;
@@ -61,6 +66,9 @@ final class DistrictLife implements Listener {
         Bukkit.getScheduler().runTaskLater(plugin, this::relocate, 160L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::relocate2, 240L, 600L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::gateGlow, 100L, 8L);
+        world.addPluginChunkTicket(KingdomLayout.GROVE_X >> 4, KingdomLayout.GROVE_Z >> 4, plugin);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::groveAir, 120L, 10L);
+        Bukkit.getScheduler().runTaskLater(plugin, this::refreshGrove, 300L);
     }
 
     /** Once: the crates move into the Grand Hall and the auction bell into the Merchant District; the old vaults and bell on the island are taken down. */
@@ -126,15 +134,80 @@ final class DistrictLife implements Listener {
         world.spawnParticle(org.bukkit.Particle.REVERSE_PORTAL, -D - 4.5, Y + 3, 0.5, 6, 0.3, 2.0, 2.5, 0.05);
     }
 
+    void setTrader(GroveTrader trader) { this.trader = trader; }
+
+    /** Drifting spores and golden motes in the Grove while anyone is there. */
+    private void groveAir() {
+        for (org.bukkit.entity.Player p : world.getPlayers()) {
+            if (!KingdomLayout.inGrove(p.getX(), p.getY(), p.getZ())) continue;
+            world.spawnParticle(org.bukkit.Particle.SPORE_BLOSSOM_AIR, p.getX(), p.getY() + 4, p.getZ(), 6, 8, 3, 8, 0);
+            world.spawnParticle(org.bukkit.Particle.WAX_ON, p.getX(), p.getY() + 2, p.getZ(), 2, 7, 2, 7, 0);
+        }
+    }
+
+    /** NPCs left over from an earlier layout. */
+    private void removeOldGroveNpcs() {
+        Location centre = new Location(world, KingdomLayout.GROVE_X + 0.5, KingdomLayout.GROVE_Y + 1, KingdomLayout.GROVE_Z + 0.5);
+        for (Entity e : world.getNearbyEntities(centre, 14, 6, 14)) {
+            if (!(e instanceof Villager v)) continue;
+            String id = v.getPersistentDataContainer().get(tag, PersistentDataType.STRING);
+            if (id != null && id.startsWith("grove_") && Math.abs(v.getZ() - (KingdomLayout.GROVE_Z - 5.5)) > 1) v.remove();
+        }
+    }
+
+    /**
+     * Once per layout version: brings an already-built Grove in line with the current design, from its surface up. Nothing but
+     * the Grove reaches this high here (the caldera's rock stops 3 blocks below its surface), so this never touches other builds.
+     */
+    private void refreshGrove() {
+        java.io.File marker = new java.io.File(plugin.getDataFolder(), "grove-layout-v2");
+        if (marker.exists() || !groveBuilt(plugin)) return;
+        net.blackforge.core.build.Canvas c = GildedGrove.build();
+        java.util.Map<Long, String> all = new java.util.HashMap<>(c.blocks());
+        all.putAll(c.lateBlocks());
+        java.util.ArrayDeque<int[]> columns = new java.util.ArrayDeque<>();
+        int gx = KingdomLayout.GROVE_X, gz = KingdomLayout.GROVE_Z, r = KingdomLayout.GROVE_R + 4, g = KingdomLayout.GROVE_Y;
+        for (int x = gx - r; x <= gx + r; x++) for (int z = gz - r; z <= gz + r; z++) if (Math.hypot(x - gx, z - gz) <= r) columns.add(new int[]{x, z});
+        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+            long until = System.nanoTime() + 20_000_000L;
+            while (!columns.isEmpty() && System.nanoTime() < until) {
+                int[] col = columns.poll();
+                for (int y = g; y <= g + 58; y++) {
+                    String want = all.getOrDefault(net.blackforge.core.build.Canvas.key(col[0], y, col[1]), "minecraft:air");
+                    var b = world.getBlockAt(col[0], y, col[1]);
+                    org.bukkit.block.data.BlockData data;
+                    try { data = Bukkit.createBlockData(want); } catch (IllegalArgumentException ex) { continue; }
+                    if (!b.getBlockData().matches(data)) b.setBlockData(data, false);
+                }
+            }
+            if (!columns.isEmpty()) return;
+            task.cancel();
+            try { marker.createNewFile(); } catch (Exception ignored) { }
+            plugin.getLogger().info("Gilded Grove: layout updated");
+        }, 1L, 1L);
+    }
+
     private void ensure() {
         if (!new java.io.File(plugin.getDataFolder(), "spawn-upgrade-phase2").exists()) return;   // only once the districts are built
         if (holos.isEmpty() || holos.stream().anyMatch(t -> !t.isValid())) holograms();
         villager("blacksmith", "<#ff7a1a>Blacksmith", Villager.Profession.WEAPONSMITH, D + 1.5, 0.5, 90f);
         villager("merchant", "<gold>Merchant", Villager.Profession.LIBRARIAN, 0.5, D + 1.5, 180f);
+        if (groveBuilt(plugin)) {
+            if (trader != null) trader.ensureFrames(world);
+            // from the landing point, looking south: Daily Shop on the left, the Trader straight ahead, Auction House on the right
+            villager("grove_daily", "<gradient:#ffd27a:#5fd38a>Daily Shop</gradient>", Villager.Profession.CARTOGRAPHER, KingdomLayout.GROVE_X + 6.5, KingdomLayout.GROVE_Y + 1, KingdomLayout.GROVE_Z - 5.5, 180f);
+            villager("grove_trader", "<gradient:#ffd27a:#5fd38a>Trader</gradient>", Villager.Profession.FARMER, KingdomLayout.GROVE_X + 0.5, KingdomLayout.GROVE_Y + 1, KingdomLayout.GROVE_Z - 5.5, 180f);
+            villager("grove_auction", "<gradient:#ffd27a:#5fd38a>Auction House</gradient>", Villager.Profession.LIBRARIAN, KingdomLayout.GROVE_X - 5.5, KingdomLayout.GROVE_Y + 1, KingdomLayout.GROVE_Z - 5.5, 180f);
+            removeOldGroveNpcs();
+        }
     }
 
     private void villager(String id, String name, Villager.Profession prof, double x, double z, float yaw) {
-        Location at = new Location(world, x, Y + 1, z, yaw, 0);
+        villager(id, name, prof, x, Y + 1, z, yaw);
+    }
+
+    private void villager(String id, String name, Villager.Profession prof, double x, double y, double z, float yaw) {
+        Location at = new Location(world, x, y, z, yaw, 0);
         Villager found = null;
         for (Entity e : world.getNearbyEntities(at, 4, 4, 4)) {
             if (!(e instanceof Villager v) || !id.equals(v.getPersistentDataContainer().get(tag, PersistentDataType.STRING))) continue;
@@ -161,6 +234,15 @@ final class DistrictLife implements Listener {
         holos.clear();
         holos.add(Ui.hologram(new Location(world, 0.5, Y + 6, -(D - 7) + 0.5),
                 "<#ff6a00><bold>BLACKFORGEMC</bold><newline><gray>Welcome to the Grand Hall<newline><white>/warp <gray>• <white>/daily <gray>• <white>/vote <gray>• <white>/pv<newline><gray>Crates and the Hall of Fame are at spawn", 1.3f));
+        if (groveBuilt(plugin) && trader != null) trader.priceTags(world, holos);
+        if (groveBuilt(plugin)) {
+            double y = KingdomLayout.GROVE_Y + 4.1, z = KingdomLayout.GROVE_Z - 5.5, gx = KingdomLayout.GROVE_X;
+            holos.add(Ui.hologram(new Location(world, KingdomLayout.GROVE_WARP_X, KingdomLayout.GROVE_Y + 5, KingdomLayout.GROVE_WARP_Z + 3.5),
+                    "<gradient:#ffd27a:#5fd38a><bold>THE GILDED GROVE</bold></gradient><newline><white>Sell your items: <gold>follow the arrows", 1.2f));
+            holos.add(Ui.hologram(new Location(world, gx + 0.5, y, z), "<#5fd38a><bold>TRADER</bold><newline><white>Sell your items here", 1.2f));
+            holos.add(Ui.hologram(new Location(world, gx + 6.5, y, z), "<gold><bold>DAILY SHOP</bold><newline><gray>New offers every day", 0.9f));
+            holos.add(Ui.hologram(new Location(world, gx - 5.5, y, z), "<gold><bold>AUCTION HOUSE</bold><newline><gray>Buy from other players", 0.9f));
+        }
         holos.add(Ui.hologram(new Location(world, D + 1.5, Y + 3.2, 0.5), "<#ff7a1a><bold>BLACKSMITH</bold><newline><gray>Right-click to use the anvil", 1.0f));
         holos.add(Ui.hologram(new Location(world, 0.5, Y + 3.2, D + 1.5), "<gold><bold>MERCHANT</bold><newline><gray>Right-click to open the Auction House", 1.0f));
         holos.add(Ui.hologram(new Location(world, -(D - 6) + 0.5, Y + 4, 0.5), "<#e5484d><bold>THE WILDS</bold><newline><gray>Use <white>/warp wild <gray>to leave on an expedition", 1.2f));
@@ -174,7 +256,9 @@ final class DistrictLife implements Listener {
         e.setCancelled(true);
         Player p = e.getPlayer();
         if (id.equals("blacksmith")) p.openAnvil(null, true);
-        else if (id.equals("merchant")) p.performCommand("ah");
+        else if (id.equals("merchant") || id.equals("grove_auction")) p.performCommand("ah");
+        else if (id.equals("grove_daily")) p.performCommand("dailyshop");
+        else if (id.equals("grove_trader") && trader != null) trader.open(p);
     }
 
     void shutdown() { holos.forEach(TextDisplay::remove); }

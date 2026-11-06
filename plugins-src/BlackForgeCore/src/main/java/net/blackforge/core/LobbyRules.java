@@ -22,11 +22,15 @@ import java.util.function.Predicate;
 public final class LobbyRules implements Listener {
     private final Predicate<Player> exempt;
     private Predicate<Player> itemsFree = p -> false;
+    private java.util.function.BiPredicate<Player, org.bukkit.Location> buildFree = (p, l) -> false;
 
     public LobbyRules(Predicate<Player> exempt) { this.exempt = exempt; }
 
     /** Players for whom this is true may still move, drop and pick up items (e.g. in the hub's Arena) while every other rule stays on. */
     public LobbyRules allowItems(Predicate<Player> who) { this.itemsFree = who; return this; }
+
+    /** These players may place, break and use blocks at these spots (e.g. the Arena's Foundry). Damage and hunger stay off. */
+    public LobbyRules allowBuild(java.util.function.BiPredicate<Player, org.bukkit.Location> where) { this.buildFree = where; return this; }
 
     private boolean itemsOk(Player p) { return free(p) || itemsFree.test(p); }
 
@@ -59,17 +63,17 @@ public final class LobbyRules implements Listener {
     }
 
     @EventHandler(ignoreCancelled = true)
-    public void onBreak(BlockBreakEvent e) { if (!free(e.getPlayer())) e.setCancelled(true); }
+    public void onBreak(BlockBreakEvent e) { if (!free(e.getPlayer()) && !buildFree.test(e.getPlayer(), e.getBlock().getLocation())) e.setCancelled(true); }
 
     @EventHandler(ignoreCancelled = true)
-    public void onPlace(BlockPlaceEvent e) { if (!free(e.getPlayer())) e.setCancelled(true); }
+    public void onPlace(BlockPlaceEvent e) { if (!free(e.getPlayer()) && !buildFree.test(e.getPlayer(), e.getBlockPlaced().getLocation())) e.setCancelled(true); }
 
     @EventHandler(priority = EventPriority.LOW)
     public void onInteract(PlayerInteractEvent e) {
         if (free(e.getPlayer())) return;
         Block b = e.getClickedBlock();
         if (b == null) return;
-        if (e.getAction() == org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK && b.getType().isInteractable())
+        if (e.getAction() == org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK && b.getType().isInteractable() && !buildFree.test(e.getPlayer(), b.getLocation()))
             e.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY);
         if (e.getAction() == org.bukkit.event.block.Action.PHYSICAL && b.getType() == org.bukkit.Material.FARMLAND) e.setCancelled(true);
     }
@@ -109,6 +113,6 @@ public final class LobbyRules implements Listener {
     @EventHandler public void onPortal(PlayerPortalEvent e) { e.setCancelled(true); }
     @EventHandler public void onEntityPortal(EntityPortalEvent e) { e.setCancelled(true); }
     @EventHandler public void onSpawn(CreatureSpawnEvent e) {
-        if (e.getSpawnReason() == CreatureSpawnEvent.SpawnReason.NATURAL) e.setCancelled(true);
+        if (Shared.zoneBlocksSpawn(e.getSpawnReason())) e.setCancelled(true);
     }
 }

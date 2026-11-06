@@ -5,6 +5,58 @@ mode: backend
 # (an item's own custom-model setting still wins). False = items show as their vanilla base item.
 resource-pack-live: false
 
+# Survival 2: a staff-only copy of Survival for trying new ideas (runs mode: survival). With enabled true this server keeps
+# its own wallet and its own copy of the progress files, sends non-staff back to the hub, and every idea is a switch in /lab.
+# graduated: on any other server, ideas listed here run for real (how an idea moves from Survival 2 to live Survival).
+lab:
+  enabled: false
+  id: survival2
+  graduated: []
+
+# Survival 2 experiments (switch each on/off live in /lab). Numbers only; every key falls back to the default shown.
+lab-experiments:
+  ash-urns:            # dying (not to a player, not in a PvP zone) puts your items in an urn where you fell
+    lock-minutes: 10   # only the owner can open it for this long
+    life-minutes: 60   # then it crumbles and spills what's left
+  hearth-contracts:    # /contracts buy orders: money held up front, sellers paid at once
+    max-open: 5
+    max-amount: 2304   # items per order (36 stacks)
+    expire-days: 7     # unfilled orders refund after this
+    fee-percent: 1.0   # posting fee (not refunded), so posting and cancelling over and over costs something
+    fee-min: 25
+  kindle-draw:         # /draw lottery
+    ticket-price: 100
+    house-cut: 0.10    # share of the pot removed from the economy
+    max-tickets: 100   # per player per draw
+    every-hours: 6
+  living-prices:       # Grove Trader prices fall with server-wide sales and recover
+    half-price-at: 2000             # recent sales of one item that halve its price
+    floor: 0.3                      # never below 30% of the normal price
+    recover-half-life-hours: 6
+  ember-bonds:         # /bonds: lock money, get it back with interest
+    short-days: 3
+    short-rate-percent: 3
+    long-days: 7
+    long-rate-percent: 8
+    max-locked: 50000
+    min: 1000
+  ashfall-nights:      # ash every few nights, ember-touched mobs drop Ashmarks (/ashmarks)
+    every-nights: 5
+    health-multiplier: 1.5
+  forge-rifts:         # a rift opens in the wild: 3 waves, then it bursts with loot
+    every-minutes: 90
+    first-after-minutes: 10
+    open-minutes: 20   # closes by itself if nobody clears it
+    reward-money: 400  # per player who fought
+  vein-timber:         # sneak-break a vein (Miner) or a tree (Lumberjack)
+    job-level: 20
+    max-ore: 16
+    max-logs: 64
+  sit:
+    height: 0.5        # seat height above the block: raise or lower if players sit too low or high
+  forge-post:          # /post parcels and money, even to offline players
+    postage: 10
+
 # Gale Bellows PvP item (survival only). Every player gets one on first join; /jbello gives another if they
 # don't carry one. Set false to stop it firing. Its custom texture needs the resource pack: leave custom-model
 # false until the pack is live (otherwise it shows as the purple/black missing model); until then it is a
@@ -43,6 +95,29 @@ emp:
   enabled: true
   radius: 10
   cooldown-seconds: 45
+
+# Nightrend (hub Arena only for now): dual-wielded daggers, left-click melee only, no sweep. One in your main hand hits
+# for `damage` at `attack-speed` a second, with `reach-change` blocks of reach (normal reach is 3). A Nightrend in each
+# hand raises that to `pair-attack-speed`; swings alternate arms starting with the right, and after each swing there's
+# a `same-side-chance` that the next uses the same arm again, when that blade's glow swells for a second (cosmetic). A
+# different sword in the off hand gives `mixed-attack-speed` instead (speed only). Hits from the `behind-arc-degrees`
+# arc behind the target (centred on its back) do `behind-damage` of normal damage (0.6 = 60%). An EMP turns both speed
+# bonuses off for `emp-seconds`. Drawing a Nightrend into either hand flips it up (silently for now), at most once
+# per `draw-cooldown-seconds`. Staff: /nightrend (/daggers) gives one, /nrdebug shows each swing. Set enabled false to
+# stop it.
+nightrend:
+  enabled: true
+  damage: 5
+  attack-speed: 2.0
+  pair-attack-speed: 2.6
+  reach-change: -0.5
+  behind-arc-degrees: 120
+  behind-damage: 0.6
+  emp-seconds: 4
+  draw-cooldown-seconds: 0.4
+  mixed-attack-speed: 2.3
+  same-side-chance: 0.05
+  quick-right-on-left-turns: true   # before a left turn your own right swing is one tick long, so the left shows at once
 
 # Rimelock (hub Arena only for now): leap, slam, and a 16-block-tall, 6-block-radius cage holds for 10 s. Nobody
 # inside can leave, mobs included, except the caster (and their team, once teams exist); anyone can walk in; no hits
@@ -99,7 +174,110 @@ last-rite:
   allow-totems: true
   chamber-slots: 8         # rites at once per server
 
-# Robots (Survival + Skyblock copper golems). NOT read by the plugin yet - a later task wires these up.
+# Night Thieves (Survival). Outside a claim you're trusted on, at night, every roll-seconds there's a chance a gang comes
+# for you. Solo: one thief in a copy of your gear, solo-multiplier stronger. A group within party-radius rolls once and
+# gets more, tougher thieves the more of them there are and the better their gear. One in mage-every is a mage who throws
+# Hex Bolts. A hit can steal: weapon-turn-chance of the time he takes your weapon and fights you with it, otherwise he
+# grabs your most valuable item and runs. Kill him to get it back. Staff: /blackforge thieves spawn <player> | clear | status
+thief-ambush:
+  enabled: true
+  roll-seconds: 60
+  chance: 0.05
+  cooldown-minutes: 10         # no second ambush this soon after one ends
+  min-playtime-minutes: 60     # brand-new players are left alone
+  party-radius: 24
+  max-thieves: 8
+  thieves-per-gear: 12         # groups: +1 thief per this much average gear score (iron kit ~16, netherite ~28)
+  solo-multiplier: 1.5         # health, damage and armour vs the gear they copy
+  per-extra-player: 0.08
+  per-gear-point: 0.015        # per point of average gear score above 10
+  max-multiplier: 2.5
+  mage-every: 3
+  steal-chance: 0.25           # per thief hit that lands
+  weapon-turn-chance: 0.5
+  speed: 0.3                   # movement speed (a zombie is 0.23)
+  flee-speed-boost: 0.05
+  escape-seconds: 30
+  escape-distance: 40
+  give-up-seconds: 180
+  hex-damage: 4.0              # times the multiplier
+  cast-gap-min-ticks: 60
+  cast-gap-max-ticks: 90
+  reward-coins: 150            # per thief killed, times the multiplier, split between the group
+  key-chance: 0.04
+  key-crate: iron
+  rare-key-chance: 0.01
+  rare-key-crate: gold
+
+# Base Station (Survival + Skyblock): one per claim or island. Sells Hopper Upgrades, upgrades Agents, collects their output.
+# Survival claim previews, confirmation, help, and the first-claim RTP tip. Off until rollout.
+survival-claims-base-qol:
+  enabled: false
+
+base-station:
+  enabled: true
+  price: 25000
+  essence: 128
+  agent-radius: 16
+  custom-ui: true          # false = plain menus
+
+# Base levels (plan: docs/plans/base-progression.md). Survival and the Foundry only; the Foundry always runs them for testing.
+# deliveries = lifetime items Agents put in the Forge, per level from 2 to 5, and must rise.
+base-levels:
+  enabled: false
+  deliveries: [2000, 12000, 52000, 202000]
+  money: [25000, 100000, 400000, 2000000]
+  essence: [128, 512, 2048, 8192]
+  job-levels:                       # the farmer must stay at 1
+    farmer: 1
+    miner: 2
+    fisherman: 3
+    grinder: 4
+  allay-levels: [3, 4, 5]           # Gatherer, Courier, Steward; their prices stay under allays:
+  hopper-levels: [2, 4]             # claim-wide Tier II, Tier III
+  hopper-money: [150000, 1500000]
+  hopper-essence: [512, 8192]
+  claim-hopper-max-per-chunk: 256   # safety limit until the lag test
+  starter-agent: true               # one free Tier I Farmer, once per player, on placing a Forge
+
+# Hopper tiers I, II, III. delays = ticks between moves (vanilla is 8). upgrades-needed = I to II, then II to III.
+hopper-upgrades:
+  enabled: true            # false = hoppers run at vanilla speed; tiers are kept
+  delays: [8, 4, 1]
+  upgrades-needed: [1, 10]
+  price: 20000             # per Hopper Upgrade
+  essence: 128             # per Hopper Upgrade
+  max-per-chunk: 16
+
+# Forge Allays: a base upgrade that stays at the Base Station and moves items (plan: docs/plans/forge-allays.md).
+# Survival and the Foundry only. Lists are per tier I, II, III. With enabled and preview-staff both false, no allays fly and tiers are kept.
+allays:
+  enabled: true
+  preview-staff: true             # staff get the Forge's allay menu on Survival with real money, before enabled is on
+  flock: [1, 2, 3]                # allays per base
+  leash: [12, 20, 28]             # blocks from the Station, and never outside the claim
+  price: [75000, 250000, 750000]  # to reach each tier
+  essence: [256, 1024, 4096]      # to reach each tier
+  carry: 16                       # items per trip
+  speed: 6.0                      # blocks a second
+  pause-seconds: 1.0              # pause after each trip
+  min-drop-age-ticks: 60          # leaves newer drops alone, so players can pick up their own
+  scan-seconds: 5                 # how often a base looks for work
+  link-scan-seconds: 30           # how often a base looks for framed chests
+  max-scans-per-tick: 4           # bases scanned per tick across the server
+  path-max-nodes: 500             # blocks searched for a way round walls before it gives up and flies straight (plenty inside a 16-32 block leash)
+  no-route-seconds: 5             # after a search finds no way to a spot, trips there fly straight this long without searching again
+  max-path-searches-per-tick: 2   # across the server, so a busy moment means a short wait
+  sell-fee: 0.10                  # Steward's cut of a sale
+  sausage-flip: true              # an allay named Smoked Sausage flies upside down
+  custom-skins: true              # Tier II orange and Tier III rainbow, from the resource pack (needs resource-pack-live)
+
+# Skins and work animations for Agents, and skins for upgraded hoppers. Both need resource-pack-live.
+agent-looks: true
+hopper-looks: true
+hopper-looks-max-per-chunk: 32   # skins per chunk, own tiers first; the rest still run at their tier
+
+# Agents, called robots in the code and saves (Survival + Skyblock copper golems). NOT read by the plugin yet - a later task wires these up.
 # fish-seconds (per robot tier I..V) and fisher-burn match the built-in values in RobotRules; the rest are for the
 # upcoming chest trips (radius in blocks, store when any item reaches store-threshold, fetch fuel at 2 minutes left).
 robots:
@@ -108,5 +286,85 @@ robots:
   store-threshold: 20
   fuel-fetch-minutes: 2
   walk-speed: 4.0
-  fish-seconds: [180, 150, 120, 90, 60]
+  fish-seconds: [120, 100, 80, 60, 40]
   fisher-burn: 0.25
+  # Logs each Grinder's result when it changes (fuel, mobs found, skipped and why, hits, kills).
+  # If this key is missing, it's on for the Arena's Foundry and off everywhere else.
+  # grinder-debug-log: true
+
+# The Academy: Agents earn Mastery by working (Survival, once live). live-modes lists the server modes it's on for; the
+# Arena's Foundry always has it, for testing. Nothing reads these yet except the startup log line for live-modes.
+# level-base and level-exponent: total points for a level = base x level^exponent. Per job, per UTC day: full points up
+# to daily-soft-cap, then over-cap-rate of them. coach-mult applies while the owner is within coach-radius blocks.
+academy:
+  live-modes: []
+  points-per-work:
+    miner: 1
+    farmer: 1
+    grinder: 2
+    fisherman: 12
+  level-base: 20
+  level-exponent: 2.0
+  max-level: 30
+  daily-soft-cap: 1500
+  over-cap-rate: 0.25
+  coach-radius: 16
+  coach-mult: 1.25
+  perks: {}
+  specs: {}
+  traits: {}
+
+# The Trader in the Gilded Grove (Survival): sells raw farmed goods for the player's balance.
+# Per player, per item, per UTC day: full price up to daily-soft-cap, then over-cap-rate of the price.
+# Override any default price under prices, for example:  wheat: 1.5
+grove-shop:
+  enabled: true
+  daily-soft-cap: 1728
+  over-cap-rate: 0.25
+  prices: {}
+
+# The Sundering (Survival): five bosses chained in their own arena (/warp sundering). Every Saturday at 1pm Central one breaks free.
+# The day and time are in Events.WEEKLY. The damage split decides the loot; anyone under min-share gets nothing.
+boss:
+  size: 2.0                # how much bigger than the old world bosses
+  fight-seconds: 600       # the fight length to aim for, whatever the crowd size
+  player-dps: 12           # the damage per second one player is assumed to deal, used with fight-seconds
+  time-limit-seconds: 1200 # after this it retreats to its pit
+  money-pool: 25000
+  scrap-pool: 1500
+  min-share: 0.01
+  retreat-share: 0.25      # if it retreats, this much of the money and Scrap is still paid (no keys)
+  key-rolls: [netherite, gold, gold, iron, iron, iron]   # each key goes to one player; your damage share is your chance
+
+# The Foundry: the Arena's build-and-test island (hub server). Agents, hopper tiers and the Forge are free there, and
+# everything a player places goes when they leave. These limits only apply inside it.
+foundry:
+  max-agents-per-player: 20
+  max-agents-total: 60
+  max-upgraded-hoppers-per-chunk: 64
+  max-allays-total: 12
+  check-seconds: 60               # how long /foundry check runs before it reports
+  agent-radius: 40                # blocks an agent can deliver to the Forge from, enough for every bench on the island
+  leave-grace-seconds: 15         # time to step back in before your Foundry test is cleared
+  fisherman-seconds: 10           # a Fisherman's catch time here, so it can be seen working
+  allay-scan-seconds: 2           # how often allays look for drops here
+  allay-link-scan-seconds: 5      # how often allays look for framed chests and low Agents here
+
+# Black Forge hub (hub server only). Commands: /blackforge setspawn | reload | dragons | effects | portals | info
+hub:
+  # portal -> proxy server name (change if a backend is registered under another name in the proxy)
+  portals:
+    survival: survival
+    arcade: arcade
+    factions: factions
+    skyblock: skyblock
+    raft: raft
+  # spawn: set in-game with /blackforge setspawn (until set, the built-in spawn is used)
+  join:
+    enabled: true                     # false = no arrival effects at all
+    full-show-cooldown-minutes: 360   # a returning player sees the full "Forge Awakens" show only after this long away (first join always does)
+    short-effects: true               # the quick ring of fire + embers for everyone else
+    roar-chance: 0.2                  # chance of a soft dragon roar on the short arrival
+  dragons:
+    enabled: true                     # takes effect on hub restart
+    fire-interval-scale: 1.0          # 2 = dragons breathe fire half as often, 0.5 = twice as often

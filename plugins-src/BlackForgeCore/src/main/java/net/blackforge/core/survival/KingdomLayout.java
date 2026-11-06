@@ -16,6 +16,25 @@ public final class KingdomLayout {
     public static final int Y = SurvivalLayout.Y;
     static final int D = SpawnUpgradeBuilder.DIST;
 
+    // ------------------------------------------------------------------ the Gilded Grove (/sell), spawn upgrade phase 4
+    /** The island floats just above the caldera's south-west ridge (the rock under it tops out at Y + 17). */
+    public static final int GROVE_X = -70, GROVE_Z = 150, GROVE_R = 34, GROVE_Y = Y + 20;
+    /** The bridge leaves the Merchant District's west edge at this point and runs west along this z. */
+    public static final int GROVE_BRIDGE_X = -9, GROVE_BRIDGE_Z = D;
+    /** Where /sell lands: on the avenue just inside the arch, looking south to the pavilion. */
+    public static final double GROVE_WARP_X = GROVE_X + 0.5, GROVE_WARP_Y = GROVE_Y + 1;
+    public static final int GROVE_WARP_Z = GROVE_Z - GROVE_R + 8;
+    public static boolean inGrove(double x, double y, double z) {
+        if (y <= GROVE_Y - 60 || y >= GROVE_Y + 60) return false;
+        return Math.hypot(x - GROVE_X, z - GROVE_Z) <= GROVE_R + 6
+                || x >= GROVE_X - 4 && x <= GROVE_BRIDGE_X && z >= GROVE_BRIDGE_Z - 4 && z <= GROVE_Z - GROVE_R + 4;
+    }
+    /** Too close to the Grove or its bridge for a land claim. */
+    public static boolean nearGrove(double x, double z) {
+        return Math.hypot(x - GROVE_X, z - GROVE_Z) < GROVE_R + 32
+                || x >= GROVE_X - 32 && x <= GROVE_BRIDGE_X && z >= GROVE_BRIDGE_Z - 32 && z <= GROVE_BRIDGE_Z + 32;
+    }
+
     // ------------------------------------------------------------------ the Trading Hall (south-east annex)
     /** Hall walls run x 22..44, z 95..107 on a platform x 20..46, z 93..109. */
     public static final int TH_X1 = 22, TH_X2 = 44, TH_Z1 = 95, TH_Z2 = 107;

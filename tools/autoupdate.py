@@ -11,7 +11,7 @@ Restart requests: staff type /blackforge restart <server|all|this> [now] in game
 tools/restart-requests/. Each run handles those first: the servers restart the same safe way (empty right away,
 players get the countdown), or immediately with "now".
 """
-import os, re, subprocess, sys, time
+import json, os, re, subprocess, sys, time
 from datetime import datetime
 from pathlib import Path
 
@@ -19,8 +19,9 @@ ROOT = Path(__file__).resolve().parent.parent
 TOOLS = ROOT / "tools"
 LOG = TOOLS / "autoupdate.log"
 LOCK = TOOLS / "autoupdate.lock"
-SERVERS = ["hub", "skyblock", "survival", "factions", "arcade"]
-NEEDS_DEPLOY = ("plugins-src/", "datapacks/", "branding/server-icon.png", "tools/deploy.py")
+SERVERS = ["hub", "skyblock", "survival", "factions", "arcade", "raft", "survival2"]
+NEEDS_DEPLOY = ("plugins-src/", "datapacks/", "resourcepack/", "website/pack/", "branding/server-icon.png", "tools/deploy.py")
+STATE = TOOLS / "autoupdate_state.json"   # last commit the servers were deployed from
 COUNTDOWN = [300, 60, 30, 10]   # seconds-left warnings for servers with players
 REQUESTS = TOOLS / "restart-requests"   # written by /blackforge restart in game
 NO_WINDOW = 0x08000000
@@ -118,17 +119,28 @@ def main():
         restart_requests()   # staff asked in game: handled before (and independently of) any update
         code, out = git("fetch", "--quiet", "origin", "main")
         if code != 0: log("fetch failed: " + out.strip()[:300]); return
-        head, remote = git("rev-parse", "HEAD")[1].strip(), git("rev-parse", "origin/main")[1].strip()
-        if head == remote: return
-        if git("merge-base", "--is-ancestor", "HEAD", "origin/main")[0] != 0:
-            log("local commits aren't on GitHub yet (or histories diverged) - not pulling; push or reconcile first"); return
-        changed = git("diff", "--name-only", head, remote)[1].split()
-        short = remote[:7]
-        code, out = git("merge", "--ff-only", "--quiet", "origin/main")
-        if code != 0: log("pull failed (local edits in the way?): " + out.strip()[:500]); return
-        log(f"pulled {head[:7]} -> {short}: {len(changed)} file(s) changed")
-        if not any(f.startswith(NEEDS_DEPLOY) for f in changed): log("no plugin/datapack changes - nothing to restart"); return
-        if build(): install(short); log("update installed")
+        remote = git("rev-parse", "origin/main")[1].strip()
+        if git("merge-base", "--is-ancestor", "HEAD", "origin/main")[0] == 0:
+            if git("rev-parse", "HEAD")[1].strip() != remote:
+                code, out = git("merge", "--ff-only", "--quiet", "origin/main")
+                if code != 0: log("pull failed (local edits in the way?): " + out.strip()[:500]); return
+        elif git("merge-base", "--is-ancestor", "origin/main", "HEAD")[0] != 0:
+            log("histories diverged - not pulling; reconcile first"); return
+        head = git("rev-parse", "HEAD")[1].strip()
+        # deploy only what is on GitHub: skip while local commits are unpushed
+        if head != remote: return
+        try: deployed = json.loads(STATE.read_text())["deployed"]
+        except Exception: deployed = None
+        if deployed is None: STATE.write_text(json.dumps({"deployed": head})); return
+        if deployed == head: return
+        if git("cat-file", "-e", deployed + "^{commit}")[0] != 0: deployed = head
+        changed = git("diff", "--name-only", deployed, head)[1].split()
+        log(f"GitHub {deployed[:7]} -> {head[:7]}: {len(changed)} file(s) changed")
+        if any(f.startswith(NEEDS_DEPLOY) for f in changed):
+            if not build(): return   # retry next run
+            install(head[:7]); log("update installed")
+        else: log("no plugin/datapack/pack changes - nothing to restart")
+        STATE.write_text(json.dumps({"deployed": head}))
     finally:
         LOCK.unlink(missing_ok=True)
 

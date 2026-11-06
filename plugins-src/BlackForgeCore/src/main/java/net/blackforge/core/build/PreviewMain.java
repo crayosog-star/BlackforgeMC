@@ -21,12 +21,14 @@ public final class PreviewMain {
         System.out.println("hub blocks: " + hub.size());
         render(hub, new File(out, "hub_southeast.png"), 0, 7);
         render(hub, new File(out, "hub_southwest.png"), 1, 7);
-        pov(hub, new File(out, "hub_spawn_view.png"), 0.5, 104.62, 0.5, 180, -10, 1280, 720);
+        pov(hub, new File(out, "hub_spawn_view.png"), 0.5, 104.62, 40.5, 180, -4, 1600, 900);
         pov(hub, new File(out, "hub_spawn_view_east.png"), 0.5, 104.62, 0.5, -90, -2, 1280, 720);
         pov(hub, new File(out, "hub_spawn_view_south.png"), 0.5, 104.62, 0.5, 0, -2, 1280, 720);
         pov(hub, new File(out, "hub_view_from_arcade_gate.png"), 0.5, 103.6, 40.5, 180, -4, 1280, 720);
         pov(hub, new File(out, "hub_view_side.png"), 44.5, 112, 30.5, 125, -14, 1280, 720);
         topDown(hub, new File(out, "hub_top.png"), 6);
+        pov(hub, new File(out, "hub_keep_front.png"), 0.5, 140, 100.5, 180, 14, 1600, 900);
+        pov(hub, new File(out, "hub_keep_aerial.png"), 0.5, 230, 190.5, 180, 30, 1600, 900);
         pov(hub, new File(out, "hub_castle_aerial.png"), 0.5, 240, 300.5, 180, 32, 1600, 900);
         // the island on its own (no castle ring), for the website's hero image
         Canvas island = new Canvas();
@@ -41,6 +43,9 @@ public final class PreviewMain {
         pov(ta, new File(out, "arena_spawn_view.png"), 0.5, 102.62, 13.5, 180, -4, 1280, 720);
         pov(ta, new File(out, "arena_showcase_view.png"), -4.5, 102.62, 0.5, 90, -8, 1280, 720);
         pov(ta, new File(out, "arena_aerial.png"), 0.5, 140, 50.5, 180, 32, 1600, 900);
+        pov(ta, new File(out, "arena_foundry_entrance.png"), 0.5, 102.62, -9.5, 180, -2, 1280, 720);
+        pov(ta, new File(out, "arena_foundry_gate.png"), 0.5, 102.62, -32.5, 180, -2, 1280, 720);
+        pov(ta, new File(out, "arena_foundry_aerial.png"), 0.5, 145, -20.5, 180, 40, 1600, 900);
         Canvas rc = net.blackforge.core.survival.RiteChamberBuilder.build();
         System.out.println("last rite chamber blocks: " + rc.size());
         pov(rc, new File(out, "rite_chamber_caster_view.png"), 3.5, 102.62, 5.5, -90, 4, 1280, 720);
@@ -150,7 +155,7 @@ public final class PreviewMain {
     }
 
     /** Simple voxel raytracer from a player's eye (yaw/pitch in Minecraft convention). */
-    static void pov(Canvas c, File file, double ex, double ey, double ez, float yaw, float pitch, int w, int h) throws Exception {
+    public static void pov(Canvas c, File file, double ex, double ey, double ez, float yaw, float pitch, int w, int h) throws Exception {
         Map<Long, String> all = new HashMap<>(c.blocks());
         all.putAll(c.lateBlocks());
         all.values().removeIf(v -> v.startsWith("minecraft:light"));   // invisible light blocks
@@ -207,7 +212,7 @@ public final class PreviewMain {
         return (clamp((int) ar) << 16) | (clamp((int) ag) << 8) | clamp((int) ab);
     }
 
-    static boolean night;
+    public static boolean night;
 
     static int sky(double dy) {
         if (night) {

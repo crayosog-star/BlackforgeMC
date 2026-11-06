@@ -429,6 +429,17 @@ public final class Cosmetics implements Listener {
                 return true;
             }
         });
+        Bukkit.getCommandMap().register("blackforge", new Command("pet", "Toggle your orange companion", "/pet <on|off>", List.of()) {
+            @Override public boolean execute(CommandSender s, String label, String[] args) {
+                if (!(s instanceof Player p)) { s.sendMessage("Players only."); return true; }
+                OrangeCompanion.Toggle toggle = OrangeCompanion.Toggle.parse(args);
+                if (toggle == null) { p.sendMessage(Ui.mm("<yellow>Use /pet on or /pet off.")); return true; }
+                boolean enabled = toggle == OrangeCompanion.Toggle.ON;
+                fx.setOrangeCompanion(p, enabled);
+                p.sendMessage(Ui.mm(enabled ? "<gold>Orange companion on." : "<gray>Orange companion off."));
+                return true;
+            }
+        });
         Bukkit.getCommandMap().register("blackforge", new Command("cosmeticcrate", "Open a Cosmetic Crate", "/cosmeticcrate", List.of("ccrate", "ckey")) {
             @Override public boolean execute(CommandSender s, String label, String[] a) {
                 if (s instanceof Player p) openCrate(p); else s.sendMessage("Players only.");

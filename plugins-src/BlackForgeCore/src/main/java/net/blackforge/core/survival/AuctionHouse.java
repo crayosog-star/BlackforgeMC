@@ -1,6 +1,7 @@
 package net.blackforge.core.survival;
 
 import net.blackforge.core.BlackForgeCore;
+import net.blackforge.core.NetEconomy;
 import net.blackforge.core.Ui;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
@@ -136,9 +137,7 @@ public final class AuctionHouse implements Listener {
 
     private void sell(Player p, String[] a) {
         if (a.length < 2) { p.sendMessage(Ui.mm(PREFIX + "<gray>Hold an item and type <white>/ah sell <price>")); return; }
-        double price;
-        try { price = Double.parseDouble(a[1].replace(",", "").replace("$", "").toLowerCase().replace("k", "000").replace("m", "000000")); }
-        catch (NumberFormatException e) { p.sendMessage(Ui.mm(PREFIX + "<red>That's not a valid price.")); return; }
+        double price = NetEconomy.parseAmount(a[1]);
         if (price < 1 || price > 100_000_000) { p.sendMessage(Ui.mm(PREFIX + "<red>Price must be between $1 and $100,000,000.")); return; }
         ItemStack hand = p.getInventory().getItemInMainHand();
         if (hand.getType().isAir()) { p.sendMessage(Ui.mm(PREFIX + "<red>Hold the item you want to sell.")); return; }
@@ -307,13 +306,19 @@ public final class AuctionHouse implements Listener {
         Listing l = listings.get(id);
         p.closeInventory();
         if (l == null) { p.sendMessage(Ui.mm(PREFIX + "<red>Too slow - that item was already sold.")); return; }
+        if (!NetEconomy.validPrice(l.price)) { p.sendMessage(Ui.mm(PREFIX + "<red>This listing has an invalid price.")); return; }
         if (!eco.has(p, l.price)) { p.sendMessage(Ui.mm(PREFIX + "<red>You need <gold>" + money(l.price) + "<red> (you have " + money(eco.getBalance(p)) + ").")); return; }
         if (p.getInventory().firstEmpty() == -1) { p.sendMessage(Ui.mm(PREFIX + "<red>Your inventory is full.")); return; }
         if (!eco.withdrawPlayer(p, l.price).transactionSuccess()) { p.sendMessage(Ui.mm(PREFIX + "<red>Payment failed.")); return; }
-        listings.remove(id);
         OfflinePlayer seller = Bukkit.getOfflinePlayer(l.seller);
         double afterTax = Math.round(l.price * (1 - TAX) * 100) / 100.0;
-        eco.depositPlayer(seller, afterTax);
+        if (!eco.depositPlayer(seller, afterTax).transactionSuccess()) {
+            if (!eco.depositPlayer(p, l.price).transactionSuccess())
+                plugin.getLogger().severe("Could not refund failed auction purchase " + id);
+            p.sendMessage(Ui.mm(PREFIX + "<red>Payment could not be completed."));
+            return;
+        }
+        listings.remove(id);
         if (seller.getPlayer() != null) net.blackforge.core.Hooks.stat(seller.getPlayer(), "ah_sold", 1);
         give(p, l.item);
         Player sp = seller.getPlayer();

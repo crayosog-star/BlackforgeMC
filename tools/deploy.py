@@ -14,8 +14,8 @@ PERMANENT_OPS = [OWNER, {"uuid": "8c67e820-3611-42b8-9f5f-d355d31f9ca9", "name":
 ADDRESS = "blackforgemc.com"
 # served straight from GitHub (public repo, main branch): a merged pack is downloadable at once, no website re-upload.
 # The file name carries the SHA-1, so a new pack is a new file and clients never get a stale cached copy.
-PACK_URL = "https://raw.githubusercontent.com/crayosog-star/BlackforgeMC/main/website/pack/blackforge-pack-acec528b.zip"
-PACK_SHA1 = "acec528bf380d6d5cc81d2447ac7c6edde4b6bdb"
+PACK_URL = "https://raw.githubusercontent.com/crayosog-star/BlackforgeMC/main/website/pack/blackforge-pack-a7689b91.zip"
+PACK_SHA1 = "a7689b91e0efe71edae09cc3cdb88c4a86e636ce"
 # local testing only: tools/pack_override.txt (line 1 URL, line 2 SHA-1) beats the two lines above. Delete it once the pack is on GitHub.
 _override = Path(__file__).with_name("pack_override.txt")
 if _override.exists():
@@ -27,6 +27,9 @@ SERVERS = {
     "survival": {"port": 30003, "mode": "survival", "display": "Survival", "join": ""},
     "factions": {"port": 30004, "mode": "factions", "display": "Factions", "join": ""},
     "arcade":   {"port": 30005, "mode": "arcade", "display": "Arcade", "join": ""},
+    "raft":     {"port": 30006, "mode": "raft", "display": "Raft", "join": "raft"},
+    # Survival 2: staff-only test copy of Survival, own wallet and progress files (BlackForgeCore Lab)
+    "survival2": {"port": 30007, "mode": "survival", "display": "Survival 2", "join": "", "lab": True},
 }
 
 secret_file = ROOT / "tools" / "rcon.secret"
@@ -72,6 +75,9 @@ for name, s in SERVERS.items():
     if name not in targets:
         continue
     d = ROOT / name
+    if not (d / "paper.jar").exists():   # not set up on this PC yet (run setup_network.py first): nothing to deploy
+        print(f"{name}: not set up yet - skipped")
+        continue
     plugins = d / "plugins"
     for old in plugins.glob("TAB*.jar"):
         old.unlink()
@@ -83,12 +89,12 @@ for name, s in SERVERS.items():
         "koth:", "  interval-minutes: 300", "  first-after-minutes: 30",
         "  capture-seconds: 180", "  max-minutes: 20", "  reward-money: 5000",
         "pvp:", "  drop-interval-minutes: 180", "  first-drop-after-minutes: 60", "  crates-per-drop: 15",
-        "rtp:", "  border-size: 100000", "  range: 100000   # wild teleports land anywhere inside the border",
+        "rtp:", "  border-size: 1000000   # world border (the nether is this / 8)", "  range: 100000   # wild teleports land within this square, whatever the border",
         "votes:", "  party-every: 50", "  money: 250", "  sites: []",
         "store-url: 'Store coming soon!'",
         "gale-bellows:", "  enabled: true", "  custom-model: true   # the resource pack below is live, so the bellows can use its texture",
     ] if s["mode"] == "survival" else [
-        "rtp:", "  border-size: 12000",
+        "rtp:", "  border-size: 100000", "  range: 12000   # wild teleports land within this square, whatever the border",
         "season:", "  months: 3   # the factions map resets every this many months",
     ] if s["mode"] == "factions" else [
         "oneblock:",
@@ -96,8 +102,11 @@ for name, s in SERVERS.items():
         f"  fragment-chance-chest: {os.environ.get('BF_FRAGMENT_CHANCE', '0.0833')}   # per OneBlock chest opened (~1 in 12)",
     ] if s["mode"] == "skyblock" else []
     (cfg / "config.yml").write_text("\n".join([
-        "# hub | arcade | survival | skyblock | factions | backend", f"mode: {s['mode']}", f"display-name: {s['display']}",
-        f"join-command: '{s['join']}'", f"address: '{ADDRESS}'", "resource-pack-live: true", *koth, ""]), encoding="utf-8")
+        "# hub | arcade | survival | skyblock | factions | raft | backend", f"mode: {s['mode']}", f"display-name: {s['display']}",
+        f"join-command: '{s['join']}'", f"address: '{ADDRESS}'", "resource-pack-live: true", *koth,
+        *(["lab:", "  enabled: true", f"  id: {name}"] if s.get("lab") else
+          ["lab:", "  enabled: false", "  graduated: []   # Survival 2 ideas that run here for real"] if s["mode"] == "survival" else []),
+        ""]), encoding="utf-8")
     set_props(d / "server.properties", {
         "enable-rcon": "true", "rcon.port": str(s["port"] + 1000), "rcon.password": RCON_PASS,
         "broadcast-rcon-to-ops": "false", "motd": f"BlackForgeMC {s['display']}",

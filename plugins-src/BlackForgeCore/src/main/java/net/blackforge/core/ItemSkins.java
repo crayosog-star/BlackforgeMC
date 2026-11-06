@@ -33,7 +33,7 @@ public final class ItemSkins implements Listener {
     private static final Map<String, String> SKINS = new LinkedHashMap<>();
     static {
         for (String id : new String[]{"ashen_bonfire", "ashen_chain", "darkness_potion", "gaia_potion", "gods_eye",
-                "last_rite", "rimelock", "soul_candy", "gale_bellows", "frost_shard"}) SKINS.put(id, id);
+                "last_rite", "rimelock", "soul_candy", "gale_bellows", "frost_shard", "base_station", "hopper_upgrade", "nightrend"}) SKINS.put(id, id);
         SKINS.put("surge_item", "surge");
     }
 
@@ -46,7 +46,9 @@ public final class ItemSkins implements Listener {
         WHERE.put("gaia_potion", "Survival, not in spawn or others' claims · hub Arena");
         for (String id : new String[]{"rimelock", "ashen_chain", "ashen_bonfire", "gods_eye", "emp_item"})
             WHERE.put(id, "Survival PvP zones (KOTH, Scrapyard) · hub Arena");
+        for (String id : new String[]{"base_station", "hopper_upgrade"}) WHERE.put(id, "Survival and Skyblock");
         WHERE.put("last_rite", "Survival outside spawn · only catches where PvP is on");
+        WHERE.put("nightrend", "hub Arena (for now)");
     }
     static final String WHERE_PREFIX = "Works in: ";
 

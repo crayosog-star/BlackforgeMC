@@ -1,0 +1,196 @@
+{
+  "providers": [
+    {
+      "type": "space",
+      "advances": {
+        "\uf100": 1,
+        "\uf101": 2,
+        "\uf102": 4,
+        "\uf103": 8,
+        "\uf104": 16,
+        "\uf105": 32,
+        "\uf106": 64,
+        "\uf107": 128,
+        "\uf110": -1,
+        "\uf111": -2,
+        "\uf112": -4,
+        "\uf113": -8,
+        "\uf114": -16,
+        "\uf115": -32,
+        "\uf116": -64,
+        "\uf117": -128
+      }
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/forge.png",
+      "height": 89,
+      "ascent": 13,
+      "chars": [
+        "\ue000"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/storage.png",
+      "height": 71,
+      "ascent": 13,
+      "chars": [
+        "\ue001"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/agent.png",
+      "height": 125,
+      "ascent": 13,
+      "chars": [
+        "\ue004"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/workshop.png",
+      "height": 89,
+      "ascent": 13,
+      "chars": [
+        "\ue005"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/home_1.png",
+      "height": 125,
+      "ascent": 13,
+      "chars": [
+        "\ue020"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/home_2.png",
+      "height": 125,
+      "ascent": 13,
+      "chars": [
+        "\ue021"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/home_3.png",
+      "height": 125,
+      "ascent": 13,
+      "chars": [
+        "\ue022"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/home_4.png",
+      "height": 125,
+      "ascent": 13,
+      "chars": [
+        "\ue023"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/home_5.png",
+      "height": 125,
+      "ascent": 13,
+      "chars": [
+        "\ue024"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/home_on_2.png",
+      "height": 18,
+      "ascent": -40,
+      "chars": [
+        "\ue025"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/home_on_3.png",
+      "height": 18,
+      "ascent": -58,
+      "chars": [
+        "\ue026"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/home_on_4.png",
+      "height": 18,
+      "ascent": -76,
+      "chars": [
+        "\ue027"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/home_ready.png",
+      "height": 18,
+      "ascent": -94,
+      "chars": [
+        "\ue028"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/home_bar_on.png",
+      "height": 2,
+      "ascent": -35,
+      "chars": [
+        "\ue029"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/home_bar_off.png",
+      "height": 2,
+      "ascent": -35,
+      "chars": [
+        "\ue02a"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/pip_on.png",
+      "height": 3,
+      "ascent": -54,
+      "chars": [
+        "\ue010"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/pip_off.png",
+      "height": 3,
+      "ascent": -54,
+      "chars": [
+        "\ue011"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/count_on.png",
+      "height": 7,
+      "ascent": 8,
+      "chars": [
+        "\ue012"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "blackforge:gui/count_off.png",
+      "height": 7,
+      "ascent": 8,
+      "chars": [
+        "\ue013"
+      ]
+    }
+  ]
+}

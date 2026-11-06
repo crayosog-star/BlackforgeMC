@@ -93,7 +93,7 @@ def main():
     out = DEST / stamp
     out.mkdir(parents=True, exist_ok=True)
     log(f"backup -> {out}")
-    for name in ["hub", "survival", "skyblock", "factions", "arcade", "proxy"]:
+    for name in ["hub", "survival", "skyblock", "factions", "arcade", "raft", "proxy"]:
         try:
             backup_server(name, out)
         except Exception as e:  # one bad server must not stop the others

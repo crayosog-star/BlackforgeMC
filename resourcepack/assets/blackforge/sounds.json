@@ -1,0 +1,45 @@
+{
+  "pet.orange_companion": {
+    "sounds": ["blackforge:pet/orange_companion"]
+  },
+  "pet.in_the_smoke": {
+    "sounds": ["blackforge:pet/in_the_smoke"]
+  },
+  "pet.you_good_gang": {
+    "sounds": ["blackforge:pet/you_good_gang"]
+  },
+  "pet.cooked": {
+    "sounds": ["blackforge:pet/cooked"]
+  },
+  "pet.on_my_mama": {
+    "sounds": ["blackforge:pet/on_my_mama"]
+  },
+  "pet.run_it_back": {
+    "sounds": ["blackforge:pet/run_it_back"]
+  },
+  "pet.let_bro_cook": {
+    "sounds": ["blackforge:pet/let_bro_cook"]
+  },
+  "pet.lock_in": {
+    "sounds": ["blackforge:pet/lock_in"]
+  },
+  "pet.got_your_back": {
+    "sounds": ["blackforge:pet/got_your_back"]
+  },
+  "pet.thats_crazy": {
+    "sounds": ["blackforge:pet/thats_crazy"]
+  },
+  "pet.we_outside": {
+    "sounds": ["blackforge:pet/we_outside"]
+  },
+  "pet.say_less": {
+    "sounds": ["blackforge:pet/say_less"]
+  },
+  "pet.check_the_corner": {
+    "sounds": ["blackforge:pet/check_the_corner"]
+  },
+  "item.nightrend.draw": {
+    "sounds": ["blackforge:item/nightrend_draw"],
+    "subtitle": "Blade drawn"
+  }
+}

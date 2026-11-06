@@ -57,10 +57,8 @@ public final class Robots implements Listener {
     }
 
     static final int MAX_TIER = 5;
-    static final int[] INTERVAL = {8, 6, 4, 3, 2};          // seconds between jobs, per tier
-    static final int[] RADIUS = {2, 3, 4, 5, 6};
+    static final int[] RADIUS = AgentStats.RADIUS;
     static final int[] STORAGE = {9, 18, 27, 36, 36};
-    static final double[] DAMAGE = {8, 12, 16, 22, 30};
     // to reach tier t+2 from tier t+1
     static final int[] UP_MONEY = {10_000, 35_000, 100_000, 300_000};
     static final int[] UP_ESSENCE = {64, 256, 768, 2_048};
@@ -74,21 +72,43 @@ public final class Robots implements Listener {
     static final String[] FUEL_COLOR = {"<gray>", "<gold>", "<yellow>", "<aqua>", "<light_purple>"};
     static final long MAX_TANK = 48L * 3600_000;
     public static final int ROBOT_PRICE = 7_500;
+    static final long SANDBOX_START_FUEL = 3600_000L;
 
     private static final NamespacedKey ROBOT = new NamespacedKey(BlackForgeCore.NS, "robot_id");
     private static final NamespacedKey ITEM = new NamespacedKey(BlackForgeCore.NS, "robot_item");
     private static final NamespacedKey FUEL = new NamespacedKey(BlackForgeCore.NS, "fuel_tier");
+    /** An Agent item's Academy record. Fresh items have none and get a new record when placed. */
+    private static final NamespacedKey RECORD = new NamespacedKey(BlackForgeCore.NS, "agent_record");
 
     /** One robot's state; the entity is found by robot id each tick (entities can reload with new UUIDs). */
     final class Bot {
+        /** What its last job touched, and what that was, for the animation. Not saved. */
+        Location lastTarget; Material lastMaterial;
+        /** Jobs done since /foundry check started. Not saved. */
+        int workCount;
         final String id; UUID owner; Job job; int tier; long fuel, charge; int fuelTier = 1; int xp;
         /** Fuel-weighted charge multiplier of what's in the tank; fuelTier is now only the icon/colour of the best cell added. */
         double chargeRate;
         /** Sub-millisecond charge left over between ticks (blended and Fisherman rates aren't whole numbers). Not saved. */
         double chargeCarry;
+        /** Seconds of work done toward the next cycle, so a fractional speed bonus isn't lost. Not saved. */
+        double workProgress;
         Location loc; Inventory storage; UUID entity; int timer; String status = "";
+        /** The name the player gave it, or null. */
+        String name;
+        /** The last Grinder log line, so an unchanged cycle isn't logged again. Not saved. */
+        String lastGrindLog;
+        /** What the Grinder's name tag says after its last cycle. Not saved. */
+        String grindStatus = "";
+        /** What's already been warned about, so one fault can't flood the log every second. Not saved. */
+        final Set<String> warned = new HashSet<>();
         Bot(String id) { this.id = id; }
-        int interval() { return job == Job.FISHERMAN ? (int) (RobotRules.fishIntervalMs(tier) / 1000) : INTERVAL[tier - 1]; }
+        /** "Agent Bob", or "Miner Agent" until it's named. */
+        /** Academy data, including the UID that identifies this Agent. Foundry Agents have one too, but aren't saved. */
+        AgentRecord record = withUid(new AgentRecord());
+        String title() { return name != null ? "Agent " + name : job.label + " Agent"; }
+        int interval() { return stats().intervalSeconds(); }
+        AgentStats stats() { return AgentStats.of(job.name().toLowerCase(Locale.ROOT), tier, record); }
         /** Old saves and robot items have no rate: fall back to the burning cell tier's rate. */
         void fixRate() { if (!(chargeRate > 0)) chargeRate = RobotRules.rateForTier(Math.max(1, Math.min(5, fuelTier))); }
     }
@@ -103,16 +123,51 @@ public final class Robots implements Listener {
     private String crateOnly;   // non-null: robots can't be bought here, only won from these crates
     private Ranks ranks;
     private Economy eco;
+    private BaseStation stations;
+    private BaseLevels levels;
+    private final Map<UUID, Naming> naming = new java.util.concurrent.ConcurrentHashMap<>();   // who we're waiting on for a name
+    private record Naming(String botId, long until) {}
     private final Random rnd = new Random();
 
-    Robots(BlackForgeCore plugin) {
+    /** The Arena's Foundry: upgrades are free, nothing is saved, there's no /agents shop, and only the owner can open an agent. */
+    private final boolean sandbox;
+    private final AgentLook look;
+
+    Collection<Bot> allBots() { return bots.values(); }
+    CopperGolem golem(Bot b) { return entity(b); }
+    private int sandboxPerPlayer, sandboxTotal, sandboxFishSeconds = 10;
+    /** Logs what each Grinder does when that changes. On by default in the Foundry only. */
+    private final boolean grinderLog;
+
+    Robots(BlackForgeCore plugin) { this(plugin, false); }
+
+    Robots(BlackForgeCore plugin, boolean sandbox) {
         this.plugin = plugin;
+        this.sandbox = sandbox;
+        this.grinderLog = plugin.getConfig().getBoolean("robots.grinder-debug-log", sandbox);
         this.file = new File(plugin.getDataFolder(), "robots.yml");
-        load();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 40L, 20L);
+        look = new AgentLook(plugin, this);
+        if (sandbox) return;
+        load();
         Bukkit.getScheduler().runTaskTimer(plugin, this::save, 1200L, 1200L);
         registerCommand();
+    }
+
+    void setSandboxLimits(int perPlayer, int total) { this.sandboxPerPlayer = perPlayer; this.sandboxTotal = total; }
+    void setSandboxFishSeconds(int seconds) { this.sandboxFishSeconds = Math.max(1, seconds); }
+
+    /** Removes this player's agents and whatever they held. */
+    void removeOwnedBy(UUID owner) {
+        for (Iterator<Bot> it = bots.values().iterator(); it.hasNext(); ) {
+            Bot b = it.next();
+            if (!b.owner.equals(owner)) continue;
+            CopperGolem g = entity(b);
+            if (g != null) g.remove();
+            it.remove();
+        }
+        naming.remove(owner);
     }
 
     void setAccess(BiPredicate<Player, Location> rule) { this.canUse = rule; }
@@ -120,11 +175,42 @@ public final class Robots implements Listener {
     void setWorkArea(BiPredicate<UUID, Location> rule) { this.workArea = rule; }
     void setRanks(Ranks r) { this.ranks = r; }
     void setEconomy(Economy e) { this.eco = e; }
+    void setStations(BaseStation s) { this.stations = s; }
+    void setLevels(BaseLevels l) { this.levels = l; }
+
+    /** The base level this job needs here, or 0 if it's available. Servers without levels, like Skyblock, never lock a job. */
+    /** Each owner's placed jobs, by the names base levels use. */
+    Map<UUID, Set<String>> placedJobs() {
+        Map<UUID, Set<String>> out = new HashMap<>();
+        for (Bot b : bots.values()) out.computeIfAbsent(b.owner, k -> new HashSet<>()).add(b.job.name().toLowerCase(Locale.ROOT));
+        return out;
+    }
+
+    /** New Agents start with the first job a base unlocks. */
+    private Job defaultJob() { return levels != null && levels.active() ? Job.FARMER : Job.MINER; }
+
+    /** One free Agent, for a player's first Forge. */
+    void giveStarter(Player p) {
+        give(p, robotItem(Job.FARMER, 1, 0, 0, 1));
+        p.sendMessage(Ui.mm("<#4fd1b5>You got a free Farmer Agent! <gray>Place it by your crops, within range of your Forge. It runs on Fuel Cells from <white>/agents<gray>."));
+    }
+
+    /** Where to get an Agent, for an empty card in the Forge. */
+    String emptySlotHint() {
+        return crateOnly == null ? "<gray>Get an agent at <white>/agents<gray> and place it." : "<gray>Win agents from " + crateOnly + " <gray>crates and place them.";
+    }
+
+    private int lockedUntil(Job job, Location at) {
+        if (levels == null || !levels.active() || stations == null) return 0;
+        String name = job.name().toLowerCase(Locale.ROOT);
+        return levels.table().jobUnlocked(levels.level(stations.regionAt(at)), name) ? 0 : levels.table().jobLevel(name);
+    }
 
     int limit(Player p) {
+        if (sandbox) return sandboxPerPlayer;
         Ranks.Rank r = ranks == null ? null : ranks.of(p);
         if (r == null) return 2;
-        return switch (r.id()) { case "copper" -> 3; case "iron" -> 4; case "gold" -> 5; case "diamond" -> 6; default -> 8; };
+        return Math.min(RobotRules.MAX_AGENTS, switch (r.id()) { case "copper" -> 3; case "iron" -> 4; default -> 5; });
     }
 
     int owned(UUID u) { int n = 0; for (Bot b : bots.values()) if (b.owner.equals(u)) n++; return n; }
@@ -134,9 +220,9 @@ public final class Robots implements Listener {
     static ItemStack fuelCell(int tier, int n) {
         int t = Math.max(1, Math.min(5, tier));
         ItemStack it = Ui.item(FUEL_ICON[t - 1], FUEL_COLOR[t - 1] + "<bold>Fuel Cell " + Spawners.roman(t),
-                "<gray>Powers a robot for <white>" + time(FUEL_MINUTES[t - 1] * 60_000L),
-                "<gray>Charge rate: <white>x" + FUEL_CHARGE[t - 1] + " <dark_gray>(levels robots up faster)",
-                "", "<yellow>Open a robot and click its fuel slot");
+                "<gray>Powers an agent for <white>" + time(FUEL_MINUTES[t - 1] * 60_000L),
+                "<gray>Charge rate: <white>x" + FUEL_CHARGE[t - 1] + " <dark_gray>(levels agents up faster)",
+                "", "<yellow>Open an agent and click its fuel slot");
         it.editMeta(m -> { m.getPersistentDataContainer().set(FUEL, PersistentDataType.INTEGER, t); m.setEnchantmentGlintOverride(true); });
         it.setAmount(Math.max(1, Math.min(64, n)));
         return it;
@@ -148,16 +234,38 @@ public final class Robots implements Listener {
     }
 
     /** A robot in item form. Carries its job, tier, charge and fuel so picking it up loses nothing. */
-    static ItemStack robotItem(Job job, int tier, long charge, long fuel, int fuelTier) {
-        ItemStack it = Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, job.color + "<bold>⚙ " + job.label + " Robot " + Spawners.roman(tier),
+    static ItemStack robotItem(Job job, int tier, long charge, long fuel, int fuelTier) { return robotItem(job, tier, charge, fuel, fuelTier, null); }
+
+    static ItemStack robotItem(Job job, int tier, long charge, long fuel, int fuelTier, String name) {
+        ItemStack it = Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, job.color + "<bold>⚙ " + (name != null ? "Agent " + name : job.label + " Agent") + " " + Spawners.roman(tier),
                 "<gray>" + job.desc, "<gray>Tier: <white>" + Spawners.roman(tier) + " <dark_gray>| <gray>Fuel: <white>" + time(fuel),
                 "<gray>Charge: <white>" + time(charge), "", "<yellow>Right-click a block on your island or claim to place");
         it.editMeta(m -> {
             PersistentDataContainer pdc = m.getPersistentDataContainer();
-            pdc.set(ITEM, PersistentDataType.STRING, job.name() + ";" + tier + ";" + charge + ";" + fuel + ";" + fuelTier);
+            pdc.set(ITEM, PersistentDataType.STRING, job.name() + ";" + tier + ";" + charge + ";" + fuel + ";" + fuelTier + (name != null ? ";" + name : ""));
             m.setEnchantmentGlintOverride(true);
         });
         return it;
+    }
+
+    /** An Agent picked up with its record. The UID in the record stops it stacking with other Agents. */
+    static ItemStack robotItem(Job job, int tier, long charge, long fuel, int fuelTier, String name, AgentRecord record) {
+        ItemStack it = robotItem(job, tier, charge, fuel, fuelTier, name);
+        it.editMeta(m -> m.getPersistentDataContainer().set(RECORD, PersistentDataType.STRING, record.encode()));
+        return it;
+    }
+
+    /** Old saves, fresh items and unreadable records have no UID yet, so this is where an Agent gets its identity. */
+    private static AgentRecord withUid(AgentRecord record) {
+        if (record.uid.isBlank()) record.uid = UUID.randomUUID().toString();
+        return record;
+    }
+
+    /** Includes Agents whose world isn't loaded yet: placing a copy now would clash when that world loads. */
+    private boolean uidInUse(String uid) {
+        for (Bot b : bots.values()) if (uid.equals(b.record.uid)) return true;
+        for (ConfigurationSection s : pending.values()) if (uid.equals(AgentRecord.decode(s.getString("academy")).uid)) return true;
+        return false;
     }
 
     /**
@@ -191,29 +299,66 @@ public final class Robots implements Listener {
         if (e.getHand() != EquipmentSlot.HAND) return;
         Player p = e.getPlayer();
         Block at = e.getClickedBlock().getRelative(e.getBlockFace());
-        if (!at.isPassable() || !at.getRelative(BlockFace.UP).isPassable()) { p.sendMessage(Ui.mm("<red>Not enough room there.")); return; }
-        if (!canUse.test(p, at.getLocation())) { p.sendMessage(Ui.mm("<red>Robots can only go on your own island or claimed land.")); return; }
-        if (owned(p.getUniqueId()) >= limit(p)) { p.sendMessage(Ui.mm("<red>You have " + owned(p.getUniqueId()) + "/" + limit(p) + " robots placed. Ranks raise the limit.")); return; }
-        String[] d = e.getItem().getItemMeta().getPersistentDataContainer().get(ITEM, PersistentDataType.STRING).split(";");
+        if (!hasRoom(at)) { p.sendMessage(Ui.mm("<red>Not enough room there.")); return; }
+        if (!canUse.test(p, at.getLocation())) { p.sendMessage(Ui.mm("<red>Agents can only go on your own island or claimed land.")); return; }
+        place(p, e.getItem(), at, p.getYaw());
+    }
+
+    /** Two passable blocks, so the agent fits. */
+    static boolean hasRoom(Block at) { return at.isPassable() && at.getRelative(BlockFace.UP).isPassable(); }
+
+    /** The ownership rule a player's click checks, for agents placed by a command instead. */
+    boolean mayBuild(Player p, Block at) { return canUse.test(p, at.getLocation()); }
+
+    /** Is an agent, anyone's, already standing on this block? */
+    boolean agentOn(Block at) {
+        for (Bot b : bots.values())
+            if (b.loc.getWorld() == at.getWorld() && b.loc.getBlockX() == at.getX() && b.loc.getBlockY() == at.getY() && b.loc.getBlockZ() == at.getZ()) return true;
+        return false;
+    }
+
+    /** Places an agent from this item, facing {@code look}. False, with a message, if it was refused. */
+    boolean place(Player p, ItemStack item, Block at, float look) {
+        if (sandbox && bots.size() >= sandboxTotal) { p.sendMessage(Ui.mm("<red>The Foundry is at its limit of " + sandboxTotal + " agents right now.")); return false; }
+        if (owned(p.getUniqueId()) >= limit(p)) { p.sendMessage(Ui.mm("<red>You have " + owned(p.getUniqueId()) + "/" + limit(p) + " agents placed. Ranks raise the limit.")); return false; }
+        PersistentDataContainer pdc = item.getItemMeta().getPersistentDataContainer();
+        AgentRecord record = withUid(AgentRecord.decode(pdc.get(RECORD, PersistentDataType.STRING)));
+        // e.g. a crash restored an Agent item whose Agent is still placed: a second copy would dupe a trained Agent
+        if (uidInUse(record.uid)) {
+            p.sendMessage(Ui.mm("<red>This Agent is already placed."));
+            plugin.getLogger().warning("Refused duplicate Agent " + record.uid + " placed by " + p.getName());
+            return false;
+        }
+        String[] d = pdc.get(ITEM, PersistentDataType.STRING).split(";");
         Bot b = new Bot(UUID.randomUUID().toString());
+        b.record = record;
         b.owner = p.getUniqueId();
         b.job = Job.valueOf(d[0]);
         b.tier = Integer.parseInt(d[1]);
         b.charge = Long.parseLong(d[2]);
         b.fuel = Long.parseLong(d[3]);
         b.fuelTier = Integer.parseInt(d[4]);
+        if (d.length > 5 && RobotRules.validName(d[5])) b.name = d[5];   // older items have no name
         b.fixRate();   // the item has no rate: derive it from fuelTier (see itemFuelTier)
+        if (sandbox && b.fuel <= 0) b.fuel = SANDBOX_START_FUEL;   // the Foundry's chest agents are empty: placed ones work straight away
         // face the way the player is looking, snapped to N/E/S/W, so a Miner mines what you clicked toward
-        float yaw = Math.round(p.getYaw() / 90f) * 90f;
+        float yaw = Math.round(look / 90f) * 90f;
         b.loc = at.getLocation().add(0.5, 0, 0.5);
         b.loc.setYaw(yaw);
         b.storage = Bukkit.createInventory(null, STORAGE[b.tier - 1]);
+        // placed, not refused, so an Agent from a crate is never stuck in someone's inventory
+        int needs = lockedUntil(b.job, b.loc);
+        if (needs > 0) {
+            p.sendMessage(Ui.mm("<yellow>" + b.job.label + " Agents need Base Level " + needs + " here, so this one starts as a Farmer."));
+            b.job = Job.FARMER;
+        }
         bots.put(b.id, b);
         spawn(b);
-        e.getItem().setAmount(e.getItem().getAmount() - 1);
+        item.setAmount(item.getAmount() - 1);
         p.playSound(b.loc, Sound.ENTITY_COPPER_GOLEM_SPAWN, 1f, 1f);
-        p.sendMessage(Ui.mm("<green>Robot placed! Right-click it to add fuel, switch its job or collect its loot."));
+        p.sendMessage(Ui.mm("<green>Agent placed! Right-click it to add fuel, switch its job or collect its loot."));
         save();
+        return true;
     }
 
     @EventHandler
@@ -224,7 +369,7 @@ public final class Robots implements Listener {
             x.setAI(false);
             x.setInvulnerable(true);
             x.setSilent(true);
-            x.setPersistent(true);
+            x.setPersistent(!sandbox);
             x.setRemoveWhenFarAway(false);
             x.setCollidable(false);
             x.setOxidizing(CopperGolem.Oxidizing.waxed());
@@ -240,11 +385,37 @@ public final class Robots implements Listener {
     private void style(Bot b, CopperGolem g) {
         WeatheringCopperState[] look = {WeatheringCopperState.OXIDIZED, WeatheringCopperState.WEATHERED, WeatheringCopperState.EXPOSED,
                 WeatheringCopperState.UNAFFECTED, WeatheringCopperState.UNAFFECTED};
-        g.setWeatheringState(look[b.tier - 1]);
-        g.setGlowing(b.tier >= 5);
-        g.getEquipment().setItemInMainHand(new ItemStack(b.job.icon));
         String st = b.fuel <= 0 ? "<red>No fuel" : b.status.isEmpty() ? "<white>" + time(b.fuel) : b.status;
-        g.customName(Ui.mm(b.job.color + "⚙ " + b.job.label + " " + Spawners.roman(b.tier) + " <dark_gray>• " + st));
+        // each part on its own: a failure in one must not cost the agent its name tag or stop the others
+        stylePart(b, "name", () -> g.setCustomNameVisible(true));
+        stylePart(b, "name", () -> g.customName(Ui.mm(b.job.color + "⚙ " + (b.name != null ? "Agent " + b.name + " <dark_gray>• " + b.job.color + b.job.label : b.title()) + " " + Spawners.roman(b.tier) + " <dark_gray>• " + st)));
+        if (this.look != null && this.look.active()) {   // it wears a skin and holds its own tool, so the golem underneath only carries the hitbox and name
+            stylePart(b, "skin", () -> { g.setInvisible(true); g.setGlowing(false); g.getEquipment().setItemInMainHand(null); });
+            return;
+        }
+        // looks were on before (or the pack is off now): the golem was saved invisible, so bring its body back
+        stylePart(b, "skin", () -> { if (g.isInvisible()) g.setInvisible(false); });
+        stylePart(b, "hand", () -> g.getEquipment().setItemInMainHand(new ItemStack(b.job.icon)));
+        stylePart(b, "copper", () -> g.setWeatheringState(look[b.tier - 1]));
+        stylePart(b, "glow", () -> g.setGlowing(b.tier >= 5));
+    }
+
+    private void stylePart(Bot b, String part, Runnable apply) {
+        try { apply.run(); } catch (Exception ex) { warnOnce(b, "style " + part, ex); }
+    }
+
+    private void warnOnce(Bot b, String where, Exception ex) {
+        if (b.warned.add(where + ":" + ex)) plugin.getLogger().warning("agent " + b.id + " " + b.job + " " + where + ": " + ex);
+    }
+
+    /** One line when a Grinder's result changes; the fuel left doesn't count as a change. */
+    private void logGrinder(Bot b, CopperGolem g, String what) {
+        if (!grinderLog || b.job != Job.GRINDER) return;
+        String line = "T" + b.tier + " r=" + RADIUS[b.tier - 1] + " at " + b.loc.getBlockX() + "," + b.loc.getBlockY() + "," + b.loc.getBlockZ() + " in " + b.loc.getWorld().getName()
+                + ": " + what + " | tagShown=" + g.isCustomNameVisible() + " hand=" + g.getEquipment().getItemInMainHand().getType();
+        if (line.equals(b.lastGrindLog)) return;
+        b.lastGrindLog = line;
+        plugin.getLogger().info("Grinder " + b.id.substring(0, 8) + " fuel=" + time(b.fuel) + " " + line);
     }
 
     private CopperGolem entity(Bot b) {
@@ -266,8 +437,13 @@ public final class Robots implements Listener {
         if (b == null) { if (!pending.containsKey(g.getPersistentDataContainer().get(ROBOT, PersistentDataType.STRING))) g.remove(); return; }   // orphan
         b.entity = g.getUniqueId();
         Player p = e.getPlayer();
-        if (!b.owner.equals(p.getUniqueId()) && !canUse.test(p, g.getLocation()) && !p.hasPermission("blackforge.admin")) {
-            p.sendMessage(Ui.mm("<red>That's " + Bukkit.getOfflinePlayer(b.owner).getName() + "'s robot.")); return;
+        if (!b.owner.equals(p.getUniqueId()) && net.blackforge.core.Titles.isOwner(p)
+                && (OwnerView.viewing(p, g.getLocation()) || !canUse.test(p, g.getLocation()))) {
+            open(p, b, true);   // the OWNER title looks but doesn't touch, even with admin permission
+            return;
+        }
+        if (!b.owner.equals(p.getUniqueId()) && (sandbox || !canUse.test(p, g.getLocation())) && !p.hasPermission("blackforge.admin")) {
+            p.sendMessage(Ui.mm("<red>That's " + Bukkit.getOfflinePlayer(b.owner).getName() + "'s agent.")); return;
         }
         open(p, b);
     }
@@ -292,63 +468,92 @@ public final class Robots implements Listener {
 
     private void tick() {
         for (Bot b : new ArrayList<>(bots.values())) {
-            World w = b.loc.getWorld();
-            if (w == null || !w.isChunkLoaded(b.loc.getBlockX() >> 4, b.loc.getBlockZ() >> 4)) continue;
-            Chunk ch = b.loc.getChunk();
-            if (!ch.isEntitiesLoaded()) continue;
-            CopperGolem g = entity(b);
-            if (g == null) {
-                for (Entity x : w.getNearbyEntities(b.loc, 1.5, 1.5, 1.5))
-                    if (b.id.equals(x.getPersistentDataContainer().get(ROBOT, PersistentDataType.STRING)) && x instanceof CopperGolem cg) { g = cg; b.entity = cg.getUniqueId(); break; }
-                if (g == null) { plugin.getLogger().info("Robot " + b.id + " had no entity (was " + b.entity + ", lookup=" + Bukkit.getEntity(b.entity == null ? new UUID(0, 0) : b.entity) + ") - respawning it"); g = spawn(b); }
-            }
-            if (b.fuel <= 0) { if (++b.timer % 5 == 0) style(b, g); continue; }
-            boolean full = b.storage.firstEmpty() < 0;
-            boolean dry = !full && b.job == Job.FISHERMAN && !nearWater(b);
-            b.status = full ? "<red>Storage full" : dry ? "<red>Needs water" : "";
-            if (!full && !dry) {
-                // Fishermen burn fuel and build Charge at a quarter of the normal rate
-                long burn = Math.min(b.fuel, b.job == Job.FISHERMAN ? (long) (1000 * RobotRules.FISHER_BURN) : 1000);
-                b.fuel -= burn;
-                b.chargeCarry += burn * b.chargeRate;
-                long whole = (long) b.chargeCarry;
-                b.charge += whole;
-                b.chargeCarry -= whole;
-                if (++b.timer >= b.interval()) {
-                    b.timer = 0;
-                    try { work(b, g); } catch (Exception ex) { plugin.getLogger().warning("robot " + b.id + " " + b.job + ": " + ex); }
-                }
-            }
-            else if (dry && ++b.timer >= 5) b.timer = 0;   // no burn, no fishing progress; keep refreshing the name tag
-            if (b.timer % 5 == 0) style(b, g);
+            try { tickBot(b); } catch (Exception ex) { warnOnce(b, "tick", ex); }   // one bad agent must not stop the rest
         }
     }
 
-    private void work(Bot b, CopperGolem g) {
-        switch (b.job) {
-            case MINER -> mine(b, g);
-            case FARMER -> farm(b, g);
-            case GRINDER -> grind(b, g);
-            case FISHERMAN -> fish(b, g);
+    private void tickBot(Bot b) {
+        World w = b.loc.getWorld();
+        if (w == null || !w.isChunkLoaded(b.loc.getBlockX() >> 4, b.loc.getBlockZ() >> 4)) return;
+        Chunk ch = b.loc.getChunk();
+        if (!ch.isEntitiesLoaded()) return;
+        CopperGolem g = entity(b);
+        if (g == null) {
+            for (Entity x : w.getNearbyEntities(b.loc, 1.5, 1.5, 1.5))
+                if (b.id.equals(x.getPersistentDataContainer().get(ROBOT, PersistentDataType.STRING)) && x instanceof CopperGolem cg) { g = cg; b.entity = cg.getUniqueId(); break; }
+            if (g == null) { plugin.getLogger().info("Robot " + b.id + " had no entity (was " + b.entity + ", lookup=" + Bukkit.getEntity(b.entity == null ? new UUID(0, 0) : b.entity) + ") - respawning it"); g = spawn(b); }
         }
+        if (b.fuel <= 0) { logGrinder(b, g, "idle: no fuel"); if (++b.timer % 5 == 0) style(b, g); b.workProgress = b.timer; return; }
+        boolean full = b.storage.firstEmpty() < 0 && (stations == null || !stations.hasRoom(b.loc));
+        boolean dry = !full && b.job == Job.FISHERMAN && !nearWater(b);
+        b.status = full ? "<red>Storage full" : dry ? "<red>Needs water" : b.job == Job.GRINDER ? b.grindStatus : "";
+        if (full) logGrinder(b, g, "idle: storage full");
+        if (!full && !dry) {
+            // Fishermen burn fuel and build Charge at a quarter of the normal rate
+            AgentStats stats = b.stats();
+            long burn = Math.min(b.fuel, b.job == Job.FISHERMAN ? (long) (1000 * RobotRules.FISHER_BURN) : 1000);
+            b.fuel -= stats.fuelSpent(burn);
+            b.chargeCarry += burn * b.chargeRate * stats.chargeMult();   // from the full burn, so saving fuel doesn't cost Charge
+            long whole = (long) b.chargeCarry;
+            b.charge += whole;
+            b.chargeCarry -= whole;
+            b.timer++;   // only for the name tag refresh now
+            b.workProgress += stats.speedMult();
+            // the Foundry's Fisherman would otherwise take minutes to show anything
+            int interval = sandbox && b.job == Job.FISHERMAN ? Math.min(stats.intervalSeconds(), sandboxFishSeconds) : stats.intervalSeconds();
+            if (b.workProgress >= interval) {
+                b.timer = 0;
+                b.workProgress %= interval;   // keeps a fraction, but one cycle at most after a job switch or idle time
+                try { work(b, g, stats); } catch (Exception ex) { plugin.getLogger().warning("robot " + b.id + " " + b.job + ": " + ex); }
+            }
+        }
+        else if (dry) {   // no burn, no fishing progress; keep refreshing the name tag
+            if (++b.timer >= 5) b.timer = 0;
+            b.workProgress = b.timer;
+        }
+        if (b.timer % 5 == 0) style(b, g);
     }
+
+    private void work(Bot b, CopperGolem g, AgentStats stats) {
+        b.lastTarget = null;
+        int done = switch (b.job) {
+            case MINER -> mine(b, g, stats);
+            case FARMER -> farm(b, g, stats);
+            case GRINDER -> grind(b, g, stats);
+            case FISHERMAN -> fish(b, g, stats);
+        };
+        onWorked(b, done);
+        if (done > 0) look.play(b);
+    }
+
+    /** Called after every cycle with how much real work was done. The Academy earns Mastery here from Phase 2. */
+    private void onWorked(Bot b, int done) { b.workCount += done; }
+
+    /** Starts /foundry check's count over. */
+    void resetWorkCounts() { for (Bot b : bots.values()) b.workCount = 0; }
 
     private void store(Bot b, Collection<ItemStack> items) {
         for (ItemStack it : items) if (it != null && !it.getType().isAir())
-            b.storage.addItem(it).values().forEach(l -> b.loc.getWorld().dropItemNaturally(b.loc, l));
+        {
+            ItemStack left = stations == null ? it : stations.deliver(b.loc, it);   // the Base Station first, if there's one in range
+            if (left != null) b.storage.addItem(left).values().forEach(l -> b.loc.getWorld().dropItemNaturally(b.loc, l));
+        }
     }
 
     private static final Set<Material> NO_MINE = EnumSet.of(Material.BEDROCK, Material.SPAWNER, Material.END_PORTAL_FRAME, Material.END_PORTAL,
             Material.NETHER_PORTAL, Material.BARRIER, Material.COMMAND_BLOCK, Material.REINFORCED_DEEPSLATE);
 
-    private void mine(Bot b, CopperGolem g) {
+    /** Returns the blocks mined. */
+    private int mine(Bot b, CopperGolem g, AgentStats stats) {
         Block target = b.loc.getBlock().getRelative(facing(b.loc));
         Material t = target.getType();
-        if (t.isAir() || target.isLiquid() || NO_MINE.contains(t) || t.getHardness() < 0 || target.getState() instanceof Container) return;
-        if (!workArea.test(b.owner, target.getLocation())) return;
+        b.lastTarget = target.getLocation().add(0.5, 0.5, 0.5);
+        b.lastMaterial = t;
+        if (t.isAir() || target.isLiquid() || NO_MINE.contains(t) || t.getHardness() < 0 || target.getState() instanceof Container) return 0;
+        if (!workArea.test(b.owner, target.getLocation())) return 0;
         Material[] picks = {Material.STONE_PICKAXE, Material.IRON_PICKAXE, Material.DIAMOND_PICKAXE, Material.NETHERITE_PICKAXE, Material.NETHERITE_PICKAXE};
         ItemStack tool = new ItemStack(picks[b.tier - 1]);
-        if (b.tier >= 4) tool.addUnsafeEnchantment(Enchantment.FORTUNE, b.tier - 2);
+        if (stats.fortune() > 0) tool.addUnsafeEnchantment(Enchantment.FORTUNE, stats.fortune());
         Player owner = Bukkit.getPlayer(b.owner);
         if (owner != null) {
             // Let other plugins (OneBlock, island protection) see the break as the owner's
@@ -357,16 +562,17 @@ public final class Robots implements Listener {
             Collection<ItemStack> drops = target.getDrops(tool);
             Material before = target.getType();
             Bukkit.getPluginManager().callEvent(ev);
-            if (ev.isCancelled()) return;
+            if (ev.isCancelled()) return 0;
             store(b, drops);
             if (target.getType() == before) target.setType(Material.AIR);
         } else {
-            if (isMagicBlock(target)) return;   // OneBlock needs its owner online to roll the next block
+            if (isMagicBlock(target)) return 0;   // OneBlock needs its owner online to roll the next block
             store(b, target.getDrops(tool));
             target.setType(Material.AIR);
         }
         g.swingMainHand();
         target.getWorld().playSound(target.getLocation(), Sound.BLOCK_STONE_BREAK, 0.4f, 1f);
+        return 1;
     }
 
     private boolean isMagicBlock(Block bl) {
@@ -382,12 +588,13 @@ public final class Robots implements Listener {
             Material.POTATOES, Material.POTATO, Material.BEETROOTS, Material.BEETROOT_SEEDS, Material.NETHER_WART, Material.NETHER_WART,
             Material.COCOA, Material.COCOA_BEANS, Material.TORCHFLOWER_CROP, Material.TORCHFLOWER_SEEDS);
 
-    private void farm(Bot b, CopperGolem g) {
-        int r = RADIUS[b.tier - 1], done = 0;
+    /** Returns the crops harvested. */
+    private int farm(Bot b, CopperGolem g, AgentStats stats) {
+        int r = stats.radius(), limit = stats.harvests(), done = 0;
         Block c = b.loc.getBlock();
-        for (int dy = -1; dy <= 2 && done < b.tier; dy++)
-            for (int dx = -r; dx <= r && done < b.tier; dx++)
-                for (int dz = -r; dz <= r && done < b.tier; dz++) {
+        for (int dy = -1; dy <= 2 && done < limit; dy++)
+            for (int dx = -r; dx <= r && done < limit; dx++)
+                for (int dz = -r; dz <= r && done < limit; dz++) {
                     Block bl = c.getRelative(dx, dy, dz);
                     Material t = bl.getType();
                     if (!workArea.test(b.owner, bl.getLocation())) continue;
@@ -399,40 +606,60 @@ public final class Robots implements Listener {
                         store(b, drops);
                         a.setAge(0);
                         bl.setBlockData(a);
+                        if (b.lastTarget == null) b.lastTarget = bl.getLocation().add(0.5, 0.2, 0.5);
                         done++;
                     } else if (t == Material.MELON || t == Material.PUMPKIN) {
+                        if (b.lastTarget == null) b.lastTarget = bl.getLocation().add(0.5, 0.5, 0.5);   // so the Farmer's work animation plays
                         store(b, bl.getDrops());
                         bl.setType(Material.AIR);
                         done++;
                     } else if ((t == Material.SUGAR_CANE || t == Material.CACTUS || t == Material.BAMBOO) && bl.getRelative(BlockFace.DOWN).getType() == t
                             && bl.getRelative(BlockFace.UP).getType() != t) {
+                        if (b.lastTarget == null) b.lastTarget = bl.getLocation().add(0.5, 0.5, 0.5);
                         store(b, bl.getDrops());
                         bl.setType(Material.AIR);
                         done++;
                     }
                 }
         if (done > 0) g.swingMainHand();
+        return done;
     }
 
-    private void grind(Bot b, CopperGolem g) {
-        int r = RADIUS[b.tier - 1], hits = 0;
+    /** Returns the hits that landed. */
+    private int grind(Bot b, CopperGolem g, AgentStats stats) {
+        int r = stats.radius(), maxHits = stats.hits(), mobs = 0, hits = 0, noEffect = 0, kills = 0;
+        Map<RobotRules.GrindSkip, Integer> skipped = new EnumMap<>(RobotRules.GrindSkip.class);
         Map<EntityType, Integer> count = new HashMap<>();
         Collection<Entity> near = b.loc.getWorld().getNearbyEntities(b.loc, r, 3, r);
         for (Entity e : near) count.merge(e.getType(), 1, Integer::sum);
         for (Entity e : near) {
-            if (hits > b.tier) break;   // tier + 1 mobs per swing
             if (!(e instanceof Mob m) || e instanceof CopperGolem || e.getPersistentDataContainer().has(ROBOT)) continue;
-            if (m instanceof Tameable t && t.isTamed()) continue;
-            if (!(m instanceof Enemy) && !workArea.test(b.owner, m.getLocation())) continue;   // hostiles anywhere, animals only on the owner's land
-            if (m instanceof AbstractVillager || m.customName() != null && !m.getPersistentDataContainer().has(Spawners.FROM_SPAWNER)) continue;
-            // leave a breeding pair of farm animals alone
-            if (m instanceof Animals an && !m.getPersistentDataContainer().has(Spawners.FROM_SPAWNER) && (count.get(e.getType()) <= 2 || !an.isAdult())) continue;
+            mobs++;
+            if (hits >= maxHits) continue;
+            boolean hostile = m instanceof Enemy;
+            Optional<RobotRules.GrindSkip> skip = RobotRules.grindSkip(new RobotRules.GrindTarget(
+                    m instanceof Tameable t && t.isTamed(), hostile, hostile || workArea.test(b.owner, m.getLocation()),
+                    m instanceof AbstractVillager, m.customName() != null, m.getPersistentDataContainer().has(Spawners.FROM_SPAWNER),
+                    m instanceof Animals, m instanceof Animals an && an.isAdult(), count.get(e.getType())));
+            if (skip.isPresent()) { skipped.merge(skip.get(), 1, Integer::sum); continue; }
+            double before = m.getHealth();
             killedBy.put(m.getUniqueId(), b.id);
-            m.damage(DAMAGE[b.tier - 1]);
-            if (!m.isDead()) killedBy.remove(m.getUniqueId());
+            m.damage(stats.damage());
+            if (!m.isDead() && m.getHealth() >= before) {
+                noEffect++;   // something cancelled or absorbed the hit
+                if (sandbox) m.setHealth(Math.max(0, before - stats.damage()));   // the Foundry's bench must always work
+            }
+            if (m.isDead()) kills++;
+            else killedBy.remove(m.getUniqueId());
             hits++;
+            if (b.lastTarget == null) b.lastTarget = m.getLocation().add(0, 1, 0);
+            m.getWorld().spawnParticle(Particle.DAMAGE_INDICATOR, m.getLocation().add(0, 1, 0), 6, 0.25, 0.3, 0.25, 0.05);
+            m.getWorld().playSound(m.getLocation(), Sound.ENTITY_HUSK_HURT, 0.6f, 1f);
         }
+        b.grindStatus = RobotRules.grindStatus(mobs, hits);
+        logGrinder(b, g, RobotRules.grindSummary(mobs, skipped, hits, noEffect, kills));
         if (hits > 0) { g.swingMainHand(); b.loc.getWorld().playSound(b.loc, Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.4f, 1.2f); }
+        return hits - noEffect;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -449,21 +676,25 @@ public final class Robots implements Listener {
     private static boolean nearWater(Bot b) {
         Block c = b.loc.getBlock();
         for (int dx = -2; dx <= 2; dx++) for (int dy = -2; dy <= 0; dy++) for (int dz = -2; dz <= 2; dz++)
-            if (c.getRelative(dx, dy, dz).getType() == Material.WATER) return true;
+            if (c.getRelative(dx, dy, dz).getType() == Material.WATER) {
+                b.lastTarget = c.getRelative(dx, dy, dz).getLocation().add(0.5, 1, 0.5);
+                return true;
+            }
         return false;
     }
 
-    private void fish(Bot b, CopperGolem g) {
-        if (!nearWater(b)) { b.status = "<red>Needs water"; return; }
-        double roll = rnd.nextDouble();
+    /** Returns the catches: one, or none away from water. */
+    private int fish(Bot b, CopperGolem g, AgentStats stats) {
+        if (!nearWater(b)) { b.status = "<red>Needs water"; return 0; }
+        double roll = rnd.nextDouble(), treasureChance = 0.02 * b.tier * stats.treasureMult();
         ItemStack catchIt;
-        if (roll < 0.02 * b.tier) {
+        if (roll < treasureChance) {
             Material[] treasure = {Material.NAME_TAG, Material.SADDLE, Material.NAUTILUS_SHELL, Material.ENCHANTED_BOOK, Material.BOW};
             catchIt = new ItemStack(treasure[rnd.nextInt(treasure.length)]);
             if (catchIt.getType() == Material.ENCHANTED_BOOK)
                 catchIt.editMeta(org.bukkit.inventory.meta.EnchantmentStorageMeta.class, m -> m.addStoredEnchant(
                         List.of(Enchantment.MENDING, Enchantment.UNBREAKING, Enchantment.LUCK_OF_THE_SEA, Enchantment.LURE, Enchantment.SHARPNESS).get(rnd.nextInt(5)), 1 + rnd.nextInt(3), true));
-        } else if (roll < 0.02 * b.tier + 0.05) {
+        } else if (roll < treasureChance + 0.05) {
             Material[] junk = {Material.STICK, Material.STRING, Material.LEATHER, Material.BOWL, Material.INK_SAC, Material.BONE};
             catchIt = new ItemStack(junk[rnd.nextInt(junk.length)]);
         } else {
@@ -474,19 +705,20 @@ public final class Robots implements Listener {
         b.xp += 1 + rnd.nextInt(3);
         g.swingMainHand();
         b.loc.getWorld().playSound(b.loc, Sound.ENTITY_FISHING_BOBBER_SPLASH, 0.3f, 1.2f);
+        return 1;
     }
 
     // ------------------------------------------------------------------ robot menu
 
     private static final class Menu implements InventoryHolder {
-        final String id; final String kind; Inventory inv;
+        final String id; final String kind; Inventory inv; boolean readOnly;
         Menu(String id, String kind) { this.id = id; this.kind = kind; }
         public Inventory getInventory() { return inv; }
     }
 
     // row 1: job selector; row 2: actions; rows 3-6: storage
     private static final int[] JOB_SLOTS = {1, 3, 5, 7};
-    private static final int SLOT_COLLECT = 9, SLOT_XP = 10, SLOT_FUEL = 11, SLOT_INFO = 13, SLOT_UPGRADE = 15, SLOT_PICKUP = 17;
+    private static final int SLOT_COLLECT = 9, SLOT_XP = 10, SLOT_FUEL = 11, SLOT_INFO = 13, SLOT_UPGRADE = 15, SLOT_RENAME = 16, SLOT_PICKUP = 17;
     private static final int STORAGE_START = 18;
 
     /** "▮▮▮▮▯▯▯": lit segments coloured red/yellow/green by position, unlit ones dark grey. */
@@ -500,11 +732,16 @@ public final class Robots implements Listener {
         return sb.toString();
     }
 
-    void open(Player p, Bot b) {
+    void open(Player p, Bot b) { open(p, b, false); }
+
+    private void open(Player p, Bot b, boolean readOnly) {
         Menu m = new Menu(b.id, "robot");
-        m.inv = Bukkit.createInventory(m, 54, Ui.mm("<dark_gray>⚙ " + b.job.label + " Robot " + Spawners.roman(b.tier)));
-        ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
-        for (int i = 0; i < STORAGE_START; i++) m.inv.setItem(i, pane);
+        m.readOnly = readOnly;
+        m.inv = Bukkit.createInventory(m, 54, StationUi.title(StationUi.Screen.AGENT, "⚙ " + b.title() + " " + Spawners.roman(b.tier)));
+        if (!StationUi.art()) {
+            ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
+            for (int i = 0; i < STORAGE_START; i++) m.inv.setItem(i, pane);
+        }
         int used = 0;
         for (ItemStack it : b.storage.getContents()) if (it != null) used++;
         m.inv.setItem(SLOT_COLLECT, Ui.item(Material.CHEST, "<green><bold>Collect All", "<gray>Storage: <white>" + used + "/" + b.storage.getSize() + " slots", "<gray>Click an item below to take just that stack."));
@@ -518,8 +755,9 @@ public final class Robots implements Listener {
                 "<gray>Works every <white>" + b.interval() + "s" + (b.job == Job.MINER ? "" : " <gray>in a <white>" + RADIUS[b.tier - 1] + "<gray>-block radius"),
                 "<gray>Charge: <white>" + time(b.charge)));
         if (!b.status.isEmpty()) info.add(b.status);
-        m.inv.setItem(SLOT_INFO, Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, b.job.color + "<bold>" + b.job.label + " Robot " + Spawners.roman(b.tier), info.toArray(String[]::new)));
+        m.inv.setItem(SLOT_INFO, Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, b.job.color + "<bold>" + b.title() + " " + Spawners.roman(b.tier), info.toArray(String[]::new)));
         if (b.tier >= MAX_TIER) m.inv.setItem(SLOT_UPGRADE, Ui.item(Material.NETHER_STAR, "<gold><bold>MAX TIER"));
+        else if (sandbox) m.inv.setItem(SLOT_UPGRADE, Ui.item(Material.ANVIL, "<aqua><bold>Upgrade to Tier " + Spawners.roman(b.tier + 1), "<green>Free in the Foundry", "", "<yellow>Click to upgrade"));
         else {
             int t = b.tier - 1;
             long need = UP_CHARGE_HOURS[t] * 3600_000L;
@@ -530,14 +768,22 @@ public final class Robots implements Listener {
                     "<gray>Charge: " + bar + " <white>" + pct + "%", "<dark_gray>(" + time(b.charge) + " / " + UP_CHARGE_HOURS[t] + "h - burn fuel to charge)",
                     "<#9d7bff>" + UP_ESSENCE[t] + " Mob Essence", "<green>" + NetEconomy.money(UP_MONEY[t]), "", "<yellow>Click to upgrade"));
         }
-        m.inv.setItem(SLOT_PICKUP, Ui.item(Material.HOPPER, "<red><bold>Pick Up Robot", "<gray>Gives you the robot item (keeps tier,", "<gray>charge and fuel) and its storage."));
+        m.inv.setItem(SLOT_RENAME, Ui.item(Material.NAME_TAG, "<aqua><bold>Rename", "<gray>Name: <white>" + (b.name != null ? b.name : "none"), "<gray>Type a name and it becomes <white>Agent Name<gray>.", "", "<yellow>Click to rename"));
+        m.inv.setItem(SLOT_PICKUP, Ui.item(Material.HOPPER, "<red><bold>Pick Up Agent", "<gray>Gives you the agent item (keeps tier,", "<gray>charge and fuel) and its storage."));
         for (int i = 0; i < 4; i++) {
             Job j = Job.values()[i];
-            ItemStack icon = Ui.item(j.icon, j.color + "<bold>" + j.label, "<gray>" + j.desc, "", j == b.job ? "<green>✔ Current job" : "<yellow>Click to switch");
+            int needs = lockedUntil(j, b.loc);
+            ItemStack icon = Ui.item(j.icon, j.color + "<bold>" + j.label, "<gray>" + j.desc, "", j == b.job ? "<green>✔ Current job" : needs > 0 ? "<red>Needs Base Level " + needs : "<yellow>Click to switch");
             if (j == b.job) icon.editMeta(x -> x.setEnchantmentGlintOverride(true));
             m.inv.setItem(JOB_SLOTS[i], icon);
         }
         for (int i = 0; i < b.storage.getSize() && STORAGE_START + i < 54; i++) m.inv.setItem(STORAGE_START + i, b.storage.getItem(i));
+        if (readOnly) {
+            ItemStack locked = Ui.item(Material.BARRIER, "<red><bold>Read-only", "<gray>You can look, but not change anything.");
+            m.inv.setItem(SLOT_COLLECT, Ui.item(Material.CHEST, "<green><bold>Storage", "<gray>" + used + "/" + b.storage.getSize() + " slots used"));
+            m.inv.setItem(SLOT_RENAME, locked);
+            m.inv.setItem(SLOT_PICKUP, locked);
+        }
         p.openInventory(m.inv);
     }
 
@@ -548,9 +794,15 @@ public final class Robots implements Listener {
         // the player's own inventory, so nothing can be moved into the menu (the menu is a copy, not the real storage).
         e.setCancelled(true);
         if (!(e.getWhoClicked() instanceof Player p) || e.getClickedInventory() != e.getInventory()) return;
+        if (m.readOnly) { p.sendActionBar(Ui.mm("<red>Read-only: you can look, but not change anything.")); return; }
         if (m.kind.equals("shop")) { shopClick(p, e.getRawSlot()); return; }
         Bot b = bots.get(m.id);
-        if (b == null) { p.closeInventory(); return; }
+        if (b == null || !mayUse(p, b)) {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (p.getOpenInventory().getTopInventory().equals(m.inv)) p.closeInventory();
+            });
+            return;
+        }
         int slot = e.getRawSlot();
         if (slot >= STORAGE_START) {
             int i = slot - STORAGE_START;
@@ -581,18 +833,52 @@ public final class Robots implements Listener {
                 open(p, b);
             }
             case SLOT_UPGRADE -> { upgrade(p, b); open(p, b); }
+            case SLOT_RENAME -> {
+                naming.put(p.getUniqueId(), new Naming(b.id, System.currentTimeMillis() + 60_000L));
+                p.closeInventory();
+                p.sendMessage(Ui.mm("<aqua>Type your agent's name in chat: <gray>1-16 letters or numbers. <white>clear<gray> removes the name, <white>cancel<gray> stops."));
+            }
             case SLOT_PICKUP -> pickUp(p, b);
             default -> {
                 for (int i = 0; i < 4; i++) if (JOB_SLOTS[i] == slot && b.job != Job.values()[i]) {
+                    int needs = lockedUntil(Job.values()[i], b.loc);
+                    if (needs > 0) {
+                        p.sendActionBar(Ui.mm("<red>" + Job.values()[i].label + " Agents need Base Level " + needs + "."));
+                        p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6f, 0.8f);
+                        return;
+                    }
                     b.job = Job.values()[i];
                     b.timer = 0;
+                    b.workProgress = 0;
+                    b.lastGrindLog = null;
+                    b.grindStatus = "";
                     CopperGolem g = entity(b);
                     if (g != null) style(b, g);
-                    p.sendMessage(Ui.mm("<green>Your robot is now a " + b.job.color + b.job.label + "<green>."));
+                    p.sendMessage(Ui.mm("<green>Your agent is now a " + b.job.color + b.job.label + "<green>."));
                     open(p, b);
                 }
             }
         }
+    }
+
+    /** Puts one cell's worth in the tank. The caller has checked that it fits and takes the cell away. */
+    private static void pour(Bot b, RobotRules.FuelCell c) {
+        // blend the tank's current rate with only the newly accepted fuel
+        b.chargeRate = RobotRules.blendRate(b.fuel, b.chargeRate, c.chargeMs(), RobotRules.rateForTier(c.tier()));
+        b.fuelTier = b.fuel > 0 ? Math.max(b.fuelTier, c.tier()) : c.tier();   // icon/colour only now
+        b.fuel += c.chargeMs();
+    }
+
+    /** Fuels an agent from one cell of this stack with no player involved. False, and the stack is untouched, if it isn't fuel or won't fit. */
+    boolean fuelFromItem(Bot b, ItemStack cell) {
+        int t = fuelTier(cell);
+        if (t == 0 || cell.getAmount() <= 0) return false;
+        long ms = FUEL_MINUTES[t - 1] * 60_000L;
+        if (b.fuel + ms > MAX_TANK) return false;
+        b.fixRate();
+        pour(b, new RobotRules.FuelCell(t, ms));
+        cell.setAmount(cell.getAmount() - 1);
+        return true;
     }
 
     private void addFuel(Player p, Bot b, boolean all) {
@@ -613,28 +899,27 @@ public final class Robots implements Listener {
             if (pick.isEmpty()) break;
             RobotRules.FuelCell c = pick.get();
             int i = slots.get(fits.indexOf(c));
-            // blend the tank's current rate with only the newly accepted fuel
-            b.chargeRate = RobotRules.blendRate(b.fuel, b.chargeRate, c.chargeMs(), RobotRules.rateForTier(c.tier()));
-            b.fuelTier = b.fuel > 0 ? Math.max(b.fuelTier, c.tier()) : c.tier();   // icon/colour only now
-            b.fuel += c.chargeMs();
+            pour(b, c);
             inv[i].setAmount(inv[i].getAmount() - 1);
             added++;
             if (!all) break;
         }
         p.getInventory().setStorageContents(inv);
-        if (added == 0) p.sendMessage(Ui.mm(b.fuel >= MAX_TANK - 30 * 60_000L ? "<red>The tank is full." : "<red>You have no Fuel Cells. Buy them at <white>/robots<red> or the Scrap Shop."));
+        if (added == 0) p.sendMessage(Ui.mm(b.fuel >= MAX_TANK - 30 * 60_000L ? "<red>The tank is full." : sandbox ? "<red>You have no Fuel Cells. Take some from the Fuel chest." : "<red>You have no Fuel Cells. Buy them at <white>/agents<red> or the Scrap Shop."));
         else { p.sendMessage(Ui.mm("<green>Added " + added + " Fuel Cell" + (added > 1 ? "s" : "") + ". Fuel: <white>" + time(b.fuel))); p.playSound(p.getLocation(), Sound.ITEM_BUCKET_FILL_LAVA, 0.6f, 1.2f); }
     }
 
     private void upgrade(Player p, Bot b) {
         if (b.tier >= MAX_TIER) return;
         int t = b.tier - 1;
+        if (!sandbox) {
         if (b.charge < UP_CHARGE_HOURS[t] * 3600_000L) { p.sendMessage(Ui.mm("<red>Not enough Charge yet - keep it fuelled (" + time(b.charge) + " / " + UP_CHARGE_HOURS[t] + "h). Better fuel charges faster.")); return; }
         if (Spawners.countEssence(p) < UP_ESSENCE[t]) { p.sendMessage(Ui.mm("<red>You need " + UP_ESSENCE[t] + " Mob Essence.")); return; }
         if (eco == null || eco.getBalance(p) < UP_MONEY[t]) { p.sendMessage(Ui.mm("<red>You need " + NetEconomy.money(UP_MONEY[t]) + ".")); return; }
-        eco.withdrawPlayer(p, UP_MONEY[t]);
+        if (!eco.withdrawPlayer(p, UP_MONEY[t]).transactionSuccess()) { p.sendMessage(Ui.mm("<red>The payment failed.")); return; }
         Spawners.takeEssence(p, UP_ESSENCE[t]);
         b.charge -= UP_CHARGE_HOURS[t] * 3600_000L;
+        }
         b.tier++;
         Inventory bigger = Bukkit.createInventory(null, STORAGE[b.tier - 1]);
         bigger.setContents(Arrays.copyOf(b.storage.getContents(), bigger.getSize()));
@@ -642,7 +927,7 @@ public final class Robots implements Listener {
         CopperGolem g = entity(b);
         if (g != null) { style(b, g); g.getWorld().spawnParticle(Particle.WAX_OFF, g.getLocation().add(0, 1, 0), 40, 0.4, 0.6, 0.4); }
         p.playSound(p.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 0.8f, 1.2f);
-        p.sendMessage(Ui.mm("<gold><bold>Robot upgraded to Tier " + Spawners.roman(b.tier) + "!"));
+        p.sendMessage(Ui.mm("<gold><bold>Agent upgraded to Tier " + Spawners.roman(b.tier) + "!"));
         save();
     }
 
@@ -653,9 +938,94 @@ public final class Robots implements Listener {
         bots.remove(b.id);
         for (ItemStack it : b.storage.getContents()) if (it != null) give(p, it);
         if (b.xp > 0) p.giveExp(b.xp);
-        give(p, robotItem(b.job, b.tier, b.charge, b.fuel, itemFuelTier(b.chargeRate)));
-        p.sendMessage(Ui.mm("<green>Robot picked up."));
+        give(p, robotItem(b.job, b.tier, b.charge, b.fuel, itemFuelTier(b.chargeRate), b.name, b.record));
+        p.sendMessage(Ui.mm("<green>Agent picked up."));
         save();
+    }
+
+    // This message is a name, so it never reaches chat. The chat filter still sees it, as it does all typed text.
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onChatName(io.papermc.paper.event.player.AsyncChatEvent e) {
+        Naming n = naming.remove(e.getPlayer().getUniqueId());
+        if (n == null || n.until() < System.currentTimeMillis()) return;
+        e.setCancelled(true);
+        String typed = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(e.message()).trim();
+        Player p = e.getPlayer();
+        Bukkit.getScheduler().runTask(plugin, () -> applyName(p, n.botId(), typed));
+    }
+
+    @EventHandler
+    public void onQuitNaming(org.bukkit.event.player.PlayerQuitEvent e) { naming.remove(e.getPlayer().getUniqueId()); }
+
+    private void applyName(Player p, String botId, String typed) {
+        Bot b = bots.get(botId);
+        if (b == null || !mayUse(p, b) || typed.equalsIgnoreCase("cancel")) { p.sendMessage(Ui.mm("<gray>Rename cancelled.")); return; }
+        if (typed.equalsIgnoreCase("clear")) b.name = null;
+        else if (!RobotRules.validName(typed)) { p.sendMessage(Ui.mm("<red>Names are 1-16 letters or numbers, with no spaces.")); return; }
+        else if (net.blackforge.core.moderation.AutoMod.blocks(typed)) { p.sendMessage(Ui.mm("<red>That name isn't allowed.")); return; }
+        else b.name = typed;
+        CopperGolem g = entity(b);
+        if (g != null) style(b, g);
+        save();
+        p.sendMessage(Ui.mm("<green>Your agent is now <white>" + b.title() + "<green>."));
+    }
+
+    // ------------------------------------------------------------------ Base Station
+
+    /** This player's agents, the highest tier first. */
+    List<Bot> agentsOf(UUID owner) {
+        List<Bot> out = new ArrayList<>();
+        for (Bot b : bots.values()) if (b.owner.equals(owner)) out.add(b);
+        out.sort(Comparator.comparingInt((Bot b) -> b.tier).reversed());
+        return out;
+    }
+
+    /** Is this agent still placed? It can be picked up while something's on its way to it. */
+    boolean isPlaced(Bot b) { return bots.get(b.id) == b; }
+
+    /** Is this agent nearly out of fuel, by the same rule a Fisherman's slower burn already follows? */
+    boolean wantsFuel(Bot b) {
+        return RobotRules.shouldFetchFuel(b.fuel, b.job == Job.FISHERMAN ? (long) (1000 * RobotRules.FISHER_BURN) : 1000);
+    }
+
+    /** Agents within this many blocks of a spot, this owner's only unless {@code owner} is null. */
+    List<Bot> agentsNear(Location at, int radius, UUID owner) {
+        List<Bot> out = new ArrayList<>();
+        for (Bot b : bots.values())
+            if ((owner == null || b.owner.equals(owner)) && b.loc.getWorld() == at.getWorld() && b.loc.distanceSquared(at) <= (double) radius * radius) out.add(b);
+        return out;
+    }
+
+    private boolean mayUse(Player p, Bot b) {
+        return p.hasPermission("blackforge.admin") || (sandbox ? b.owner.equals(p.getUniqueId()) : canUse.test(p, b.loc));
+    }
+
+    /** An agent's card in the Forge: its tier and the price of the next one, and nothing from its storage. */
+    ItemStack forgeIcon(Bot b) {
+        List<String> lore = new ArrayList<>(List.of("<gray>Job: " + b.job.color + b.job.label, "<gray>Tier: <white>" + Spawners.roman(b.tier), ""));
+        if (b.tier >= MAX_TIER) lore.add("<gold><bold>Max tier");
+        else {
+            int t = b.tier - 1;
+            lore.add("<gray>Upgrade to Tier <white>" + Spawners.roman(b.tier + 1) + "<gray>:");
+            if (sandbox) lore.add("<green>Free in the Foundry");
+            else {
+            lore.add("<green>" + NetEconomy.money(UP_MONEY[t]));
+            lore.add("<#9d7bff>" + UP_ESSENCE[t] + " Mob Essence");
+            lore.add("<gray>Charge: <white>" + time(b.charge) + " <dark_gray>/ " + UP_CHARGE_HOURS[t] + "h");
+            }
+            lore.add("");
+            lore.add("<yellow>Click to upgrade");
+        }
+        ItemStack it = Ui.item(Material.COPPER_GOLEM_SPAWN_EGG, b.job.color + "<bold>" + b.title(), lore.toArray(String[]::new));
+        it.setAmount(b.tier);
+        return it;
+    }
+
+    void upgradeFromStation(Player p, String id) {
+        Bot b = bots.get(id);
+        if (b == null) return;
+        if (!mayUse(p, b)) { p.sendMessage(Ui.mm("<red>That's " + Bukkit.getOfflinePlayer(b.owner).getName() + "'s agent.")); return; }
+        upgrade(p, b);   // same rules and costs as the agent's own menu
     }
 
     @EventHandler
@@ -665,17 +1035,19 @@ public final class Robots implements Listener {
 
     void openShop(Player p) {
         Menu m = new Menu("", "shop");
-        m.inv = Bukkit.createInventory(m, 36, Ui.mm("<dark_gray>⚙ Robot Workshop"));
-        ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
-        for (int i = 0; i < 36; i++) m.inv.setItem(i, pane);
-        m.inv.setItem(4, Ui.item(Material.BOOK, "<gold><bold>How robots work",
-                crateOnly == null ? "<gray>1. Buy a robot and place it on your island" : "<gray>1. Win a robot from a crate, place it in your claim", "<gray>2. Right-click it and add Fuel Cells",
+        m.inv = Bukkit.createInventory(m, 36, StationUi.title(StationUi.Screen.WORKSHOP, "⚙ Agent Workshop"));
+        if (!StationUi.art()) {
+            ItemStack pane = Ui.item(Material.GRAY_STAINED_GLASS_PANE, " ");
+            for (int i = 0; i < 36; i++) m.inv.setItem(i, pane);
+        }
+        m.inv.setItem(4, Ui.item(Material.BOOK, "<gold><bold>How agents work",
+                crateOnly == null ? "<gray>1. Buy an agent and place it on your island" : "<gray>1. Win an agent from a crate, place it in your claim", "<gray>2. Right-click it and add Fuel Cells",
                 "<gray>3. Pick a job: Farmer, Miner, Grinder, Fisherman", "<gray>4. Burning fuel builds Charge - with Charge,",
-                "<gray>   Essence and money it can reach the next tier", "", "<gray>Your robots: <white>" + owned(p.getUniqueId()) + "/" + limit(p) + " <dark_gray>(ranks raise this)"));
-        ItemStack r = robotItem(Job.MINER, 1, 0, 0, 1);
+                "<gray>   Essence and money it can reach the next tier", "", "<gray>Your agents: <white>" + owned(p.getUniqueId()) + "/" + limit(p) + " <dark_gray>(ranks raise this)"));
+        ItemStack r = robotItem(defaultJob(), 1, 0, 0, 1);
         r.editMeta(x -> { List<net.kyori.adventure.text.Component> l = new ArrayList<>(Optional.ofNullable(x.lore()).orElse(List.of())); l.add(Ui.mm(""));
             if (crateOnly == null) { l.add(Ui.mm("<green>Price: " + NetEconomy.money(ROBOT_PRICE))); l.add(Ui.mm("<yellow>Click to buy")); }
-            else { l.add(Ui.mm("<red>Not for sale here")); l.add(Ui.mm("<gray>Win robots from " + crateOnly + " <gray>crates")); }
+            else { l.add(Ui.mm("<red>Not for sale here")); l.add(Ui.mm("<gray>Win agents from " + crateOnly + " <gray>crates")); }
             x.lore(l); });
         m.inv.setItem(13, r);
         for (int t = 1; t <= 5; t++) {
@@ -685,20 +1057,22 @@ public final class Robots implements Listener {
                 l.add(Ui.mm("<green>" + NetEconomy.money(FUEL_MONEY[tt - 1]) + " <dark_gray>+ <#9d7bff>" + FUEL_ESSENCE[tt - 1] + " Mob Essence")); l.add(Ui.mm("<yellow>Click to buy")); x.lore(l); });
             m.inv.setItem(19 + 2 * (t - 1), f);
         }
+        if (stations != null) m.inv.setItem(31, stations.shopIcon());
         p.openInventory(m.inv);
     }
 
     private void shopClick(Player p, int slot) {
-        if (slot == 13) {
-            if (crateOnly != null) { p.sendMessage(Ui.mm("<gray>Robots can only be won from " + crateOnly + " <gray>crates.")); return; }
-            if (eco == null || !eco.withdrawPlayer(p, ROBOT_PRICE).transactionSuccess()) { p.sendMessage(Ui.mm("<red>A robot costs " + NetEconomy.money(ROBOT_PRICE) + ".")); return; }
-            give(p, robotItem(Job.MINER, 1, 0, 0, 1));
-            p.sendMessage(Ui.mm("<green>You bought a robot! Place it on your island."));
+        if (slot == 31 && stations != null) stations.buy(p);
+        else if (slot == 13) {
+            if (crateOnly != null) { p.sendMessage(Ui.mm("<gray>Agents can only be won from " + crateOnly + " <gray>crates.")); return; }
+            if (eco == null || !eco.withdrawPlayer(p, ROBOT_PRICE).transactionSuccess()) { p.sendMessage(Ui.mm("<red>An agent costs " + NetEconomy.money(ROBOT_PRICE) + ".")); return; }
+            give(p, robotItem(defaultJob(), 1, 0, 0, 1));
+            p.sendMessage(Ui.mm("<green>You bought an agent! Place it on your island."));
         } else if (slot >= 19 && slot <= 27 && (slot - 19) % 2 == 0) {
             int t = (slot - 19) / 2 + 1;
             if (Spawners.countEssence(p) < FUEL_ESSENCE[t - 1]) { p.sendMessage(Ui.mm("<red>You need " + FUEL_ESSENCE[t - 1] + " Mob Essence.")); return; }
             if (eco == null || eco.getBalance(p) < FUEL_MONEY[t - 1]) { p.sendMessage(Ui.mm("<red>You need " + NetEconomy.money(FUEL_MONEY[t - 1]) + ".")); return; }
-            eco.withdrawPlayer(p, FUEL_MONEY[t - 1]);
+            if (!eco.withdrawPlayer(p, FUEL_MONEY[t - 1]).transactionSuccess()) { p.sendMessage(Ui.mm("<red>The payment failed.")); return; }
             Spawners.takeEssence(p, FUEL_ESSENCE[t - 1]);
             give(p, fuelCell(t, 1));
             p.sendMessage(Ui.mm("<green>Bought a Fuel Cell " + Spawners.roman(t) + "."));
@@ -708,19 +1082,19 @@ public final class Robots implements Listener {
     }
 
     private void registerCommand() {
-        Bukkit.getCommandMap().register("blackforge", new Command("robots", "Robot workshop", "/robots", List.of("robot", "fuel")) {
+        Bukkit.getCommandMap().register("blackforge", new Command("agents", "Agent workshop", "/agents", List.of("agent", "robots", "robot", "fuel")) {
             @Override public boolean execute(CommandSender s, String label, String[] a) {
                 if (a.length >= 3 && a[0].equalsIgnoreCase("give") && s.hasPermission("blackforge.admin")) {   // robots give <player> <robot|fuel|essence> [tier/amount] [job]
                     Player t = Bukkit.getPlayerExact(a[1]);
                     if (t == null) { s.sendMessage(Ui.mm("<red>Not online.")); return true; }
                     int n = a.length > 3 ? Integer.parseInt(a[3]) : 1;
                     switch (a[2].toLowerCase()) {
-                        case "robot" -> give(t, robotItem(a.length > 4 ? Job.valueOf(a[4].toUpperCase()) : Job.MINER, Math.max(1, Math.min(5, n)), 0, 0, 1));
+                        case "agent", "robot" -> give(t, robotItem(a.length > 4 ? Job.valueOf(a[4].toUpperCase()) : defaultJob(), Math.max(1, Math.min(5, n)), 0, 0, 1));
                         case "fuel" -> give(t, fuelCell(n, 1));
                         case "essence" -> Spawners.giveEssence(t, n);
                         case "fragment", "fragments" -> give(t, Spawners.fragment(n));
                         case "emptyspawner" -> { for (int i = 0; i < n; i++) give(t, Spawners.emptySpawner()); }
-                        default -> { s.sendMessage(Ui.mm("<red>robot|fuel|essence|fragment|emptyspawner")); return true; }
+                        default -> { s.sendMessage(Ui.mm("<red>agent|fuel|essence|fragment|emptyspawner")); return true; }
                     }
                     s.sendMessage(Ui.mm("<green>Given."));
                     return true;
@@ -729,7 +1103,7 @@ public final class Robots implements Listener {
                     Player t = Bukkit.getPlayerExact(a[1]);
                     if (t == null) { s.sendMessage(Ui.mm("<red>Not online.")); return true; }
                     for (Bot b : bots.values()) if (b.owner.equals(t.getUniqueId())) b.charge += Long.parseLong(a[2]) * 3600_000L;
-                    s.sendMessage(Ui.mm("<green>Charged " + t.getName() + "'s robots.")); return true;
+                    s.sendMessage(Ui.mm("<green>Charged " + t.getName() + "'s agents.")); return true;
                 }
                 if (s instanceof Player p) openShop(p);
                 return true;
@@ -771,6 +1145,8 @@ public final class Robots implements Listener {
             b.fixRate();
             b.charge = s.getLong("charge");
             b.xp = s.getInt("xp");
+            b.name = s.getString("name");
+            b.record = withUid(AgentRecord.decode(s.getString("academy")));
             b.loc = new Location(w, s.getDouble("x"), s.getDouble("y"), s.getDouble("z"), (float) s.getDouble("yaw"), 0);
             b.storage = Bukkit.createInventory(null, STORAGE[b.tier - 1]);
             List<?> items = s.getList("storage", List.of());
@@ -779,10 +1155,11 @@ public final class Robots implements Listener {
             if (ent != null) b.entity = UUID.fromString(ent);
             bots.put(id, b);
         }
-        if (bots.size() > before) plugin.getLogger().info("Loaded " + (bots.size() - before) + " robots" + (pending.isEmpty() ? "" : " (" + pending.size() + " waiting for their world)"));
+        if (bots.size() > before) plugin.getLogger().info("Loaded " + (bots.size() - before) + " agents" + (pending.isEmpty() ? "" : " (" + pending.size() + " waiting for their world)"));
     }
 
     void save() {
+        if (sandbox) return;
         YamlConfiguration y = new YamlConfiguration();
         for (Map.Entry<String, ConfigurationSection> en : pending.entrySet()) y.set("robots." + en.getKey(), en.getValue());
         for (Bot b : bots.values()) {
@@ -795,6 +1172,8 @@ public final class Robots implements Listener {
             y.set(k + "charge-rate", b.chargeRate);
             y.set(k + "charge", b.charge);
             y.set(k + "xp", b.xp);
+            y.set(k + "name", b.name);
+            y.set(k + "academy", b.record.encode());
             y.set(k + "world", b.loc.getWorld().getName());
             y.set(k + "x", b.loc.getX()); y.set(k + "y", b.loc.getY()); y.set(k + "z", b.loc.getZ()); y.set(k + "yaw", b.loc.getYaw());
             y.set(k + "entity", b.entity == null ? null : b.entity.toString());

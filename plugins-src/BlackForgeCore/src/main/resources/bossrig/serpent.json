@@ -1,0 +1,67 @@
+{
+ "scale": 8.0,
+ "groups": [
+  {
+   "name": "head",
+   "parent": null,
+   "pivot": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "jaw",
+   "parent": "head",
+   "pivot": [
+    0,
+    -3,
+    -1
+   ]
+  },
+  {
+   "name": "head_glow",
+   "parent": "head",
+   "pivot": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "seg_a",
+   "parent": null,
+   "pivot": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "seg_b",
+   "parent": null,
+   "pivot": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "tail",
+   "parent": null,
+   "pivot": [
+    0,
+    0,
+    0
+   ]
+  }
+ ],
+ "models": [
+  "head",
+  "head_glow",
+  "jaw",
+  "seg_a",
+  "seg_b",
+  "tail"
+ ]
+}
