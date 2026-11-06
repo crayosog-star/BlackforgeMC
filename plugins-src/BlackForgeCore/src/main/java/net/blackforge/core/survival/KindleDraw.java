@@ -18,7 +18,8 @@ import java.util.*;
 
 /**
  * Kindle Draw (Survival 2 experiment "kindle-draw"): a lottery. Tickets cost a fixed price and go into the pot; the
- * house keeps a cut, so the draw also takes money out of the economy. Every few hours one ticket wins the pot; more
+ * house keeps a cut, so the draw also takes money out of the economy. The pot is a running total saved in draw.yml
+ * ("pot"), so changing ticket-price or house-cut mid-draw doesn't change what was already collected. Every few hours one ticket wins the pot; more
  * tickets means better odds. Staff can force a draw with /draw now.
  */
 final class KindleDraw {
@@ -59,6 +60,7 @@ final class KindleDraw {
             if (have + n > maxTickets) { p.sendMessage(Ui.mm("<red>You can hold up to " + maxTickets + " tickets per draw (you have " + have + ").")); return; }
             double cost = LabMath.round2(n * price);
             if (!eco.withdraw(p, cost)) { p.sendMessage(Ui.mm("<red>" + n + " tickets cost " + NetEconomy.money(cost) + ".")); return; }
+            data.set("pot", LabMath.drawPotAfterBuy(pot(), cost, cut)); // before the tickets change, so an old save seeds it right
             data.set("tickets." + p.getUniqueId(), have + n);
             data.set("names." + p.getUniqueId(), p.getName());
             save();
@@ -105,7 +107,7 @@ final class KindleDraw {
             save();
             return;
         }
-        data.set("tickets", null); data.set("names", null); data.set("warned", false);
+        data.set("tickets", null); data.set("names", null); data.set("pot", null); data.set("warned", false);
         data.set("next", System.currentTimeMillis() + everyMillis);
         if (winner == null) { save(); return; }
         data.set("last", name + " won " + NetEconomy.money(pot));
@@ -134,7 +136,8 @@ final class KindleDraw {
         return n;
     }
 
-    private double pot() { return LabMath.drawPot(total(), price, cut); }
+    /** The money actually collected for this draw. Saves from before the running total fall back to today's config. */
+    private double pot() { return data.isSet("pot") ? data.getDouble("pot") : LabMath.drawPot(total(), price, cut); }
 
     private void save() {
         try { file.getParentFile().mkdirs(); data.save(file); }
