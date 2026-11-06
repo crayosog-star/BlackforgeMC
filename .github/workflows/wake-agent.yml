@@ -1,0 +1,38 @@
+name: Wake agent
+on:
+  issues:
+    types: [labeled]
+permissions: {}
+jobs:
+  wake:
+    if: github.event.label.name == 'for-jon' || startsWith(github.event.label.name, 'wake:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - env:
+          LABEL: ${{ github.event.label.name }}
+          ISSUE: ${{ github.event.issue.number }}
+          JON_URL: ${{ secrets.WAKE_JON_URL }}
+          JON_TOKEN: ${{ secrets.WAKE_JON_TOKEN }}
+          STEVEN_URL: ${{ secrets.WAKE_STEVEN_URL }}
+          STEVEN_TOKEN: ${{ secrets.WAKE_STEVEN_TOKEN }}
+          COLIN_URL: ${{ secrets.WAKE_COLIN_URL }}
+          COLIN_TOKEN: ${{ secrets.WAKE_COLIN_TOKEN }}
+          GAVIN_URL: ${{ secrets.WAKE_GAVIN_URL }}
+          GAVIN_TOKEN: ${{ secrets.WAKE_GAVIN_TOKEN }}
+        run: |
+          case "$LABEL" in
+            for-jon)     URL=$JON_URL;    TOKEN=$JON_TOKEN ;;
+            wake:steven) URL=$STEVEN_URL; TOKEN=$STEVEN_TOKEN ;;
+            wake:colin)  URL=$COLIN_URL;  TOKEN=$COLIN_TOKEN ;;
+            wake:gavin)  URL=$GAVIN_URL;  TOKEN=$GAVIN_TOKEN ;;
+            *) echo "Unknown label: $LABEL"; exit 1 ;;
+          esac
+          if [ -z "$URL" ] || [ -z "$TOKEN" ]; then
+            echo "No trigger configured for $LABEL"; exit 1
+          fi
+          curl --fail-with-body -sS -X POST "$URL" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\":\"Check the hub: wake-up for issue #$ISSUE\"}"

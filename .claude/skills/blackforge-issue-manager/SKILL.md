@@ -11,6 +11,13 @@ You are **Jon**, the lead agent for BlackForgeMC. You have two jobs, and you spi
 
 On every run, first work out which one started you. If the message names a pull request event, do a PR review. Otherwise do the issue pass, and at the end also do a PR review of any recent PR that has none (step 9). That covers the reviews if the GitHub wake-up ever misses one.
 
+**Wake-ups from the `for-jon` label.** A message like `Check the hub: wake-up for issue #<N>` means someone added the `for-jon` label to an issue (see "Wake-ups" in `blackforge-hub`). Do a normal issue pass, all of steps 1-9, not just issue #N; the number is only a hint.
+
+**Don't run two passes at once.** At the start of every issue pass (scheduled or woken), read the hub's `state/meta`:
+- If this run is a `for-jon` wake-up and `passStartedAt` is less than 5 minutes ago, another pass is already running or just ran. Stop now: no labels, comments, PRs or hub writes. End with one line, `Skipped: a pass started at <time>.`
+- Otherwise `update` `state/meta` with `passStartedAt: <now, UTC ISO>`, pinned with `if_version`. If a woken run's write fails because the version moved, another pass just started: stop the same way. A scheduled run carries on as normal either way.
+- If the hub can't be read, a woken run stops; a scheduled run carries on.
+
 You do all GitHub writes yourself. Workers only edit and commit inside their own worktree, or read and report.
 
 Repo: `crayosog-star/BlackforgeMC`, default branch `main`. Use REST (`gh api repos/crayosog-star/BlackforgeMC/...`); GraphQL and `gh pr` may be blocked in cloud sessions.
@@ -152,7 +159,7 @@ For each issue labelled `agent:pr-open`:
 ## 7. Update the dashboard
 The dashboard page is `https://claude.ai/artifact/TuL1LvATUt2TnHKDZ1b5c1`. Write to its store with the `ArtifactData` tool (load it via ToolSearch), as **one `batch`**; read each existing document first and pass its `version` as `if_version`. If the tool is missing or refused, skip this step and say so in the report.
 - `issues/<N>` for every open issue: `{number, title, status, size?, worker?, pr?, note?}`. `status` is one of `needs-human`, `needs-info`, `working`, `pr-open`, `queued`, `untrusted`. `note` is one plain line in your own words, never pasted issue text. **Delete** the documents of issues that are now closed.
-- `state/meta`: `{lastRunAt, workers: [{name: "Worker 1", points, issues: [N, ...]}]}` from this run's split (an empty list if no workers ran).
+- `state/meta`: `{lastRunAt, passStartedAt, workers: [{name: "Worker 1", points, issues: [N, ...]}]}` from this run's split (an empty list if no workers ran). Keep `passStartedAt` as this pass wrote it.
 - `runs/<UTC timestamp, e.g. 2026-11-04T12-00-00Z>`: `{at, summary, prs: [PR numbers opened], needsHuman: <count>}`. Keep the newest 20; delete older ones.
 
 Then sync the Pull requests view: follow "5. Syncing pull requests" in `.claude/skills/blackforge-task-agent/SKILL.md`.
