@@ -11,8 +11,8 @@ for a moment, then spins in its own plane to upright (with a small settle) while
 low "drawn from the hip" position. The curve is NightrendMath.drawOffset / drawDrop.
 
 The client re-reads an item's cooldown only once a game tick, so the pose changes at most 20 times a second
-however many frame models there are: the smoothness comes from the curve (HOLD, FLIP), which keeps each tick's
-turn to about 21 degrees. The frame models are still spaced by motion: a new one whenever the blade has turned
+however many frame models there are. The curve (HOLD, FLIP) sets how far each tick turns: a slow 14-tick flip
+(about 21 degrees a tick) still looked stepped, so it's a quick 6-tick snap (about 47 a tick). The frame models are still spaced by motion: a new one whenever the blade has turned
 MAX_STEP_DEGREES (or dropped MAX_STEP_PIXELS), so no tick lands far from a frame.
 
 Run from the repo root after changing a number here:  python3 tools/gen_nightrend_draw.py
@@ -36,8 +36,8 @@ DROP = {"firstperson": 3.5, "thirdperson": 2.0}   # how far below its normal pla
 
 
 # same as NightrendMath.DRAW_HOLD / DRAW_FLIP: the client re-reads the cooldown once a game tick, so the motion is
-# paced per tick (hold low while the game raises the item, then an even flip of at most ~21 degrees a tick)
-HOLD, FLIP = 3, 14
+# paced per tick (hold low while the game raises the item, then a quick 0.3 s flip of at most ~47 degrees a tick)
+HOLD, FLIP = 5, 6
 
 
 def flip_progress(x: float) -> float:
