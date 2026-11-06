@@ -77,6 +77,39 @@ final class NightrendMath {
      * copies go and the real held daggers (hidden while it plays) come back, so there's never two of them on screen.
      */
     static final int FLIP_TICKS = 10, FLIP_HOLD = 3;
+
+    // ------------------------------------------------------------------ your own pull-out (the pack's item model)
+
+    /**
+     * Your own pull-out runs on the dagger's item cooldown, which the client only re-reads once a game tick, so the
+     * pose can change at most 20 times a second however many frame models the pack has. It holds low and upside down
+     * for {@link #DRAW_HOLD} ticks (the game is still raising a freshly selected item while its attack charges), then
+     * flips evenly over {@link #DRAW_FLIP} ticks, at most about 21 degrees a tick, with a small settle at the end.
+     * tools/gen_nightrend_draw.py writes the frames from the same two formulas.
+     */
+    static final int DRAW_HOLD = 3, DRAW_FLIP = 14, DRAW_TICKS = DRAW_HOLD + DRAW_FLIP;
+
+    private static double clamp01(double v) { return Math.max(0, Math.min(1, v)); }
+
+    /** Flip progress (0..1) at overall draw progress {@code x} (0..1): 0 through the hold, then 0 to 1. */
+    static double drawFlipProgress(double x) {
+        double h = DRAW_HOLD / (double) DRAW_TICKS;
+        return clamp01((x - h) / (1 - h));
+    }
+
+    /** Degrees from upright at draw progress {@code x}: -180 through the hold, ease-in-out to 0, a little past near the end. */
+    static double drawOffset(double x) {
+        double u = drawFlipProgress(x);
+        double ease = 0.5 - 0.5 * Math.cos(Math.PI * u);
+        double settle = 8 * Math.sin(Math.PI * clamp01((u - 0.8) / 0.2));
+        return -180 * (1 - ease) + settle;
+    }
+
+    /** How low the blade sits (1 = lowest) at draw progress {@code x}: low through the hold, then rises over the first 60% of the flip. */
+    static double drawDrop(double x) {
+        double r = clamp01(drawFlipProgress(x) / 0.6);
+        return 1 - r * r * (3 - 2 * r);
+    }
     static final int FLIP_TOTAL = FLIP_TICKS + FLIP_HOLD;
     /** How far the blades rise out of your hands, in blocks. */
     static final double FLIP_LIFT = 0.45;
