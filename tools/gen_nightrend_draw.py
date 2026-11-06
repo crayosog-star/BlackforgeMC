@@ -1,7 +1,7 @@
 """Writes the Nightrend pull-out animation into the resource pack.
 
 When a Nightrend is drawn, the plugin puts it on a short item cooldown (Nightrend.draw). The pack's
-items/nightrend.json reads that cooldown (minecraft:cooldown, 1 -> 0) and picks one of FRAMES models,
+items/nightrend.json reads that cooldown (minecraft:cooldown, 1 -> 0) and picks one of the frame models,
 so the held dagger itself flips up from pointing down, in first and third person, with one dagger or
 two. It's the player's own client that animates it, so it shows on their own screen too. Other
 players don't get the cooldown, so the plugin shows them display entities instead.
@@ -10,13 +10,19 @@ Each frame is the handheld model with its hand transforms turned: the blade spin
 from upside down to upright (with the same small snap past upright as NightrendMath.flipPitch) while
 it rises out of a low "drawn from the hip" position.
 
+The client reads the cooldown every rendered frame (not every tick), so the flip is only as smooth as the
+number of frame models. They're spaced by motion, not time: a new frame whenever the blade has turned
+MAX_STEP_DEGREES (or dropped MAX_STEP_PIXELS), so the fast start of the flip gets many frames and the slow
+settle few. Ten evenly timed frames jumped about 60 degrees at a time at the start and looked choppy.
+
 Run from the repo root after changing a number here:  python3 tools/gen_nightrend_draw.py
 """
 import json
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent / "resourcepack/assets/blackforge"
-FRAMES = 10
+MAX_STEP_DEGREES = 4.0   # most the blade turns between two frame models
+MAX_STEP_PIXELS = 0.15   # most it rises between two frame models
 
 # vanilla minecraft:item/handheld hand transforms, which the plain nightrend model inherits
 BASE = {
@@ -53,16 +59,33 @@ def frame_model(x: float) -> dict:
     return {"parent": "blackforge:item/nightrend", "display": display}
 
 
+def slices() -> list:
+    """Progress ranges (x0, x1) covering 0..1, each short enough that the blade moves at most one step in it."""
+    fine = 4000
+    out, start = [], 0.0
+    for i in range(1, fine + 1):
+        x = i / fine
+        turned = abs(flip_offset(x) - flip_offset(start))
+        rose = max(DROP.values()) * abs(drop(x) - drop(start))
+        if turned >= MAX_STEP_DEGREES or rose >= MAX_STEP_PIXELS or i == fine:
+            out.append((start, x))
+            start = x
+    return out
+
+
 def main() -> None:
+    root = ROOT / "models/item"
+    for old in root.glob("nightrend_draw_*.json"):
+        old.unlink()   # the frame count changes with the step sizes, so no stale frames stay in the pack
     entries = []
-    for k in range(FRAMES):
+    parts = slices()
+    for k, (x0, x1) in enumerate(parts):
         name = f"nightrend_draw_{k}"
-        x = (k + 0.5) / FRAMES
-        path = ROOT / "models/item" / f"{name}.json"
-        path.write_text(json.dumps(frame_model(x), indent=2) + "\n")
-        # cooldown runs 1 -> 0, so frame k covers the slice just under 1 - k/FRAMES; the last one stops just above
-        # 0, so a dagger with no cooldown falls through to the plain model
-        threshold = round(1 - (k + 1) / FRAMES, 4) if k < FRAMES - 1 else 0.001
+        path = root / f"{name}.json"
+        path.write_text(json.dumps(frame_model((x0 + x1) / 2), indent=2) + "\n")
+        # cooldown runs 1 -> 0 while progress runs 0 -> 1, so this frame shows while the cooldown is above 1 - x1;
+        # the last one stops just above 0, so a dagger with no cooldown falls through to the plain model
+        threshold = round(1 - x1, 4) if k < len(parts) - 1 else 0.001
         entries.append({"threshold": threshold, "model": {"type": "minecraft:model", "model": f"blackforge:item/{name}"}})
     item = {
         "model": {
@@ -76,7 +99,7 @@ def main() -> None:
         "hand_animation_on_swap": False,
     }
     (ROOT / "items/nightrend.json").write_text(json.dumps(item, indent=2) + "\n")
-    print(f"wrote {FRAMES} frames and items/nightrend.json")
+    print(f"wrote {len(parts)} frames and items/nightrend.json")
 
 
 if __name__ == "__main__":
