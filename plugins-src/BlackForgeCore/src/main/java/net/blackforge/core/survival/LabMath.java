@@ -43,6 +43,15 @@ public final class LabMath {
     }
 
     /**
+     * The pot after a ticket purchase: the running total plus what was actually paid, less the house cut. Keeping a
+     * running total means a later config change can't create or destroy money already in the pot.
+     */
+    static double drawPotAfterBuy(double pot, double paid, double houseCut) {
+        double cut = Math.max(0, Math.min(1, houseCut));
+        return round2(pot + paid * (1 - cut));
+    }
+
+    /**
      * Picks the winning index by tickets held: {@code roll} in [0, 1). Each player's chance is their share of tickets.
      * Returns -1 when nobody bought one.
      */

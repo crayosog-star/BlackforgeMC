@@ -32,6 +32,17 @@ class LabMathTest {
         assertEquals(2, LabMath.drawWinner(List.of(1, 0, 1), 0.9));
     }
 
+    @Test void drawPotKeepsWhatWasPaid() {
+        // 10 tickets at 100 with a 10% cut, then the price goes to 200 and the cut to 0 before 1 more ticket:
+        // the pot is 900 + 200, not 11 x 200.
+        double pot = LabMath.drawPotAfterBuy(0, 1000, 0.10);
+        assertEquals(900, pot, 1e-9);
+        assertEquals(1100, LabMath.drawPotAfterBuy(pot, 200, 0), 1e-9);
+        assertEquals(1000, LabMath.drawPotAfterBuy(0, 1000, -1), 1e-9);
+        assertEquals(0, LabMath.drawPotAfterBuy(0, 1000, 2), 1e-9);
+        assertEquals(0.03, LabMath.drawPotAfterBuy(0.01, 0.02, 0), 1e-9);
+    }
+
     @Test void pricesFallWithSalesAndRecover() {
         assertEquals(1, LabMath.priceFactor(0, 2000, 0.3), 1e-9);
         assertEquals(0.5, LabMath.priceFactor(2000, 2000, 0.3), 1e-9);
