@@ -18,6 +18,8 @@ import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
@@ -120,6 +122,18 @@ final class AshfallNights implements Listener {
                     p.spawnParticle(Particle.FLAME, m.getLocation().add(0, m.getHeight() * 0.6, 0), 3, 0.2, 0.3, 0.2, 0.01);
         }
     }
+
+    /** Joining, respawning into or coming back to the world mid-Ashfall gets the ash sky; anywhere else is reset. */
+    private void weather(Player p) {
+        if (active && p.getWorld() == c.world()) p.setPlayerWeather(WeatherType.DOWNFALL);
+        else p.resetPlayerWeather();
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent e) { weather(e.getPlayer()); }
+
+    @EventHandler
+    public void onWorld(PlayerChangedWorldEvent e) { weather(e.getPlayer()); }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onSpawn(CreatureSpawnEvent e) {

@@ -10,6 +10,7 @@ import org.bukkit.block.data.type.Stairs;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
@@ -46,6 +47,7 @@ final class Seats implements Listener {
         if (e.getAction() != Action.RIGHT_CLICK_BLOCK || e.getHand() != EquipmentSlot.HAND || e.getClickedBlock() == null) return;
         Player p = e.getPlayer();
         if (p.isSneaking() || !p.getInventory().getItemInMainHand().getType().isAir() || p.isInsideVehicle() || !Lab.enabled(ID)) return;
+        if (e.useInteractedBlock() == Event.Result.DENY) return;   // a claim said no
         Block b = e.getClickedBlock();
         boolean seat = b.getBlockData() instanceof Stairs s && s.getHalf() == Bisected.Half.BOTTOM
                 || b.getBlockData() instanceof Slab sl && sl.getType() == Slab.Type.BOTTOM;
@@ -69,7 +71,7 @@ final class Seats implements Listener {
             if (d.isValid() && !d.getPassengers().isEmpty()) continue;
             Player p = Bukkit.getPlayer(en.getKey());
             Block b = seatBlock.remove(en.getKey());
-            if (p != null && b != null && !p.isInsideVehicle() && p.getLocation().distanceSquared(b.getLocation()) < 4) {
+            if (p != null && b != null && !p.isInsideVehicle() && p.getWorld() == b.getWorld() && p.getLocation().distanceSquared(b.getLocation()) < 4) {
                 Location up = b.getLocation().add(0.5, 1, 0.5);
                 up.setYaw(p.getLocation().getYaw()); up.setPitch(p.getLocation().getPitch());
                 p.teleport(up);

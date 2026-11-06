@@ -111,6 +111,10 @@ final class ForgeRifts implements Listener {
     }
 
     private void open(Location l) {
+        if (task != null) task.cancel();               // /rift here over a closing rift: never run two tick loops
+        task = null;
+        if (label != null) label.remove();
+        label = null;
         rift = l;
         stage = Stage.WAITING;
         wave = 0; tick = 0; stageTick = 0;

@@ -98,10 +98,16 @@ final class KindleDraw {
         UUID winner = w < 0 ? null : who.get(w);
         OfflinePlayer op = winner == null ? null : Bukkit.getOfflinePlayer(winner);
         String name = winner == null ? "" : data.getString("names." + winner, op.getName() == null ? "?" : op.getName());
+        if (winner != null && !eco.deposit(op, pot)) {
+            // keep the tickets so the pot isn't lost; try again in 5 minutes
+            c.plugin().getLogger().severe("kindle draw payout failed, retrying in 5 min: " + winner + " " + pot);
+            data.set("next", System.currentTimeMillis() + 5 * 60_000L);
+            save();
+            return;
+        }
         data.set("tickets", null); data.set("names", null); data.set("warned", false);
         data.set("next", System.currentTimeMillis() + everyMillis);
         if (winner == null) { save(); return; }
-        if (!eco.deposit(op, pot)) c.plugin().getLogger().severe("kindle draw payout failed: " + winner + " " + pot);
         data.set("last", name + " won " + NetEconomy.money(pot));
         save();
         c.plugin().getLogger().info("kindle draw: " + name + " won " + pot + " with " + tickets.get(w) + "/" + tickets.stream().mapToInt(i -> i).sum() + " tickets");
