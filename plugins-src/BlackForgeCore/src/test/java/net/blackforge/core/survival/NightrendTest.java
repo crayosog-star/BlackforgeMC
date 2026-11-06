@@ -68,7 +68,7 @@ class NightrendTest {
         double max = -999;
         for (int t = 1; t <= n; t++) {
             double a = NightrendMath.drawOffset((t - 1) / (double) n), b = NightrendMath.drawOffset(t / (double) n);
-            assertTrue(Math.abs(b - a) <= 22, "tick " + t + " turns " + Math.abs(b - a));   // no big per-tick jumps
+            assertTrue(Math.abs(b - a) <= 50, "tick " + t + " turns " + Math.abs(b - a));   // a quick snap, but no half-turn in one tick
             max = Math.max(max, b);
         }
         assertTrue(max > 0 && max < 6, "a small settle past upright, not a wobble");

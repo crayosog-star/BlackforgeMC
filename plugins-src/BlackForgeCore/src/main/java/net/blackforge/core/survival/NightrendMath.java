@@ -84,10 +84,11 @@ final class NightrendMath {
      * Your own pull-out runs on the dagger's item cooldown, which the client only re-reads once a game tick, so the
      * pose can change at most 20 times a second however many frame models the pack has. It holds low and upside down
      * for {@link #DRAW_HOLD} ticks (the game is still raising a freshly selected item while its attack charges), then
-     * flips evenly over {@link #DRAW_FLIP} ticks, at most about 21 degrees a tick, with a small settle at the end.
+     * flips fast over {@link #DRAW_FLIP} ticks (0.3 s, at most about 47 degrees a tick: a quick snap reads better than a slow
+     * stepped turn at 20 updates a second), with a small settle at the end.
      * tools/gen_nightrend_draw.py writes the frames from the same two formulas.
      */
-    static final int DRAW_HOLD = 3, DRAW_FLIP = 14, DRAW_TICKS = DRAW_HOLD + DRAW_FLIP;
+    static final int DRAW_HOLD = 5, DRAW_FLIP = 6, DRAW_TICKS = DRAW_HOLD + DRAW_FLIP;
 
     private static double clamp01(double v) { return Math.max(0, Math.min(1, v)); }
 
