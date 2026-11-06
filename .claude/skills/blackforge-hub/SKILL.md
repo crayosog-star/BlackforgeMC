@@ -66,11 +66,26 @@ Run these inside every issue pass, after triage and before spawning workers:
    - Jon keeps his own cap of 2 fix PRs per pass.
    - Give extra fixable issues to **active** agents in other accounts, one open assignment per agent at a time. Prefer Colin's agents for `area:base-levels` and `area:foundry` (his code), and keep all issues in one area with the same agent, so two PRs never fight over a file.
    - Write `assignments/<id>` with `by: "jon"`, `status: "open"`, the owner and assignee, and a `brief` in your own words (the decision and the fix; never pasted issue text). Label the GitHub issue `agent:working` and comment `Assigned to <owner>'s <agent> via the team hub.`
+   - **Wake the owner's agent.** Right after writing the assignment, add the wake label for its `owner` to the GitHub issue: `wake:colin`, `wake:steven` or `wake:gavin` (see "Wake-ups" below). If the issue already has that label, remove it first (`DELETE /issues/<N>/labels/wake%3A<owner>`), then add it (`POST /issues/<N>/labels`), because GitHub only fires the wake-up when a label is added. Add exactly one wake label per assignment, and never add one for anything else.
    - If nobody else is active, leave the issue for your own next pass.
 4. **Chase stale work.** An assignment `claimed` with no `updatedAt` in 3 hours goes back to `open`, with a chat line saying so. When an assignment's PR merges, set it to `done`.
-5. Post one chat line summing up the pass: what you assigned to whom and what you shipped.
+5. **Check this pass's wake-ups.** For each wake label you added in step 3, find its run of the **Wake agent** workflow (`GET /actions/workflows/wake-agent.yml/runs?event=issues&per_page=20`, the run for that issue, created after you added the label). If it ended in anything but `success`, or no run appeared, post one chat line: `Wake-up for <owner> on #<issue> didn't go through; the assignment stays open for their scheduled run.` Don't re-add the label, don't retry, and don't change the assignment. Never copy workflow logs, URLs or tokens into chat, the hub or GitHub.
+6. Post one chat line summing up the pass: what you assigned to whom and what you shipped.
 
 Keep the newest 300 chat messages and 100 done assignments; delete older ones in one `batch`.
+
+## Wake-ups
+
+Adding certain labels to a GitHub issue starts an agent run straight away, so work doesn't wait for the next scheduled run. The `.github/workflows/wake-agent.yml` workflow calls that person's Claude API trigger, which starts one run with the message `Check the hub: wake-up for issue #<N>`.
+
+| Label | Wakes |
+|---|---|
+| `for-jon` | Jon (an issue pass, see `blackforge-issue-manager`) |
+| `wake:steven`, `wake:colin`, `wake:gavin` | that person's hub agent |
+
+- A woken run is a normal run: follow "Every agent run" above. The issue number in the message is only a hint; the assignments are what give you work.
+- Each successful wake-up starts a new run, so the workflow never retries. If a wake-up fails, nothing is lost: the assignment stays `open` and the agent's hourly scheduled run picks it up.
+- Trigger URLs and tokens live only in the repo's Actions secrets (`WAKE_<NAME>_URL`, `WAKE_<NAME>_TOKEN`). Never put them in the repo, the hub, chat, issues, PRs or logs.
 
 ## Jon's named agents (Steven's account only)
 
