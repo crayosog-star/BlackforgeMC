@@ -10,10 +10,10 @@ Each frame is the handheld model with its hand transforms turned: the blade hold
 for a moment, then spins in its own plane to upright (with a small settle) while it rises out of the
 low "drawn from the hip" position. The curve is NightrendMath.drawOffset / drawDrop.
 
-The client reads the cooldown every rendered frame (not every tick), so the flip is only as smooth as the
-number of frame models. They're spaced by motion, not time: a new frame whenever the blade has turned
-MAX_STEP_DEGREES (or dropped MAX_STEP_PIXELS), so the fast start of the flip gets many frames and the slow
-settle few. Ten evenly timed frames jumped about 60 degrees at a time at the start and looked choppy.
+The client re-reads an item's cooldown only once a game tick, so the pose changes at most 20 times a second
+however many frame models there are: the smoothness comes from the curve (HOLD, FLIP), which keeps each tick's
+turn to about 21 degrees. The frame models are still spaced by motion: a new one whenever the blade has turned
+MAX_STEP_DEGREES (or dropped MAX_STEP_PIXELS), so no tick lands far from a frame.
 
 Run from the repo root after changing a number here:  python3 tools/gen_nightrend_draw.py
 """
