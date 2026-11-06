@@ -225,6 +225,10 @@ public final class SurvivalModule implements Listener {
         new ShowcaseWarp(plugin);
         new LagGuard(plugin, world, this::protectedArea);
         blockLog = new BlockLog(plugin);
+        // Survival 2 ideas (/lab): every one stays off on live Survival unless it is listed under lab.graduated
+        LabExperiments.start(new LabExperiments.Ctx(plugin, world, crates, jobs,
+                (p, l) -> claims.ownerAt(l) == null || claims.canUse(p, l), l -> claims.ownerAt(l) != null,
+                this::protectedArea, this::spawn));
         registerCommands();
         if (!new File(plugin.getDataFolder(), "survival-built").exists()) build(Bukkit.getConsoleSender());
         else if (!new File(plugin.getDataFolder(), "spawn-v2").exists()) rebuildSpawn(Bukkit.getConsoleSender());
