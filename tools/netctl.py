@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parent.parent
 JAVA = str(next((ROOT / "tools").glob("jdk-25*")) / "bin" / "java.exe")
 PROXY_PORT = 25577
 SERVERS = {"hub": (30001, "1536M"), "skyblock": (30002, "2G"), "survival": (30003, "2560M"),
-           "factions": (30004, "2G"), "arcade": (30005, "1536M"), "raft": (30006, "2G")}
+           "factions": (30004, "2G"), "arcade": (30005, "1536M"), "raft": (30006, "2G"),
+           "survival2": (30007, "2G")}
 FLAGS = ["-XX:+UseG1GC", "-XX:+ParallelRefProcEnabled", "-XX:MaxGCPauseMillis=200", "-XX:+UnlockExperimentalVMOptions",
          "-XX:+DisableExplicitGC", "-XX:G1NewSizePercent=30", "-XX:G1MaxNewSizePercent=40", "-XX:G1HeapRegionSize=8M",
          "-XX:G1ReservePercent=20", "-XX:InitiatingHeapOccupancyPercent=15"]
@@ -46,8 +47,14 @@ def up(port):
     except OSError: return False
 
 
+def installed(name):
+    """Set up on this PC (setup_network.py has run for it)? A new server in the list stays off until then."""
+    return (ROOT / name / "paper.jar").exists()
+
+
 def start_server(name):
     port, xmx = SERVERS[name]
+    if not installed(name): print(f"{name}: not set up yet - skipped"); return
     if up(port): print(f"{name}: already running"); return
     subprocess.Popen([JAVA, f"-Xms{xmx}", f"-Xmx{xmx}", *FLAGS, "-jar", "paper.jar", "--nogui"], cwd=ROOT / name,
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
@@ -56,6 +63,7 @@ def start_server(name):
 
 def start():
     for name, (port, xmx) in SERVERS.items():
+        if not installed(name): print(f"{name}: not set up yet - skipped"); continue
         if up(port): print(f"{name}: already running"); continue
         subprocess.Popen([JAVA, f"-Xms{xmx}", f"-Xmx{xmx}", *FLAGS, "-jar", "paper.jar", "--nogui"], cwd=ROOT / name,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)

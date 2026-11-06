@@ -38,7 +38,8 @@ public final class NetEconomy implements org.bukkit.event.Listener {
     NetEconomy(BlackForgeCore plugin) {
         this.plugin = plugin;
         this.mode = plugin.getConfig().getString("mode", "backend");
-        this.wallet = id -> walletForMode(mode);
+        String w = walletForMode(mode, Lab.on() ? Lab.id() : null);   // Survival 2 keeps its own balances
+        this.wallet = id -> w;
         File serverDir;
         try { serverDir = plugin.getServer().getWorldContainer().getCanonicalFile(); }
         catch (Exception e) { serverDir = plugin.getServer().getWorldContainer().getAbsoluteFile(); }
@@ -50,6 +51,12 @@ public final class NetEconomy implements org.bukkit.event.Listener {
             try { VaultHook.register(plugin, this); plugin.getLogger().info("Economy registered with Vault (" + mode + " balances)"); }
             catch (Throwable t) { plugin.getLogger().warning("Vault hook failed: " + t); }
         }
+    }
+
+    /** {@code lab} is the Survival 2 id on the lab server (its own wallet, so test money never reaches live), else null. */
+    static String walletForMode(String mode, String lab) {
+        if (lab != null && walletForMode(mode) != null) return lab;
+        return walletForMode(mode);
     }
 
     static String walletForMode(String mode) {
@@ -67,6 +74,7 @@ public final class NetEconomy implements org.bukkit.event.Listener {
     public static String walletName(String w) {
         return w == null ? "the hub" : switch (w) {
             case "oneblock" -> "OneBlock";
+            case "survival2" -> "Survival 2";
             default -> Character.toUpperCase(w.charAt(0)) + w.substring(1);
         };
     }
@@ -232,6 +240,7 @@ public final class NetEconomy implements org.bukkit.event.Listener {
 
     /** Move pending rewards and clear the pending pot in the same account update. */
     public void flushPending(Player p) {
+        if (Lab.on()) return;   // hub rewards belong to a live wallet, never the Survival 2 test wallet
         String w = walletOf(p.getUniqueId());
         if (w == null) return;
         java.util.concurrent.atomic.AtomicReference<PendingReward> paid = new java.util.concurrent.atomic.AtomicReference<>();

@@ -5,6 +5,14 @@ mode: backend
 # (an item's own custom-model setting still wins). False = items show as their vanilla base item.
 resource-pack-live: false
 
+# Survival 2: a staff-only copy of Survival for trying new ideas (runs mode: survival). With enabled true this server keeps
+# its own wallet and its own copy of the progress files, sends non-staff back to the hub, and every idea is a switch in /lab.
+# graduated: on any other server, ideas listed here run for real (how an idea moves from Survival 2 to live Survival).
+lab:
+  enabled: false
+  id: survival2
+  graduated: []
+
 # Gale Bellows PvP item (survival only). Every player gets one on first join; /jbello gives another if they
 # don't carry one. Set false to stop it firing. Its custom texture needs the resource pack: leave custom-model
 # false until the pack is live (otherwise it shows as the purple/black missing model); until then it is a

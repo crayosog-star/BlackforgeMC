@@ -22,6 +22,9 @@ SERVERS = {
         "difficulty": "normal", "spawn-protection": "0", "allow-nether": "true"}),
     "survival": (30003, "2560M", ["LuckPerms-Bukkit", "VaultUnlocked", "EssentialsX", "EssentialsXSpawn", "GriefPrevention"], {
         "difficulty": "normal", "spawn-protection": "16", "pvp": "false"}),
+    # Survival 2: the staff-only test copy of Survival (BlackForgeCore lab.enabled, set by deploy.py)
+    "survival2": (30007, "2G", ["LuckPerms-Bukkit", "VaultUnlocked", "EssentialsX", "EssentialsXSpawn", "GriefPrevention"], {
+        "difficulty": "normal", "spawn-protection": "16", "pvp": "false"}),
     "factions": (30004, "2G", ["LuckPerms-Bukkit", "VaultUnlocked", "EssentialsX", "EssentialsXSpawn", "PvPIndex-Factions"], {
         "difficulty": "hard", "spawn-protection": "16", "pvp": "true"}),
     "arcade": (30005, "1536M", ["LuckPerms-Bukkit"], {
@@ -36,6 +39,8 @@ SERVERS = {
         "generator-settings": '{"layers"\\:[{"block"\\:"minecraft\\:air","height"\\:1}],"biome"\\:"minecraft\\:warm_ocean"}'}),
 }
 BENTO_ADDONS = ["BSkyBlock", "Level", "Challenges", "Warps"]
+# third-party plugins on trial: copied only if their jar is in _downloads/plugins, so a missing one never stops setup
+TRIAL_PLUGINS = {"survival2": ["CoreProtect", "voicechat-bukkit"]}
 PROXY_PLUGINS = ["ViaVersion", "ViaBackwards"]   # no LuckPerms on the proxy: it would overwrite shared rank data
 
 
@@ -103,6 +108,11 @@ def main():
         shutil.copy(DL / "paper.jar", d / "paper.jar")
         for pl in plugins:
             shutil.copy(DL / "plugins" / f"{pl}.jar", d / "plugins" / f"{pl}.jar")
+        for pl in TRIAL_PLUGINS.get(name, []):
+            if (DL / "plugins" / f"{pl}.jar").exists():
+                shutil.copy(DL / "plugins" / f"{pl}.jar", d / "plugins" / f"{pl}.jar")
+            else:
+                print(f"{name}: trial plugin {pl}.jar not in _downloads/plugins, skipped")
         if name == "skyblock":
             (d / "plugins" / "BentoBox" / "addons").mkdir(parents=True, exist_ok=True)
             for a in BENTO_ADDONS:
