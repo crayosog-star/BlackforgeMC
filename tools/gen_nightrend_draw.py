@@ -6,9 +6,9 @@ so the held dagger itself flips up from pointing down, in first and third person
 two. It's the player's own client that animates it, so it shows on their own screen too. Other
 players don't get the cooldown, so the plugin shows them display entities instead.
 
-Each frame is the handheld model with its hand transforms turned: the blade spins in its own plane
-from upside down to upright (with the same small snap past upright as NightrendMath.flipPitch) while
-it rises out of a low "drawn from the hip" position.
+Each frame is the handheld model with its hand transforms turned: the blade holds low and upside down
+for a moment, then spins in its own plane to upright (with a small settle) while it rises out of the
+low "drawn from the hip" position. The curve is NightrendMath.drawOffset / drawDrop.
 
 The client reads the cooldown every rendered frame (not every tick), so the flip is only as smooth as the
 number of frame models. They're spaced by motion, not time: a new frame whenever the blade has turned
@@ -18,6 +18,7 @@ settle few. Ten evenly timed frames jumped about 60 degrees at a time at the sta
 Run from the repo root after changing a number here:  python3 tools/gen_nightrend_draw.py
 """
 import json
+import math
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent / "resourcepack/assets/blackforge"
@@ -34,17 +35,29 @@ BASE = {
 DROP = {"firstperson": 3.5, "thirdperson": 2.0}   # how far below its normal place the blade starts, in pixels
 
 
+# same as NightrendMath.DRAW_HOLD / DRAW_FLIP: the client re-reads the cooldown once a game tick, so the motion is
+# paced per tick (hold low while the game raises the item, then an even flip of at most ~21 degrees a tick)
+HOLD, FLIP = 3, 14
+
+
+def flip_progress(x: float) -> float:
+    h = HOLD / (HOLD + FLIP)
+    return min(max((x - h) / (1 - h), 0.0), 1.0)
+
+
 def flip_offset(x: float) -> float:
-    """Degrees from upright at progress x (0..1): -180 at the start, 0 at the end, a little past 0 on the way
-    (ease-out-back, c1 = 1.0, the same curve as NightrendMath.flipPitch)."""
-    c1, c3 = 1.0, 2.0
-    e = 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2
-    return -180 + 180 * e
+    """Degrees from upright at progress x (0..1): -180 through the hold, ease-in-out to 0, a little past near
+    the end (NightrendMath.drawOffset)."""
+    u = flip_progress(x)
+    ease = 0.5 - 0.5 * math.cos(math.pi * u)
+    settle = 8 * math.sin(math.pi * min(max((u - 0.8) / 0.2, 0.0), 1.0))
+    return -180 * (1 - ease) + settle
 
 
 def drop(x: float) -> float:
-    """1 at the start, 0 at the end: ease-out cubic, so it rises fast and settles."""
-    return (1 - x) ** 3
+    """1 (lowest) through the hold, then rises over the first 60% of the flip (NightrendMath.drawDrop)."""
+    r = min(max(flip_progress(x) / 0.6, 0.0), 1.0)
+    return 1 - r * r * (3 - 2 * r)
 
 
 def frame_model(x: float) -> dict:

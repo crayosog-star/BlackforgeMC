@@ -57,6 +57,23 @@ class NightrendTest {
         assertTrue(NightrendMath.nextIsOffHand(false, 0.95, 5));      // a bad config never locks one arm forever
     }
 
+    @Test void ownDrawHoldsLowThenFlipsEvenlyPerTick() {
+        int n = NightrendMath.DRAW_TICKS;
+        for (int t = 0; t <= NightrendMath.DRAW_HOLD; t++) {        // the hold: upside down and low
+            assertEquals(-180, NightrendMath.drawOffset(t / (double) n), EPS);
+            assertEquals(1, NightrendMath.drawDrop(t / (double) n), EPS);
+        }
+        assertEquals(0, NightrendMath.drawOffset(1), EPS);           // ends upright and in place
+        assertEquals(0, NightrendMath.drawDrop(1), EPS);
+        double max = -999;
+        for (int t = 1; t <= n; t++) {
+            double a = NightrendMath.drawOffset((t - 1) / (double) n), b = NightrendMath.drawOffset(t / (double) n);
+            assertTrue(Math.abs(b - a) <= 22, "tick " + t + " turns " + Math.abs(b - a));   // no big per-tick jumps
+            max = Math.max(max, b);
+        }
+        assertTrue(max > 0 && max < 6, "a small settle past upright, not a wobble");
+    }
+
     @Test void repeatChanceComesOutRoughlyRight() {
         java.util.Random r = new java.util.Random(1);
         int repeats = 0, n = 100_000;

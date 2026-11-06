@@ -88,7 +88,7 @@ public final class Nightrend implements Listener, Hackable {
     private final long empMillis, drawCooldownMillis;
     private final boolean quickRight;   // shorten your own right swing on left turns (see onSwing)
     private final boolean packLive;
-    private final NamespacedKey tagKey, damageKey, speedKey, reachKey, pairKey, mixedKey, drawGroup;
+    private final NamespacedKey tagKey, damageKey, speedKey, reachKey, pairKey, mixedKey, drawGroup, drawGroupOff;
     private final Set<UUID> pairOn = new HashSet<>();     // a Nightrend in each hand
     private final Set<UUID> mixedOn = new HashSet<>();    // a Nightrend in the main hand, another sword in the off hand
     private final Map<UUID, Boolean> nextOff = new HashMap<>();   // which arm swings next (true = off hand)
@@ -128,6 +128,7 @@ public final class Nightrend implements Listener, Hackable {
         this.pairKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_pair");
         this.mixedKey = new NamespacedKey(BlackForgeCore.NS, "nightrend_mixed");
         this.drawGroup = new NamespacedKey("blackforge", "nightrend_draw");
+        this.drawGroupOff = new NamespacedKey("blackforge", "nightrend_draw_off");   // its own, so drawing one blade never flips the other
         Bukkit.getPluginManager().registerEvents(this, plugin);
         registerDebugCommand();
         this.task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, TICK_EVERY);
@@ -166,8 +167,8 @@ public final class Nightrend implements Listener, Hackable {
             m.getPersistentDataContainer().set(tagKey, PersistentDataType.BYTE, hand);
             // its own cooldown group, so the draw cooldown only touches Nightrends (flint has no use, so nothing else does)
             var cd = m.getUseCooldown();
-            cd.setCooldownSeconds(NightrendMath.FLIP_TICKS / 20f);
-            cd.setCooldownGroup(drawGroup);
+            cd.setCooldownSeconds(NightrendMath.DRAW_TICKS / 20f);
+            cd.setCooldownGroup(hand == OFF ? drawGroupOff : drawGroup);
             m.setUseCooldown(cd);
         });
         return it;
@@ -212,6 +213,7 @@ public final class Nightrend implements Listener, Hackable {
         boolean drewMain = main && !heldMain.contains(id), drewOff = off && !heldOff.contains(id);
         if (main) heldMain.add(id); else heldMain.remove(id);
         if (off) heldOff.add(id); else heldOff.remove(id);
+        setDrawGroups(p);   // like setQuick, before draw(), so the flip's hidden hands stay hidden
         setQuick(p, pairOn.contains(id) && nextOff.getOrDefault(id, false));   // before draw(), so the flip's hidden hands stay hidden
         if (here && !p.isDead() && (drewMain || drewOff)) draw(p, drewMain, drewOff, now);
         if (auraNow && here && (main || off) && !flipping.containsKey(p.getUniqueId()) && visible(p)) aura(p, main, off);
@@ -330,8 +332,9 @@ public final class Nightrend implements Listener, Hackable {
         UUID id = p.getUniqueId();
         if (now - lastDraw.getOrDefault(id, 0L) < drawCooldownMillis) return;
         lastDraw.put(id, now);
-        ItemStack held = mainHand ? p.getInventory().getItemInMainHand() : p.getInventory().getItemInOffHand();
-        p.setCooldown(held, NightrendMath.FLIP_TICKS);   // one group, so both hands flip together on a pair draw
+        // each hand has its own cooldown group (setDrawGroups), so only the blade just drawn flips
+        if (mainHand) p.setCooldown(p.getInventory().getItemInMainHand(), NightrendMath.DRAW_TICKS);
+        if (offHand) p.setCooldown(p.getInventory().getItemInOffHand(), NightrendMath.DRAW_TICKS);
         // no draw sound for now (the pack still has blackforge:item.nightrend.draw, to bring it back later)
         if (visible(p)) flipUp(p, mainHand, offHand);
         if (debug.contains(id)) p.sendMessage(Ui.mm("<dark_gray>[Nightrend] <gray>draw: " + (mainHand ? "main" : "") + (mainHand && offHand ? " + " : "") + (offHand ? "off" : "") + " hand"));
@@ -499,6 +502,33 @@ public final class Nightrend implements Listener, Hackable {
             it.resetData(DataComponentTypes.ATTACK_ANIMATION);
             inv.setItemInOffHand(it);
         }
+    }
+
+    /**
+     * The dagger in each hand carries that hand's cooldown group, so a draw only flips the blade that was drawn, even
+     * when both came from /nightrend (both main-hand variants). Only rewrites a dagger that just changed hands.
+     */
+    private void setDrawGroups(Player p) {
+        var inv = p.getInventory();
+        ItemStack main = withDrawGroup(inv.getItemInMainHand(), drawGroup), off = withDrawGroup(inv.getItemInOffHand(), drawGroupOff);
+        if (main != null) inv.setItemInMainHand(main);
+        if (off != null) inv.setItemInOffHand(off);
+    }
+
+    /** A copy of {@code it} with this cooldown group, or null when it isn't a Nightrend or already has it. */
+    private ItemStack withDrawGroup(ItemStack it, NamespacedKey group) {
+        if (!isNightrend(it)) return null;
+        var m = it.getItemMeta();
+        float secs = NightrendMath.DRAW_TICKS / 20f;
+        if (m.hasUseCooldown() && group.equals(m.getUseCooldown().getCooldownGroup()) && m.getUseCooldown().getCooldownSeconds() == secs) return null;
+        ItemStack c = it.clone();
+        c.editMeta(mm -> {
+            var cd = mm.getUseCooldown();
+            cd.setCooldownSeconds(secs);
+            cd.setCooldownGroup(group);
+            mm.setUseCooldown(cd);
+        });
+        return c;
     }
 
     private static boolean isQuick(ItemStack it) {
