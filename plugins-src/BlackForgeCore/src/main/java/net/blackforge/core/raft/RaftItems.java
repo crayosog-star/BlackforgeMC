@@ -51,6 +51,7 @@ public final class RaftItems {
             m.displayName(Ui.mm(d.name()));
             m.lore(java.util.Arrays.stream(d.lore().split("<newline>")).map(Ui::mm).toList());
             m.getPersistentDataContainer().set(KEY, PersistentDataType.STRING, id);
+            m.setItemModel(new NamespacedKey("blackforge", "raft_" + id));
             if (m instanceof PotionMeta pm) pm.setColor(id.equals("fresh") ? Color.fromRGB(0x7fd6ff) : Color.fromRGB(0x3f6f9a));
         });
         return it;

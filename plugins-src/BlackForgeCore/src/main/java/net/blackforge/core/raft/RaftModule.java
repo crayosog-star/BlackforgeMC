@@ -252,7 +252,7 @@ public final class RaftModule implements Listener {
                     "<gray>Crew: <white>" + t.members.size() + "   <gray>Tiles: <white>" + t.tiles.size(),
                     "<gray>Thirst: <white>" + th + "<gray>/20",
                     "<gray>Wind: <white>" + RaftTeam.DIR_NAMES[t.wind],
-                    "<gray>Course: <white>" + (t.steer < 0 ? "anchored" : RaftTeam.DIR_NAMES[t.steer] + (t.sailing ? " (sail)" : " (motor)")),
+                    "<gray>Course: <white>" + (t.steer < 0 ? (t.anchored ? "anchored" : "drifting " + RaftTeam.DIR_NAMES[t.wind]) : RaftTeam.DIR_NAMES[t.steer] + (t.sailing ? " (sail)" : " (motor)")),
                     "<gray>Radio: <white>" + t.towers + "<gray>/3 towers" + (t.won ? " <gold>★" : ""),
                     "<dark_gray>" + "-".repeat(18) + " ",
                     "<gold>" + plugin.getConfig().getString("address", "BlackForgeMC")));

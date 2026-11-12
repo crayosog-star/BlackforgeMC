@@ -35,6 +35,7 @@ public final class RaftTeam {
     public int wind;                 // index into DIRS
     public long windChangeAt;
     public int steer = -1;           // -1 anchored, else index into DIRS
+    public boolean anchored;         // true = the anchor is down; otherwise an idle raft drifts with the wind
     public boolean sailing;          // true = under sail, false = under motor
     public final Map<UUID, Integer> thirst = new HashMap<>();
     public final Map<UUID, Integer> hunger = new HashMap<>();
@@ -80,6 +81,7 @@ public final class RaftTeam {
         s.set("won", won);
         s.set("wind", wind);
         s.set("sailing", sailing);
+        s.set("anchored", anchored);
         for (var e : thirst.entrySet()) s.set("thirst." + e.getKey(), e.getValue());
         for (var e : hunger.entrySet()) s.set("hunger." + e.getKey(), e.getValue());
     }
@@ -104,6 +106,7 @@ public final class RaftTeam {
         t.won = s.getBoolean("won");
         t.wind = s.getInt("wind");
         t.sailing = s.getBoolean("sailing");
+        t.anchored = s.getBoolean("anchored");
         ConfigurationSection th = s.getConfigurationSection("thirst");
         if (th != null) for (String k : th.getKeys(false)) t.thirst.put(UUID.fromString(k), th.getInt(k));
         ConfigurationSection hu = s.getConfigurationSection("hunger");

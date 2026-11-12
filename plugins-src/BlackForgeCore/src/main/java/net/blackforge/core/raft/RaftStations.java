@@ -302,7 +302,7 @@ final class RaftStations implements Listener {
         g.inv.setItem(12, dirItem("west", 2, t));
         g.inv.setItem(14, dirItem("east", 0, t));
         g.inv.setItem(22, dirItem("south", 1, t));
-        g.inv.setItem(13, Ui.item(Material.RED_DYE, t.steer < 0 ? "<red><bold>Anchored" : "<red>Drop anchor", "<gray>Click to stop the raft."));
+        g.inv.setItem(13, Ui.item(Material.RED_DYE, t.anchored ? "<red><bold>Anchored" : "<red>Drop anchor", "<gray>Click to stop the raft and hold it still.", "<dark_gray>Without an anchor the raft drifts with the wind."));
         boolean sail = t.hasStation("sail"), motor = t.hasStation("motor");
         g.inv.setItem(18, Ui.item(Material.WHITE_WOOL, t.sailing ? "<green><bold>Under sail" : "<white>Use the sail", "<gray>Follows the wind, any way but against it.", sail ? "<green>You have a sail." : "<red>Build and place a Sail."));
         g.inv.setItem(20, Ui.item(Material.BLAST_FURNACE, !t.sailing ? "<green><bold>Under motor" : "<white>Use the motor", "<gray>Any direction. Burns fuel.", motor ? "<green>You have a motor." : "<red>Research and place a Motor."));
@@ -316,7 +316,7 @@ final class RaftStations implements Listener {
 
     private void wheelClick(Player p, RaftTeam t, int slot) {
         int dir = switch (slot) { case 4 -> 3; case 12 -> 2; case 14 -> 0; case 22 -> 1; default -> -2; };
-        if (slot == 13) { t.steer = -1; p.sendActionBar(Ui.mm("<red>Anchor down.")); }
+        if (slot == 13) { t.steer = -1; t.anchored = true; p.sendActionBar(Ui.mm("<red>Anchor down.")); }
         else if (slot == 18) { if (!t.hasStation("sail")) p.sendActionBar(Ui.mm("<red>You have no sail.")); else t.sailing = true; }
         else if (slot == 20) { if (!t.hasStation("motor")) p.sendActionBar(Ui.mm("<red>You have no motor.")); else t.sailing = false; }
         else if (dir >= 0) {
@@ -330,6 +330,7 @@ final class RaftStations implements Listener {
                 if (m.fuel <= 0) { p.sendActionBar(Ui.mm("<red>The motor is out of fuel.")); return; }
             }
             t.steer = dir;
+            t.anchored = false;
             p.sendActionBar(Ui.mm("<green>Course set: <white>" + RaftTeam.DIR_NAMES[dir]));
         } else return;
         mod.markDirty();
@@ -348,7 +349,10 @@ final class RaftStations implements Listener {
                 mod.tell(t, "<aqua>The wind turns and blows <white>" + RaftTeam.DIR_NAMES[t.wind] + "<aqua>.");
                 if (t.steer >= 0 && t.sailing) { int[] ww = RaftTeam.DIRS[t.wind], d = RaftTeam.DIRS[t.steer]; if (ww[0] * d[0] + ww[1] * d[1] < 0) { t.steer = -1; mod.tell(t, "<red>The wind is against you. The sail goes slack."); } }
             }
-            if (t.steer < 0) continue;
+            if (t.steer < 0) {
+                if (!t.anchored) drift(w, t, now);
+                continue;
+            }
             String key = t.owner.toString();
             long interval = t.sailing ? 400 : 200;         // milliseconds per block: 2.5 and 5 blocks a second
             RaftTeam.Station motor = t.sailing ? null : t.stations.values().stream().filter(s -> s.type.equals("motor")).findFirst().orElse(null);
@@ -367,6 +371,15 @@ final class RaftStations implements Listener {
             }
             mod.markDirty();
         }
+    }
+
+    /** An idle raft with no anchor down slowly floats with the wind (a block every 3 seconds), like the real game. */
+    private void drift(World w, RaftTeam t, long now) {
+        String key = t.owner.toString() + "/drift";
+        if (now - lastStep.getOrDefault(key, 0L) < 3000) return;
+        lastStep.put(key, now);
+        int[] d = RaftTeam.DIRS[t.wind];
+        if (RaftMover.step(w, t, d[0], d[1]) == RaftMover.Result.OK) mod.markDirty();
     }
 
     private void plotTick() {
