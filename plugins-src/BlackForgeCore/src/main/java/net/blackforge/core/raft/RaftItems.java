@@ -65,5 +65,15 @@ public final class RaftItems {
         return it.getItemMeta().getPersistentDataContainer().get(KEY, PersistentDataType.STRING);
     }
 
+    /** Gives an older raft item (made before the icons existed) its model. Returns whether it changed. */
+    public static boolean refresh(ItemStack it) {
+        String id = id(it);
+        if (id == null || !DEFS.containsKey(id)) return false;
+        NamespacedKey model = new NamespacedKey("blackforge", "raft_" + id);
+        if (it.getItemMeta().hasItemModel() && model.equals(it.getItemMeta().getItemModel())) return false;
+        it.editMeta(m -> m.setItemModel(model));
+        return true;
+    }
+
     public static boolean is(ItemStack it, String id) { return id.equals(id(it)); }
 }

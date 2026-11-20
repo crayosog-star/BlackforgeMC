@@ -84,6 +84,9 @@ public final class RaftModule implements Listener {
         new RaftStations(this);
         Bukkit.getScheduler().runTaskTimer(plugin, this::saveIfDirty, 1200L, 1200L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::sidebars, 60L, 40L);
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> {   // items made before the icons existed get their model
+            for (org.bukkit.entity.Player p : world.getPlayers()) for (org.bukkit.inventory.ItemStack it : p.getInventory().getContents()) RaftItems.refresh(it);
+        }, 100L, 100L);
         plugin.getLogger().info("Raft ocean ready: " + byOwner.size() + " raft(s)");
     }
 
