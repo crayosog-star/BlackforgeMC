@@ -42,7 +42,7 @@ final class Leviathan implements Listener {
     private static final float SCALE = 8f;            // the pack's serpent models: 16 model units = 8 blocks
     private static final double BODY_W = 9.0;         // how wide the pack's body segment is, in blocks
 
-    private enum State { APPEAR, CIRCLE, TENSION, DIVE, LUNGE, RECOVER, DYING }
+    private enum State { APPEAR, CIRCLE, TENSION, WHIRL, DIVE, LUNGE, RECOVER, DYING }
 
     private final BlackForgeCore plugin;
     private final World world;
@@ -65,6 +65,7 @@ final class Leviathan implements Listener {
     private double[] lungeFrom, lungeApex, lungeTo, lungeCtl;
     private boolean lungeHit;
     private int lungesLeft;
+    private double wx, wz;                        // the middle of the whirlpool
     private final Runnable onEnd;
 
     Leviathan(BlackForgeCore plugin, World world, Player target, Runnable onEnd) {
@@ -200,7 +201,7 @@ final class Leviathan implements Listener {
 
     private double hit(int i) {
         // humps travelling down the body; calm during the dive and lunge, big while it circles
-        double amp = state == State.LUNGE || state == State.DIVE ? 2.5 : 5.5;
+        double amp = state == State.LUNGE || state == State.DIVE || state == State.WHIRL ? 2.5 : 5.5;
         double wave = Math.sin(phase - i * 0.42);
         return amp * wave + (state == State.DIVE || state == State.LUNGE ? 0 : 0);
     }
@@ -243,6 +244,7 @@ final class Leviathan implements Listener {
 
         switch (state) {
             case APPEAR, CIRCLE, TENSION, RECOVER -> orbit();
+            case WHIRL -> whirl(tp);
             case DIVE -> dive(tp);
             case LUNGE -> lunge(tp);
             case DYING -> dying();
@@ -265,14 +267,62 @@ final class Leviathan implements Listener {
         switch (state) {
             case APPEAR -> { R = 125; speed = 0.7; if (stateT > 360) setState(State.CIRCLE); }
             case CIRCLE -> { R = 125 - 90 * Math.min(1, stateT / 1500.0); speed = 0.85; if (stateT > 1500) setState(State.TENSION); }
-            case TENSION -> { R = 34; speed = 1.05; if (stateT > 220) { setState(State.DIVE); lungesLeft = ph >= 2 ? 2 : 1; } }
-            default -> { R = 46; speed = 0.95 + 0.1 * ph; if (stateT > (ph == 3 ? 120 : ph == 2 ? 200 : 280) + 0) { setState(State.DIVE); lungesLeft = ph >= 2 ? 2 : 1; } }
+            case TENSION -> { R = 34; speed = 1.05; if (stateT > 220) startWhirl(ph); }
+            default -> { R = 46; speed = 0.95 + 0.1 * ph; if (stateT > (ph == 3 ? 120 : ph == 2 ? 200 : 280)) { if (ph >= 2 && rnd.nextDouble() < 0.6) startWhirl(ph); else { setState(State.DIVE); lungesLeft = ph >= 2 ? 2 : 1; } } }
         }
         theta += speed / R;
         double lead = 0.28;
         double tx = cx + Math.cos(theta + lead) * R, tz = cz + Math.sin(theta + lead) * R;
         steer(tx - hx, (SEA - 2 - hy), tz - hz, speed, 0.07);
         if (state == State.TENSION && stateT % 70 == 0) for (Player p : world.getPlayers()) if (p.getLocation().distance(new Location(world, hx, hy, hz)) < 120) p.playSound(p.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL, SoundCategory.HOSTILE, 1.4f, 0.5f);
+    }
+
+    /** It sinks out of sight and circles under the target, spinning the sea into a whirlpool; then it erupts (the dive and lunge). */
+    private void startWhirl(int ph) {
+        wx = cx; wz = cz;
+        lungesLeft = ph >= 2 ? 2 : 1;
+        setState(State.WHIRL);
+        Location c = new Location(world, wx, SEA, wz);
+        for (Player p : world.getPlayers()) if (p.getLocation().distance(c) < 130) {
+            p.sendActionBar(Ui.mm("<dark_aqua><bold>The water begins to spin...</bold> <gray>get clear!"));
+            p.playSound(p.getLocation(), Sound.ENTITY_GENERIC_SPLASH, SoundCategory.HOSTILE, 2f, 0.4f);
+        }
+    }
+
+    private void whirl(Player tp) {
+        int dur = 180 + 40 * phaseNo();
+        double prog = Math.min(1, stateT / (double) dur);
+        double R = 24 - 8 * prog, speed = 1.2 + 0.5 * prog;
+        theta += speed / R;
+        steer(wx + Math.cos(theta + 0.28) * R - hx, (SEA - 16) - hy, wz + Math.sin(theta + 0.28) * R - hz, speed, 0.1);
+        whirlpool(Math.min(1, stateT / 100.0));
+        if (stateT > dur) setState(tp == null ? State.RECOVER : State.DIVE);
+    }
+
+    /** The whirlpool itself: spiral arms of spray and bubbles on the surface, and everything floating in it is dragged round and in. */
+    private void whirlpool(double grow) {
+        double rad = 3 + 19 * grow;
+        for (int arm = 0; arm < 3; arm++) for (int k = 1; k <= 7; k++) {
+            double r = rad * k / 7.0, a = stateT * 0.3 - r * 0.45 + arm * 2.094;
+            double x = wx + Math.cos(a) * r, z = wz + Math.sin(a) * r;
+            world.spawnParticle(Particle.SPLASH, x, SEA + 0.2, z, 2, 0.25, 0.05, 0.25, 0.0, (Object) null, true);
+            if (k % 2 == 0) world.spawnParticle(Particle.BUBBLE, x, SEA - 0.6, z, 1, 0.2, 0.1, 0.2, 0.0, (Object) null, true);
+        }
+        Location c = new Location(world, wx, SEA, wz);
+        if (stateT % 40 == 1) for (Player p : world.getPlayers()) if (p.getLocation().distance(c) < 100) p.playSound(p.getLocation(), Sound.BLOCK_BUBBLE_COLUMN_WHIRLPOOL_AMBIENT, SoundCategory.HOSTILE, 3f, 0.6f);
+        for (Entity e : world.getNearbyEntities(c, 26, 8, 26)) {
+            boolean boat = e instanceof Boat || e instanceof ChestBoat;
+            if (!(e instanceof Player p ? p.getGameMode() != GameMode.SPECTATOR && p.getGameMode() != GameMode.CREATIVE : boat)) continue;
+            double dx = wx - e.getLocation().getX(), dz = wz - e.getLocation().getZ(), d = Math.hypot(dx, dz);
+            if (d < 0.5 || d > rad + 6 || Math.abs(e.getLocation().getY() - SEA) > 8) continue;
+            double pull = 0.04 + 0.1 * (1 - d / 26) * grow, spin = 0.1 * grow;
+            Vector v = e.getVelocity().add(new Vector(dx / d * pull - dz / d * spin, 0, dz / d * pull + dx / d * spin));
+            double h = Math.hypot(v.getX(), v.getZ());
+            if (h > 0.8) v.setX(v.getX() * 0.8 / h).setZ(v.getZ() * 0.8 / h);
+            if (d < 5) v.setY(v.getY() - 0.12);
+            e.setVelocity(v);
+            if (d < 5 && e instanceof Player p && stateT % 20 == 0) { p.damage(3); p.sendActionBar(Ui.mm("<dark_aqua>The whirlpool drags you under!")); }
+        }
     }
 
     private void dive(Player tp) {
