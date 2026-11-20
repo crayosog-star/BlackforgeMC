@@ -210,7 +210,8 @@ public final class SurvivalModule implements Listener {
         });
         Bukkit.getScheduler().runTaskTimer(plugin, this::refreshLeaderboard, 1200L, 1200L);
         world.setSpawnLocation(spawn());
-        for (int cx = -3; cx <= 2; cx++) for (int cz = -3; cz <= 2; cz++) world.addPluginChunkTicket(cx, cz, plugin);
+        for (int cx = -3; cx <= 2; cx++) for (int cz = -3; cz <= 3; cz++) world.addPluginChunkTicket(cx, cz, plugin);   // the spawn, auction bell included
+        world.addPluginChunkTicket(SurvivalLayout.KOTH_X >> 4, (SurvivalLayout.KOTH_Z + 1) >> 4, plugin);   // the KOTH hologram: unloaded, it counted as missing and every hologram was rebuilt each second (flashing)
         Bukkit.getPluginManager().registerEvents(this, plugin);
         new net.blackforge.core.SpawnSafety(plugin, l -> l.getWorld() == world && inSpawn(l.getX(), l.getY(), l.getZ()), p -> spawn());
         new TradingHall(plugin, world, ranks);
