@@ -78,7 +78,7 @@ final class AbyssPirate implements Listener {
 
     private Location spot() {
         var c = plugin.getConfig();
-        return new Location(world, c.getDouble("abyss.pirate-x", SurvivalLayout.BELL_X - 4.5), c.getDouble("abyss.pirate-y", Y + 1), c.getDouble("abyss.pirate-z", SurvivalLayout.BELL_Z - 0.5), 180f, 0f);
+        return new Location(world, c.getDouble("abyss.pirate-x", SurvivalLayout.SPAWN_X + 4), c.getDouble("abyss.pirate-y", Y + 1), c.getDouble("abyss.pirate-z", SurvivalLayout.SPAWN_Z + 3), 135f, 0f);
     }
 
     private Mannequin find() {
@@ -91,6 +91,11 @@ final class AbyssPirate implements Listener {
         Location at = spot();
         world.getChunkAt(at).load();
         Mannequin found = null;
+        Location old = new Location(world, SurvivalLayout.BELL_X - 4.5, Y + 1, SurvivalLayout.BELL_Z - 0.5);   // where he stood before he moved to the spawn
+        if (old.distanceSquared(at) > 36) {
+            world.getChunkAt(old).load();
+            for (Entity e : world.getNearbyEntities(old, 6, 6, 6)) if (e instanceof Mannequin && e.getPersistentDataContainer().has(tag, PersistentDataType.STRING)) e.remove();
+        }
         for (Entity e : world.getNearbyEntities(at, 6, 6, 6)) {
             if (!e.getPersistentDataContainer().has(tag, PersistentDataType.STRING)) continue;
             if (e instanceof Villager) { e.remove(); continue; }   // the old villager stand-in, before the custom skin
